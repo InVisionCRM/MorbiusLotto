@@ -1,0 +1,449 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>MORBlotto — Labs Hub</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+/* ── MORBlotto Labs Hub — Deep-Sea Neon (arcade2) ──────────────────────────
+   One-tap launcher for every lab prototype. The 13 new-game candidates get
+   full mockup cards (tap anywhere on a card to open its lab); previously
+   designed labs sit below as quick pill links. Relative hrefs, so the hub
+   works on any deploy or local server: /labs-hub.html */
+:root{
+  --abyss:#050E16; --cyan:#22D3EE; --cyan-soft:rgba(34,211,238,0.12); --cyan-edge:rgba(34,211,238,0.35);
+  --win:#F59E0B; --loss:#FB7185;
+  --ink:#E2E8F0; --slate-300:#CBD5E1; --slate-400:#94A3B8; --slate-500:#64748B;
+  --panel:rgba(8,20,31,0.78); --field:#081420;
+  --font-disp:'Chakra Petch','Trebuchet MS',system-ui,sans-serif;
+  --font-mono:'JetBrains Mono',ui-monospace,'SFMono-Regular',Consolas,monospace;
+}
+*{box-sizing:border-box}
+html{color-scheme:dark}
+body{
+  margin:0;min-height:100svh;background-color:var(--abyss);
+  background-image:linear-gradient(to bottom,rgba(5,14,22,0.92),rgba(2,7,11,0.96) 55%,rgba(5,14,22,0.98));
+  color:var(--ink);font-family:var(--font-disp);-webkit-font-smoothing:antialiased;overflow-x:hidden;
+}
+.bg-light{position:fixed;inset:0;pointer-events:none;z-index:0;background:radial-gradient(ellipse 75% 55% at 50% -5%,rgba(34,211,238,0.13),transparent 70%)}
+.bg-vignette{position:fixed;inset:0;pointer-events:none;z-index:0;background:radial-gradient(ellipse 120% 60% at 50% 115%,rgba(0,0,0,0.55),transparent 60%)}
+.mono{font-family:var(--font-mono);font-variant-numeric:tabular-nums}
+
+.wrap{position:relative;z-index:1;max-width:1180px;margin:0 auto;padding:26px 16px 90px}
+@media(min-width:700px){.wrap{padding:40px 24px 110px}}
+
+header.hero{text-align:center;margin-bottom:26px}
+.hero h1{margin:0;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#fff;font-size:clamp(26px,6vw,40px);line-height:1.05;text-wrap:balance}
+.hero h1 .glyph{color:var(--cyan);filter:drop-shadow(0 0 12px rgba(34,211,238,.65))}
+.hero .tagline{margin:.6rem auto 0;max-width:62ch;font-size:clamp(12px,2.6vw,14px);color:var(--slate-400);line-height:1.55}
+.hero .tagline b{color:var(--slate-300);font-weight:600}
+
+.grid{display:grid;grid-template-columns:1fr;gap:18px}
+@media(min-width:660px){.grid{grid-template-columns:repeat(2,1fr)}}
+@media(min-width:1000px){.grid{grid-template-columns:repeat(3,1fr)}}
+
+a.card{
+  display:flex;flex-direction:column;text-decoration:none;color:inherit;cursor:pointer;
+  background:linear-gradient(rgba(255,255,255,0.03),rgba(255,255,255,0) 18%),var(--panel);
+  border:1px solid var(--cyan-soft);border-radius:16px;overflow:hidden;
+  box-shadow:0 18px 40px -24px rgba(0,0,0,0.9);
+  transition:border-color .18s, transform .18s, box-shadow .18s;
+}
+a.card:hover,a.card:focus-visible{border-color:var(--cyan-edge);transform:translateY(-3px);box-shadow:0 26px 50px -26px rgba(0,0,0,.95),0 0 24px -10px rgba(34,211,238,.35);outline:none}
+a.card:focus-visible{border-color:var(--cyan)}
+
+.card .head{display:flex;align-items:baseline;gap:10px;padding:14px 16px 10px}
+.pick{flex:none;font-family:var(--font-mono);font-weight:700;font-size:13px;color:var(--cyan);border:1px solid var(--cyan-edge);border-radius:8px;padding:2px 8px;background:rgba(34,211,238,.08);box-shadow:0 0 14px -6px rgba(34,211,238,.6)}
+.card h2{margin:0;font-size:17px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#fff}
+.card .sub{margin:0 16px;font-size:12px;color:var(--slate-500);letter-spacing:.02em}
+
+.scene{position:relative;margin:12px 12px 0;height:190px;border-radius:12px;overflow:hidden;
+  background:linear-gradient(160deg,#0b1c28,#06121b);
+  box-shadow:inset 0 0 0 1px rgba(34,211,238,.12), inset 0 -30px 40px -30px rgba(0,0,0,.8);}
+.scene::after{content:"";position:absolute;inset:0;background:radial-gradient(ellipse 80% 60% at 50% 20%,rgba(34,211,238,.07),transparent 70%);pointer-events:none}
+
+.body{padding:12px 16px 14px;display:flex;align-items:center;gap:10px;margin-top:auto}
+.file{font-family:var(--font-mono);font-size:10.5px;letter-spacing:.04em;color:var(--slate-500)}
+.open{margin-left:auto;flex:none;font-family:var(--font-disp);font-weight:700;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--cyan);border:1px solid var(--cyan-edge);border-radius:9px;padding:7px 12px;background:rgba(34,211,238,.07);transition:.15s}
+a.card:hover .open{color:#04222b;background:linear-gradient(160deg,#7be9fb,#22D3EE);box-shadow:0 0 18px -6px var(--cyan)}
+
+/* ── shared scene atoms (mockups) ── */
+.pcard{position:absolute;width:34px;height:48px;border-radius:6px;background:linear-gradient(165deg,#f5f8fa,#cfd9e2);
+  box-shadow:0 6px 14px -6px rgba(0,0,0,.8);display:flex;flex-direction:column;justify-content:space-between;
+  padding:4px 5px;font-family:var(--font-mono);font-weight:700;font-size:12px;color:#0b1c28;line-height:1}
+.pcard .lo{align-self:flex-end;transform:rotate(180deg)}
+.pcard.red{color:#e11d48}
+.pcard.back{background:linear-gradient(165deg,#0e2233,#081420);box-shadow:inset 0 0 0 2px rgba(34,211,238,.35),0 6px 14px -6px rgba(0,0,0,.8)}
+.pcard.back::after{content:"◆";position:absolute;inset:0;display:grid;place-items:center;color:rgba(34,211,238,.55);font-size:14px}
+.chipc{position:absolute;width:26px;height:26px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#7be9fb,#22D3EE 55%,#0e7490);box-shadow:0 0 12px rgba(34,211,238,.5), inset 0 0 0 3px rgba(255,255,255,.25)}
+.chipc.amber{background:radial-gradient(circle at 35% 30%,#ffd58a,#F59E0B 55%,#92600a);box-shadow:0 0 12px rgba(245,158,11,.5), inset 0 0 0 3px rgba(255,255,255,.25)}
+.lbl{position:absolute;font-family:var(--font-mono);font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--slate-500)}
+.vs{position:absolute;font-family:var(--font-mono);font-weight:700;font-size:11px;color:var(--slate-500);letter-spacing:.1em}
+.glowamber{color:var(--win);text-shadow:0 0 14px rgba(245,158,11,.7)}
+.glowcyan{color:var(--cyan);text-shadow:0 0 14px rgba(34,211,238,.7)}
+
+/* slots */
+.reels{position:absolute;left:50%;top:16px;transform:translateX(-50%);display:grid;grid-template-columns:repeat(5,38px);gap:5px}
+.reel{display:grid;grid-template-rows:repeat(3,36px);gap:5px}
+.sym{border-radius:8px;background:rgba(6,16,25,.85);box-shadow:inset 0 0 0 1px rgba(34,211,238,.12);display:grid;place-items:center;font-size:16px}
+.sym.hit{box-shadow:inset 0 0 0 2px var(--win),0 0 16px -4px var(--win);background:rgba(245,158,11,.10)}
+.payline{position:absolute;left:12%;right:12%;top:calc(16px + 41px + 18px);height:2px;background:linear-gradient(90deg,transparent,var(--win),transparent);box-shadow:0 0 10px var(--win);opacity:.8}
+.slotwin{position:absolute;left:0;right:0;bottom:12px;text-align:center;font-family:var(--font-mono);font-weight:700;font-size:13px}
+
+/* scratch */
+.ticket{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%) rotate(-2deg);width:78%;max-width:250px;border-radius:12px;padding:10px 12px;
+  background:linear-gradient(165deg,#0e2233,#081420);box-shadow:inset 0 0 0 1px rgba(34,211,238,.25),0 14px 30px -14px rgba(0,0,0,.9)}
+.ticket .t-head{display:flex;justify-content:space-between;font-family:var(--font-mono);font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--cyan);margin-bottom:8px}
+.t-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.t-cell{aspect-ratio:1.25;border-radius:8px;display:grid;place-items:center;font-size:17px;background:rgba(6,16,25,.9);box-shadow:inset 0 0 0 1px rgba(34,211,238,.12)}
+.t-cell.foil{background:repeating-linear-gradient(135deg,#64748B 0 6px,#7f8ea3 6px 12px);box-shadow:inset 0 0 0 1px rgba(255,255,255,.15);color:transparent}
+.t-cell.hit{box-shadow:inset 0 0 0 2px var(--win),0 0 14px -4px var(--win)}
+.t-foot{margin-top:8px;text-align:center;font-family:var(--font-mono);font-size:10.5px;color:var(--win)}
+
+/* coinflip */
+.coinbig{position:absolute;left:50%;top:44px;transform:translateX(-50%);width:74px;height:74px;border-radius:50%;
+  background:radial-gradient(circle at 35% 30%,#7be9fb,#22D3EE 55%,#0e7490);
+  box-shadow:0 0 34px rgba(34,211,238,.45), inset 0 0 0 4px rgba(255,255,255,.22);
+  display:grid;place-items:center;font-weight:700;font-size:26px;color:#04222b}
+.streak{position:absolute;left:50%;bottom:16px;transform:translateX(-50%);display:flex;gap:6px}
+.step{font-family:var(--font-mono);font-size:10.5px;font-weight:600;border-radius:8px;padding:5px 8px;border:1px solid var(--cyan-soft);color:var(--slate-500);background:rgba(6,16,25,.7)}
+.step.done{color:var(--cyan);border-color:var(--cyan-edge);box-shadow:0 0 12px -4px var(--cyan)}
+.step.next{color:var(--win);border-color:rgba(245,158,11,.5)}
+
+/* sicbo */
+.sdice{position:absolute;left:50%;top:22px;transform:translateX(-50%);display:flex;gap:12px}
+.sd{width:44px;height:44px;border-radius:10px;background:linear-gradient(160deg,#0b1c28,#06121b);box-shadow:inset 0 0 0 1px rgba(34,211,238,.25),0 8px 16px -8px rgba(0,0,0,.9);display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(3,1fr);padding:7px}
+.sd i{display:grid;place-items:center}.sd b{width:6px;height:6px;border-radius:50%;background:var(--cyan);box-shadow:0 0 6px var(--cyan)}
+.bets{position:absolute;left:12px;right:12px;bottom:14px;display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.betc{border:1px solid var(--cyan-soft);border-radius:9px;background:rgba(6,16,25,.7);text-align:center;padding:7px 2px}
+.betc .bk{font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--slate-500)}
+.betc .bv{font-family:var(--font-mono);font-size:11px;font-weight:700;color:var(--slate-300);margin-top:2px}
+.betc.on{border-color:var(--win);background:rgba(245,158,11,.08)}.betc.on .bv{color:var(--win)}
+
+/* war */
+.warband{position:absolute;left:0;right:0;text-align:center;font-weight:700;letter-spacing:.35em;font-size:13px;color:var(--loss);text-shadow:0 0 16px rgba(251,113,133,.6)}
+
+/* gems */
+.gemrow{position:absolute;left:50%;top:56px;transform:translateX(-50%);display:flex;gap:12px}
+.gem{width:36px;height:36px;transform:rotate(45deg);border-radius:7px;box-shadow:0 8px 18px -8px rgba(0,0,0,.9)}
+.gem.cy{background:linear-gradient(135deg,#7be9fb,#0e7490)}
+.gem.am{background:linear-gradient(135deg,#ffd58a,#b45309)}
+.gem.rs{background:linear-gradient(135deg,#fda4af,#be123c)}
+.gem.hit{box-shadow:0 0 0 2px var(--win),0 0 20px rgba(245,158,11,.55)}
+.gemres{position:absolute;left:0;right:0;bottom:18px;text-align:center;font-family:var(--font-mono);font-size:12px;color:var(--slate-400)}
+
+/* balloon */
+.bal{position:absolute;left:50%;top:26px;transform:translateX(-50%);width:86px;height:100px;border-radius:50% 50% 48% 48%/55% 55% 45% 45%;
+  background:radial-gradient(circle at 35% 28%,rgba(251,113,133,.9),rgba(190,18,60,.85));box-shadow:0 0 30px rgba(251,113,133,.35), inset -8px -12px 24px rgba(0,0,0,.35);
+  display:grid;place-items:center;animation:balpulse 2.6s ease-in-out infinite}
+.bal::after{content:"";position:absolute;left:50%;bottom:-10px;transform:translateX(-50%);border:6px solid transparent;border-top-color:rgba(190,18,60,.85)}
+.bal .bm{font-family:var(--font-mono);font-weight:700;font-size:17px;color:#fff;text-shadow:0 1px 6px rgba(0,0,0,.6)}
+@keyframes balpulse{0%,100%{transform:translateX(-50%) scale(1)}50%{transform:translateX(-50%) scale(1.05)}}
+.cashbtn{position:absolute;left:50%;bottom:16px;transform:translateX(-50%);font-family:var(--font-disp);font-weight:700;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:#04222b;background:linear-gradient(160deg,#7be9fb,#22D3EE);border-radius:10px;padding:9px 18px;box-shadow:0 0 22px -6px var(--cyan)}
+
+/* penalty */
+.goal{position:absolute;left:50%;top:24px;transform:translateX(-50%);width:78%;max-width:250px;height:104px;border:2px solid rgba(226,232,240,.55);border-bottom:0;border-radius:6px 6px 0 0;
+  background:repeating-linear-gradient(90deg,rgba(226,232,240,.06) 0 1px,transparent 1px 14px),repeating-linear-gradient(0deg,rgba(226,232,240,.06) 0 1px,transparent 1px 14px)}
+.zone{position:absolute;width:30%;height:44%;border:1px dashed rgba(34,211,238,.4);border-radius:6px}
+.zone.hit{border:2px solid var(--win);box-shadow:0 0 18px -4px var(--win);background:rgba(245,158,11,.1)}
+.keeper{position:absolute;left:50%;bottom:0;transform:translateX(-50%);width:34px;height:52px;border-radius:10px 10px 4px 4px;background:linear-gradient(180deg,#FB7185,#9f1239);box-shadow:0 0 14px -4px var(--loss)}
+.ball{position:absolute;width:16px;height:16px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#fff,#94A3B8);box-shadow:0 0 10px rgba(255,255,255,.4)}
+.prow{position:absolute;left:50%;bottom:12px;transform:translateX(-50%);display:flex;gap:6px}
+.pr{width:10px;height:10px;border-radius:50%;border:1px solid var(--cyan-soft);background:rgba(6,16,25,.7)}
+.pr.g{background:var(--cyan);box-shadow:0 0 8px var(--cyan);border-color:var(--cyan)}
+
+/* let it ride */
+.pgrow{position:absolute;left:50%;display:flex;gap:6px;transform:translateX(-50%)}
+.betspots{position:absolute;left:50%;bottom:12px;transform:translateX(-50%);display:flex;gap:14px}
+.spot{width:40px;height:40px;border-radius:50%;border:1.5px dashed rgba(34,211,238,.45);display:grid;place-items:center;font-family:var(--font-mono);font-size:10px;color:var(--slate-500)}
+.spot.live{border-style:solid;border-color:var(--win);color:var(--win);box-shadow:0 0 16px -6px var(--win)}
+
+/* rps */
+.rpsrow{position:absolute;left:50%;top:44px;transform:translateX(-50%);display:flex;gap:14px}
+.rps{width:56px;height:56px;border-radius:14px;display:grid;place-items:center;font-size:24px;background:rgba(6,16,25,.8);box-shadow:inset 0 0 0 1px rgba(34,211,238,.15)}
+.rps.pick{box-shadow:inset 0 0 0 2px var(--cyan),0 0 20px -6px var(--cyan);background:rgba(34,211,238,.08)}
+
+/* bingo */
+.bcard{position:absolute;left:50%;top:56%;transform:translate(-50%,-50%);display:grid;grid-template-columns:repeat(5,30px);gap:4px}
+.bc{aspect-ratio:1;border-radius:6px;display:grid;place-items:center;font-family:var(--font-mono);font-size:10.5px;font-weight:600;color:var(--slate-400);background:rgba(6,16,25,.85);box-shadow:inset 0 0 0 1px rgba(34,211,238,.12)}
+.bc.daub{color:#04222b;background:radial-gradient(circle at 35% 30%,#7be9fb,#22D3EE 60%,#0e7490);box-shadow:0 0 12px -3px var(--cyan)}
+.bc.star{color:var(--win)}
+.ballstrip{position:absolute;top:10px;left:50%;transform:translateX(-50%);display:flex;gap:6px}
+.bball{width:24px;height:24px;border-radius:50%;display:grid;place-items:center;font-family:var(--font-mono);font-size:9.5px;font-weight:700;color:#04222b;background:radial-gradient(circle at 35% 30%,#ffd58a,#F59E0B 60%,#92600a);box-shadow:0 0 10px -2px var(--win)}
+
+/* darts */
+.dboard{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:130px;height:130px;border-radius:50%;
+  background:radial-gradient(circle,#F59E0B 0 9%, #06121b 9% 20%, rgba(34,211,238,.55) 20% 36%, #06121b 36% 55%, rgba(251,113,133,.45) 55% 72%, #06121b 72% 88%, rgba(34,211,238,.25) 88% 100%);
+  box-shadow:0 0 0 2px rgba(34,211,238,.25), 0 0 34px -8px rgba(34,211,238,.5)}
+.dart{position:absolute;width:9px;height:9px;border-radius:50%;background:#fff;box-shadow:0 0 12px #fff,0 0 22px var(--win)}
+.dartlbl{position:absolute;font-family:var(--font-mono);font-size:10.5px;font-weight:700}
+
+section.more{margin-top:44px}
+.more h3{margin:0 0 4px;text-align:center;font-size:13px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--slate-400)}
+.more p{margin:0 0 14px;text-align:center;font-size:11.5px;color:var(--slate-500)}
+.pills{display:flex;flex-wrap:wrap;justify-content:center;gap:8px;max-width:900px;margin:0 auto}
+.pills a{font-family:var(--font-mono);font-size:11px;letter-spacing:.04em;color:var(--slate-400);text-decoration:none;border:1px solid var(--cyan-soft);background:rgba(8,20,31,.7);border-radius:999px;padding:7px 13px;transition:.15s}
+.pills a:hover,.pills a:focus-visible{color:var(--cyan);border-color:var(--cyan-edge);outline:none}
+
+@media (prefers-reduced-motion: reduce){
+  .bal{animation:none}
+  a.card,a.card:hover{transform:none;transition:none}
+}
+</style>
+</head>
+<body>
+<div class="bg-light"></div><div class="bg-vignette"></div>
+<div class="wrap">
+
+<header class="hero">
+  <h1>Labs Hub <span class="glyph">◆</span></h1>
+  <p class="tagline">One tap to open any lab prototype. The <b>13 new-game candidates</b> are up top; earlier labs are linked below. This page lives at <b class="mono">/labs-hub.html</b> on every deploy.</p>
+</header>
+
+<div class="grid">
+
+<a class="card" href="./slots-lab.html">
+  <div class="head"><span class="pick">01</span><h2>Abyss Reels</h2></div>
+  <p class="sub">5×3 video slot — 20 lines, wilds, free spins</p>
+  <div class="scene">
+    <div class="reels">
+      <div class="reel"><div class="sym">🐙</div><div class="sym hit">◆</div><div class="sym">🐚</div></div>
+      <div class="reel"><div class="sym">🦑</div><div class="sym hit">◆</div><div class="sym">⚓</div></div>
+      <div class="reel"><div class="sym">🐚</div><div class="sym hit">◆</div><div class="sym">🐙</div></div>
+      <div class="reel"><div class="sym">⚓</div><div class="sym hit">◆</div><div class="sym">🦑</div></div>
+      <div class="reel"><div class="sym">🐙</div><div class="sym">🐚</div><div class="sym">⚓</div></div>
+    </div>
+    <div class="payline"></div>
+    <div class="slotwin glowamber">4× ◆ PAYLINE — 12.50× WIN</div>
+  </div>
+  <div class="body"><span class="file">slots-lab.html</span><span class="open">Open Lab →</span></div>
+</a>
+
+<a class="card" href="./scratch-lab.html">
+  <div class="head"><span class="pick">02</span><h2>Neon Scratch</h2></div>
+  <p class="sub">Instant scratch tickets — match 3 symbols</p>
+  <div class="scene">
+    <div class="ticket">
+      <div class="t-head"><span>MORB SCRATCH</span><span>№ 88-3021</span></div>
+      <div class="t-grid">
+        <div class="t-cell hit">◆</div><div class="t-cell">🐚</div><div class="t-cell foil">◆</div>
+        <div class="t-cell">⚓</div><div class="t-cell hit">◆</div><div class="t-cell foil">◆</div>
+        <div class="t-cell foil">◆</div><div class="t-cell hit">◆</div><div class="t-cell">🦑</div>
+      </div>
+      <div class="t-foot">3 × ◆ = 25.00× — KEEP SCRATCHING</div>
+    </div>
+  </div>
+  <div class="body"><span class="file">scratch-lab.html</span><span class="open">Open Lab →</span></div>
+</a>
+
+<a class="card" href="./coinflip-lab.html">
+  <div class="head"><span class="pick">03</span><h2>Morb Flip</h2></div>
+  <p class="sub">Coin-flip streak ladder — ride or bank</p>
+  <div class="scene">
+    <div class="coinbig">◆</div>
+    <div class="lbl" style="left:50%;top:126px;transform:translateX(-50%)">STREAK 3 — RIDE OR BANK?</div>
+    <div class="streak">
+      <span class="step done">1.96×</span><span class="step done">3.84×</span><span class="step done">7.53×</span><span class="step next">14.7×</span><span class="step">28.9×</span>
+    </div>
+  </div>
+  <div class="body"><span class="file">coinflip-lab.html</span><span class="open">Open Lab →</span></div>
+</a>
+
+<a class="card" href="./sic-bo-lab.html">
+  <div class="head"><span class="pick">04</span><h2>Sic Bo</h2></div>
+  <p class="sub">Three-dice betting table, Macau-style board</p>
+  <div class="scene">
+    <div class="sdice">
+      <div class="sd"><i></i><i></i><i><b></b></i><i></i><i><b></b></i><i></i><i><b></b></i><i></i><i></i></div>
+      <div class="sd"><i><b></b></i><i></i><i><b></b></i><i><b></b></i><i></i><i><b></b></i><i><b></b></i><i></i><i><b></b></i></div>
+      <div class="sd"><i><b></b></i><i></i><i></i><i></i><i><b></b></i><i></i><i></i><i></i><i><b></b></i></div>
+    </div>
+    <div class="lbl" style="left:50%;top:78px;transform:translateX(-50%)">TOTAL 12 — SMALL LOSES, BIG PAYS</div>
+    <div class="bets">
+      <div class="betc"><div class="bk">Small</div><div class="bv">1:1</div></div>
+      <div class="betc on"><div class="bk">Big</div><div class="bv">1:1</div></div>
+      <div class="betc"><div class="bk">Total 12</div><div class="bv">6:1</div></div>
+      <div class="betc"><div class="bk">Triple</div><div class="bv">180:1</div></div>
+    </div>
+  </div>
+  <div class="body"><span class="file">sic-bo-lab.html</span><span class="open">Open Lab →</span></div>
+</a>
+
+<a class="card" href="./casino-war-lab.html">
+  <div class="head"><span class="pick">05</span><h2>Casino War</h2></div>
+  <p class="sub">High card wins — tie means WAR</p>
+  <div class="scene">
+    <div class="lbl" style="left:22%;top:22px;transform:translateX(-50%)">You</div>
+    <div class="pcard" style="left:22%;top:40px;transform:translateX(-50%) rotate(-4deg)"><span>K</span><span class="lo">♠</span></div>
+    <div class="vs" style="left:50%;top:60px;transform:translateX(-50%)">VS</div>
+    <div class="lbl" style="left:78%;top:22px;transform:translateX(-50%)">Dealer</div>
+    <div class="pcard red" style="left:78%;top:40px;transform:translateX(-50%) rotate(4deg)"><span>K</span><span class="lo">♦</span></div>
+    <div class="warband" style="top:72%">⚔ WAR ⚔</div>
+    <div class="lbl" style="left:50%;bottom:10px;transform:translateX(-50%)">RAISE TO BATTLE OR SURRENDER HALF</div>
+  </div>
+  <div class="body"><span class="file">casino-war-lab.html</span><span class="open">Open Lab →</span></div>
+</a>
+
+<a class="card" href="./gem-draw-lab.html">
+  <div class="head"><span class="pick">06</span><h2>Gem Draw</h2></div>
+  <p class="sub">Five gems drop — colors pay like poker hands</p>
+  <div class="scene">
+    <div class="gemrow">
+      <div class="gem cy hit"></div><div class="gem am"></div><div class="gem cy hit"></div><div class="gem rs"></div><div class="gem cy hit"></div>
+    </div>
+    <div class="gemres"><span class="glowcyan">TRIPLE CYAN</span> — 4.20× <span style="color:var(--slate-500)">· pair · two pair · quads · five</span></div>
+  </div>
+  <div class="body"><span class="file">gem-draw-lab.html</span><span class="open">Open Lab →</span></div>
+</a>
+
+<a class="card" href="./pop-lab.html">
+  <div class="head"><span class="pick">07</span><h2>Pop</h2></div>
+  <p class="sub">Pump the balloon — cash out before it bursts</p>
+  <div class="scene">
+    <div class="bal"><span class="bm">2.87×</span></div>
+    <div class="lbl" style="left:50%;top:138px;transform:translateX(-50%)">EVERY PUMP RAISES MULT & POP CHANCE</div>
+    <div class="cashbtn">Cash Out 2.87×</div>
+  </div>
+  <div class="body"><span class="file">pop-lab.html</span><span class="open">Open Lab →</span></div>
+</a>
+
+<a class="card" href="./penalty-lab.html">
+  <div class="head"><span class="pick">08</span><h2>Penalty Strike</h2></div>
+  <p class="sub">Pick a corner, beat the keeper — 5-shot ladder</p>
+  <div class="scene">
+    <div class="goal">
+      <div class="zone" style="left:4%;top:6%"></div>
+      <div class="zone hit" style="left:35%;top:6%"><div class="ball" style="left:50%;top:50%;transform:translate(-50%,-50%)"></div></div>
+      <div class="zone" style="right:4%;top:6%"></div>
+      <div class="zone" style="left:4%;bottom:4%"></div>
+      <div class="zone" style="right:4%;bottom:4%"></div>
+      <div class="keeper" style="left:26%"></div>
+    </div>
+    <div class="prow"><span class="pr g"></span><span class="pr g"></span><span class="pr g"></span><span class="pr"></span><span class="pr"></span></div>
+  </div>
+  <div class="body"><span class="file">penalty-lab.html</span><span class="open">Open Lab →</span></div>
+</a>
+
+<a class="card" href="./let-it-ride-lab.html">
+  <div class="head"><span class="pick">09</span><h2>Let It Ride</h2></div>
+  <p class="sub">Three bets down — pull back or let them ride</p>
+  <div class="scene">
+    <div class="pgrow" style="top:18px;left:50%">
+      <div class="pcard" style="position:static"><span>10</span><span class="lo">♠</span></div>
+      <div class="pcard red" style="position:static"><span>J</span><span class="lo">♥</span></div>
+      <div class="pcard" style="position:static"><span>Q</span><span class="lo">♣</span></div>
+      <div class="pcard back" style="position:static"></div>
+      <div class="pcard back" style="position:static"></div>
+    </div>
+    <div class="lbl" style="left:50%;top:82px;transform:translateX(-50%)">OPEN-ENDED STRAIGHT DRAW…</div>
+    <div class="betspots">
+      <div class="spot live">1</div><div class="spot live">2</div><div class="spot">$</div>
+    </div>
+    <div class="chipc" style="left:calc(50% - 47px);bottom:20px"></div>
+    <div class="chipc amber" style="left:calc(50% + 7px);bottom:20px"></div>
+  </div>
+  <div class="body"><span class="file">let-it-ride-lab.html</span><span class="open">Open Lab →</span></div>
+</a>
+
+<a class="card" href="./pai-gow-lab.html">
+  <div class="head"><span class="pick">10</span><h2>Pai Gow Poker</h2></div>
+  <p class="sub">Split seven cards — beat both dealer hands</p>
+  <div class="scene">
+    <div class="lbl" style="left:50%;top:12px;transform:translateX(-50%)">HIGH HAND — FLUSH</div>
+    <div class="pgrow" style="top:28px">
+      <div class="pcard" style="position:static"><span>A</span><span class="lo">♠</span></div>
+      <div class="pcard" style="position:static"><span>J</span><span class="lo">♠</span></div>
+      <div class="pcard" style="position:static"><span>9</span><span class="lo">♠</span></div>
+      <div class="pcard" style="position:static"><span>6</span><span class="lo">♠</span></div>
+      <div class="pcard" style="position:static"><span>3</span><span class="lo">♠</span></div>
+    </div>
+    <div class="lbl" style="left:50%;top:96px;transform:translateX(-50%)">LOW HAND — PAIR OF KINGS</div>
+    <div class="pgrow" style="top:112px">
+      <div class="pcard red" style="position:static"><span>K</span><span class="lo">♥</span></div>
+      <div class="pcard red" style="position:static"><span>K</span><span class="lo">♦</span></div>
+    </div>
+  </div>
+  <div class="body"><span class="file">pai-gow-lab.html</span><span class="open">Open Lab →</span></div>
+</a>
+
+<a class="card" href="./rps-lab.html">
+  <div class="head"><span class="pick">11</span><h2>Rock Paper Scissors</h2></div>
+  <p class="sub">House throw is committed before you pick</p>
+  <div class="scene">
+    <div class="rpsrow">
+      <div class="rps">✊</div><div class="rps pick">✋</div><div class="rps">✌️</div>
+    </div>
+    <div class="lbl" style="left:50%;top:118px;transform:translateX(-50%)">HOUSE THREW ✊ — <span class="glowcyan" style="font-size:10px">YOU WIN · STREAK ×2</span></div>
+    <div class="streak" style="bottom:14px">
+      <span class="step done">1.96×</span><span class="step done">3.84×</span><span class="step next">7.53×</span>
+    </div>
+  </div>
+  <div class="body"><span class="file">rps-lab.html</span><span class="open">Open Lab →</span></div>
+</a>
+
+<a class="card" href="./bingo-lab.html">
+  <div class="head"><span class="pick">12</span><h2>Bingo Royale</h2></div>
+  <p class="sub">Live multiplayer rooms — shared draws, split pots</p>
+  <div class="scene">
+    <div class="ballstrip">
+      <span class="bball">B4</span><span class="bball">I19</span><span class="bball">N33</span><span class="bball">G51</span><span class="bball">O67</span>
+    </div>
+    <div class="bcard">
+      <span class="bc daub">4</span><span class="bc">17</span><span class="bc">32</span><span class="bc daub">51</span><span class="bc">62</span>
+      <span class="bc">9</span><span class="bc daub">19</span><span class="bc">44</span><span class="bc">48</span><span class="bc daub">67</span>
+      <span class="bc">2</span><span class="bc">22</span><span class="bc star">★</span><span class="bc">55</span><span class="bc">71</span>
+      <span class="bc daub">13</span><span class="bc">28</span><span class="bc daub">33</span><span class="bc">60</span><span class="bc">74</span>
+      <span class="bc">7</span><span class="bc">25</span><span class="bc">41</span><span class="bc daub">59</span><span class="bc">68</span>
+    </div>
+  </div>
+  <div class="body"><span class="file">bingo-lab.html</span><span class="open">Open Lab →</span></div>
+</a>
+
+<a class="card" href="./darts-lab.html">
+  <div class="head"><span class="pick">13</span><h2>Bullseye</h2></div>
+  <p class="sub">Call your ring — tighter targets pay bigger</p>
+  <div class="scene">
+    <div class="dboard"></div>
+    <div class="dart" style="left:calc(50% + 3px);top:calc(50% - 6px)"></div>
+    <div class="dartlbl glowamber" style="left:50%;top:14px;transform:translateX(-50%)">BULLSEYE — 24.0×</div>
+    <div class="dartlbl" style="left:50%;bottom:12px;transform:translateX(-50%);color:var(--slate-500);font-weight:400;font-size:9.5px;letter-spacing:.1em">OUTER 1.5× · MID 3.2× · INNER 8× · BULL 24×</div>
+  </div>
+  <div class="body"><span class="file">darts-lab.html</span><span class="open">Open Lab →</span></div>
+</a>
+
+</div>
+
+<section class="more">
+  <h3>Earlier Labs</h3>
+  <p>Prototypes designed before this batch — games, tools, and animation studies.</p>
+  <div class="pills">
+    <a href="./morb-derby-lab.html">Morb Derby</a>
+    <a href="./splitstream-lab.html">Splitstream</a>
+    <a href="./bumpers-lab.html">Bumpers</a>
+    <a href="./casino-holdem-lab.html">Casino Hold'em</a>
+    <a href="./three-card-poker-lab.html">Three Card Poker</a>
+    <a href="./dragon-tiger-lab.html">Dragon Tiger</a>
+    <a href="./andar-bahar-lab.html">Andar Bahar</a>
+    <a href="./chicken-lab.html">Chicken</a>
+    <a href="./firewalk-lab.html">Firewalk</a>
+    <a href="./heist-lab.html">Heist</a>
+    <a href="./cipher-lab.html">Cipher</a>
+    <a href="./cascade-lab.html">Cascade</a>
+    <a href="./greed-dice-lab.html">Greed Dice</a>
+    <a href="./pachinko-lab.html">Pachinko</a>
+    <a href="./plinko-sim-lab.html">Plinko Sim</a>
+    <a href="./keno-reveal-lab.html">Keno Reveal</a>
+    <a href="./poker-showdown-lab.html">Poker Showdown</a>
+    <a href="./table-arcade-lab.html">Table Arcade</a>
+    <a href="./avatar-lab.html">Avatar</a>
+    <a href="./home-nav-lab.html">Home Nav</a>
+    <a href="./player-dashboard-lab.html">Player Dashboard</a>
+  </div>
+</section>
+
+</div>
+</body>
+</html>
