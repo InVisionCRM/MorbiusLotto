@@ -8,29 +8,42 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
 <style>
-/* ── Abyss Reels — Deep-Sea Neon (arcade2) prototype · v2 ──────────────────
-   5×3 video slot with 20 fixed paylines, real MORBlotto art and multiplier
-   wilds. Mirrors the shared arcade2-scope system (Greed Dice / Firewalk /
-   Chicken / Mines): abyss #050E16, cyan #22D3EE chrome, amber #F59E0B wins,
-   rose losses, Chakra Petch display + JetBrains Mono numerals, .panel glass,
-   provably-fair commit/verify, My-rounds / FAQ tab strip and fairness modal.
+/* ── Abyss Reels — Deep-Sea Neon (arcade2) prototype · v3 ──────────────────
+   5×3 video slot with 20 fixed paylines, real MORBlotto art, hot multiplier
+   wilds and a SHIELD LOCK free-spins bonus. Mirrors the shared arcade2-scope
+   system (Greed Dice / Firewalk / Chicken / Mines): abyss #050E16, cyan
+   #22D3EE chrome, amber #F59E0B wins, rose losses, Chakra Petch display +
+   JetBrains Mono numerals, .panel glass, provably-fair commit/verify,
+   My-rounds / FAQ tab strip and fairness modal.
 
    Art (all from /public): MORB shield = wild, crash rocket = free-spin
    scatter, the six VIP badges (obsidian→bronze) are the paying ladder, and
    two poker chips fill the low end. Special cells carry framed borders:
-   cyan = wild, amber + ×N badge = multiplier wild, rose = scatter.
+   cyan = wild, amber + ×N badge = hot wild, rose = scatter.
 
-   Mechanic: bet = total per spin (line bet = bet ÷ 20). Reel stops are drawn
-   from a seeded stream (5 stops per spin), then ONE multiplier is drawn per
-   wild cell in the window (reel-major order): ×1 90%, ×2 5.5%, ×3 3%, ×5
-   1.5%. A line win that runs through hot wilds is multiplied by the HIGHEST
-   multiplier in the run (no compounding). 3+ rockets anywhere pay 2/10/50×
-   total bet and award 8 free spins (retriggerable) at the same bet.
+   Reels: velocity-driven rAF animation modelled on the app's transaction
+   slot machine (components/PLINKO/SlotMachine.tsx) — reels cruise with tick
+   sounds and motion blur, then decelerate into place on a fixed stop
+   schedule: first reel ≈1.3s, then one stop per second. When two rockets
+   are on screen the remaining reels stretch to two seconds apart with an
+   amber pulse and a heartbeat; the third rocket landing detonates a
+   celebration (flash, shake, rocket burst) before free spins begin.
 
-   Payout tuning: same 52/53-symbol strips as v1; paytable rescaled for the
-   multiplier feature and re-verified by a 4,000,000-spin Monte Carlo of this
-   exact eval: RTP ≈ 96.6% (hit ≈ 49%, free spins 1-in-80 contributing ≈ 9.6
-   points, max observed round ≈ 511×) — ≈ 3.4% house edge, stated in the FAQ.
+   Mechanic: bet = total per spin (line bet = bet ÷ 20). Per spin the seeded
+   stream yields 5 reel stops, then ONE multiplier draw per natural wild in
+   the window (reel-major). Base game: ×2/×3/×5 on 4.5/2.3/1.2% of wilds; a
+   line win through hot wilds is multiplied by the HIGHEST badge in the run.
+   3+ rockets pay 1/4/20× total bet and award 5 free spins (+2 per
+   retrigger). SHIELD LOCK: during free spins wilds run hot far more often
+   (×2/×3/×5 on 11/6/2.5% of wilds) and every hot shield LOCKS in place for
+   the rest of the bonus — locked cells act as that wild on every later
+   spin, a higher badge landing on a locked cell upgrades it, and each new
+   lock makes every remaining spin stronger.
+
+   Payout tuning: same 52/53-symbol strips as v1; this exact ruleset was
+   tuned by Monte Carlo (1M + 4M spins, two seeds): RTP ≈ 96.4% (hit ≈ 49%,
+   free spins 1-in-80 contributing ≈ 14 points, ≈1 locked shield per bonus,
+   max observed round ≈ 1,133×) — ≈ 3.6% house edge, stated in the FAQ.
    Self-contained client-side demo (illustrative seeded RNG). Currency: MORBIUS. */
 :root{
   --abyss:#050E16; --cyan:#22D3EE; --cyan-soft:rgba(34,211,238,0.12); --cyan-edge:rgba(34,211,238,0.35);
@@ -104,6 +117,7 @@ h1.title .glyph{margin-left:.35rem;color:var(--cyan);filter:drop-shadow(0 0 12px
 .hud .v{font-family:var(--font-mono);font-weight:700;font-size:clamp(15px,3.8vw,21px);color:#fff;margin-top:3px}
 .hud .v.win-v{color:var(--win)}.hud .v.win-v.idle{color:var(--slate-400)}
 .hud .v.lines-v{color:var(--cyan)}
+.hud .v.lines-v.locked-v{color:var(--win);text-shadow:0 0 12px rgba(245,158,11,.6)}
 .hud .v.fs-v{color:var(--slate-400)}
 /* free-spins amber HUD state */
 .board-shell.fs{border-color:rgba(245,158,11,.5);box-shadow:0 0 44px -10px rgba(245,158,11,.4),0 24px 50px -30px rgba(0,0,0,.95)}
@@ -120,15 +134,19 @@ h1.title .glyph{margin-left:.35rem;color:var(--cyan);filter:drop-shadow(0 0 12px
   75%{transform:translate(-3px,1px)}88%{transform:translate(2px,-1px)}
 }
 .felt{position:relative;padding:18px 12px 14px;display:flex;flex-direction:column;gap:12px;background:radial-gradient(ellipse 70% 60% at 50% 40%,rgba(34,211,238,.06),transparent 70%);transition:background .4s}
-.reels{position:relative;display:grid;grid-template-columns:repeat(5,1fr);gap:8px}
-.reel{position:relative;overflow:hidden;border-radius:12px;background:linear-gradient(180deg,#0b1c28,#06121b);box-shadow:inset 0 0 0 1px rgba(34,211,238,.12),0 6px 14px -8px rgba(0,0,0,.8);height:calc(var(--cell) * 3);--cell:clamp(50px,12.5vw,84px)}
+.felt-flash{position:absolute;inset:0;z-index:7;pointer-events:none;background:radial-gradient(ellipse at 50% 45%,rgba(245,158,11,.5),rgba(245,158,11,.1) 60%,transparent 80%);opacity:0}
+.felt-flash.go{animation:feltflash .7s ease-out both}
+@keyframes feltflash{0%{opacity:0}18%{opacity:1}100%{opacity:0}}
+.reels{position:relative;display:grid;grid-template-columns:repeat(5,1fr);gap:8px;--cell:clamp(50px,12.5vw,84px)}
+.reel{position:relative;overflow:hidden;border-radius:12px;background:linear-gradient(180deg,#0b1c28,#06121b);box-shadow:inset 0 0 0 1px rgba(34,211,238,.12),0 6px 14px -8px rgba(0,0,0,.8);height:calc(var(--cell) * 3)}
+.reel::after{content:"";position:absolute;inset:0;pointer-events:none;z-index:2;border-radius:12px;background:linear-gradient(180deg,rgba(2,8,13,.65) 0%,transparent 22%,transparent 78%,rgba(2,8,13,.65) 100%)}
 .strip{display:flex;flex-direction:column;will-change:transform}
-.reel.spin .strip{filter:blur(2px)}
+.reel.spin .strip{filter:blur(2.2px)}
 /* scatter anticipation — remaining reels burn amber while the rocket teases */
 .reel.antic{box-shadow:inset 0 0 0 2px rgba(245,158,11,.65),0 0 22px -4px rgba(245,158,11,.55)}
-.reel.antic::after{content:"";position:absolute;inset:0;border-radius:12px;background:radial-gradient(ellipse at 50% 50%,rgba(245,158,11,.14),transparent 70%);animation:anticpulse .55s ease-in-out infinite;pointer-events:none}
-@keyframes anticpulse{0%,100%{opacity:.4}50%{opacity:1}}
-.reel.flash::before{content:"";position:absolute;inset:0;background:rgba(190,240,255,.22);animation:reelflash .18s ease-out both;pointer-events:none;z-index:2}
+.reel.antic::before{content:"";position:absolute;inset:0;border-radius:12px;z-index:3;background:radial-gradient(ellipse at 50% 50%,rgba(245,158,11,.16),transparent 70%);animation:anticpulse .55s ease-in-out infinite;pointer-events:none}
+@keyframes anticpulse{0%,100%{opacity:.35}50%{opacity:1}}
+.reel.flash::before{content:"";position:absolute;inset:0;background:rgba(190,240,255,.22);animation:reelflash .18s ease-out both;pointer-events:none;z-index:3}
 @keyframes reelflash{from{opacity:1}to{opacity:0}}
 /* symbol cells */
 .sym{position:relative;height:var(--cell);display:grid;place-items:center;user-select:none}
@@ -136,7 +154,7 @@ h1.title .glyph{margin-left:.35rem;color:var(--cyan);filter:drop-shadow(0 0 12px
 .sym img.chipart{width:64%;height:64%}
 .sym img.rocketart{width:70%;height:70%;filter:drop-shadow(0 0 8px rgba(251,113,133,.5)) drop-shadow(0 3px 6px rgba(0,0,0,.6))}
 .sym img.wildart{filter:drop-shadow(0 0 9px rgba(34,211,238,.65)) drop-shadow(0 3px 6px rgba(0,0,0,.6))}
-/* special-cell frames — the borders that mark wilds / multipliers / scatters */
+/* special-cell frames — the borders that mark wilds / hot wilds / scatters */
 .sym .frame{position:absolute;inset:4px;border-radius:10px;pointer-events:none}
 .sym.wild .frame{box-shadow:inset 0 0 0 2px rgba(34,211,238,.75),0 0 14px -2px rgba(34,211,238,.55);background:radial-gradient(ellipse at 50% 60%,rgba(34,211,238,.10),transparent 72%)}
 .sym.scat .frame{box-shadow:inset 0 0 0 2px rgba(251,113,133,.7),0 0 14px -2px rgba(251,113,133,.5);background:radial-gradient(ellipse at 50% 60%,rgba(251,113,133,.10),transparent 72%)}
@@ -146,8 +164,23 @@ h1.title .glyph{margin-left:.35rem;color:var(--cyan);filter:drop-shadow(0 0 12px
 @keyframes badgein{from{transform:scale(.3);opacity:0}to{transform:scale(1);opacity:1}}
 .sym.hit{background:radial-gradient(circle at 50% 50%,rgba(245,158,11,.28),rgba(245,158,11,.05) 72%);box-shadow:inset 0 0 0 2px rgba(245,158,11,.75),0 0 18px -2px rgba(245,158,11,.6);border-radius:10px;animation:symhit .42s ease}
 @keyframes symhit{0%{transform:scale(1)}40%{transform:scale(1.14)}100%{transform:scale(1)}}
+/* third-rocket detonation */
+.sym.scathit{animation:scathit .9s cubic-bezier(.34,1.56,.64,1)}
+.sym.scathit .frame{box-shadow:inset 0 0 0 3px rgba(251,113,133,1),0 0 34px 2px rgba(251,113,133,.9)}
+@keyframes scathit{0%{transform:scale(1)}30%{transform:scale(1.28)}55%{transform:scale(1.06)}75%{transform:scale(1.16)}100%{transform:scale(1)}}
 .reel.land{animation:reelland .22s cubic-bezier(.34,1.56,.64,1)}
 @keyframes reelland{0%{transform:translateY(-6px)}55%{transform:translateY(3px)}100%{transform:translateY(0)}}
+/* SHIELD LOCK sticky overlay */
+.sticky-layer{position:absolute;inset:0;z-index:6;pointer-events:none;display:grid;grid-template-columns:repeat(5,1fr);grid-template-rows:repeat(3,var(--cell));gap:8px}
+.lockcell{position:relative;display:grid;place-items:center;border-radius:10px;background:radial-gradient(ellipse at 50% 60%,rgba(245,158,11,.16),rgba(6,16,25,.78) 78%)}
+.lockcell img{width:76%;height:76%;object-fit:contain;filter:drop-shadow(0 0 10px rgba(245,158,11,.75)) drop-shadow(0 3px 6px rgba(0,0,0,.6))}
+.lockcell .frame{position:absolute;inset:2px;border-radius:9px;box-shadow:inset 0 0 0 2.5px rgba(245,158,11,.95),0 0 22px -2px rgba(245,158,11,.85);animation:lockpulse 1.6s ease-in-out infinite}
+@keyframes lockpulse{0%,100%{box-shadow:inset 0 0 0 2.5px rgba(245,158,11,.95),0 0 16px -2px rgba(245,158,11,.7)}50%{box-shadow:inset 0 0 0 2.5px #ffd370,0 0 30px -2px rgba(245,158,11,1)}}
+.lockcell .mbadge{position:absolute;top:5px;right:5px;font-family:var(--font-mono);font-weight:700;font-size:calc(var(--cell) * .2);line-height:1;color:#180d01;background:linear-gradient(180deg,#ffd370,#F59E0B);border-radius:7px;padding:3px 5px;box-shadow:0 0 12px rgba(245,158,11,.9),inset 0 1px 0 rgba(255,255,255,.5)}
+.lockcell .lockpin{position:absolute;bottom:4px;left:6px;font-size:calc(var(--cell) * .16);filter:drop-shadow(0 0 6px rgba(245,158,11,.8))}
+.lockcell.lockin{animation:lockin .55s cubic-bezier(.34,1.56,.64,1) both}
+@keyframes lockin{0%{transform:scale(1.7);opacity:0}55%{transform:scale(.94);opacity:1}100%{transform:scale(1)}}
+.lockcell.hit{background:radial-gradient(circle at 50% 50%,rgba(245,158,11,.34),rgba(6,16,25,.8) 78%)}
 .lines-svg{position:absolute;inset:0;pointer-events:none;z-index:5}
 .lines-svg polyline{fill:none;stroke-linecap:round;stroke-linejoin:round}
 .lines-svg .pl-faint{stroke:rgba(34,211,238,.3);stroke-width:2.5}
@@ -252,6 +285,7 @@ h1.title .glyph{margin-left:.35rem;color:var(--cyan);filter:drop-shadow(0 0 12px
 .m-sr .rd{display:flex;gap:3px;flex-wrap:wrap}
 .m-sr .md{min-width:22px;height:16px;border-radius:3px;background:var(--field);box-shadow:inset 0 0 0 1px rgba(34,211,238,.15);font-family:var(--font-mono);font-size:10px;display:grid;place-items:center;color:var(--slate-400);padding:0 2px}
 .m-sr .md.hot{color:var(--win);box-shadow:inset 0 0 0 1px rgba(245,158,11,.5)}
+.m-sr .md.lockmd{color:#ffd370;box-shadow:inset 0 0 0 1px rgba(245,158,11,.8)}
 .m-sr .rp{font-family:var(--font-mono);margin-left:auto;flex:none}
 .m-sr .rp.up{color:var(--cyan)}.m-sr .rp.no{color:var(--slate-500)}
 /* paytable modal */
@@ -272,7 +306,8 @@ h1.title .glyph{margin-left:.35rem;color:var(--cyan);filter:drop-shadow(0 0 12px
 @media (prefers-reduced-motion: reduce){
   .reel.spin .strip{filter:none}
   .board-shell.shake{animation:none}
-  .reel.antic::after,.sym.mult .frame,.banner.mega .b-k{animation:none}
+  .reel.antic::before,.sym.mult .frame,.banner.mega .b-k,.lockcell .frame{animation:none}
+  .reel.land,.reel.flash::before,.sym.hit,.sym.scathit,.sym .mbadge,.arc-banner-in,.lockcell.lockin,.felt-flash.go{animation:none}
 }
 </style>
 </head>
@@ -283,7 +318,7 @@ h1.title .glyph{margin-left:.35rem;color:var(--cyan);filter:drop-shadow(0 0 12px
 <div class="wrap">
   <header>
     <h1 class="title">Abyss Reels<span class="glyph">◆</span></h1>
-    <p class="tagline">5×3 reels · 20 lines · MORB wilds up to ×5 · 🚀 free spins · provably fair · played in MORBIUS</p>
+    <p class="tagline">5×3 reels · 20 lines · hot MORB wilds up to ×5 · 🚀 Shield Lock free spins · provably fair · played in MORBIUS</p>
   </header>
 
   <div class="topbar">
@@ -299,7 +334,7 @@ h1.title .glyph{margin-left:.35rem;color:var(--cyan);filter:drop-shadow(0 0 12px
       <div class="panel">
         <p class="panel-label">Spin speed</p>
         <div class="diff-row" id="diffRow">
-          <button class="diff active" data-diff="normal"><div class="d-name">Normal</div><div class="d-meta">snappy ride</div></button>
+          <button class="diff active" data-diff="normal"><div class="d-name">Normal</div><div class="d-meta">reels stop 1s apart</div></button>
           <button class="diff" data-diff="turbo"><div class="d-name">Turbo</div><div class="d-meta">instant stops</div></button>
         </div>
       </div>
@@ -324,7 +359,7 @@ h1.title .glyph{margin-left:.35rem;color:var(--cyan);filter:drop-shadow(0 0 12px
           <div class="sr"><img src="morbius/MorbiusChip.png" alt="MORB wild" /><span>MORB wild ×5</span><span class="sv">1000</span></div>
           <div class="sr"><img src="vip-badges/obsidian.png" alt="Obsidian" /><span>Obsidian ×5</span><span class="sv">325</span></div>
           <div class="sr"><img src="vip-badges/diamond.png" alt="Diamond" /><span>Diamond ×5</span><span class="sv">200</span></div>
-          <div class="sr"><img src="crash/rocket.webp" alt="Rocket scatter" /><span>Rocket ×3+</span><span class="sv hl">8 free spins</span></div>
+          <div class="sr"><img src="crash/rocket.webp" alt="Rocket scatter" /><span>Rocket ×3+</span><span class="sv hl">Shield Lock spins</span></div>
         </div>
         <button class="pt-open" id="ptBtn">Full paytable</button>
       </div>
@@ -333,7 +368,7 @@ h1.title .glyph{margin-left:.35rem;color:var(--cyan);filter:drop-shadow(0 0 12px
     <section class="board">
       <div class="board-shell" id="boardShell">
         <div class="hud">
-          <div class="cell"><div class="k">Lines</div><div class="v lines-v">20</div></div>
+          <div class="cell"><div class="k" id="hudC1k">Lines</div><div class="v lines-v" id="hudC1v">20</div></div>
           <div class="cell"><div class="k">Bet</div><div class="v" id="hudBet">200</div></div>
           <div class="cell"><div class="k">Win</div><div class="v win-v idle" id="hudWin">—</div></div>
           <div class="cell"><div class="k">Free spins</div><div class="v fs-v" id="hudFs">—</div></div>
@@ -346,9 +381,11 @@ h1.title .glyph{margin-left:.35rem;color:var(--cyan);filter:drop-shadow(0 0 12px
             <div class="reel"><div class="strip"></div></div>
             <div class="reel"><div class="strip"></div></div>
             <svg class="lines-svg" id="linesSvg"></svg>
+            <div class="sticky-layer" id="stickyLayer"></div>
           </div>
           <div class="felt-status" id="status">Set your bet and dive in</div>
           <div class="banner-host"><div class="banner" id="banner"><div class="b-k" id="bannerK"></div><div class="b-v" id="bannerV"></div></div></div>
+          <div class="felt-flash" id="feltFlash"></div>
         </div>
         <canvas class="fx-canvas" id="fxCanvas"></canvas>
       </div>
@@ -371,8 +408,8 @@ h1.title .glyph{margin-left:.35rem;color:var(--cyan);filter:drop-shadow(0 0 12px
   <p class="lab-note">
     <b>Prototype</b> — Deep-Sea Neon style, single-player on the arcade2 pattern (like Greed Dice / Firewalk / Mines).<br/>
     Reel stops and wild multipliers here come from an in-page seeded RNG for feel; the real build draws them from the server
-    <b>provably-fair HMAC</b> stream (<span class="mono">/api/arcade/reels/*</span>). Strips + paytable are Monte-Carlo tuned to
-    <b>≈ 96.6% RTP</b>. Every round (base spin + its free spins) re-derives from the seed in Verify. Currency: <b>MORBIUS</b>.
+    <b>provably-fair HMAC</b> stream (<span class="mono">/api/arcade/reels/*</span>). Strips + paytable + Shield Lock bonus are
+    Monte-Carlo tuned to <b>≈ 96.4% RTP</b>. Every round (base spin + its free spins) re-derives from the seed in Verify. Currency: <b>MORBIUS</b>.
   </p>
 </div>
 
@@ -389,7 +426,7 @@ h1.title .glyph{margin-left:.35rem;color:var(--cyan);filter:drop-shadow(0 0 12px
     </div>
     <div class="m-sec">
       <h3>Verify a round</h3>
-      <p class="note">Every spin draws 5 reel stops, then one multiplier per wild cell (reel-major order) — all from one stream derived from a server seed committed (hashed) before your bet. The seed is revealed once the round settles and the whole sequence re-derives draw-for-draw.</p>
+      <p class="note">Every spin draws 5 reel stops, then one multiplier per natural wild (reel-major order) — all from one stream derived from a server seed committed (hashed) before your bet. Shield Lock state is derived, not drawn: locked cells replay exactly from the same sequence. The seed is revealed once the round settles and everything re-derives draw-for-draw.</p>
       <div class="m-input-row">
         <input class="m-input" id="verifyIdInput" placeholder="Round ID" />
         <button class="m-btn solid" id="verifyBtn">Verify</button>
@@ -410,14 +447,16 @@ h1.title .glyph{margin-left:.35rem;color:var(--cyan);filter:drop-shadow(0 0 12px
 "use strict";
 (function(){
   var MIN_BET=100, MAX_BET=100000, LINES_N=20;
+  // stop schedule: firstStop, per-reel gap, gap under scatter anticipation, pause between free spins
   var SPEEDS={
-    normal:{spin:620,stagger:120,gap:900,antic:550,label:'Normal'},
-    turbo:{spin:300,stagger:55,gap:500,antic:300,label:'Turbo'}
+    normal:{first:1300,gap:1000,anticGap:2000,settle:1100,cruise:17,label:'Normal'},
+    turbo:{first:420,gap:170,anticGap:650,settle:550,cruise:26,label:'Turbo'}
   };
-  var FS_AWARD=8;
-  var SCAT_PAY={3:2,4:10,5:50}; // × total bet
-  // wild multiplier odds — drawn once per wild cell, reel-major (matches the Monte Carlo)
-  var MULT_TABLE=[[0.90,1],[0.055,2],[0.03,3],[0.015,5]];
+  var FS_AWARD=5, FS_RETRIG=2;
+  var SCAT_PAY={3:1,4:4,5:20}; // × total bet
+  // hot-wild odds — one draw per natural wild, reel-major (Monte-Carlo tuned, see head comment)
+  var BASE_MULT=[[0.92,1],[0.045,2],[0.023,3],[0.012,5]];
+  var FS_MULT=[[0.805,1],[0.11,2],[0.06,3],[0.025,5]];
 
   // symbol catalog — real MORBlotto art; ids/order match the strips & RTP sim
   var SYMS={
@@ -432,7 +471,7 @@ h1.title .glyph{margin-left:.35rem;color:var(--cyan);filter:drop-shadow(0 0 12px
     Q:{name:'Cyan Chip',art:'PokerChips/cyanpokerchip020.png',cls:'chipart',frame:''},
     J:{name:'Red Chip',art:'PokerChips/redpokerchip015.png',cls:'chipart',frame:''}
   };
-  // pays per LINE BET, index = leftmost run length (4,000,000-spin Monte Carlo w/ mult wilds → RTP ≈ 96.6%)
+  // pays per LINE BET, index = leftmost run length (Monte-Carlo tuned with Shield Lock → RTP ≈ 96.4%)
   var PAYS={
     W:[0,0,2,40,200,1000],
     H1:[0,0,2,25,100,325],
@@ -461,16 +500,18 @@ h1.title .glyph{margin-left:.35rem;color:var(--cyan);filter:drop-shadow(0 0 12px
   ];
 
   var S={ balance:10000, speed:'normal', bet:200, phase:'idle', busy:false, sound:true,
-    rng:null, roundWin:0, fsLeft:0, fsTotal:0, fsPlayed:0, inFs:false, spinLog:[],
+    rng:null, roundWin:0, fsLeft:0, fsTotal:0, fsPlayed:0, inFs:false, spinLog:[], sticky:null,
     serverSeed:'', clientSeed:'', clientSeedPref:'', nonce:0, serverHash:'', roundId:'',
-    lastGrid:null, cycleIv:null, rollupRaf:null, rollupTickIv:null, anticIv:null, history:[] };
+    lastEv:null, cycleIv:null, rollupRaf:null, anticIv:null, tickIv:null, spinRaf:null, history:[] };
 
   var REDUCED=window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   var $=function(id){return document.getElementById(id);};
   var balanceEl=$('balance'),betInput=$('betInput'),reelsEl=$('reels'),statusEl=$('status'),
       boardShell=$('boardShell'),hudBet=$('hudBet'),hudWin=$('hudWin'),hudFs=$('hudFs'),
+      hudC1k=$('hudC1k'),hudC1v=$('hudC1v'),
       banner=$('banner'),bannerK=$('bannerK'),bannerV=$('bannerV'),linesSvg=$('linesSvg'),
+      stickyLayer=$('stickyLayer'),feltFlash=$('feltFlash'),
       soundBtn=$('soundBtn'),overlay=$('overlay'),ptOverlay=$('ptOverlay'),
       histBody=$('histBody'),histCount=$('histCount'),faqBody=$('faqBody'),actions=$('actions'),
       fxCanvas=$('fxCanvas');
@@ -499,21 +540,48 @@ h1.title .glyph{margin-left:.35rem;color:var(--cyan);filter:drop-shadow(0 0 12px
   }
   var STRIPS=STRIP_COUNTS.map(buildStrip);
 
+  /* ── provably-fair draws (identical order in play & verify & Monte Carlo) ── */
   function drawStops(rng){var st=[];for(var r=0;r<5;r++)st.push(Math.floor(rng()*STRIPS[r].length));return st;}
   function windowAt(stops){
     var g=[];for(var r=0;r<5;r++){var st=STRIPS[r],col=[];for(var row=0;row<3;row++)col.push(st[(stops[r]+row)%st.length]);g.push(col);}
     return g; // g[reel][row]
   }
-  // one multiplier per wild cell, reel-major — consumption order matches the Monte Carlo & Verify
-  function drawMult(rng){
+  function drawMultFrom(rng,table){
     var r=rng(),acc=0;
-    for(var i=0;i<MULT_TABLE.length;i++){acc+=MULT_TABLE[i][0];if(r<acc)return MULT_TABLE[i][1];}
+    for(var i=0;i<table.length;i++){acc+=table[i][0];if(r<acc)return table[i][1];}
     return 1;
   }
-  function drawMults(rng,g){
-    var m={};
-    for(var r=0;r<5;r++)for(var row=0;row<3;row++)if(g[r][row]==='W')m[r+','+row]=drawMult(rng);
+  // one multiplier per NATURAL wild in the raw window, reel-major
+  function drawMults(rng,raw,isFree){
+    var m={},table=isFree?FS_MULT:BASE_MULT;
+    for(var r=0;r<5;r++)for(var row=0;row<3;row++)if(raw[r][row]==='W')m[r+','+row]=drawMultFrom(rng,table);
     return m;
+  }
+  // overlay Shield Lock cells onto the raw window (locked cell = wild with its badge)
+  function overlaySticky(raw,rawMults,sticky){
+    if(!sticky)return {g:raw,mults:rawMults};
+    var keys=Object.keys(sticky);
+    if(!keys.length)return {g:raw,mults:rawMults};
+    var g=raw.map(function(col){return col.slice();});
+    var mults={};
+    for(var k in rawMults)mults[k]=rawMults[k];
+    keys.forEach(function(key){
+      var p=key.split(','),r=+p[0],row=+p[1];
+      g[r][row]='W';
+      mults[key]=sticky[key];
+    });
+    return {g:g,mults:mults};
+  }
+  // lock new hot wilds from the raw window; returns list of new/upgraded locks
+  function lockNewShields(raw,rawMults,sticky){
+    var added=[];
+    for(var r=0;r<5;r++)for(var row=0;row<3;row++){
+      if(raw[r][row]==='W'){
+        var key=r+','+row,m=rawMults[key];
+        if(m>1&&m>(sticky[key]||0)){sticky[key]=m;added.push({r:r,row:row,m:m});}
+      }
+    }
+    return added;
   }
   // best pay on one line (line-bet units, multiplier applied) + run + mult used
   function lineWin(g,line,mults){
@@ -549,6 +617,11 @@ h1.title .glyph{margin-left:.35rem;color:var(--cyan);filter:drop-shadow(0 0 12px
     var p=Math.floor(lineUnits*bet/LINES_N);
     if(sc>=3)p+=(SCAT_PAY[Math.min(sc,5)]||0)*bet;
     return p;
+  }
+  function multsToLog(raw,rawMults){
+    var out=[];
+    for(var r=0;r<5;r++)for(var row=0;row<3;row++)if(raw[r][row]==='W')out.push({r:r,row:row,m:rawMults[r+','+row]||1});
+    return out;
   }
 
   /* ── sound engine — layered WebAudio, all synthesized ── */
@@ -587,9 +660,16 @@ h1.title .glyph{margin-left:.35rem;color:var(--cyan);filter:drop-shadow(0 0 12px
   }
   function sClick(){blip(900,0.05,'sine',0.03);}
   function sSpinStart(){noise(0.35,900,0.06,0,0.8);blip(190,0.3,'sawtooth',0.02,0,90);}
+  function sTick(){blip(600+Math.random()*200,0.03,'square',0.022);}
   function sStop(i){noise(0.06,600+i*120,0.07,0,2);blip(150+i*34,0.09,'square',0.05,0,110+i*30);}
   function sScatLand(n){blip(500+n*180,0.14,'triangle',0.07);blip(750+n*180,0.16,'triangle',0.05,0.06);}
+  function sScatCelebrate(){
+    noise(0.9,2200,0.05,0,0.7);
+    [392,523,659,784,1047,1319].forEach(function(f,i){blip(f,0.16,'triangle',0.065,i*0.07);});
+    blip(180,0.5,'sawtooth',0.05,0,700);
+  }
   function sMultZap(){blip(300,0.16,'sawtooth',0.06,0,1400);blip(1600,0.1,'sine',0.04,0.1);}
+  function sLock(){noise(0.09,300,0.09,0,3);blip(210,0.22,'square',0.07,0.02,120);blip(1050,0.14,'sine',0.05,0.1);}
   function sAnticBeat(){blip(72,0.14,'sine',0.09);blip(72,0.12,'sine',0.06,0.22);}
   function sCoin(){blip(1250+Math.random()*500,0.06,'triangle',0.035);}
   function sWinSmall(){blip(660,0.1,'sine',0.06);blip(880,0.12,'sine',0.06,0.08);}
@@ -599,16 +679,18 @@ h1.title .glyph{margin-left:.35rem;color:var(--cyan);filter:drop-shadow(0 0 12px
   function sFsFanfare(){[440,554,659,880].forEach(function(f,i){blip(f,0.16,'square',0.04,i*0.1);blip(f,0.2,'sine',0.05,i*0.1);});}
   function startAnticLoop(){stopAnticLoop();sAnticBeat();S.anticIv=setInterval(sAnticBeat,620);}
   function stopAnticLoop(){if(S.anticIv){clearInterval(S.anticIv);S.anticIv=null;}}
+  function startTicks(){stopTicks();S.tickIv=setInterval(sTick,85);}
+  function stopTicks(){if(S.tickIv){clearInterval(S.tickIv);S.tickIv=null;}}
 
-  /* ── particle burst (coin/badge shower on big wins) ── */
+  /* ── particle burst (badge/rocket shower on big moments) ── */
   var fx={ctx:null,parts:[],raf:null};
   function fxResize(){fxCanvas.width=boardShell.clientWidth;fxCanvas.height=boardShell.clientHeight;}
   function burst(kind){
     if(REDUCED||!fxCanvas.getContext)return;
     fxResize();
     fx.ctx=fxCanvas.getContext('2d');
-    var imgs=[ART.H4,ART.H2,ART.H1,ART.W];
-    var n=kind==='mega'?70:(kind==='big'?44:26);
+    var imgs=kind==='rocket'?[ART.S,ART.W,ART.H2]:[ART.H4,ART.H2,ART.H1,ART.W];
+    var n=kind==='mega'?70:(kind==='big'||kind==='rocket'?46:26);
     var W=fxCanvas.width,H=fxCanvas.height;
     for(var i=0;i<n;i++){
       fx.parts.push({
@@ -640,6 +722,10 @@ h1.title .glyph{margin-left:.35rem;color:var(--cyan);filter:drop-shadow(0 0 12px
     boardShell.classList.remove('shake');void boardShell.offsetWidth;boardShell.classList.add('shake');
     setTimeout(function(){boardShell.classList.remove('shake');},550);
   }
+  function feltFlashGo(){
+    if(REDUCED)return;
+    feltFlash.classList.remove('go');void feltFlash.offsetWidth;feltFlash.classList.add('go');
+  }
 
   /* ── rendering ── */
   function symHtml(id,mult){
@@ -663,14 +749,27 @@ h1.title .glyph{margin-left:.35rem;color:var(--cyan);filter:drop-shadow(0 0 12px
   }
   function renderIdleGrid(g){
     for(var r=0;r<5;r++){
-      stripEls[r].style.transition='none';stripEls[r].style.transform='translateY(0)';
+      stripEls[r].style.transform='translateY(0)';
       stripEls[r].innerHTML=colHtml(g,r,null);
     }
   }
+  function renderSticky(newLocks){
+    var keys=S.sticky?Object.keys(S.sticky):[];
+    stickyLayer.innerHTML=keys.map(function(key){
+      var p=key.split(','),r=+p[0],row=+p[1],m=S.sticky[key];
+      var isNew=newLocks&&newLocks.some(function(l){return l.r===r&&l.row===row;});
+      return '<div class="lockcell'+(isNew?' lockin':'')+'" data-key="'+key+'" style="grid-column:'+(r+1)+';grid-row:'+(row+1)+'">'
+        +'<img src="'+SYMS.W.art+'" alt="Locked MORB shield" draggable="false"/>'
+        +'<span class="frame"></span><span class="mbadge">×'+m+'</span><span class="lockpin">🔒</span>'
+        +'</div>';
+    }).join('');
+  }
+  function clearSticky(){stickyLayer.innerHTML='';}
   function clearHighlights(){
     if(S.cycleIv){clearInterval(S.cycleIv);S.cycleIv=null;}
     linesSvg.innerHTML='';
     reelsEl.querySelectorAll('.sym.hit').forEach(function(el){el.classList.remove('hit');});
+    stickyLayer.querySelectorAll('.lockcell.hit').forEach(function(el){el.classList.remove('hit');});
   }
   function cellCenter(r,row){
     var reel=reelEls[r],box=reelsEl.getBoundingClientRect(),rb=reel.getBoundingClientRect();
@@ -690,12 +789,15 @@ h1.title .glyph{margin-left:.35rem;color:var(--cyan);filter:drop-shadow(0 0 12px
   }
   function highlightEntry(entry){
     reelsEl.querySelectorAll('.sym.hit').forEach(function(el){el.classList.remove('hit');});
+    stickyLayer.querySelectorAll('.lockcell.hit').forEach(function(el){el.classList.remove('hit');});
     var cells=entry.line!=null
       ? LINES[entry.line].map(function(row,r){return {r:r,row:row};}).slice(0,entry.run)
       : entry.cells;
     cells.forEach(function(c){
       var el=stripEls[c.r].children[c.row];
       if(el)el.classList.add('hit');
+      var lock=stickyLayer.querySelector('.lockcell[data-key="'+c.r+','+c.row+'"]');
+      if(lock)lock.classList.add('hit');
     });
   }
   function presentWins(ev){
@@ -713,23 +815,34 @@ h1.title .glyph{margin-left:.35rem;color:var(--cyan);filter:drop-shadow(0 0 12px
     show();
     S.cycleIv=setInterval(show,800);
   }
+  function stopRollup(){
+    if(S.rollupRaf){cancelAnimationFrame(S.rollupRaf);S.rollupRaf=null;}
+  }
   function rollup(el,to,big){
-    if(S.rollupRaf)cancelAnimationFrame(S.rollupRaf);
-    if(S.rollupTickIv){clearInterval(S.rollupTickIv);S.rollupTickIv=null;}
-    var from=0,t0=null,dur=big?1300:600;
-    if(big)S.rollupTickIv=setInterval(sCoin,75);
+    stopRollup();
+    var from=0,t0=null,dur=big?1300:600,lastTick=0;
     function step(ts){
       if(t0===null)t0=ts;
       var k=Math.min(1,(ts-t0)/dur);
       el.textContent=fmt(from+(to-from)*(1-Math.pow(1-k,3)));
+      if(big&&ts-lastTick>75){sCoin();lastTick=ts;}
       if(k<1){S.rollupRaf=requestAnimationFrame(step);}
-      else if(S.rollupTickIv){clearInterval(S.rollupTickIv);S.rollupTickIv=null;}
+      else{S.rollupRaf=null;}
     }
     S.rollupRaf=requestAnimationFrame(step);
   }
 
   function syncHud(){
     hudBet.textContent=fmt(S.bet);
+    if(S.inFs){
+      hudC1k.textContent='Locked';
+      hudC1v.className='v lines-v locked-v';
+      hudC1v.textContent=S.sticky?Object.keys(S.sticky).length:0;
+    }else{
+      hudC1k.textContent='Lines';
+      hudC1v.className='v lines-v';
+      hudC1v.textContent='20';
+    }
     if(S.roundWin>0){hudWin.classList.remove('idle');}
     else{hudWin.classList.add('idle');hudWin.textContent='—';}
     hudFs.textContent=S.fsTotal>0?(S.fsPlayed+'/'+S.fsTotal):'—';
@@ -757,105 +870,156 @@ h1.title .glyph{margin-left:.35rem;color:var(--cyan);filter:drop-shadow(0 0 12px
     if(bet>S.balance){flashInput();return;}
     betInput.value=bet;
     S.bet=bet;S.balance-=bet;S.phase='active';S.busy=true;
-    S.roundWin=0;S.fsLeft=0;S.fsTotal=0;S.fsPlayed=0;S.inFs=false;S.spinLog=[];
+    S.roundWin=0;S.fsLeft=0;S.fsTotal=0;S.fsPlayed=0;S.inFs=false;S.spinLog=[];S.sticky=null;
     S.serverSeed=rndHex(64);
     S.clientSeed=(S.clientSeedPref||'').trim()||rndHex(20);
     S.nonce+=1;S.roundId=shortId();
     S.serverHash=await sha256Hex(S.serverSeed);
     S.rng=makeRng(S.serverSeed+':'+S.clientSeed+':'+S.nonce);
-    hideBanner();clearHighlights();setControls(false);syncHud();renderActions();
+    stopRollup();hideBanner();clearHighlights();clearSticky();setControls(false);syncHud();renderActions();
     statusEl.className='felt-status';statusEl.textContent='Reels spinning…';
     doSpin(false);
   }
 
+  /* ── velocity reel engine (modelled on the transaction slot machine) ──
+     Each reel renders its full strip (+3 wrap cells). One shared rAF drives
+     offset(t) = D * profile(t/T): quick accel, long cruise, smooth decel —
+     landing exactly on the drawn stop at its scheduled time. */
+  function easeProfile(u){
+    var a=0.1,b=0.72,s=1/(a/2+(b-a)+(1-b)/2);
+    if(u<=0)return 0;
+    if(u>=1)return 1;
+    if(u<=a)return s*u*u/(2*a);
+    if(u<=b)return s*a/2+s*(u-a);
+    return 1-s*(1-u)*(1-u)/(2*(1-b));
+  }
+  function stripHtml(r){
+    var L=STRIPS[r].length,html='';
+    for(var i=0;i<L+3;i++)html+=symHtml(STRIPS[r][i%L],1);
+    return html;
+  }
+
   function doSpin(isFree){
     var stops=drawStops(S.rng);
-    var g=windowAt(stops);
-    var mults=drawMults(S.rng,g);
+    var raw=windowAt(stops);
+    var rawMults=drawMults(S.rng,raw,isFree);
+    var ov=overlaySticky(raw,rawMults,isFree?S.sticky:null);
+    var newLocks=(isFree&&S.sticky)?lockNewShields(raw,rawMults,S.sticky):[];
+    var ev=evalSpin(ov.g,ov.mults);
     var sp=spd();
+    S.lastEv=null;
     clearHighlights();
     sSpinStart();
+    startTicks();
 
-    // scatter anticipation — if two rockets have landed and reels remain, stretch the tease
-    var durs=[],anticFrom=-1,scSoFar=0;
+    // stop schedule — 1s apart; once two rockets are visible the rest stretch & burn
+    var stopAt=[],anticFrom=-1,scSoFar=0,celebrateReel=-1;
+    var t=REDUCED?260:sp.first;
     for(var r=0;r<5;r++){
-      durs[r]=sp.spin+r*sp.stagger;
-      if(anticFrom>=0)durs[r]+=sp.antic*(r-anticFrom);
-      scSoFar+=g[r].filter(function(s){return s==='S';}).length;
-      if(anticFrom<0&&scSoFar>=2&&r<4)anticFrom=r;
+      stopAt[r]=t;
+      scSoFar+=ov.g[r].filter(function(s){return s==='S';}).length;
+      if(anticFrom<0&&scSoFar===2&&r<4)anticFrom=r;
+      if(celebrateReel<0&&scSoFar>=3)celebrateReel=r;
+      var gap=(anticFrom>=0&&r>=anticFrom)?sp.anticGap:sp.gap;
+      t+=REDUCED?120:gap;
     }
 
-    for(var r2=0;r2<5;r2++){
-      (function(r){
-        var strip=stripEls[r],reel=reelEls[r];
-        var cellH=reel.clientHeight/3;
-        var FILL=10+r*2;
-        var html=colHtml(g,r,mults);
-        var keys=Object.keys(SYMS);
-        for(var f=0;f<FILL;f++)html+=symHtml(keys[Math.floor(Math.random()*keys.length)],1);
-        strip.style.transition='none';
-        strip.innerHTML=html;
-        strip.style.transform='translateY(-'+(FILL*cellH)+'px)';
-        void strip.offsetHeight;
-        reel.classList.add('spin');
-        var dur=durs[r];
-        strip.style.transition='transform '+dur+'ms cubic-bezier(.22,.61,.35,1.04)';
-        strip.style.transform='translateY(0)';
-        // anticipation glow kicks in the moment the second rocket lands
-        if(anticFrom>=0&&r>anticFrom){
-          setTimeout(function(){
-            if(reel.classList.contains('spin'))reel.classList.add('antic');
-          },durs[anticFrom]);
-        }
-        setTimeout(function(){
-          reel.classList.remove('spin');reel.classList.remove('antic');reel.classList.add('land');
-          reel.classList.add('flash');
-          sStop(r);
-          var landedSc=g[r].filter(function(s){return s==='S';}).length;
+    var cellH=reelEls[0].clientHeight/3;
+    var reels=stops.map(function(stop,r){
+      var L=STRIPS[r].length;
+      var start=Math.floor(Math.random()*L);
+      var T=stopAt[r];
+      var ideal=sp.cruise*T/1000;
+      var base=((stop-start)%L+L)%L;
+      var D=base+Math.max(1,Math.round((ideal-base)/L))*L; // ≥1 full loop, near cruise speed
+      stripEls[r].innerHTML=stripHtml(r);
+      reelEls[r].classList.add('spin');
+      return {r:r,L:L,start:start,D:D,T:T,done:false};
+    });
+
+    if(anticFrom>=0){
+      setTimeout(function(){
+        startAnticLoop();
+        for(var r2=anticFrom+1;r2<5;r2++)if(!reels[r2].done)reelEls[r2].classList.add('antic');
+      },stopAt[anticFrom]);
+    }
+
+    var t0=null;
+    function frame(ts){
+      if(t0===null)t0=ts;
+      var el=ts-t0,allDone=true;
+      reels.forEach(function(R){
+        if(R.done)return;
+        var u=el/R.T;
+        if(u>=1){
+          R.done=true;
+          var reel=reelEls[R.r],strip=stripEls[R.r];
+          reel.classList.remove('spin');reel.classList.remove('antic');
+          strip.style.transform='translateY(0)';
+          strip.innerHTML=colHtml(ov.g,R.r,ov.mults);
+          reel.classList.add('land');reel.classList.add('flash');
+          (function(reel){setTimeout(function(){reel.classList.remove('land');reel.classList.remove('flash');},260);})(reel);
+          sStop(R.r);
+          var landedSc=ov.g[R.r].filter(function(s){return s==='S';}).length;
           if(landedSc>0){
-            var upTo=0;for(var q=0;q<=r;q++)upTo+=g[q].filter(function(s){return s==='S';}).length;
+            var upTo=0;for(var q=0;q<=R.r;q++)upTo+=ov.g[q].filter(function(s){return s==='S';}).length;
             sScatLand(upTo);
           }
           for(var row=0;row<3;row++){
-            if(g[r][row]==='W'&&(mults[r+','+row]||1)>1){sMultZap();break;}
+            if(ov.g[R.r][row]==='W'&&(ov.mults[R.r+','+row]||1)>1&&!(S.sticky&&S.sticky[R.r+','+row]&&!newLocks.some(function(l){return l.r===R.r&&l.row===row;}))){sMultZap();break;}
           }
-          setTimeout(function(){reel.classList.remove('land');reel.classList.remove('flash');},260);
-        },dur);
-      })(r2);
-    }
-    if(anticFrom>=0){
-      setTimeout(startAnticLoop,durs[anticFrom]);
-    }
-    var total=Math.max.apply(null,durs)+140;
-    setTimeout(function(){
-      stopAnticLoop();
-      // trim strips back to the settled window so highlights address children 0–2
-      for(var r=0;r<5;r++){
-        stripEls[r].style.transition='none';stripEls[r].style.transform='translateY(0)';
-        stripEls[r].innerHTML=colHtml(g,r,mults);
+          // new Shield Locks on this reel snap in as it lands
+          var reelLocks=newLocks.filter(function(l){return l.r===R.r;});
+          if(reelLocks.length){renderSticky(reelLocks);sLock();}
+          // third rocket — detonation
+          if(R.r===celebrateReel){
+            stopAnticLoop();
+            ov.g.forEach(function(col,cr){col.forEach(function(s,crow){
+              if(s==='S'&&cr<=R.r){
+                var cell=stripEls[cr].children[crow];
+                if(cell){cell.classList.remove('scathit');void cell.offsetWidth;cell.classList.add('scathit');}
+              }
+            });});
+            feltFlashGo();shake();burst('rocket');sScatCelebrate();
+          }
+        }else{
+          var off=(R.start+R.D*easeProfile(u))%R.L;
+          stripEls[R.r].style.transform='translateY('+(-off*cellH)+'px)';
+          // drop the blur just before landing
+          if(R.T-el<240)reelEls[R.r].classList.remove('spin');
+          allDone=false;
+        }
+      });
+      if(allDone){
+        S.spinRaf=null;
+        stopTicks();stopAnticLoop();
+        setTimeout(function(){resolveSpin(stops,raw,rawMults,ov,ev,newLocks,isFree);},140);
+      }else{
+        S.spinRaf=requestAnimationFrame(frame);
       }
-      resolveSpin(stops,g,mults,isFree);
-    },total);
+    }
+    S.spinRaf=requestAnimationFrame(frame);
   }
 
-  function resolveSpin(stops,g,mults,isFree){
-    var ev=evalSpin(g,mults);
+  function resolveSpin(stops,raw,rawMults,ov,ev,newLocks,isFree){
     var win=spinPayout(S.bet,ev.lineUnits,ev.sc);
-    var multList=Object.keys(mults).filter(function(k){return mults[k]>1;}).map(function(k){return mults[k];});
-    S.spinLog.push({stops:stops.slice(),mults:multsToLog(g,mults),free:isFree,win:win,lines:ev.wins.length,sc:ev.sc});
+    S.spinLog.push({stops:stops.slice(),mults:multsToLog(raw,rawMults),free:isFree,win:win,lines:ev.wins.length,sc:ev.sc,
+      locked:S.sticky?Object.keys(S.sticky).length:0});
     S.roundWin+=win;
-    S.lastGrid=g;
     if(isFree)S.fsPlayed++;
     var retrig=ev.sc>=3;
     if(retrig){
-      S.fsLeft+=FS_AWARD;S.fsTotal+=FS_AWARD;
+      var award=S.inFs?FS_RETRIG:FS_AWARD;
+      S.fsLeft+=award;S.fsTotal+=award;
+      if(!S.inFs){S.sticky={};renderSticky(null);}
       boardShell.classList.add('fs');S.inFs=true;
       sFsFanfare();
-      showBanner('win',(isFree?'Retrigger!':'Free spins!'),'+'+FS_AWARD+' FREE SPINS');
+      showBanner('win',(isFree?'Retrigger!':'Shield Lock!'),'+'+award+' FREE SPINS');
       burst('big');
-      setTimeout(hideBanner,spd().gap*1.4);
+      setTimeout(hideBanner,spd().settle*1.6);
     }
     if(win>0){
+      S.lastEv=ev;
       presentWins(ev);
       var hotMult=ev.wins.reduce(function(a,w){return Math.max(a,w.mult||1);},1);
       var x=win/S.bet;
@@ -863,7 +1027,7 @@ h1.title .glyph{margin-left:.35rem;color:var(--cyan);filter:drop-shadow(0 0 12px
       statusEl.className='felt-status';
       statusEl.innerHTML=(ev.wins.length?ev.wins.length+' line'+(ev.wins.length===1?'':'s'):'scatter')
         +' · <span class="gain">+'+fmt(win)+' MORBIUS</span>'
-        +(hotMult>1?' · <span class="hot">🔥 ×'+hotMult+' wild!</span>':'')
+        +(hotMult>1?' · <span class="hot">🔥 ×'+hotMult+' shield!</span>':'')
         +(isFree?' · free spin':'');
       if(x>=25){sWinMega();shake();burst('mega');}
       else if(x>=10){sWinBig();shake();burst('big');}
@@ -879,23 +1043,20 @@ h1.title .glyph{margin-left:.35rem;color:var(--cyan);filter:drop-shadow(0 0 12px
       renderActions();
       setTimeout(function(){
         statusEl.className='felt-status fsmode';
-        statusEl.textContent='Free spin '+(S.fsPlayed+1)+' of '+S.fsTotal;
+        var locked=S.sticky?Object.keys(S.sticky).length:0;
+        statusEl.textContent='Free spin '+(S.fsPlayed+1)+' of '+S.fsTotal+(locked?' · '+locked+' shield'+(locked===1?'':'s')+' locked':'');
         doSpin(true);
-      },spd().gap);
+      },spd().settle+(retrig?600:0));
     }else{
       settle();
     }
   }
-  function multsToLog(g,mults){
-    var out=[];
-    for(var r=0;r<5;r++)for(var row=0;row<3;row++)if(g[r][row]==='W')out.push({r:r,row:row,m:mults[r+','+row]||1});
-    return out;
-  }
 
   function settle(){
-    S.phase='settled';S.busy=false;S.inFs=false;
+    S.phase='settled';S.busy=false;
+    var hadFs=S.inFs;S.inFs=false;
     boardShell.classList.remove('fs');
-    var win=S.roundWin,profit=win-S.bet,x=win/S.bet;
+    var win=S.roundWin,x=win/S.bet;
     if(win>0)S.balance+=win;
     if(win>0){
       var tier=x>=25?'mega':(x>=10?'big':'');
@@ -908,9 +1069,12 @@ h1.title .glyph{margin-left:.35rem;color:var(--cyan);filter:drop-shadow(0 0 12px
     S.history.unshift({ id:S.roundId, at:new Date().toISOString(), bet:S.bet, win:win,
       spins:S.spinLog.length, fs:S.fsTotal, lines:S.spinLog.reduce(function(a,s){return a+s.lines;},0),
       hot:S.spinLog.reduce(function(a,s){return a+s.mults.filter(function(m){return m.m>1;}).length;},0),
-      spinLog:S.spinLog.map(function(s){return {stops:s.stops.slice(),mults:s.mults.map(function(m){return {r:m.r,row:m.row,m:m.m};}),free:s.free,win:s.win,lines:s.lines,sc:s.sc};}),
+      locked:S.spinLog.length?S.spinLog[S.spinLog.length-1].locked:0,
+      spinLog:S.spinLog.map(function(s){return {stops:s.stops.slice(),mults:s.mults.map(function(m){return {r:m.r,row:m.row,m:m.m};}),free:s.free,win:s.win,lines:s.lines,sc:s.sc,locked:s.locked};}),
       serverSeed:S.serverSeed, serverHash:S.serverHash, clientSeed:S.clientSeed, nonce:S.nonce });
     if(S.history.length>15)S.history.pop();
+    if(hadFs){setTimeout(clearSticky,1600);}
+    S.sticky=null;
     setControls(true);syncHud();renderActions();renderHistory();
   }
 
@@ -926,10 +1090,10 @@ h1.title .glyph{margin-left:.35rem;color:var(--cyan);filter:drop-shadow(0 0 12px
     histBody.innerHTML='<ul class="hist-list">'+S.history.map(function(r){
       var profit=r.win-r.bet,multX100=Math.round(r.win/r.bet*100);
       var badge=r.fs>0?'<span class="badge fsb">'+r.fs+' FS</span>':'<span class="badge">base</span>';
-      var hot=r.hot>0?'<span class="badge fsb">🔥'+r.hot+'</span>':'';
+      var locks=r.locked>0?'<span class="badge fsb">🔒'+r.locked+'</span>':'';
       var xcell=r.win>0?'<span class="x win">'+(multX100/100).toFixed(2)+'×</span>':'<span class="x bust">0.00×</span>';
       var pcell='<span class="p '+(profit>0?'up':(profit<0?'down':'flat'))+'">'+(profit>0?'+':'')+fmt(profit)+'</span>';
-      return '<li class="hist-row"><span class="t">'+timeLabel(r.at)+'</span>'+badge+hot
+      return '<li class="hist-row"><span class="t">'+timeLabel(r.at)+'</span>'+badge+locks
         +'<span class="m">bet '+fmt(r.bet)+'</span>'
         +'<span class="m">'+r.lines+' line'+(r.lines===1?'':'s')+'</span>'
         +xcell+pcell
@@ -939,7 +1103,7 @@ h1.title .glyph{margin-left:.35rem;color:var(--cyan);filter:drop-shadow(0 0 12px
   }
 
   /* fairness modal */
-  function recipeStr(){return 'demo: mulberry32(xmur3(`${serverSeed}:${clientSeed}:${nonce}`)) → 5 reel stops per spin, then 1 multiplier draw per wild cell (reel-major), consumed in spin order (base spin first, then each free spin). Production draws the same sequence from the server HMAC_SHA256 stream.';}
+  function recipeStr(){return 'demo: mulberry32(xmur3(`${serverSeed}:${clientSeed}:${nonce}`)) → 5 reel stops per spin, then 1 multiplier draw per natural wild (reel-major), consumed in spin order (base spin first, then each free spin). Shield Lock cells are derived from prior draws, never drawn. Production draws the same sequence from the server HMAC_SHA256 stream.';}
   function ckHtml(ok,label){return '<div class="m-check"><span class="ck '+(ok?'ok':'no')+'">'+(ok?'✓':'✗')+'</span><span>'+label+'</span></div>';}
   function fieldHtml(l,v){return '<div class="m-field"><div class="fl">'+l+'</div><div class="fv">'+v+'</div></div>';}
   function spinsHtml(log){
@@ -947,8 +1111,9 @@ h1.title .glyph{margin-left:.35rem;color:var(--cyan);filter:drop-shadow(0 0 12px
     return '<div class="m-spins">'+log.map(function(s,i){
       var stops=s.stops.map(function(v){return '<span class="md">'+v+'</span>';}).join('');
       var hot=s.mults.filter(function(m){return m.m>1;}).map(function(m){return '<span class="md hot">R'+(m.r+1)+'×'+m.m+'</span>';}).join('');
+      var lk=s.locked>0?'<span class="md lockmd">🔒'+s.locked+'</span>':'';
       var pc=s.win>0?'<span class="rp up">+'+fmt(s.win)+'</span>':'<span class="rp no">0</span>';
-      return '<div class="m-sr"><span class="rn'+(s.free?' fs':'')+'">'+(s.free?'free':'spin')+' '+(i+1)+'</span><span class="rd">'+stops+hot+'</span>'
+      return '<div class="m-sr"><span class="rn'+(s.free?' fs':'')+'">'+(s.free?'free':'spin')+' '+(i+1)+'</span><span class="rd">'+stops+hot+lk+'</span>'
         +(s.sc>=3?'<span class="rp up">🚀×'+s.sc+'</span>':'')+pc+'</div>';
     }).join('')+'</div>';
   }
@@ -965,34 +1130,43 @@ h1.title .glyph{margin-left:.35rem;color:var(--cyan);filter:drop-shadow(0 0 12px
     var out=$('verifyOut'),r=findRound(id);
     if(!r){out.innerHTML='<p class="note" style="color:var(--loss)">No round found with that ID.</p>';return;}
     out.innerHTML='<p class="note">Checking…</p>';
-    var hashOk=(await sha256Hex(r.serverSeed))===r.serverHash;
+    var reHash=await sha256Hex(r.serverSeed);
+    var hashAvail=reHash!=='sha256-unavailable'&&r.serverHash!=='sha256-unavailable';
+    var hashOk=hashAvail&&reHash===r.serverHash;
     var rng=makeRng(r.serverSeed+':'+r.clientSeed+':'+r.nonce);
-    var stopsOk=true,multsOk=true,winsOk=true,reTotal=0;
+    var stopsOk=true,multsOk=true,winsOk=true,locksOk=true,reTotal=0;
+    var sticky=null;
     for(var i=0;i<r.spinLog.length;i++){
+      var lg=r.spinLog[i];
+      if(!lg.free)sticky=null; // base spin — Shield Lock only exists inside the bonus
       var st=drawStops(rng);
-      if(st.join(',')!==r.spinLog[i].stops.join(','))stopsOk=false;
-      var g=windowAt(st);
-      var m=drawMults(rng,g);
-      var logM=r.spinLog[i].mults;
-      var reM=multsToLog(g,m);
-      if(JSON.stringify(reM)!==JSON.stringify(logM))multsOk=false;
-      var ev=evalSpin(g,m);
+      if(st.join(',')!==lg.stops.join(','))stopsOk=false;
+      var raw=windowAt(st);
+      var m=drawMults(rng,raw,lg.free);
+      if(JSON.stringify(multsToLog(raw,m))!==JSON.stringify(lg.mults))multsOk=false;
+      var ov=overlaySticky(raw,m,lg.free?sticky:null);
+      if(lg.free&&sticky)lockNewShields(raw,m,sticky);
+      var ev=evalSpin(ov.g,ov.mults);
       var w=spinPayout(r.bet,ev.lineUnits,ev.sc);
-      if(w!==r.spinLog[i].win)winsOk=false;
+      if(w!==lg.win)winsOk=false;
+      if((sticky?Object.keys(sticky).length:0)!==(lg.locked||0))locksOk=false;
       reTotal+=w;
+      if(ev.sc>=3&&sticky===null)sticky={}; // bonus starts after the triggering spin
     }
     var payoutOk=reTotal===r.win;
     out.innerHTML='<div class="m-result">'
-      +ckHtml(hashOk,'Server seed matches its committed hash (checked locally)')
+      +ckHtml(hashOk,hashAvail?'Server seed matches its committed hash (checked locally)':'Hash check unavailable — SHA-256 needs a secure (https) context')
       +ckHtml(stopsOk,'Every reel stop re-derives from the seed stream')
       +ckHtml(multsOk,'Every wild multiplier re-derives from the same stream')
+      +ckHtml(locksOk,'Shield Lock state replays spin-for-spin')
       +ckHtml(winsOk,'Each spin’s win reconciles with the paytable & 20 lines')
       +ckHtml(payoutOk,'Round payout equals the sum of spin wins')
-      +'<div class="m-maplabel">Spin replay — 5 reel stops + hot wilds each</div>'+spinsHtml(r.spinLog)
+      +'<div class="m-maplabel">Spin replay — 5 reel stops · hot wilds · locks</div>'+spinsHtml(r.spinLog)
       +'<div class="m-meta"><span>Spins: <span class="mv">'+r.spins+'</span></span>'
         +'<span>Free spins: <span class="mv">'+r.fs+'</span></span>'
         +'<span>Lines hit: <span class="mv cyan">'+r.lines+'</span></span>'
-        +'<span>Hot wilds: <span class="mv cyan">'+(r.hot||0)+'</span></span></div>'
+        +'<span>Hot wilds: <span class="mv cyan">'+(r.hot||0)+'</span></span>'
+        +'<span>Shields locked: <span class="mv cyan">'+(r.locked||0)+'</span></span></div>'
       +'<div class="m-fields">'+fieldHtml('Server seed hash (committed)',r.serverHash)+fieldHtml('Server seed (revealed)',r.serverSeed)
         +fieldHtml('Client seed',r.clientSeed)+fieldHtml('Nonce',String(r.nonce))+fieldHtml('Recipe',recipeStr())+'</div>'
       +'<div class="m-foot"><span>Bet: <span class="fv">'+fmt(r.bet)+'</span></span>'
@@ -1013,27 +1187,28 @@ h1.title .glyph{margin-left:.35rem;color:var(--cyan);filter:drop-shadow(0 0 12px
     $('ptBody').innerHTML=
       '<table class="pt-tbl"><thead><tr><th>Symbol</th><th>×2</th><th>×3</th><th>×4</th><th>×5</th></tr></thead>'
       +'<tbody>'+rows
-      +'<tr><td>'+ptSymCell('S')+'</td><td>—</td><td>2× bet</td><td>10× bet</td><td>50× bet</td></tr>'
+      +'<tr><td>'+ptSymCell('S')+'</td><td>—</td><td>1× bet</td><td>4× bet</td><td>20× bet</td></tr>'
       +'</tbody></table>'
       +'<div class="pt-mults">'
-        +'<div class="pm"><div class="pmx">×2</div><div class="pmp">5.5% of wilds</div></div>'
-        +'<div class="pm"><div class="pmx">×3</div><div class="pmp">3% of wilds</div></div>'
-        +'<div class="pm"><div class="pmx">×5</div><div class="pmp">1.5% of wilds</div></div>'
+        +'<div class="pm"><div class="pmx">×2</div><div class="pmp">4.5% · 11% in bonus</div></div>'
+        +'<div class="pm"><div class="pmx">×3</div><div class="pmp">2.3% · 6% in bonus</div></div>'
+        +'<div class="pm"><div class="pmx">×5</div><div class="pmp">1.2% · 2.5% in bonus</div></div>'
       +'</div>'
       +'<p class="pt-note">Line pays are in <span class="hl">line bets</span> (total bet ÷ 20) and pay leftmost-consecutive on the 20 fixed lines; only the best win per line counts. '
       +'The <span class="hl">MORB wild</span> substitutes for every symbol except the 🚀 rocket and pays as its own top symbol. '
       +'<span class="am">Hot wilds</span> land with a ×2 / ×3 / ×5 badge — a winning line through hot wilds is multiplied by the <span class="am">highest</span> badge in the run. '
-      +'<span class="am">🚀 Rockets</span> pay anywhere (× total bet) and 3+ award <span class="am">8 free spins</span> — retriggerable during free spins. '
-      +'Strips &amp; paytable are tuned to ≈ 96.6% RTP.</p>';
+      +'<span class="am">🚀 Rockets</span> pay anywhere (× total bet); 3+ award <span class="am">5 Shield Lock free spins</span> (+2 per retrigger). '
+      +'During the bonus every hot shield <span class="am">locks in place</span> for the remaining spins — and a higher badge landing on a locked cell upgrades it. '
+      +'Strips, paytable &amp; bonus are tuned to ≈ 96.4% RTP.</p>';
   }
 
   var FAQS=[
     {q:'How do the 20 lines pay?',a:'<p>Your bet covers all <span class="hl">20 fixed paylines</span>, so each line stakes 1/20th of the bet. A line wins when <span class="hl">2+ (top symbols) or 3+ identical symbols</span> land left-to-right consecutively from reel 1 along that line — check the full paytable for every value. Only the single best win counts per line, but every winning line pays, so a good spin stacks several lines at once.</p><p>The <span class="hl">MORB wild</span> substitutes for every paying symbol (not the 🚀 rocket) and is also the top-paying symbol in its own right — five wilds on a line pay 1000× the line bet.</p>'},
-    {q:'What are hot (multiplier) wilds?',a:'<p>Every wild that lands can come in <span class="hl">hot</span>: about 1 in 10 wilds carries a <span class="hl">×2, ×3 or ×5 badge</span> (5.5% / 3% / 1.5% of wilds). You’ll see it instantly — hot wilds land with a pulsing amber border and the badge in the corner, regular wilds carry a cyan border, rockets a rose one.</p><p>A winning line that runs through hot wilds is multiplied by the <span class="hl">highest badge in that run</span> — badges don’t compound, so one ×5 is the best case, turning a 200× line into 1000×. The multiplier draw comes from the same seeded stream as the reel stops, so Verify replays it exactly.</p>'},
-    {q:'How do free spins work?',a:'<p>Land <span class="hl">3 or more 🚀 rockets</span> anywhere in the window and you win an instant scatter pay (2× / 10× / 50× your total bet for 3 / 4 / 5) plus <span class="hl">8 free spins</span> at the same bet. The board shifts into an amber free-spins state and the spins run automatically.</p><p>Rockets landing <span class="hl">during</span> free spins retrigger — another 8 spins stack onto your total. Everything won across the base spin and all free spins is paid together when the round settles.</p>'},
-    {q:'What is the RTP — where does the math come from?',a:'<p>The reel strips (52–53 symbols per reel, with 2 rockets and 3–4 wilds each), the hot-wild odds, and the paytable were tuned with a <span class="hl">4,000,000-spin Monte Carlo simulation</span> of these exact strips, lines, multipliers, and pays. The result: <span class="hl">RTP ≈ 96.6%</span>, a hit rate of about 49% of spins, free spins triggering about once in 80 spins (contributing ≈ 9.6 points of return), and a maximum observed round of ≈ 511× bet.</p><p>That means a built-in house edge of about <span class="hl">3.4%</span> — over a long session the game keeps ~3.4 of every 100 MORBIUS wagered. Individual sessions swing far wider than that; the edge only shows up over many spins.</p>'},
-    {q:'Is it really fair — and reproducible?',a:'<p>Yes. Before you bet, the server commits to a secret <span class="hl">server seed</span> (you see only its SHA-256 hash). Every draw of every spin — the five reel stops <span class="hl">and</span> each wild’s multiplier — comes from a stream derived from that seed, <span class="hl">your client seed</span>, and a nonce, so the entire round is fixed the instant you press spin.</p><p>When the round settles the seed is revealed. Hit <span class="hl">Verify</span> and the whole sequence re-derives draw-for-draw, the wins recompute from the paytable, and the commitment hash is checked locally.</p>'},
-    {q:'Does spin speed change the odds?',a:'<p>No — <span class="hl">Turbo</span> only shortens the reel animation, and the rocket-tease slowdown is pure theatre. The stops and multipliers are already drawn from the seeded stream before the reels start moving, so Normal and Turbo have identical math. Pick whichever feels better.</p>'},
+    {q:'How does the Shield Lock bonus work?',a:'<p>Land <span class="hl">3+ 🚀 rockets</span> and you win an instant scatter pay (1× / 4× / 20× your total bet for 3 / 4 / 5) plus <span class="hl">5 free spins</span>; rockets during the bonus retrigger <span class="hl">+2 spins</span> each time.</p><p>During free spins, wilds run hot far more often — and every <span class="hl">hot shield locks in place</span> with its ×2 / ×3 / ×5 badge for the rest of the bonus. Locked cells count as that wild on <span class="hl">every remaining spin</span>, so each new lock makes every later spin stronger. If a higher badge lands on an already-locked cell, the lock upgrades. On average a bonus banks about one locked shield, but stack two or three ×5s and the board turns into a win factory — that chase is the game’s ceiling (1,133× was the biggest round in 4 million simulated spins).</p>'},
+    {q:'What are hot (multiplier) wilds?',a:'<p>Every wild can land <span class="hl">hot</span>, carrying a <span class="hl">×2, ×3 or ×5 badge</span> — in the base game 4.5% / 2.3% / 1.2% of wilds (about 1 in 12), and during Shield Lock spins 11% / 6% / 2.5% (about 1 in 5). You’ll see it instantly: hot wilds land with a pulsing amber border and the badge in the corner, regular wilds carry a cyan border, rockets a rose one.</p><p>A winning line that runs through hot wilds is multiplied by the <span class="hl">highest badge in that run</span> — badges don’t compound, so one ×5 is the best case, turning a 200× line into 1000×. Every multiplier draw comes from the same seeded stream as the reel stops, so Verify replays it exactly.</p>'},
+    {q:'What is the RTP — where does the math come from?',a:'<p>The reel strips (52–53 symbols per reel, with 2 rockets and 3–4 wilds each), the hot-wild odds in and out of the bonus, the Shield Lock rules, and the paytable were tuned with <span class="hl">multi-million-spin Monte Carlo simulations</span> of these exact rules (1M + 4M spins on separate seeds). The result: <span class="hl">RTP ≈ 96.4%</span>, hit rate ≈ 49%, free spins about once in 80 spins contributing ≈ 14 points of return with ≈ 1 locked shield per bonus, and a maximum observed round of ≈ 1,133× bet.</p><p>That means a built-in house edge of about <span class="hl">3.6%</span> — over a long session the game keeps ~3.6 of every 100 MORBIUS wagered. Individual sessions swing far wider than that; the edge only shows up over many spins.</p>'},
+    {q:'Is it really fair — and reproducible?',a:'<p>Yes. Before you bet, the server commits to a secret <span class="hl">server seed</span> (you see only its SHA-256 hash). Every draw of every spin — the five reel stops <span class="hl">and</span> each wild’s multiplier — comes from a stream derived from that seed, <span class="hl">your client seed</span>, and a nonce, so the entire round is fixed the instant you press spin. Shield Lock positions are pure consequences of those draws, so they replay too.</p><p>When the round settles the seed is revealed. Hit <span class="hl">Verify</span> and the whole sequence re-derives draw-for-draw — stops, multipliers, locks — the wins recompute from the paytable, and the commitment hash is checked locally.</p>'},
+    {q:'Does spin speed change the odds?',a:'<p>No — <span class="hl">Turbo</span> only shortens the reel ride, and the rocket-tease slowdown (reels stretching to two seconds apart while they burn amber) is pure theatre. The stops and multipliers are already drawn from the seeded stream before the reels start moving, so Normal and Turbo have identical math. Pick whichever feels better.</p>'},
     {q:'How do I get MORBIUS?',a:'<p>MORBIUS is the project’s token on <span class="hl">PulseChain</span> (chain ID 369). Buy it on <span class="hl">PulseX</span>, the main PulseChain DEX, by swapping PLS or WPLS for MORBIUS, then deposit it to your play balance.</p><p class="mono" style="font-size:11px">Contract: <a href="https://scan.pulsechain.com/token/0xB7d4eB5fDfE3d4d3B5C16a44A49948c6EC77c6F1" target="_blank" rel="noopener noreferrer">0xB7d4eB5fDfE3d4d3B5C16a44A49948c6EC77c6F1</a></p><p>Always confirm the contract address before swapping — never trust a ticker alone.</p>'}
   ];
   function renderFaq(){
@@ -1051,7 +1226,7 @@ h1.title .glyph{margin-left:.35rem;color:var(--cyan);filter:drop-shadow(0 0 12px
   document.querySelectorAll('.chip').forEach(function(c){c.addEventListener('click',function(){
     if(S.phase==='active')return;
     sClick();
-    if(c.getAttribute('data-set')==='max'){betInput.value=clampBet(Math.min(MAX_BET,S.balance));}
+    if(c.getAttribute('data-set')==='max'){betInput.value=clampBet(Math.floor(Math.min(MAX_BET,S.balance)/20)*20);}
     else{betInput.value=clampBet((parseInt(betInput.value,10)||0)+parseInt(c.getAttribute('data-add'),10));}
     hudBet.textContent=fmt(parseInt(betInput.value,10));
   });});
@@ -1078,7 +1253,10 @@ h1.title .glyph{margin-left:.35rem;color:var(--cyan);filter:drop-shadow(0 0 12px
     document.querySelectorAll('.tab-panel').forEach(function(x){x.classList.remove('active');});
     t.classList.add('active');$('tab-'+t.getAttribute('data-tab')).classList.add('active');
   });});
-  window.addEventListener('resize',function(){clearHighlights();fxResize();});
+  window.addEventListener('resize',function(){
+    clearHighlights();fxResize();
+    if(S.lastEv)presentWins(S.lastEv); // re-draw the win presentation at the new geometry
+  });
 
   // idle grid — a pretty static window showing off the art
   renderIdleGrid([['H1','A','H3'],['K','W','Q'],['H2','H4','J'],['Q','W','A'],['H3','K','H1']]);
