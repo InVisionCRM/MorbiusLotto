@@ -1556,11 +1556,7 @@ h1 .title-chip{height:.74em;width:auto;vertical-align:-.05em;margin-left:.16em;b
   /* paytable modal */
   function ptSymCell(id){
     var s=SYMS[id];
-    if(s.kind==='img')return '<img src="'+s.art+'" alt="'+s.name+'"/>'+s.name;
-    if(s.kind==='vip')return '<span class="tg">🎫</span>'+s.name;
-    if(s.kind==='back')return '<span class="tg">🂠</span>'+s.name;
-    if(s.kind==='card')return '<span class="tg" style="font-family:var(--font-lux);font-weight:700;'+(s.col==='red'?'color:#f0a9b5':'color:#d8d2bd')+'">'+s.rk+s.suit+'</span>'+s.name;
-    return '<span class="tg">'+s.em+'</span>'+s.name;
+    return '<img'+(s.cls?' class="'+s.cls+'"':'')+' src="'+s.art+'" alt="'+s.name+'"/>'+s.name;
   }
   function renderPaytable(){
     var order=['W','C1','C2','C3','C4','C5','D','A','K','Q','J'];
@@ -1574,8 +1570,8 @@ h1 .title-chip{height:.74em;width:auto;vertical-align:-.05em;margin-left:.16em;b
       +'<tr><td>'+ptSymCell('S')+'</td><td>—</td><td colspan="3">3+ anywhere → Chip Stack free spins</td></tr>'
       +'<tr><td>'+ptSymCell('B')+'</td><td>—</td><td colspan="3">on reels 1·3·5 → Dealer Duel</td></tr>'
       +'</tbody></table>'
-      +'<p class="pt-note"><span class="rd">🂠 Dealer Duel</span> — best-of-5 high card against the house. All the cards come off ONE seeded 52-card shuffle committed before the reels stop: your card first, dealer\'s second; ties redeal from the next pair. The pot starts at <span class="rd">1× bet</span> and <span class="rd">DOUBLES</span> every hand you win (dealer wins add nothing) — bank after 5 decisive hands, 1× to 32×, exact average 7.59×. '
-      +'<span class="hl">🎫 Chip Stack</span> — 3+ VIP cards award 6 free spins (+2 per retrigger). Every free spin that hits a line win stacks a chip on the side meter: <span class="hl">+0.5× global multiplier</span>, applied to every line win, never resetting during the bonus. '
+      +'<p class="pt-note"><span class="rd"><img src="Logos/pCOCK.png" alt=""/> Dealer Duel</span> — best-of-5 high card against the house. All the cards come off ONE seeded 52-card shuffle committed before the reels stop: your card first, dealer\'s second; ties redeal from the next pair. The pot starts at <span class="rd">1× bet</span> and <span class="rd">DOUBLES</span> every hand you win (dealer wins add nothing) — bank after 5 decisive hands, 1× to 32×, exact average 7.59×. '
+      +'<span class="hl"><img src="vip-badges/gold.png" alt=""/> Chip Stack</span> — 3+ House Medallions award 6 free spins (+2 per retrigger). Every free spin that hits a line win stacks a chip on the side meter: <span class="hl">+0.5× global multiplier</span>, applied to every line win, never resetting during the bonus. '
       +'<span class="am">Hot wilds</span> (×2/×3/×5 badges on ~1-in-12 wilds) multiply a winning line by the highest badge in the run — on top of the Chip Stack multiplier. '
       +'<span class="am">Progressive jackpots</span> — HIGH at 5 MORBIUS chips on screen (~1-in-450 spins), ROLLER at 7 (~1-in-24,000), WHALE BAY at 9+ (~1-in-3.6M); pools grow with every bet (0.9/0.5/0.1%) and reset to their seed after a hit. '
       +'Line pays are in <span class="hl">line bets</span> (total bet ÷ 40), leftmost-consecutive, best win per line, across the full 5×5 window. Ruleset tuned to ≈ 96.7% RTP including the jackpot contribution.</p>';
