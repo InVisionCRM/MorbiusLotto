@@ -1,0 +1,702 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Sic Bo — Deep-Sea Neon lab</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+/* ── Sic Bo — Deep-Sea Neon (arcade2) prototype ────────────────────────────
+   The classic three-dice betting table. Mirrors the shared arcade2-scope
+   system (Greed Dice / Dragon Tiger / Chicken / Mines / Cascade): abyss
+   #050E16, cyan #22D3EE chrome, amber #F59E0B wins, rose losses, Chakra Petch
+   display + JetBrains Mono numerals, .panel glass, provably-fair commit/
+   verify, My-rounds / FAQ tab strip and fairness modal.
+
+   Mechanic: pick a chip value, tap any glowing zones on the layout to stack
+   chips (multiple bets per roll), then roll three dice. Every bet settles
+   independently: Small 4–10 / Big 11–17 / Odd / Even pay 1:1 and lose to any
+   triple; exact totals 4–17 pay the classic Macau ladder (60/30/17/12/8/6:1);
+   any triple 30:1; a specific triple 180:1; a specific double 10:1; single
+   numbers pay 1:1 / 2:1 / 3:1 for one / two / three dice showing the face.
+
+   All three dice come from a seeded stream so the whole roll re-derives from
+   the seed in Verify. Payouts are the classic table — house edge ranges from
+   2.78% (Small/Big) up to ~18.5% (doubles); see FAQ for the honest math.
+   Self-contained client-side demo (illustrative seeded RNG). Currency: MORBIUS. */
+:root{
+  --abyss:#050E16; --cyan:#22D3EE; --cyan-soft:rgba(34,211,238,0.12); --cyan-edge:rgba(34,211,238,0.35);
+  --win:#F59E0B; --loss:#FB7185;
+  --ink:#E2E8F0; --slate-300:#CBD5E1; --slate-400:#94A3B8; --slate-500:#64748B;
+  --panel:rgba(8,20,31,0.78); --field:#081420;
+  --font-disp:'Chakra Petch',system-ui,sans-serif;
+  --font-mono:'JetBrains Mono',ui-monospace,monospace;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  min-height:100svh;background-color:var(--abyss);
+  background-image:linear-gradient(to bottom,rgba(5,14,22,0.92),rgba(2,7,11,0.96) 55%,rgba(5,14,22,0.98));
+  color:var(--ink);font-family:var(--font-disp);-webkit-font-smoothing:antialiased;overflow-x:hidden;
+}
+.bg-light,.bg-vignette{position:fixed;inset:0;pointer-events:none;z-index:0}
+.bg-light{background:radial-gradient(ellipse 75% 55% at 50% -5%,rgba(34,211,238,0.13),transparent 70%)}
+.bg-vignette{background:radial-gradient(ellipse 120% 60% at 50% 115%,rgba(0,0,0,0.55),transparent 60%)}
+.mono{font-family:var(--font-mono);font-variant-numeric:tabular-nums}
+.wrap{position:relative;z-index:1;max-width:1000px;margin:0 auto;padding:18px 14px 64px}
+@media(min-width:700px){.wrap{padding:30px 22px 80px}}
+header{text-align:center;margin-bottom:16px}
+h1.title{margin:0;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#fff;font-size:clamp(28px,7vw,42px);line-height:1}
+h1.title .glyph{margin-left:.35rem;color:var(--cyan);filter:drop-shadow(0 0 12px rgba(34,211,238,0.65));vertical-align:middle}
+.tagline{margin:.55rem 0 0;font-size:clamp(11px,2.6vw,13.5px);color:var(--slate-500);letter-spacing:.01em}
+.topbar{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:14px}
+.topbar .right{display:flex;gap:8px}
+.balance{display:flex;align-items:center;gap:9px;background:rgba(8,20,31,0.7);border:1px solid var(--cyan-soft);border-radius:12px;padding:8px 13px}
+.coin{width:18px;height:18px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#7be9fb,#22D3EE 55%,#0e7490);box-shadow:0 0 10px rgba(34,211,238,.5);flex:none}
+.balance .amt{font-family:var(--font-mono);font-weight:700;font-size:16px;color:#fff}
+.balance .cur{font-size:10px;letter-spacing:.12em;color:var(--cyan);text-transform:uppercase}
+.pill-btn{display:inline-flex;align-items:center;gap:7px;height:40px;padding:0 13px;border-radius:11px;border:1px solid var(--cyan-soft);background:rgba(8,20,31,0.7);color:var(--slate-400);cursor:pointer;transition:.15s;font-family:var(--font-disp);font-size:12px;letter-spacing:.06em;text-transform:uppercase}
+.pill-btn:hover{color:var(--cyan);border-color:var(--cyan-edge)}
+.pill-btn .dot{width:7px;height:7px;border-radius:50%;background:var(--cyan);box-shadow:0 0 8px var(--cyan)}
+.icon-btn{width:40px;height:40px;display:grid;place-items:center;border-radius:11px;border:1px solid var(--cyan-soft);background:rgba(8,20,31,0.7);color:var(--slate-400);cursor:pointer;transition:.15s;font-size:15px}
+.icon-btn:hover{color:var(--cyan);border-color:var(--cyan-edge)}
+.game-grid{display:flex;flex-direction:column;gap:14px}
+.board{order:-1}
+@media(min-width:900px){.game-grid{display:grid;grid-template-columns:332px 1fr;align-items:start;gap:18px}.board{order:0}}
+.panel{background:linear-gradient(rgba(255,255,255,0.03),rgba(255,255,255,0) 18%),var(--panel);border:1px solid var(--cyan-soft);border-radius:16px;box-shadow:0 18px 40px -24px rgba(0,0,0,0.9);padding:16px}
+.panel + .panel{margin-top:14px}
+.panel-label{font-size:11px;text-transform:uppercase;letter-spacing:.16em;color:var(--slate-500);margin:0 0 10px}
+.bet-input-row{display:flex;align-items:stretch;gap:8px;margin-bottom:10px}
+.bet-field{flex:1;display:flex;align-items:center;gap:8px;background:rgba(2,8,13,.7);border:1px solid var(--cyan-soft);border-radius:12px;padding:0 12px}
+.bet-field input{flex:1;width:100%;background:none;border:0;outline:none;color:#fff;font-family:var(--font-mono);font-weight:700;font-size:17px;padding:12px 0}
+.mini-btn{width:42px;border:1px solid var(--cyan-soft);background:rgba(8,20,31,.7);color:var(--slate-400);border-radius:11px;font-family:var(--font-mono);font-weight:700;cursor:pointer;transition:.15s;font-size:14px}
+.mini-btn:hover{color:var(--cyan);border-color:var(--cyan-edge)}
+.chips{display:grid;grid-template-columns:repeat(4,1fr);gap:7px}
+.chip{border:1px solid var(--cyan-soft);background:rgba(6,16,25,.6);color:var(--slate-400);border-radius:10px;padding:9px 4px;font-family:var(--font-mono);font-weight:600;font-size:12.5px;cursor:pointer;transition:.15s}
+.chip:hover{color:var(--cyan);border-color:var(--cyan-edge)}
+.chip.sel{color:var(--cyan);border-color:var(--cyan);background:linear-gradient(rgba(34,211,238,.14),rgba(34,211,238,.04));box-shadow:0 0 14px -4px rgba(34,211,238,.5)}
+.minmax{display:flex;justify-content:space-between;font-family:var(--font-mono);font-size:10.5px;color:var(--slate-500);margin-top:9px}
+.tbl-actions{display:grid;grid-template-columns:repeat(3,1fr);gap:7px}
+.tbl-actions .chip.on{color:var(--loss);border-color:rgba(251,113,133,.55);background:rgba(251,113,133,.08)}
+.pt{display:flex;flex-direction:column;gap:5px}
+.pt .ptr{display:flex;align-items:center;font-size:12px;color:var(--slate-400)}
+.pt .ptr .pv{font-family:var(--font-mono);margin-left:auto;color:var(--slate-300)}
+.pt .ptl{font-size:10.5px;letter-spacing:.04em;color:var(--slate-500);margin-top:8px}
+.board-shell{background:linear-gradient(rgba(255,255,255,0.025),rgba(255,255,255,0) 16%),rgba(6,16,25,.72);border:1px solid var(--cyan-soft);border-radius:18px;overflow:hidden;box-shadow:0 24px 50px -30px rgba(0,0,0,.95)}
+.hud{display:flex;gap:1px;background:var(--cyan-soft)}
+.hud .cell{flex:1;background:rgba(4,12,19,.85);padding:11px 12px;text-align:center}
+.hud .k{font-size:9.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--slate-500)}
+.hud .v{font-family:var(--font-mono);font-weight:700;font-size:clamp(15px,3.8vw,21px);color:#fff;margin-top:3px}
+.hud .v.amt{color:var(--win)}.hud .v.tot{color:var(--cyan)}.hud .v.idle{color:var(--slate-500)}
+.felt{position:relative;min-height:clamp(150px,26vw,190px);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:18px 14px 14px;background:radial-gradient(ellipse 70% 60% at 50% 40%,rgba(34,211,238,.06),transparent 70%)}
+.dice-row{display:flex;gap:10px;justify-content:center}
+.die{width:clamp(44px,11.5vw,56px);aspect-ratio:1;border-radius:12px;background:linear-gradient(160deg,#0b1c28,#06121b);box-shadow:inset 0 0 0 1px rgba(34,211,238,.12),0 6px 14px -8px rgba(0,0,0,.8);display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(3,1fr);padding:9px}
+.die .cp{display:grid;place-items:center}
+.die .pip{width:clamp(6px,1.7vw,8px);height:clamp(6px,1.7vw,8px);border-radius:50%;background:var(--slate-400)}
+.die.hot{box-shadow:inset 0 0 0 2px var(--cyan),0 0 18px -4px var(--cyan)}
+.die.hot .pip{background:var(--cyan)}
+.die.dead{opacity:.5}
+.die.roll{animation:dieroll .5s ease}
+@keyframes dieroll{0%{transform:translateY(-14px) rotate(-12deg);opacity:.4}60%{transform:translateY(2px) rotate(6deg)}100%{transform:translateY(0) rotate(0);opacity:1}}
+.felt-status{font-size:13px;color:var(--slate-400);text-align:center;min-height:18px}
+.felt-status .gain{color:var(--win);font-family:var(--font-mono);font-weight:600}
+.felt-status.bust{color:var(--loss)}
+.settle-list{display:flex;flex-wrap:wrap;gap:5px;justify-content:center;max-width:100%}
+.sl-item{font-family:var(--font-mono);font-size:10.5px;padding:3px 8px;border-radius:6px;background:rgba(4,12,19,.7);box-shadow:inset 0 0 0 1px rgba(34,211,238,.12);color:var(--slate-400)}
+.sl-item.w{color:var(--win);box-shadow:inset 0 0 0 1px rgba(245,158,11,.4)}
+.sl-item.l{color:var(--loss)}
+.sb-board{padding:10px 12px 16px;display:flex;flex-direction:column;gap:6px;border-top:1px solid var(--cyan-soft)}
+.sb-row{display:grid;gap:6px}
+.r-main{grid-template-columns:1.25fr .75fr 1fr .75fr 1.25fr}
+.r-six{grid-template-columns:repeat(6,1fr)}
+.r-tot{grid-template-columns:repeat(7,1fr)}
+.bcell{position:relative;border:1px solid var(--cyan-soft);background:rgba(6,16,25,.6);border-radius:10px;padding:9px 3px 7px;text-align:center;cursor:pointer;transition:.15s;color:var(--slate-400);font-family:var(--font-disp);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;min-height:48px}
+.bcell:hover{border-color:var(--cyan-edge);color:var(--slate-300)}
+.sb-board.removing .bcell:hover{border-color:rgba(251,113,133,.55)}
+.sb-board.locked .bcell{pointer-events:none;opacity:.75}
+.bcell .bn{font-weight:600;font-size:clamp(10px,2.4vw,12.5px);letter-spacing:.04em;line-height:1.1}
+.bcell .bp{font-family:var(--font-mono);font-size:clamp(8.5px,2vw,10px);color:var(--slate-500)}
+.bcell.glyphcell .bn{font-size:clamp(14px,3.6vw,18px);color:var(--slate-300);letter-spacing:.02em}
+.bcell.staked{border-color:var(--cyan-edge);background:linear-gradient(rgba(34,211,238,.1),rgba(34,211,238,.02))}
+.bchip{position:absolute;top:-7px;right:-5px;min-width:24px;height:19px;padding:0 5px;border-radius:10px;background:linear-gradient(180deg,#fbd36b,#F59E0B);color:#2a1602;font-family:var(--font-mono);font-weight:700;font-size:10px;display:flex;align-items:center;justify-content:center;box-shadow:0 0 10px -2px rgba(245,158,11,.75);z-index:2}
+.bchip[hidden]{display:none}
+.bcell.hit{border-color:var(--win);box-shadow:0 0 16px -4px rgba(245,158,11,.8);animation:cellhit .9s ease}
+.bcell.hit .bn{color:var(--win)}
+@keyframes cellhit{0%,60%{background:rgba(245,158,11,.22)}100%{background:rgba(245,158,11,.06)}}
+.bcell.miss .bchip{background:linear-gradient(180deg,#fda4af,#FB7185);color:#40060f;box-shadow:none;animation:chipfade .8s ease both}
+@keyframes chipfade{from{opacity:1}to{opacity:.45}}
+.actions{display:grid;grid-template-columns:1fr;gap:10px;margin-top:14px}
+.btn{border:0;border-radius:14px;padding:16px 18px;font-family:var(--font-disp);font-weight:700;font-size:16px;letter-spacing:.05em;text-transform:uppercase;cursor:pointer;transition:.15s;color:#04141b}
+.btn:active{transform:scale(.985)}
+.btn-go{background:linear-gradient(180deg,#3ee0f5,#22D3EE 60%,#0fb6d4);box-shadow:0 0 24px -6px rgba(34,211,238,.68),inset 0 1px 0 rgba(255,255,255,.4)}
+.btn:disabled{opacity:.45;cursor:not-allowed;filter:saturate(.4)}
+.banner-host{position:absolute;inset:0;display:grid;place-items:center;z-index:8;pointer-events:none}
+.banner{display:none;text-align:center;padding:16px 28px;border-radius:18px}
+.banner.show{display:block}
+.banner.win{background:radial-gradient(ellipse at center,rgba(245,158,11,.22),rgba(4,12,19,.6));border:1px solid rgba(245,158,11,.5);box-shadow:0 0 50px -8px rgba(245,158,11,.55)}
+.banner.loss{background:radial-gradient(ellipse at center,rgba(251,113,133,.16),rgba(4,12,19,.65));border:1px solid rgba(251,113,133,.4)}
+.banner.push{background:radial-gradient(ellipse at center,rgba(148,163,184,.16),rgba(4,12,19,.6));border:1px solid rgba(148,163,184,.35)}
+.banner .b-k{font-size:12px;letter-spacing:.22em;text-transform:uppercase;color:var(--slate-400)}
+.banner.win .b-k{color:var(--win)}.banner.loss .b-k{color:var(--loss)}
+.banner .b-v{font-family:var(--font-mono);font-weight:700;font-size:clamp(24px,7vw,38px);color:#fff;margin-top:4px}
+.arc-banner-in{animation:arc-banner-in .4s cubic-bezier(.34,1.56,.64,1) both}
+@keyframes arc-banner-in{0%{transform:scale(.7);opacity:0}55%{transform:scale(1.06);opacity:1}100%{transform:scale(1);opacity:1}}
+.info{margin-top:16px}
+.tabs-list{display:grid;grid-template-columns:1fr 1fr;gap:4px;background:rgba(8,20,31,.7);border:1px solid rgba(34,211,238,.12);border-radius:10px;padding:4px}
+.tab-btn{font-family:var(--font-disp);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.14em;color:var(--slate-500);background:none;border:0;border-radius:7px;padding:9px 6px;cursor:pointer;transition:.15s}
+.tab-btn:hover{color:var(--slate-300)}
+.tab-btn.active{background:rgba(34,211,238,.15);color:var(--cyan);box-shadow:inset 0 0 0 1px rgba(34,211,238,.5)}
+.tab-panel{display:none;margin-top:12px}.tab-panel.active{display:block}
+.hist-head{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:6px}
+.hist-head h2{font-family:var(--font-disp);font-weight:600;font-size:14px;text-transform:uppercase;letter-spacing:.08em;color:var(--slate-300);margin:0}
+.hist-head .count{font-size:11px;color:var(--slate-500)}
+.hist-empty{padding:18px 0;text-align:center;font-size:13px;color:var(--slate-500)}
+.hist-list{list-style:none;margin:0;padding:0}
+.hist-row{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;padding:9px 0;border-top:1px solid rgba(34,211,238,.08);font-size:13px}
+.hist-row:first-child{border-top:0}
+.hist-row .t{font-family:var(--font-mono);width:46px;flex:none;color:var(--slate-500)}
+.hist-row .badge{flex:none;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;padding:2px 7px;border-radius:5px;color:var(--cyan);background:rgba(34,211,238,.1);box-shadow:inset 0 0 0 1px rgba(34,211,238,.3)}
+.hist-row .m{font-family:var(--font-mono);color:var(--slate-400);flex:none}
+.hist-row .x{font-family:var(--font-mono);flex:none}.hist-row .x.win{color:var(--win)}.hist-row .x.bust{color:var(--loss)}
+.hist-row .p{font-family:var(--font-mono);font-weight:600;margin-left:auto;flex:none}
+.hist-row .p.up{color:var(--win)}.hist-row .p.flat{color:var(--slate-500)}
+.hist-row .verify{flex:none;font-size:11px;color:var(--slate-500);background:none;border:0;border-radius:5px;padding:3px 7px;cursor:pointer;transition:.15s}
+.hist-row .verify:hover{color:var(--cyan);background:rgba(34,211,238,.1)}
+.faq-item{border-top:1px solid rgba(34,211,238,.1)}.faq-item:first-child{border-top:0}
+.faq-q{width:100%;text-align:left;background:none;border:0;color:#E8EEF5;font-family:var(--font-disp);font-size:14px;font-weight:500;padding:13px 28px 13px 0;cursor:pointer;position:relative;transition:.15s}
+.faq-q:hover{color:var(--cyan)}.faq-q::after{content:"⌄";position:absolute;right:4px;top:12px;color:var(--slate-500);transition:transform .2s}
+.faq-item.open .faq-q::after{transform:rotate(180deg);color:var(--cyan)}
+.faq-a{display:none;padding:0 4px 14px;color:#AFC0CF;font-size:13.5px;line-height:1.65}.faq-item.open .faq-a{display:block}
+.faq-a p{margin:0 0 9px}.faq-a p:last-child{margin-bottom:0}
+.faq-a a{color:var(--cyan);text-decoration:underline;text-underline-offset:2px;word-break:break-all}
+.faq-a .odds{font-family:var(--font-mono);font-size:11px;line-height:1.7;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:8px;padding:10px;color:var(--slate-400);margin:8px 0}
+.faq-a .odds .a{color:var(--cyan)}
+.hl{color:var(--cyan)}
+.overlay{position:fixed;inset:0;z-index:50;display:none;align-items:center;justify-content:center;padding:16px;background:rgba(2,6,10,.72);backdrop-filter:blur(3px)}
+.overlay.open{display:flex}
+.modal{width:100%;max-width:520px;max-height:85vh;overflow-y:auto;background:#050E16;border:1px solid #0e3a47;border-radius:16px;box-shadow:0 30px 80px -20px rgba(0,0,0,.9);padding:20px}
+.modal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
+.modal-head h2{font-family:var(--font-disp);font-weight:600;text-transform:uppercase;letter-spacing:.12em;color:var(--cyan);font-size:16px;margin:0}
+.modal-x{background:none;border:0;color:var(--slate-500);font-size:20px;cursor:pointer;line-height:1}.modal-x:hover{color:var(--cyan)}
+.m-sec{margin-bottom:18px}.m-sec h3{font-size:13.5px;font-weight:600;color:var(--slate-300);margin:0 0 4px}
+.m-sec p.note{font-size:12px;color:var(--slate-500);margin:0 0 9px;line-height:1.5}
+.m-input-row{display:flex;gap:8px}
+.m-input{flex:1;min-width:0;background:var(--field);border:1px solid #0e3a47;border-radius:9px;color:#cbd5e1;font-family:var(--font-mono);font-size:12px;padding:9px 11px;outline:none}
+.m-input:focus{border-color:var(--cyan-edge)}
+.m-btn{flex:none;border-radius:9px;padding:9px 14px;font-family:var(--font-disp);font-size:13px;cursor:pointer;border:1px solid transparent;transition:.15s}
+.m-btn.outline{background:transparent;border-color:#0e3a47;color:var(--cyan)}.m-btn.outline:hover{background:rgba(34,211,238,.1)}
+.m-btn.solid{background:#0891b2;color:#fff}.m-btn.solid:hover{background:#22D3EE;color:#03121B}
+.m-result{border:1px solid #0e3a47;background:rgba(7,19,31,.7);border-radius:12px;padding:13px;margin-top:6px}
+.m-check{display:flex;align-items:center;gap:9px;font-size:13px;color:var(--slate-300);margin-bottom:6px}
+.m-check .ck{font-weight:700}.m-check .ck.ok{color:var(--cyan)}.m-check .ck.no{color:var(--loss)}
+.m-maplabel{font-size:11px;color:var(--slate-500);margin:10px 0 4px;text-transform:uppercase;letter-spacing:.06em}
+.m-dice{display:flex;gap:5px;margin:4px 0}
+.m-dice .md{width:22px;height:22px;border-radius:5px;background:var(--field);box-shadow:inset 0 0 0 1px var(--cyan-edge);font-family:var(--font-mono);font-size:12px;display:grid;place-items:center;color:var(--cyan)}
+.m-bets{display:flex;flex-direction:column;gap:5px;margin:4px 0 2px}
+.m-br{display:flex;align-items:center;gap:7px;font-size:12px}
+.m-br .rn{color:var(--slate-400);flex:1;min-width:0}
+.m-br .rm{font-family:var(--font-mono);color:var(--slate-500);flex:none}
+.m-br .rp{font-family:var(--font-mono);flex:none;margin-left:auto}
+.m-br .rp.up{color:var(--win)}.m-br .rp.no{color:var(--loss)}
+.m-fields{display:grid;gap:8px;margin-top:8px}
+.m-field .fl{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--slate-500)}
+.m-field .fv{word-break:break-all;border-radius:7px;background:var(--field);padding:5px 9px;font-family:var(--font-mono);font-size:11.5px;color:var(--slate-300);margin-top:2px}
+.m-foot{display:flex;flex-wrap:wrap;gap:3px 16px;font-size:12px;color:var(--slate-500);margin-top:10px}
+.m-foot .fv{font-family:var(--font-mono)}.m-foot .fv.amber{color:var(--win)}.m-foot .fv.cyan{color:var(--cyan)}.m-foot .fv.rose{color:var(--loss)}.m-foot .fv.b{color:#e2e8f0;font-weight:700}
+.lab-note{margin-top:22px;text-align:center;font-size:11px;color:var(--slate-500);font-family:var(--font-mono);line-height:1.6}.lab-note b{color:var(--slate-400);font-weight:600}
+</style>
+</head>
+<body>
+<div class="bg-light"></div>
+<div class="bg-vignette"></div>
+
+<div class="wrap">
+  <header>
+    <h1 class="title">Sic Bo<span class="glyph">⚂</span></h1>
+    <p class="tagline">three dice · stack chips on the layout · every zone settles on its own odds · provably fair · played in chips</p>
+  </header>
+
+  <div class="topbar">
+    <div class="balance"><span class="coin"></span><span class="amt" id="balance">10,000</span><span class="cur">MORBIUS</span></div>
+    <div class="right">
+      <button class="pill-btn" id="fairBtn"><span class="dot"></span>Provably fair</button>
+      <button class="icon-btn" id="soundBtn" title="Sound" aria-label="Toggle sound">♪</button>
+    </div>
+  </div>
+
+  <div class="game-grid">
+    <section>
+      <div class="panel">
+        <p class="panel-label">Chip value</p>
+        <div class="bet-input-row">
+          <div class="bet-field"><span class="coin"></span><input id="betInput" class="mono" inputmode="numeric" value="50" /></div>
+          <button class="mini-btn" data-bet="half">½</button>
+          <button class="mini-btn" data-bet="double">2×</button>
+        </div>
+        <div class="chips" id="chipRow">
+          <button class="chip" data-chip="10">10</button>
+          <button class="chip sel" data-chip="50">50</button>
+          <button class="chip" data-chip="100">100</button>
+          <button class="chip" data-chip="500">500</button>
+        </div>
+        <div class="minmax"><span>Chip min 10</span><span>Max stake 5,000</span></div>
+      </div>
+      <div class="panel">
+        <p class="panel-label">Table actions</p>
+        <div class="tbl-actions">
+          <button class="chip" id="modeBtn">Remove</button>
+          <button class="chip" id="clearBtn">Clear</button>
+          <button class="chip" id="rebetBtn" disabled style="opacity:.5">Rebet</button>
+        </div>
+        <div class="minmax"><span>Tap a zone to stack a chip</span><span id="modeHint">adding</span></div>
+      </div>
+      <div class="panel">
+        <p class="panel-label">Pays</p>
+        <div class="pt">
+          <div class="ptr"><span>Small / Big / Odd / Even</span><span class="pv">1:1</span></div>
+          <div class="ptr"><span>Totals 4–17</span><span class="pv">6:1 – 60:1</span></div>
+          <div class="ptr"><span>Any triple</span><span class="pv">30:1</span></div>
+          <div class="ptr"><span>Specific triple</span><span class="pv">180:1</span></div>
+          <div class="ptr"><span>Specific double</span><span class="pv">10:1</span></div>
+          <div class="ptr"><span>Single number ×1 / ×2 / ×3</span><span class="pv">1:1 / 2:1 / 3:1</span></div>
+          <div class="ptl">Small, Big, Odd &amp; Even all lose when any triple rolls.</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="board">
+      <div class="board-shell">
+        <div class="hud">
+          <div class="cell"><div class="k">Staked</div><div class="v amt idle" id="hudStake">—</div></div>
+          <div class="cell"><div class="k">Dice total</div><div class="v tot idle" id="hudTotal">—</div></div>
+          <div class="cell"><div class="k">Returned</div><div class="v idle" id="hudPay">—</div></div>
+        </div>
+        <div class="felt">
+          <div class="dice-row" id="diceRow"></div>
+          <div class="felt-status" id="status">Stack chips on the layout, then roll</div>
+          <div class="settle-list" id="settleList"></div>
+          <div class="banner-host"><div class="banner" id="banner"><div class="b-k" id="bannerK"></div><div class="b-v" id="bannerV"></div></div></div>
+        </div>
+        <div class="sb-board" id="sbBoard"></div>
+      </div>
+      <div class="actions" id="actions"><button class="btn btn-go" id="goBtn">Roll</button></div>
+    </section>
+  </div>
+
+  <section class="info panel" aria-label="Sic Bo information">
+    <div class="tabs-list">
+      <button class="tab-btn active" data-tab="rounds">My rounds</button>
+      <button class="tab-btn" data-tab="faq">FAQ</button>
+    </div>
+    <div class="tab-panel active" id="tab-rounds">
+      <div class="hist-head"><h2>Recent rounds</h2><span class="count" id="histCount">last —</span></div>
+      <div id="histBody"></div>
+    </div>
+    <div class="tab-panel" id="tab-faq"><div id="faqBody"></div></div>
+  </section>
+
+  <p class="lab-note">
+    <b>Prototype</b> — Deep-Sea Neon style, single-player on the arcade2 pattern (like Greed Dice / Dragon Tiger / Mines).<br/>
+    The three dice here come from an in-page seeded RNG for feel; the real build draws them from the server
+    <b>provably-fair HMAC</b> stream (<span class="mono">/api/arcade/sic-bo/*</span>) with the classic Macau paytable.
+    Every roll re-derives from the seed in Verify. Currency: <b>MORBIUS</b> chips.
+  </p>
+</div>
+
+<div class="overlay" id="overlay">
+  <div class="modal" role="dialog" aria-modal="true" aria-label="Provably fair">
+    <div class="modal-head"><h2>Provably Fair</h2><button class="modal-x" id="modalX" aria-label="Close">✕</button></div>
+    <div class="m-sec">
+      <h3>Your client seed</h3>
+      <p class="note">Mixed into every roll. Change it any time — the next round uses the new value.</p>
+      <div class="m-input-row">
+        <input class="m-input" id="clientSeedInput" placeholder="Leave blank for a random seed each round" />
+        <button class="m-btn outline" id="newSeedBtn">New seed</button>
+      </div>
+    </div>
+    <div class="m-sec">
+      <h3>Verify a round</h3>
+      <p class="note">All three dice are drawn from a server seed committed (hashed) before your bets — the seed is revealed once the round settles, and every zone re-settles from the same faces.</p>
+      <div class="m-input-row">
+        <input class="m-input" id="verifyIdInput" placeholder="Round ID" />
+        <button class="m-btn solid" id="verifyBtn">Verify</button>
+      </div>
+    </div>
+    <div id="verifyOut"></div>
+  </div>
+</div>
+
+<script>
+"use strict";
+(function(){
+  var MIN_CHIP=10, MAX_CHIP=1000, MAX_STAKE=5000;
+  var TOTAL_PAYS={4:60,5:30,6:17,7:12,8:8,9:6,10:6,11:6,12:6,13:8,14:12,15:17,16:30,17:60};
+  var DGLYPH=['','⚀','⚁','⚂','⚃','⚄','⚅'];
+
+  var S={ balance:10000, chip:50, mode:'add', bets:{}, lastBets:null, phase:'idle', busy:false,
+    dice:null, serverSeed:'', clientSeed:'', clientSeedPref:'', nonce:0, serverHash:'', roundId:'',
+    sound:true, history:[] };
+
+  var $=function(id){return document.getElementById(id);};
+  var balanceEl=$('balance'),betInput=$('betInput'),diceRow=$('diceRow'),statusEl=$('status'),
+      settleList=$('settleList'),sbBoard=$('sbBoard'),actions=$('actions'),
+      hudStake=$('hudStake'),hudTotal=$('hudTotal'),hudPay=$('hudPay'),
+      banner=$('banner'),bannerK=$('bannerK'),bannerV=$('bannerV'),
+      soundBtn=$('soundBtn'),overlay=$('overlay'),histBody=$('histBody'),histCount=$('histCount'),faqBody=$('faqBody');
+
+  function fmt(n){return Math.round(n).toLocaleString('en-US');}
+  function rndHex(len){var s='';for(var i=0;i<len;i++)s+=Math.floor(Math.random()*16).toString(16);return s;}
+  function shortId(){return rndHex(8).toUpperCase();}
+  function xmur3(str){var h=1779033703^str.length;for(var i=0;i<str.length;i++){h=Math.imul(h^str.charCodeAt(i),3432918353);h=h<<13|h>>>19;}return function(){h=Math.imul(h^h>>>16,2246822507);h=Math.imul(h^h>>>13,3266489909);return (h^=h>>>16)>>>0;};}
+  function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;var t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return ((t^t>>>14)>>>0)/4294967296;};}
+  function makeRng(seedStr){return mulberry32(xmur3(seedStr)());}
+  async function sha256Hex(msg){try{var b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(msg));return Array.from(new Uint8Array(b)).map(function(x){return x.toString(16).padStart(2,'0');}).join('');}catch(e){return 'sha256-unavailable';}}
+  function rollThree(rng){return [1+Math.floor(rng()*6),1+Math.floor(rng()*6),1+Math.floor(rng()*6)];}
+
+  // ── bet catalogue ─────────────────────────────────────────────────────────
+  function betLabel(key){
+    if(key==='small')return 'Small 4–10';
+    if(key==='big')return 'Big 11–17';
+    if(key==='odd')return 'Odd';
+    if(key==='even')return 'Even';
+    if(key==='anytrip')return 'Any triple';
+    var m=key.match(/^total-(\d+)$/); if(m)return 'Total '+m[1];
+    m=key.match(/^trip-(\d)$/); if(m)return 'Triple '+m[1]+'s';
+    m=key.match(/^dbl-(\d)$/); if(m)return 'Double '+m[1]+'s';
+    m=key.match(/^one-(\d)$/); if(m)return 'Single '+m[1];
+    return key;
+  }
+  // returns total chips returned for a stake on `key` given dice d (0 = lost)
+  function evalBet(key,stake,d){
+    var t=d[0]+d[1]+d[2];
+    var trip=(d[0]===d[1]&&d[1]===d[2]);
+    function cnt(f){var c=0;for(var i=0;i<3;i++)if(d[i]===f)c++;return c;}
+    if(key==='small')return (!trip&&t>=4&&t<=10)?stake*2:0;
+    if(key==='big')return (!trip&&t>=11&&t<=17)?stake*2:0;
+    if(key==='odd')return (!trip&&t%2===1)?stake*2:0;
+    if(key==='even')return (!trip&&t%2===0)?stake*2:0;
+    if(key==='anytrip')return trip?stake*31:0;
+    var m=key.match(/^total-(\d+)$/); if(m){var n=parseInt(m[1],10);return t===n?stake*(TOTAL_PAYS[n]+1):0;}
+    m=key.match(/^trip-(\d)$/); if(m){return (trip&&d[0]===parseInt(m[1],10))?stake*181:0;}
+    m=key.match(/^dbl-(\d)$/); if(m){return cnt(parseInt(m[1],10))>=2?stake*11:0;}
+    m=key.match(/^one-(\d)$/); if(m){var c=cnt(parseInt(m[1],10));return c>0?stake*(1+c):0;}
+    return 0;
+  }
+
+  // ── sounds ────────────────────────────────────────────────────────────────
+  var actx=null;
+  function tone(f,d,t,g){if(!S.sound)return;try{actx=actx||new (window.AudioContext||window.webkitAudioContext)();var o=actx.createOscillator(),gn=actx.createGain();o.type=t||'sine';o.frequency.value=f;gn.gain.value=g||0.05;o.connect(gn);gn.connect(actx.destination);var n=actx.currentTime;o.start(n);gn.gain.exponentialRampToValueAtTime(0.0001,n+(d||0.12));o.stop(n+(d||0.12));}catch(e){}}
+  function sChip(){tone(520,0.06,'triangle',0.04);}
+  function sTake(){tone(300,0.06,'triangle',0.04);}
+  function sRoll(){tone(260,0.12,'square',0.04);}
+  function sWin(){tone(660,0.12,'sine',0.06);setTimeout(function(){tone(990,0.16,'sine',0.06);},100);}
+  function sBig(){[660,880,1175,1320].forEach(function(f,i){setTimeout(function(){tone(f,0.1,'sine',0.05);},i*70);});}
+  function sLose(){tone(150,0.32,'sawtooth',0.07);}
+
+  // ── board build ───────────────────────────────────────────────────────────
+  function cellHtml(key,name,sub,cls){
+    return '<button class="bcell'+(cls?' '+cls:'')+'" data-bet="'+key+'"><span class="bn">'+name+'</span><span class="bp">'+sub+'</span><span class="bchip" hidden></span></button>';
+  }
+  function buildBoard(){
+    var html='';
+    html+='<div class="sb-row r-main">'
+      +cellHtml('small','SMALL','4–10 · 1:1')
+      +cellHtml('odd','ODD','1:1')
+      +cellHtml('anytrip','ANY TRIPLE','30:1')
+      +cellHtml('even','EVEN','1:1')
+      +cellHtml('big','BIG','11–17 · 1:1')
+      +'</div>';
+    html+='<div class="sb-row r-six">'+[1,2,3,4,5,6].map(function(f){
+      return cellHtml('trip-'+f,DGLYPH[f]+DGLYPH[f]+DGLYPH[f],'180:1','glyphcell');}).join('')+'</div>';
+    html+='<div class="sb-row r-six">'+[1,2,3,4,5,6].map(function(f){
+      return cellHtml('dbl-'+f,DGLYPH[f]+DGLYPH[f],'10:1','glyphcell');}).join('')+'</div>';
+    var tot='';for(var n=4;n<=17;n++)tot+=cellHtml('total-'+n,String(n),TOTAL_PAYS[n]+':1');
+    html+='<div class="sb-row r-tot">'+tot+'</div>';
+    html+='<div class="sb-row r-six">'+[1,2,3,4,5,6].map(function(f){
+      return cellHtml('one-'+f,DGLYPH[f]+' '+f,'1–3×','glyphcell');}).join('')+'</div>';
+    sbBoard.innerHTML=html;
+    sbBoard.querySelectorAll('.bcell').forEach(function(c){
+      c.addEventListener('click',function(){tapCell(c.getAttribute('data-bet'));});
+    });
+  }
+
+  function totalStaked(){var t=0,k;for(k in S.bets)t+=S.bets[k];return t;}
+
+  function tapCell(key){
+    if(S.busy)return;
+    if(S.phase==='settled')clearSettleVisuals();
+    if(S.mode==='remove'){
+      if(S.bets[key]){
+        S.bets[key]-=Math.min(S.chip,S.bets[key]);
+        if(S.bets[key]<=0)delete S.bets[key];
+        sTake();
+      }
+    }else{
+      if(totalStaked()+S.chip>MAX_STAKE){flashStatus('Table max is '+fmt(MAX_STAKE)+' MORBIUS');return;}
+      if(totalStaked()+S.chip>S.balance){flashStatus('Not enough MORBIUS for another chip');return;}
+      S.bets[key]=(S.bets[key]||0)+S.chip;
+      sChip();
+    }
+    renderChips();syncHud();renderActions();
+  }
+
+  function renderChips(){
+    sbBoard.querySelectorAll('.bcell').forEach(function(c){
+      var key=c.getAttribute('data-bet'),v=S.bets[key]||0,chip=c.querySelector('.bchip');
+      c.classList.toggle('staked',v>0);
+      if(v>0){chip.hidden=false;chip.textContent=v>=1000?(v/1000)+'k':v;}
+      else{chip.hidden=true;}
+    });
+  }
+  function clearSettleVisuals(){
+    S.phase='idle';
+    sbBoard.querySelectorAll('.bcell').forEach(function(c){c.classList.remove('hit','miss');});
+    settleList.innerHTML='';
+    statusEl.className='felt-status';statusEl.textContent='Stack chips on the layout, then roll';
+    hideBanner();
+  }
+
+  function syncHud(){
+    var st=totalStaked();
+    hudStake.textContent=st>0?fmt(st):'—';hudStake.classList.toggle('idle',st===0);
+    balanceEl.textContent=fmt(S.balance);
+  }
+  function setTotalHud(t){hudTotal.textContent=(t===null)?'—':String(t);hudTotal.classList.toggle('idle',t===null);}
+  function setPayHud(v){hudPay.textContent=(v===null)?'—':fmt(v);hudPay.classList.toggle('idle',v===null);}
+
+  function renderActions(){
+    var st=totalStaked();
+    actions.innerHTML='<button class="btn btn-go" id="goBtn"'+((S.busy||st===0)?' disabled':'')+'>'
+      +(st>0?'Roll · '+fmt(st)+' MORBIUS':'Roll — place a bet first')+'</button>';
+    $('goBtn').addEventListener('click',roll);
+  }
+  function setControls(on){
+    betInput.disabled=!on;
+    document.querySelectorAll('.chip,.mini-btn').forEach(function(b){b.style.pointerEvents=on?'auto':'none';b.style.opacity=(on||b.id==='rebetBtn')?(b.id==='rebetBtn'&&!S.lastBets?'.5':'1'):'.5';});
+    sbBoard.classList.toggle('locked',!on);
+  }
+
+  // ── dice render ───────────────────────────────────────────────────────────
+  var PIPS={1:[4],2:[0,8],3:[0,4,8],4:[0,2,6,8],5:[0,2,4,6,8],6:[0,2,3,5,6,8]};
+  function dieHtml(v,cls){
+    var pos=PIPS[v]||[],cells='';
+    for(var i=0;i<9;i++){cells+='<span class="cp">'+(pos.indexOf(i)>=0?'<span class="pip"></span>':'')+'</span>';}
+    return '<div class="die'+(cls||'')+'">'+cells+'</div>';
+  }
+  function renderDice(dice,cls){
+    diceRow.innerHTML=dice.map(function(v){return dieHtml(v,cls);}).join('');
+  }
+
+  // ── round flow ────────────────────────────────────────────────────────────
+  async function roll(){
+    if(S.busy)return;
+    var stake=totalStaked();
+    if(stake===0){flashStatus('Place at least one bet');return;}
+    if(stake>S.balance){flashStatus('Not enough MORBIUS');return;}
+    S.busy=true;S.phase='rolling';
+    if(banner.classList.contains('show'))hideBanner();
+    sbBoard.querySelectorAll('.bcell').forEach(function(c){c.classList.remove('hit','miss');});
+    settleList.innerHTML='';
+    S.balance-=stake;
+    S.serverSeed=rndHex(64);
+    S.clientSeed=(S.clientSeedPref||'').trim()||rndHex(20);
+    S.nonce+=1;S.roundId=shortId();
+    S.serverHash=await sha256Hex(S.serverSeed);
+    var rng=makeRng(S.serverSeed+':'+S.clientSeed+':'+S.nonce);
+    S.dice=rollThree(rng);
+    setControls(false);renderActions();syncHud();
+    setTotalHud(null);setPayHud(null);
+    statusEl.className='felt-status';statusEl.textContent='Rolling…';
+    sRoll();
+    var flick=0,iv=setInterval(function(){
+      renderDice([1+Math.floor(Math.random()*6),1+Math.floor(Math.random()*6),1+Math.floor(Math.random()*6)],' roll');
+      if(++flick>=6){clearInterval(iv);reveal();}
+    },70);
+  }
+
+  function reveal(){
+    var d=S.dice,t=d[0]+d[1]+d[2],trip=(d[0]===d[1]&&d[1]===d[2]);
+    renderDice(d,trip?' hot':'');
+    setTotalHud(t);
+    settleRound();
+  }
+
+  function settleRound(){
+    var d=S.dice,t=d[0]+d[1]+d[2],trip=(d[0]===d[1]&&d[1]===d[2]);
+    var stake=0,payout=0,wins=0,bets=[],k;
+    for(k in S.bets){
+      var st=S.bets[k],ret=evalBet(k,st,d);
+      stake+=st;payout+=ret;if(ret>0)wins++;
+      bets.push({key:k,stake:st,ret:ret});
+    }
+    S.balance+=payout;
+    var net=payout-stake;
+    // mark cells + per-bet settlement list
+    var listHtml='';
+    bets.forEach(function(b){
+      var cell=sbBoard.querySelector('[data-bet="'+b.key+'"]');
+      if(cell)cell.classList.add(b.ret>0?'hit':'miss');
+      listHtml+='<span class="sl-item '+(b.ret>0?'w':'l')+'">'+betLabel(b.key)+' '
+        +(b.ret>0?'+'+fmt(b.ret-b.stake):'−'+fmt(b.stake))+'</span>';
+    });
+    settleList.innerHTML=listHtml;
+    statusEl.className='felt-status';
+    statusEl.innerHTML=d.join(' · ')+' — total <span class="gain">'+t+'</span>'+(trip?' · TRIPLE!':'');
+    setPayHud(payout);
+    if(net>0){(payout>=stake*5?sBig:sWin)();showBanner('win',wins+' of '+bets.length+' bets hit','+'+fmt(net)+' MORBIUS');}
+    else if(net===0){sWin();showBanner('push','Break even','±0 MORBIUS');}
+    else{sLose();showBanner('loss',wins>0?wins+' bet'+(wins===1?'':'s')+' hit':'No bets hit','−'+fmt(-net)+' MORBIUS');}
+    S.history.unshift({ id:S.roundId, at:new Date().toISOString(), dice:d.slice(), total:t, triple:trip,
+      staked:stake, payout:payout, net:net, wins:wins,
+      bets:bets.map(function(b){return {key:b.key,stake:b.stake,ret:b.ret};}),
+      serverSeed:S.serverSeed, serverHash:S.serverHash, clientSeed:S.clientSeed, nonce:S.nonce });
+    if(S.history.length>15)S.history.pop();
+    S.lastBets={};for(var kk in S.bets)S.lastBets[kk]=S.bets[kk];
+    S.bets={};
+    S.phase='settled';S.busy=false;
+    $('rebetBtn').disabled=false;$('rebetBtn').style.opacity='1';
+    setControls(true);syncHud();renderActions();renderHistory();
+  }
+
+  function showBanner(k,a,b){banner.className='banner show '+k+' arc-banner-in';bannerK.textContent=a;bannerV.textContent=b;}
+  function hideBanner(){banner.className='banner';}
+  function clampChip(v){if(isNaN(v)||v<MIN_CHIP)v=MIN_CHIP;if(v>MAX_CHIP)v=MAX_CHIP;return v;}
+  function flashStatus(msg){statusEl.className='felt-status bust';statusEl.textContent=msg;
+    setTimeout(function(){if(S.phase==='idle'){statusEl.className='felt-status';statusEl.textContent='Stack chips on the layout, then roll';}},1200);}
+
+  // ── history ───────────────────────────────────────────────────────────────
+  function timeLabel(iso){var d=new Date(iso);return isNaN(d.getTime())?'—':d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});}
+  function renderHistory(){
+    histCount.textContent='last '+(S.history.length||'—');
+    if(!S.history.length){histBody.innerHTML='<p class="hist-empty">No rolls yet — stack some chips and roll the dice.</p>';return;}
+    histBody.innerHTML='<ul class="hist-list">'+S.history.map(function(r){
+      var xcell=r.wins>0?'<span class="x win">'+r.wins+' hit'+(r.wins===1?'':'s')+'</span>':'<span class="x bust">no hits</span>';
+      var pcell='<span class="p '+(r.net>0?'up':'flat')+'">'+(r.net>0?'+'+fmt(r.net):fmt(r.net))+'</span>';
+      return '<li class="hist-row"><span class="t">'+timeLabel(r.at)+'</span>'
+        +'<span class="badge">'+r.bets.length+' bet'+(r.bets.length===1?'':'s')+'</span>'
+        +'<span class="m">stake '+fmt(r.staked)+'</span>'
+        +'<span class="m">'+r.dice.join('·')+'='+r.total+(r.triple?' ▲':'')+'</span>'
+        +xcell+pcell
+        +'<button class="verify" data-id="'+r.id+'">Verify</button></li>';
+    }).join('')+'</ul>';
+    histBody.querySelectorAll('.verify').forEach(function(b){b.addEventListener('click',function(){openFairness(b.getAttribute('data-id'));});});
+  }
+
+  // ── fairness / verify ─────────────────────────────────────────────────────
+  function recipeStr(){return 'HMAC_SHA256(serverSeed, `${clientSeed}:${nonce}:die`) → three die faces 1–6, consumed in order';}
+  function ckHtml(ok,label){return '<div class="m-check"><span class="ck '+(ok?'ok':'no')+'">'+(ok?'✓':'✗')+'</span><span>'+label+'</span></div>';}
+  function fieldHtml(l,v){return '<div class="m-field"><div class="fl">'+l+'</div><div class="fv">'+v+'</div></div>';}
+  function findRound(id){id=String(id||'').trim();return S.history.filter(function(x){return x.id===id;})[0]||null;}
+  function openFairness(id){
+    overlay.classList.add('open');
+    $('clientSeedInput').value=S.clientSeedPref;
+    var target=id||(S.history[0]&&S.history[0].id);
+    if(target){$('verifyIdInput').value=target;runVerify(target);}
+    else{$('verifyOut').innerHTML='<p class="note">Play a round, then verify it here — or paste any round ID.</p>';}
+  }
+  function closeFairness(){overlay.classList.remove('open');}
+  async function runVerify(id){
+    var out=$('verifyOut'),r=findRound(id);
+    if(!r){out.innerHTML='<p class="note" style="color:var(--loss)">No round found with that ID.</p>';return;}
+    out.innerHTML='<p class="note">Checking…</p>';
+    var hashOk=(await sha256Hex(r.serverSeed))===r.serverHash;
+    var rng=makeRng(r.serverSeed+':'+r.clientSeed+':'+r.nonce);
+    var dice=rollThree(rng);
+    var diceOk=dice.join(',')===r.dice.join(',');
+    var payOk=true,expected=0;
+    r.bets.forEach(function(b){var e=evalBet(b.key,b.stake,r.dice);expected+=e;if(e!==b.ret)payOk=false;});
+    if(expected!==r.payout)payOk=false;
+    var betsHtml=r.bets.map(function(b){
+      return '<div class="m-br"><span class="rn">'+betLabel(b.key)+'</span><span class="rm">'+fmt(b.stake)+'</span>'
+        +(b.ret>0?'<span class="rp up">+'+fmt(b.ret-b.stake)+'</span>':'<span class="rp no">−'+fmt(b.stake)+'</span>')+'</div>';
+    }).join('');
+    out.innerHTML='<div class="m-result">'
+      +ckHtml(hashOk,'Server seed matches its committed hash (checked locally)')
+      +ckHtml(diceOk,'All three dice re-derive from the seed stream')
+      +ckHtml(payOk,'Every zone settles per the paytable from those faces')
+      +'<div class="m-maplabel">The roll (re-derived)</div>'
+      +'<div class="m-dice">'+dice.map(function(v){return '<span class="md">'+v+'</span>';}).join('')
+        +'<span class="md" style="width:auto;padding:0 7px">= '+(dice[0]+dice[1]+dice[2])+'</span></div>'
+      +'<div class="m-maplabel">Bet settlement</div><div class="m-bets">'+betsHtml+'</div>'
+      +'<div class="m-fields">'+fieldHtml('Server seed hash (committed)',r.serverHash)+fieldHtml('Server seed (revealed)',r.serverSeed)
+        +fieldHtml('Client seed',r.clientSeed)+fieldHtml('Nonce',String(r.nonce))+fieldHtml('Recipe',recipeStr())+'</div>'
+      +'<div class="m-foot"><span>Staked: <span class="fv">'+fmt(r.staked)+'</span></span>'
+        +'<span>Total: <span class="fv cyan">'+r.total+(r.triple?' (triple)':'')+'</span></span>'
+        +'<span>Returned: <span class="fv '+(r.payout>0?'amber':'rose')+'">'+fmt(r.payout)+' chips</span></span></div>'
+      +'</div>';
+  }
+
+  // ── FAQ ───────────────────────────────────────────────────────────────────
+  var FAQS=[
+    {q:'How does Sic Bo work?',a:'<p>Three dice, one roll, a whole layout of bets. Pick a chip value, tap any <span class="hl">glowing zone</span> to stack chips on it — you can cover as many zones as you like — then roll. Every bet settles independently against the same three dice: some zones can win big while others lose on the very same roll.</p>'},
+    {q:'What does each zone pay?',a:'<p><span class="hl">Small (4–10)</span>, <span class="hl">Big (11–17)</span>, <span class="hl">Odd</span> and <span class="hl">Even</span> pay 1:1 — but all four lose when any triple rolls. Exact totals pay the classic Macau ladder: 4 &amp; 17 → 60:1, 5 &amp; 16 → 30:1, 6 &amp; 15 → 17:1, 7 &amp; 14 → 12:1, 8 &amp; 13 → 8:1, 9–12 → 6:1.</p><p><span class="hl">Any triple</span> pays 30:1, a <span class="hl">specific triple</span> 180:1, a <span class="hl">specific double</span> (two or more of a face) 10:1, and a <span class="hl">single number</span> pays 1:1, 2:1 or 3:1 for one, two or three dice showing it.</p>'},
+    {q:'What are the true odds and house edge?',a:'<p>With three fair dice there are 216 equally likely outcomes, so every edge is exact:</p><div class="odds"><div>Small / Big / Odd / Even <span class="a">105/216 win → 2.78% edge</span></div><div>Single number <span class="a">7.87% edge</span></div><div>Total 7 or 14 (12:1) <span class="a">9.72% edge</span></div><div>Total 8, 13, 10 or 11 <span class="a">12.50% edge</span></div><div>Any triple (30:1, 6/216) <span class="a">13.89% edge</span></div><div>Total 5 or 16 (30:1) <span class="a">13.89% edge</span></div><div>Total 4 or 17 (60:1, 3/216) <span class="a">15.28% edge</span></div><div>Specific triple (180:1, 1/216) <span class="a">16.20% edge</span></div><div>Total 6 or 15 (17:1) <span class="a">16.67% edge</span></div><div>Total 9 or 12 (6:1, 25/216) <span class="a">18.98% edge</span></div><div>Specific double (10:1, 16/216) <span class="a">18.52% edge</span></div></div><p>Example math: Total 8 has 21 of 216 ways and pays 8:1, so the expected return is 21 × 9 ⁄ 216 = 87.5% — a 12.5% edge. The flashier the payout, the bigger the house cut.</p>'},
+    {q:'Why do Small and Big lose to triples?',a:'<p>That exclusion <span class="hl">is</span> the house edge on the even-money bets. Without it, Small (105 winning totals of 216) vs Big would be nearly a coin flip. The 6 triple outcomes (about 1 roll in 36) sweep Small, Big, Odd and Even all at once — that skim is where the 2.78% comes from.</p>'},
+    {q:'Is the roll provably fair?',a:'<p>Yes. Before your bets, the server commits to a secret <span class="hl">server seed</span> (you see only its SHA-256 hash). All three dice come from a stream derived from that seed, <span class="hl">your client seed</span>, and a nonce — the faces are fixed before you place a single chip.</p><p>When the round settles the seed is revealed. Hit <span class="hl">Verify</span> to re-derive the dice and re-settle every zone yourself.</p>'},
+    {q:'What’s the smartest way to play?',a:'<p>If you want the longest session, live on <span class="hl">Small / Big / Odd / Even</span> — at 2.78% they’re among the friendlier bets in any pit. The totals, triples and doubles are lottery-style thrills: bigger paydays, meaningfully worse odds. Mixing one even-money anchor with a small chip on a spicy zone is the classic table rhythm.</p>'},
+    {q:'How do I get chips?',a:'<p>Chips are the play credits used at every table. Tap <span class="hl">Buy</span> next to your balance to swap MORBIUS for chips at a fixed <span class="hl">1 chip = 1 MORBIUS</span> — instant, gasless, and <span class="hl">no fee</span>. Cash back out any time at the same 1:1.</p>'},
+    {q:'What are the fees?',a:'<p>These chip games take <span class="hl">no per-bet or per-payout fee</span> — each zone keeps its own built-in house edge in the odds (see the table above). Buying and cashing chips is free, 1:1.</p>'}
+  ];
+  function renderFaq(){
+    faqBody.innerHTML=FAQS.map(function(f){return '<div class="faq-item"><button class="faq-q">'+f.q+'</button><div class="faq-a">'+f.a+'</div></div>';}).join('');
+    faqBody.querySelectorAll('.faq-item').forEach(function(it){it.querySelector('.faq-q').addEventListener('click',function(){it.classList.toggle('open');});});
+  }
+
+  // ── wiring ────────────────────────────────────────────────────────────────
+  document.querySelectorAll('#chipRow .chip').forEach(function(c){c.addEventListener('click',function(){
+    if(S.busy)return;
+    document.querySelectorAll('#chipRow .chip').forEach(function(x){x.classList.remove('sel');});
+    c.classList.add('sel');S.chip=clampChip(parseInt(c.getAttribute('data-chip'),10));betInput.value=S.chip;
+  });});
+  document.querySelectorAll('.mini-btn').forEach(function(b){b.addEventListener('click',function(){
+    if(S.busy)return;var v=parseInt(betInput.value,10)||MIN_CHIP;
+    S.chip=clampChip(b.getAttribute('data-bet')==='half'?Math.floor(v/2):v*2);betInput.value=S.chip;
+    document.querySelectorAll('#chipRow .chip').forEach(function(x){x.classList.toggle('sel',parseInt(x.getAttribute('data-chip'),10)===S.chip);});
+  });});
+  betInput.addEventListener('change',function(){
+    S.chip=clampChip(parseInt(betInput.value,10)||0);betInput.value=S.chip;
+    document.querySelectorAll('#chipRow .chip').forEach(function(x){x.classList.toggle('sel',parseInt(x.getAttribute('data-chip'),10)===S.chip);});
+  });
+  $('modeBtn').addEventListener('click',function(){
+    if(S.busy)return;
+    S.mode=S.mode==='add'?'remove':'add';
+    $('modeBtn').classList.toggle('on',S.mode==='remove');
+    $('modeHint').textContent=S.mode==='remove'?'removing':'adding';
+    sbBoard.classList.toggle('removing',S.mode==='remove');
+  });
+  $('clearBtn').addEventListener('click',function(){
+    if(S.busy)return;
+    if(S.phase==='settled')clearSettleVisuals();
+    S.bets={};sTake();renderChips();syncHud();renderActions();
+  });
+  $('rebetBtn').addEventListener('click',function(){
+    if(S.busy||!S.lastBets)return;
+    if(S.phase==='settled')clearSettleVisuals();
+    var copy={},t=0,k;
+    for(k in S.lastBets){copy[k]=S.lastBets[k];t+=S.lastBets[k];}
+    if(t>S.balance){flashStatus('Not enough MORBIUS to rebet');return;}
+    S.bets=copy;sChip();renderChips();syncHud();renderActions();
+  });
+  soundBtn.addEventListener('click',function(){S.sound=!S.sound;soundBtn.style.color=S.sound?'':'#475569';soundBtn.textContent=S.sound?'♪':'✕';if(S.sound)tone(700,0.1,'sine',0.05);});
+  $('fairBtn').addEventListener('click',function(){openFairness(null);});
+  $('modalX').addEventListener('click',closeFairness);
+  overlay.addEventListener('click',function(e){if(e.target===overlay)closeFairness();});
+  window.addEventListener('keydown',function(e){if(e.key==='Escape')closeFairness();});
+  $('newSeedBtn').addEventListener('click',function(){S.clientSeedPref=rndHex(16);$('clientSeedInput').value=S.clientSeedPref;});
+  $('clientSeedInput').addEventListener('input',function(e){S.clientSeedPref=e.target.value.slice(0,128);});
+  $('verifyBtn').addEventListener('click',function(){runVerify($('verifyIdInput').value);});
+  document.querySelectorAll('.tab-btn').forEach(function(t){t.addEventListener('click',function(){
+    document.querySelectorAll('.tab-btn').forEach(function(x){x.classList.remove('active');});
+    document.querySelectorAll('.tab-panel').forEach(function(x){x.classList.remove('active');});
+    t.classList.add('active');$('tab-'+t.getAttribute('data-tab')).classList.add('active');
+  });});
+
+  buildBoard();
+  renderDice([2,4,6],' dead');
+  syncHud();renderActions();renderHistory();renderFaq();
+})();
+</script>
+</body>
+</html>

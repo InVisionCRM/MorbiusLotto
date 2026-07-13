@@ -1,0 +1,730 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Pai Gow Poker — Deep-Sea Neon lab</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+/* ── Pai Gow Poker — Deep-Sea Neon (arcade2) prototype ──────────────────────
+   Seven cards to you, seven to the dealer, from a standard 52-card deck (no
+   joker in this variant). You split yours into a 5-card HIGH hand and a
+   2-card LOW hand — tap cards to toggle them into the low row (exactly 2);
+   the high hand must outrank the low hand or the set is FOULED (confirm is
+   blocked with a rose hint). HOUSE WAY auto-arranges with a simplified house
+   way (no pair → 2nd+3rd highest low; one pair → pair high, top kickers low;
+   two pair → split unless both small with an ace; trips → trips high, split
+   aces; full house → split; quads → split unless a pair rides along;
+   straights/flushes stay intact when a decent low remains, else two-pair
+   rules). The dealer always sets by the same house way.
+
+   Settlement: win BOTH hands → 1:1 minus 5% commission; win one / split →
+   PUSH; lose both → bet lost. Copies (exact ties on a hand) go to the dealer.
+   Effective house edge ≈2.7%; pushes land on roughly 41% of hands.
+
+   Mirrors the shared arcade2-scope system (Chicken / Mines / Cipher / Cascade /
+   Greed Dice / Three Card Poker / Casino Hold'em): abyss #050E16, cyan chrome,
+   amber wins, rose losses, Chakra Petch + JetBrains Mono, .panel glass,
+   provably-fair commit/verify, My-rounds / FAQ tabs and the fairness modal.
+
+   Deck is a seeded Fisher-Yates shuffle (mirrors pfService.fisherYatesShuffle);
+   player = cards 1-7, dealer = cards 8-14, all fixed behind the commitment
+   hash before you set your hands. Currency: MORBIUS chips. */
+:root{
+  --abyss:#050E16; --cyan:#22D3EE; --cyan-soft:rgba(34,211,238,0.12); --cyan-edge:rgba(34,211,238,0.35);
+  --win:#F59E0B; --loss:#FB7185;
+  --ink:#E2E8F0; --slate-300:#CBD5E1; --slate-400:#94A3B8; --slate-500:#64748B;
+  --panel:rgba(8,20,31,0.78); --field:#081420;
+  --font-disp:'Chakra Petch',system-ui,sans-serif;
+  --font-mono:'JetBrains Mono',ui-monospace,monospace;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{min-height:100svh;background-color:var(--abyss);background-image:linear-gradient(to bottom,rgba(5,14,22,0.92),rgba(2,7,11,0.96) 55%,rgba(5,14,22,0.98));color:var(--ink);font-family:var(--font-disp);-webkit-font-smoothing:antialiased;overflow-x:hidden}
+.bg-light,.bg-vignette{position:fixed;inset:0;pointer-events:none;z-index:0}
+.bg-light{background:radial-gradient(ellipse 75% 55% at 50% -5%,rgba(34,211,238,0.13),transparent 70%)}
+.bg-vignette{background:radial-gradient(ellipse 120% 60% at 50% 115%,rgba(0,0,0,0.55),transparent 60%)}
+.mono{font-family:var(--font-mono);font-variant-numeric:tabular-nums}
+
+.wrap{position:relative;z-index:1;max-width:1000px;margin:0 auto;padding:18px 14px 64px}
+@media(min-width:700px){.wrap{padding:30px 22px 80px}}
+header{text-align:center;margin-bottom:16px}
+h1.title{margin:0;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#fff;font-size:clamp(24px,5.8vw,38px);line-height:1}
+h1.title .glyph{margin-left:.35rem;color:var(--cyan);filter:drop-shadow(0 0 12px rgba(34,211,238,0.65));vertical-align:middle}
+.tagline{margin:.55rem 0 0;font-size:clamp(11px,2.6vw,13.5px);color:var(--slate-500);letter-spacing:.01em}
+
+.topbar{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:14px}
+.topbar .right{display:flex;gap:8px}
+.balance{display:flex;align-items:center;gap:9px;background:rgba(8,20,31,0.7);border:1px solid var(--cyan-soft);border-radius:12px;padding:8px 13px}
+.coin{width:18px;height:18px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#7be9fb,#22D3EE 55%,#0e7490);box-shadow:0 0 10px rgba(34,211,238,.5);flex:none}
+.balance .amt{font-family:var(--font-mono);font-weight:700;font-size:16px;color:#fff}
+.balance .cur{font-size:10px;letter-spacing:.12em;color:var(--cyan);text-transform:uppercase}
+.pill-btn{display:inline-flex;align-items:center;gap:7px;height:40px;padding:0 13px;border-radius:11px;border:1px solid var(--cyan-soft);background:rgba(8,20,31,0.7);color:var(--slate-400);cursor:pointer;transition:.15s;font-family:var(--font-disp);font-size:12px;letter-spacing:.06em;text-transform:uppercase}
+.pill-btn:hover{color:var(--cyan);border-color:var(--cyan-edge)}
+.pill-btn .dot{width:7px;height:7px;border-radius:50%;background:var(--cyan);box-shadow:0 0 8px var(--cyan)}
+.icon-btn{width:40px;height:40px;display:grid;place-items:center;border-radius:11px;border:1px solid var(--cyan-soft);background:rgba(8,20,31,0.7);color:var(--slate-400);cursor:pointer;transition:.15s;font-size:15px}
+.icon-btn:hover{color:var(--cyan);border-color:var(--cyan-edge)}
+
+.game-grid{display:flex;flex-direction:column;gap:14px}
+.board{order:-1}
+@media(min-width:900px){.game-grid{display:grid;grid-template-columns:332px 1fr;align-items:start;gap:18px}.board{order:0}}
+.panel{background:linear-gradient(rgba(255,255,255,0.03),rgba(255,255,255,0) 18%),var(--panel);border:1px solid var(--cyan-soft);border-radius:16px;box-shadow:0 18px 40px -24px rgba(0,0,0,0.9);padding:16px}
+.panel + .panel{margin-top:14px}
+.panel-label{font-size:11px;text-transform:uppercase;letter-spacing:.16em;color:var(--slate-500);margin:0 0 10px}
+
+.bet-input-row{display:flex;align-items:stretch;gap:8px;margin-bottom:10px}
+.bet-field{flex:1;display:flex;align-items:center;gap:8px;background:rgba(2,8,13,.7);border:1px solid var(--cyan-soft);border-radius:12px;padding:0 12px}
+.bet-field input{flex:1;width:100%;background:none;border:0;outline:none;color:#fff;font-family:var(--font-mono);font-weight:700;font-size:17px;padding:12px 0}
+.mini-btn{width:42px;border:1px solid var(--cyan-soft);background:rgba(8,20,31,.7);color:var(--slate-400);border-radius:11px;font-family:var(--font-mono);font-weight:700;cursor:pointer;transition:.15s;font-size:14px}
+.mini-btn:hover{color:var(--cyan);border-color:var(--cyan-edge)}
+.chips{display:grid;grid-template-columns:repeat(4,1fr);gap:7px}
+.chip{border:1px solid var(--cyan-soft);background:rgba(6,16,25,.6);color:var(--slate-400);border-radius:10px;padding:9px 4px;font-family:var(--font-mono);font-weight:600;font-size:12.5px;cursor:pointer;transition:.15s}
+.chip:hover{color:var(--cyan);border-color:var(--cyan-edge)}
+.minmax{display:flex;justify-content:space-between;font-family:var(--font-mono);font-size:10.5px;color:var(--slate-500);margin-top:9px}
+
+.pt{display:flex;flex-direction:column;gap:5px}
+.pt .ptr{display:flex;align-items:center;font-size:12px;color:var(--slate-400)}
+.pt .ptr .pv{font-family:var(--font-mono);margin-left:auto;color:var(--slate-300)}
+.pt .ptl{font-size:10.5px;text-transform:uppercase;letter-spacing:.1em;color:var(--slate-500);margin:8px 0 2px}
+
+.board-shell{background:linear-gradient(rgba(255,255,255,0.025),rgba(255,255,255,0) 16%),rgba(6,16,25,.72);border:1px solid var(--cyan-soft);border-radius:18px;overflow:hidden;box-shadow:0 24px 50px -30px rgba(0,0,0,.95)}
+.hud{display:flex;gap:1px;background:var(--cyan-soft)}
+.hud .cell{flex:1;background:rgba(4,12,19,.85);padding:11px 12px;text-align:center}
+.hud .k{font-size:9.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--slate-500)}
+.hud .v{font-family:var(--font-mono);font-weight:700;font-size:clamp(15px,3.8vw,21px);color:#fff;margin-top:3px}
+.hud .v.amt{color:var(--win)}.hud .v.hand{color:var(--cyan);font-family:var(--font-disp);font-size:clamp(12px,3.2vw,16px)}
+.hud .v.idle{color:var(--slate-500)}
+
+.felt{position:relative;min-height:clamp(360px,72vw,470px);display:flex;flex-direction:column;align-items:center;justify-content:space-between;gap:8px;padding:16px 10px;background:radial-gradient(ellipse 78% 64% at 50% 45%,rgba(34,211,238,.06),transparent 70%)}
+.seat{width:100%;text-align:center}
+.seat-label{font-size:10.5px;text-transform:uppercase;letter-spacing:.16em;color:var(--slate-500);margin-bottom:5px}
+.row-wrap{display:flex;align-items:center;justify-content:center;gap:8px;margin:4px 0}
+.row-tag{flex:none;width:56px;text-align:right;font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--slate-500)}
+.row-res{flex:none;width:56px;text-align:left;font-size:10px;font-weight:600;letter-spacing:.06em;text-transform:uppercase}
+.row-res.res-w{color:var(--win)}.row-res.res-l{color:var(--loss)}.row-res.res-c{color:var(--slate-500)}
+.hand-row{display:flex;gap:clamp(4px,1.4vw,8px);justify-content:center;flex-wrap:wrap}
+.card{width:clamp(34px,8.8vw,46px);aspect-ratio:5/7;border-radius:7px;background:#f2efe6;color:#1f2937;display:flex;flex-direction:column;align-items:center;justify-content:center;border:0.5px solid rgba(0,0,0,.3);box-shadow:0 3px 8px -3px rgba(0,0,0,.6);font-weight:600}
+.card.red{color:#b3261e}
+.card .cr{font-size:clamp(12px,2.9vw,15px);line-height:1}
+.card .cs{font-size:clamp(13px,3.6vw,19px);line-height:1.1}
+.card.back{background:linear-gradient(135deg,#0c2a38,#06121b);color:var(--cyan);box-shadow:inset 0 0 0 1px rgba(34,211,238,.3),0 3px 8px -3px rgba(0,0,0,.6);justify-content:center;font-size:17px}
+.card.slot{background:rgba(34,211,238,.04);border:1.5px dashed rgba(34,211,238,.3);box-shadow:none}
+.card.deal{animation:cardin .3s cubic-bezier(.34,1.4,.6,1) both}
+@keyframes cardin{0%{transform:translateY(-14px) scale(.9);opacity:0}100%{transform:none;opacity:1}}
+.card.win{box-shadow:0 0 0 2px var(--cyan),0 0 16px -4px var(--cyan)}
+.card.pick{cursor:pointer;transition:transform .12s,box-shadow .12s}
+.card.pick:hover{transform:translateY(-4px);box-shadow:0 0 0 1.5px var(--cyan-edge),0 6px 12px -5px rgba(0,0,0,.7)}
+.foul{min-height:17px;font-size:12px;margin-top:5px;text-align:center;color:var(--slate-500)}
+.foul.bad{color:var(--loss);font-weight:600}
+.felt-mid{font-size:12.5px;color:var(--slate-400);text-align:center;min-height:16px}
+.felt-mid .hl{color:var(--cyan)}
+
+.actions{display:grid;grid-template-columns:1fr;gap:10px;margin-top:14px}
+.actions.two{grid-template-columns:1fr 1fr}
+.btn{border:0;border-radius:14px;padding:16px 18px;font-family:var(--font-disp);font-weight:700;font-size:16px;letter-spacing:.05em;text-transform:uppercase;cursor:pointer;transition:.15s;color:#04141b}
+.btn:active{transform:scale(.985)}
+.btn-go{background:linear-gradient(180deg,#3ee0f5,#22D3EE 60%,#0fb6d4);box-shadow:0 0 24px -6px rgba(34,211,238,.68),inset 0 1px 0 rgba(255,255,255,.4)}
+.btn-fold{background:rgba(20,34,44,.9);color:var(--slate-300);box-shadow:inset 0 0 0 1px rgba(148,163,184,.3)}
+.btn:disabled{opacity:.45;cursor:not-allowed;filter:saturate(.4)}
+.btn-sub{display:block;font-family:var(--font-mono);font-size:11px;font-weight:600;letter-spacing:0;margin-top:2px;opacity:.85}
+
+.banner-host{position:absolute;inset:0;display:grid;place-items:center;z-index:8;pointer-events:none}
+.banner{display:none;text-align:center;padding:16px 28px;border-radius:18px}
+.banner.show{display:block}
+.banner.win{background:radial-gradient(ellipse at center,rgba(245,158,11,.22),rgba(4,12,19,.6));border:1px solid rgba(245,158,11,.5);box-shadow:0 0 50px -8px rgba(245,158,11,.55)}
+.banner.loss{background:radial-gradient(ellipse at center,rgba(251,113,133,.16),rgba(4,12,19,.65));border:1px solid rgba(251,113,133,.4)}
+.banner.push{background:radial-gradient(ellipse at center,rgba(148,163,184,.16),rgba(4,12,19,.6));border:1px solid rgba(148,163,184,.35)}
+.banner .b-k{font-size:12px;letter-spacing:.22em;text-transform:uppercase;color:var(--slate-400)}
+.banner.win .b-k{color:var(--win)}.banner.loss .b-k{color:var(--loss)}
+.banner .b-v{font-family:var(--font-mono);font-weight:700;font-size:clamp(24px,7vw,38px);color:#fff;margin-top:4px}
+.arc-banner-in{animation:arc-banner-in .4s cubic-bezier(.34,1.56,.64,1) both}
+@keyframes arc-banner-in{0%{transform:scale(.7);opacity:0}55%{transform:scale(1.06);opacity:1}100%{transform:scale(1);opacity:1}}
+
+.info{margin-top:16px}
+.tabs-list{display:grid;grid-template-columns:1fr 1fr;gap:4px;background:rgba(8,20,31,.7);border:1px solid rgba(34,211,238,.12);border-radius:10px;padding:4px}
+.tab-btn{font-family:var(--font-disp);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.14em;color:var(--slate-500);background:none;border:0;border-radius:7px;padding:9px 6px;cursor:pointer;transition:.15s}
+.tab-btn:hover{color:var(--slate-300)}
+.tab-btn.active{background:rgba(34,211,238,.15);color:var(--cyan);box-shadow:inset 0 0 0 1px rgba(34,211,238,.5)}
+.tab-panel{display:none;margin-top:12px}.tab-panel.active{display:block}
+.hist-head{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:6px}
+.hist-head h2{font-family:var(--font-disp);font-weight:600;font-size:14px;text-transform:uppercase;letter-spacing:.08em;color:var(--slate-300);margin:0}
+.hist-head .count{font-size:11px;color:var(--slate-500)}
+.hist-empty{padding:18px 0;text-align:center;font-size:13px;color:var(--slate-500)}
+.hist-list{list-style:none;margin:0;padding:0}
+.hist-row{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;padding:9px 0;border-top:1px solid rgba(34,211,238,.08);font-size:13px}
+.hist-row:first-child{border-top:0}
+.hist-row .t{font-family:var(--font-mono);width:46px;flex:none;color:var(--slate-500)}
+.hist-row .badge{flex:none;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;padding:2px 7px;border-radius:5px;color:var(--cyan);background:rgba(34,211,238,.1);box-shadow:inset 0 0 0 1px rgba(34,211,238,.3)}
+.hist-row .m{font-family:var(--font-mono);color:var(--slate-400);flex:none}
+.hist-row .x{font-family:var(--font-mono);flex:none}.hist-row .x.win{color:var(--cyan)}.hist-row .x.bust{color:var(--loss);font-weight:600}.hist-row .x.push{color:var(--slate-500)}
+.hist-row .p{font-family:var(--font-mono);font-weight:600;margin-left:auto;flex:none}
+.hist-row .p.up{color:var(--win)}.hist-row .p.flat{color:var(--slate-500)}
+.hist-row .verify{flex:none;font-size:11px;color:var(--slate-500);background:none;border:0;border-radius:5px;padding:3px 7px;cursor:pointer;transition:.15s}
+.hist-row .verify:hover{color:var(--cyan);background:rgba(34,211,238,.1)}
+.faq-item{border-top:1px solid rgba(34,211,238,.1)}.faq-item:first-child{border-top:0}
+.faq-q{width:100%;text-align:left;background:none;border:0;color:#E8EEF5;font-family:var(--font-disp);font-size:14px;font-weight:500;padding:13px 28px 13px 0;cursor:pointer;position:relative;transition:.15s}
+.faq-q:hover{color:var(--cyan)}.faq-q::after{content:"⌄";position:absolute;right:4px;top:12px;color:var(--slate-500);transition:transform .2s}
+.faq-item.open .faq-q::after{transform:rotate(180deg);color:var(--cyan)}
+.faq-a{display:none;padding:0 4px 14px;color:#AFC0CF;font-size:13.5px;line-height:1.65}.faq-item.open .faq-a{display:block}
+.faq-a p{margin:0 0 9px}.faq-a p:last-child{margin-bottom:0}
+.faq-a a{color:var(--cyan);text-decoration:underline;text-underline-offset:2px;word-break:break-all}
+.faq-a .siwe{font-family:var(--font-mono);font-size:11px;line-height:1.6;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:8px;padding:10px;color:var(--slate-400);margin:8px 0}
+.faq-a .siwe .a{color:var(--cyan)}.faq-a .siwe .s{color:var(--slate-300)}.hl{color:var(--cyan)}
+
+.overlay{position:fixed;inset:0;z-index:50;display:none;align-items:center;justify-content:center;padding:16px;background:rgba(2,6,10,.72);backdrop-filter:blur(3px)}
+.overlay.open{display:flex}
+.modal{width:100%;max-width:520px;max-height:85vh;overflow-y:auto;background:#050E16;border:1px solid #0e3a47;border-radius:16px;box-shadow:0 30px 80px -20px rgba(0,0,0,.9);padding:20px}
+.modal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
+.modal-head h2{font-family:var(--font-disp);font-weight:600;text-transform:uppercase;letter-spacing:.12em;color:var(--cyan);font-size:16px;margin:0}
+.modal-x{background:none;border:0;color:var(--slate-500);font-size:20px;cursor:pointer;line-height:1}.modal-x:hover{color:var(--cyan)}
+.m-sec{margin-bottom:18px}.m-sec h3{font-size:13.5px;font-weight:600;color:var(--slate-300);margin:0 0 4px}
+.m-sec p.note{font-size:12px;color:var(--slate-500);margin:0 0 9px;line-height:1.5}
+.m-input-row{display:flex;gap:8px}
+.m-input{flex:1;min-width:0;background:var(--field);border:1px solid #0e3a47;border-radius:9px;color:#cbd5e1;font-family:var(--font-mono);font-size:12px;padding:9px 11px;outline:none}
+.m-input:focus{border-color:var(--cyan-edge)}
+.m-btn{flex:none;border-radius:9px;padding:9px 14px;font-family:var(--font-disp);font-size:13px;cursor:pointer;border:1px solid transparent;transition:.15s}
+.m-btn.outline{background:transparent;border-color:#0e3a47;color:var(--cyan)}.m-btn.outline:hover{background:rgba(34,211,238,.1)}
+.m-btn.solid{background:#0891b2;color:#fff}.m-btn.solid:hover{background:#22D3EE;color:#03121B}
+.m-result{border:1px solid #0e3a47;background:rgba(7,19,31,.7);border-radius:12px;padding:13px;margin-top:6px}
+.m-check{display:flex;align-items:center;gap:9px;font-size:13px;color:var(--slate-300);margin-bottom:6px}
+.m-check .ck{font-weight:700}.m-check .ck.ok{color:var(--cyan)}.m-check .ck.no{color:var(--loss)}
+.m-maplabel{font-size:11px;color:var(--slate-500);margin:10px 0 4px;text-transform:uppercase;letter-spacing:.06em}
+.m-hand{display:flex;align-items:center;gap:5px;margin:4px 0;flex-wrap:wrap}
+.m-hand .ml{font-size:11px;color:var(--slate-500);width:76px;flex:none}
+.m-card{width:24px;height:33px;border-radius:4px;background:#f2efe6;color:#1f2937;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:10px;font-weight:600;border:0.5px solid rgba(0,0,0,.3)}
+.m-card.red{color:#b3261e}
+.m-fields{display:grid;gap:8px;margin-top:8px}
+.m-field .fl{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--slate-500)}
+.m-field .fv{word-break:break-all;border-radius:7px;background:var(--field);padding:5px 9px;font-family:var(--font-mono);font-size:11.5px;color:var(--slate-300);margin-top:2px}
+.m-foot{display:flex;flex-wrap:wrap;gap:3px 16px;font-size:12px;color:var(--slate-500);margin-top:10px}
+.m-foot .fv{font-family:var(--font-mono)}.m-foot .fv.amber{color:var(--win)}.m-foot .fv.cyan{color:var(--cyan)}.m-foot .fv.rose{color:var(--loss)}.m-foot .fv.b{color:#e2e8f0;font-weight:700}
+.lab-note{margin-top:22px;text-align:center;font-size:11px;color:var(--slate-500);font-family:var(--font-mono);line-height:1.6}.lab-note b{color:var(--slate-400);font-weight:600}
+</style>
+</head>
+<body>
+<div class="bg-light"></div>
+<div class="bg-vignette"></div>
+<div class="wrap">
+  <header>
+    <h1 class="title">Pai Gow Poker<span class="glyph">♣</span></h1>
+    <p class="tagline">seven cards, two hands · beat the dealer twice · push-friendly, 5% commission on wins · provably fair · played in chips</p>
+  </header>
+
+  <div class="topbar">
+    <div class="balance"><span class="coin"></span><span class="amt" id="balance">10,000</span><span class="cur">MORBIUS</span></div>
+    <div class="right">
+      <button class="pill-btn" id="fairBtn"><span class="dot"></span>Provably fair</button>
+      <button class="icon-btn" id="soundBtn" title="Sound" aria-label="Toggle sound">♪</button>
+    </div>
+  </div>
+
+  <div class="game-grid">
+    <section>
+      <div class="panel">
+        <p class="panel-label">Bet</p>
+        <div class="bet-input-row">
+          <div class="bet-field"><span class="coin"></span><input id="betInput" class="mono" inputmode="numeric" value="500" /></div>
+          <button class="mini-btn" data-bet="half">½</button>
+          <button class="mini-btn" data-bet="double">2×</button>
+        </div>
+        <div class="chips">
+          <button class="chip" data-add="100">+100</button>
+          <button class="chip" data-add="500">+500</button>
+          <button class="chip" data-add="1000">+1k</button>
+          <button class="chip" data-set="max">Max</button>
+        </div>
+        <div class="minmax"><span>Min 100</span><span>Max 10,000</span></div>
+      </div>
+      <div class="panel">
+        <p class="panel-label">Payouts &amp; table rules</p>
+        <div class="pt">
+          <div class="ptl">Result</div>
+          <div class="ptr"><span>Win both hands</span><span class="pv">1:1 − 5%</span></div>
+          <div class="ptr"><span>Win one / split</span><span class="pv">push</span></div>
+          <div class="ptr"><span>Lose both hands</span><span class="pv">bet lost</span></div>
+          <div class="ptl">House rules</div>
+          <div class="ptr"><span>Copies (exact ties)</span><span class="pv">→ dealer</span></div>
+          <div class="ptr"><span>High hand must beat low</span><span class="pv">or foul</span></div>
+          <div class="ptr"><span>Standard 52-card deck</span><span class="pv">no joker</span></div>
+          <div class="ptr"><span>Dealer sets by</span><span class="pv">house way</span></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="board">
+      <div class="board-shell">
+        <div class="hud">
+          <div class="cell"><div class="k">Wagered</div><div class="v amt idle" id="hudWager">—</div></div>
+          <div class="cell"><div class="k">Your high hand</div><div class="v hand idle" id="hudHand">—</div></div>
+          <div class="cell"><div class="k">Payout</div><div class="v idle" id="hudPay">—</div></div>
+        </div>
+        <div class="felt">
+          <div class="seat">
+            <div class="seat-label" id="dealerLabel">Dealer</div>
+            <div class="row-wrap"><span class="row-tag">Low</span><div class="hand-row" id="dealerLowRow"></div><span class="row-res" id="dLowRes"></span></div>
+            <div class="row-wrap"><span class="row-tag">High</span><div class="hand-row" id="dealerHighRow"></div><span class="row-res" id="dHighRes"></span></div>
+          </div>
+          <div class="felt-mid" id="feltMid">Post your bet and deal</div>
+          <div class="seat">
+            <div class="row-wrap"><span class="row-tag">Low</span><div class="hand-row" id="playerLowRow"></div><span class="row-res" id="pLowRes"></span></div>
+            <div class="row-wrap"><span class="row-tag">High</span><div class="hand-row" id="playerHighRow"></div><span class="row-res" id="pHighRes"></span></div>
+            <div class="seat-label" style="margin:5px 0 0">Your hand</div>
+            <div class="foul" id="foulHint"></div>
+          </div>
+          <div class="banner-host"><div class="banner" id="banner"><div class="b-k" id="bannerK"></div><div class="b-v" id="bannerV"></div></div></div>
+        </div>
+      </div>
+      <div class="actions" id="actions"><button class="btn btn-go" id="goBtn">Post bet &amp; deal</button></div>
+    </section>
+  </div>
+
+  <section class="info panel" aria-label="Pai Gow Poker information">
+    <div class="tabs-list">
+      <button class="tab-btn active" data-tab="rounds">My rounds</button>
+      <button class="tab-btn" data-tab="faq">FAQ</button>
+    </div>
+    <div class="tab-panel active" id="tab-rounds">
+      <div class="hist-head"><h2>Recent hands</h2><span class="count" id="histCount">last —</span></div>
+      <div id="histBody"></div>
+    </div>
+    <div class="tab-panel" id="tab-faq"><div id="faqBody"></div></div>
+  </section>
+
+  <p class="lab-note">
+    <b>Prototype</b> — Deep-Sea Neon style, single-player on the arcade2 pattern.<br/>
+    The deck here is a seeded Fisher-Yates shuffle for feel; the real build derives it from the server
+    <b>provably-fair</b> pipeline (<span class="mono">pfService.fisherYatesShuffle</span> · <span class="mono">/api/arcade/pai-gow/*</span>) and the dealer sets by the same fixed house way. Every hand re-derives from the seed in Verify. Currency: <b>MORBIUS</b> chips.
+  </p>
+</div>
+
+<div class="overlay" id="overlay">
+  <div class="modal" role="dialog" aria-modal="true" aria-label="Provably fair">
+    <div class="modal-head"><h2>Provably Fair</h2><button class="modal-x" id="modalX" aria-label="Close">✕</button></div>
+    <div class="m-sec"><h3>Your client seed</h3><p class="note">Mixed into every shuffle. Change it any time — the next hand uses the new value.</p>
+      <div class="m-input-row"><input class="m-input" id="clientSeedInput" placeholder="Leave blank for a random seed each hand" /><button class="m-btn outline" id="newSeedBtn">New seed</button></div></div>
+    <div class="m-sec"><h3>Verify a hand</h3><p class="note">All 14 cards are sealed from a server seed committed (hashed) before your bet — revealed once the hand settles. The dealer's split re-derives from the fixed house way.</p>
+      <div class="m-input-row"><input class="m-input" id="verifyIdInput" placeholder="Hand ID" /><button class="m-btn solid" id="verifyBtn">Verify</button></div></div>
+    <div id="verifyOut"></div>
+  </div>
+</div>
+
+<script>
+"use strict";
+(function(){
+  var MIN_BET=100, MAX_BET=10000;
+  var SUITS=['♠','♥','♦','♣'];
+
+  var S={ balance:10000, bet:500, phase:'idle',
+    deck:[], player:[], dealer:[], lowIdx:[], pLow:[], pHigh:[], dLow:[], dHigh:[],
+    serverSeed:'', clientSeed:'', clientSeedPref:'', nonce:0, serverHash:'', roundId:'',
+    sound:true, busy:false, history:[] };
+
+  var $=function(id){return document.getElementById(id);};
+  var balanceEl=$('balance'),betInput=$('betInput'),actions=$('actions'),
+      playerLowRow=$('playerLowRow'),playerHighRow=$('playerHighRow'),
+      dealerLowRow=$('dealerLowRow'),dealerHighRow=$('dealerHighRow'),
+      dealerLabel=$('dealerLabel'),feltMid=$('feltMid'),foulHint=$('foulHint'),
+      pLowRes=$('pLowRes'),pHighRes=$('pHighRes'),dLowRes=$('dLowRes'),dHighRes=$('dHighRes'),
+      hudWager=$('hudWager'),hudHand=$('hudHand'),hudPay=$('hudPay'),
+      banner=$('banner'),bannerK=$('bannerK'),bannerV=$('bannerV'),soundBtn=$('soundBtn'),
+      overlay=$('overlay'),histBody=$('histBody'),histCount=$('histCount'),faqBody=$('faqBody');
+
+  function fmt(n){return Math.round(n).toLocaleString('en-US');}
+  function rndHex(len){var s='';for(var i=0;i<len;i++)s+=Math.floor(Math.random()*16).toString(16);return s;}
+  function shortId(){return rndHex(8).toUpperCase();}
+  function xmur3(str){var h=1779033703^str.length;for(var i=0;i<str.length;i++){h=Math.imul(h^str.charCodeAt(i),3432918353);h=h<<13|h>>>19;}return function(){h=Math.imul(h^h>>>16,2246822507);h=Math.imul(h^h>>>13,3266489909);return (h^=h>>>16)>>>0;};}
+  function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;var t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return ((t^t>>>14)>>>0)/4294967296;};}
+  async function sha256Hex(msg){try{var b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(msg));return Array.from(new Uint8Array(b)).map(function(x){return x.toString(16).padStart(2,'0');}).join('');}catch(e){return 'sha256-unavailable';}}
+
+  // deck = ordered 52, seeded Fisher-Yates (mirrors pfService.fisherYatesShuffle) — no joker
+  function buildDeck(seedStr){
+    var d=[];for(var s=0;s<4;s++)for(var r=2;r<=14;r++)d.push({r:r,s:s});
+    var rng=mulberry32(xmur3(seedStr)());
+    for(var i=d.length-1;i>0;i--){var j=Math.floor(rng()*(i+1));var t=d[i];d[i]=d[j];d[j]=t;}
+    return d;
+  }
+  function rankName(r){return r===14?'A':r===13?'K':r===12?'Q':r===11?'J':r===10?'10':String(r);}
+
+  // ── evaluators ──────────────────────────────────────────────────────────────
+  function score5(cards){
+    var rs=cards.map(function(c){return c.r;}).sort(function(a,b){return b-a;});
+    var flush=cards.every(function(c){return c.s===cards[0].s;});
+    var uniq=[];rs.forEach(function(r){if(uniq.indexOf(r)<0)uniq.push(r);});
+    var isWheel=(uniq.length===5&&uniq[0]===14&&uniq[1]===5&&uniq[2]===4&&uniq[3]===3&&uniq[4]===2);
+    var isStraight=(uniq.length===5&&uniq[0]-uniq[4]===4)||isWheel;
+    var sHigh=isWheel?5:uniq[0];
+    var cnt={};rs.forEach(function(r){cnt[r]=(cnt[r]||0)+1;});
+    var groups=Object.keys(cnt).map(function(k){return {r:+k,c:cnt[k]};}).sort(function(a,b){return b.c-a.c||b.r-a.r;});
+    if(isStraight&&flush)return [8,sHigh];
+    if(groups[0].c===4)return [7,groups[0].r,groups[1].r];
+    if(groups[0].c===3&&groups[1]&&groups[1].c>=2)return [6,groups[0].r,groups[1].r];
+    if(flush)return [5].concat(rs);
+    if(isStraight)return [4,sHigh];
+    if(groups[0].c===3)return [3,groups[0].r,groups[1].r,groups[2].r];
+    if(groups[0].c===2&&groups[1]&&groups[1].c===2)return [2,groups[0].r,groups[1].r,groups[2].r];
+    if(groups[0].c===2)return [1,groups[0].r,groups[1].r,groups[2].r,groups[3].r];
+    return [0].concat(rs);
+  }
+  function cmpScore(a,b){var n=Math.max(a.length,b.length);for(var i=0;i<n;i++){var x=a[i]||0,y=b[i]||0;if(x!==y)return x-y;}return 0;}
+  function handName(sc){
+    switch(sc[0]){
+      case 8:return sc[1]===14?'Royal flush':'Straight flush';
+      case 7:return 'Four '+rankName(sc[1])+'s';
+      case 6:return 'Full house';
+      case 5:return 'Flush';
+      case 4:return 'Straight';
+      case 3:return 'Three '+rankName(sc[1])+'s';
+      case 2:return 'Two pair';
+      case 1:return 'Pair of '+rankName(sc[1])+'s';
+      default:return rankName(sc[1])+' high';
+    }
+  }
+  function low2score(low){
+    var a=low[0].r,b=low[1].r;
+    return a===b?[1,a]:[0,Math.max(a,b),Math.min(a,b)];
+  }
+  function lowName(low){
+    var a=low[0].r,b=low[1].r;
+    return a===b?'Pair of '+rankName(a)+'s':rankName(Math.max(a,b))+'-'+rankName(Math.min(a,b))+' high';
+  }
+  // the 5-card high hand must strictly outrank the 2-card low hand
+  function isValidSplit(high,low){return cmpScore(score5(high),low2score(low))>0;}
+
+  // ── simplified house way (dealer always sets by this) ──────────────────────
+  function houseWay(cards){
+    var cs=cards.slice().sort(function(a,b){return b.r-a.r;});
+    var byRank={};cs.forEach(function(c){(byRank[c.r]=byRank[c.r]||[]).push(c);});
+    var quads=[],trips=[],pairs=[],singles=[];
+    Object.keys(byRank).map(Number).sort(function(a,b){return b-a;}).forEach(function(r){
+      var g=byRank[r];
+      if(g.length===4)quads.push(g);
+      else if(g.length===3)trips.push(g);
+      else if(g.length===2)pairs.push(g);
+      else singles.push(g[0]);
+    });
+    function make(low){
+      var high=cs.filter(function(c){return low.indexOf(c)<0;});
+      return {low:low.slice().sort(function(a,b){return b.r-a.r;}),high:high};
+    }
+    function pick(){
+      // quads: keep together with a pair (or trips) for the low; otherwise split into two pairs
+      if(quads.length){
+        if(pairs.length)return make(pairs[0]);
+        if(trips.length)return make([trips[0][0],trips[0][1]]);
+        return make([quads[0][0],quads[0][1]]);
+      }
+      // full house (trips + pair, incl. trips + two pairs): split — trips high, best pair low
+      if(trips.length===1&&pairs.length>=1)return make(pairs[0]);
+      // two trips: pair from the higher trips low, lower trips play high
+      if(trips.length===2)return make([trips[0][0],trips[0][1]]);
+      // straight / flush / straight flush: keep intact if a decent low remains
+      var cand=null,candScore=null;
+      for(var i=0;i<cs.length-1;i++)for(var j=i+1;j<cs.length;j++){
+        var lw=[cs[i],cs[j]];
+        var hi=cs.filter(function(c){return c!==cs[i]&&c!==cs[j];});
+        var sc=score5(hi);
+        if(sc[0]===4||sc[0]===5||sc[0]===8){
+          var ls=low2score(lw);
+          if(!cand||cmpScore(ls,candScore)>0){cand=lw;candScore=ls;}
+        }
+      }
+      if(cand){
+        var decent=candScore[0]===1||candScore[1]>=11; // a pair, or jack-high+ up top
+        if(decent||pairs.length<2)return make(cand);
+        // weak low AND two pair available → fall through to two-pair split rules
+      }
+      // trips (no pair alongside): keep trips high — but split three aces
+      if(trips.length===1){
+        if(trips[0][0].r===14)return make([trips[0][2],singles[0]]);
+        return make([singles[0],singles[1]]);
+      }
+      // three pairs: highest pair low
+      if(pairs.length===3)return make(pairs[0]);
+      // two pair: split unless both small (6s or lower) with an ace to save
+      if(pairs.length===2){
+        if(pairs[0][0].r<=6&&singles.length&&singles[0].r===14)return make([singles[0],singles[1]]);
+        return make(pairs[1]);
+      }
+      // one pair: pair high, top two kickers low
+      if(pairs.length===1)return make([singles[0],singles[1]]);
+      // no pair: highest card high, 2nd + 3rd highest low
+      return make([cs[1],cs[2]]);
+    }
+    var res=pick();
+    if(!isValidSplit(res.high,res.low))res=make([cs[1],cs[2]]); // safety — never foul
+    return res;
+  }
+
+  var actx=null;
+  function tone(f,d,t,g){if(!S.sound)return;try{actx=actx||new (window.AudioContext||window.webkitAudioContext)();var o=actx.createOscillator(),gn=actx.createGain();o.type=t||'sine';o.frequency.value=f;gn.gain.value=g||0.05;o.connect(gn);gn.connect(actx.destination);var n=actx.currentTime;o.start(n);gn.gain.exponentialRampToValueAtTime(0.0001,n+(d||0.12));o.stop(n+(d||0.12));}catch(e){}}
+  function sDeal(){tone(330,0.06,'triangle',0.04);}
+  function sFlip(){tone(420,0.07,'sine',0.04);}
+  function sPick(){tone(520,0.05,'triangle',0.035);}
+  function sWin(){tone(660,0.12,'sine',0.06);setTimeout(function(){tone(990,0.16,'sine',0.06);},100);}
+  function sLose(){tone(160,0.28,'sawtooth',0.06);}
+  function sPush(){tone(360,0.14,'sine',0.05);}
+
+  function cardHtml(c,faceDown,extra){
+    if(faceDown)return '<div class="card back'+(extra||'')+'">✦</div>';
+    var red=(c.s===1||c.s===2);
+    return '<div class="card'+(red?' red':'')+(extra||'')+'"><span class="cr">'+rankName(c.r)+'</span><span class="cs">'+SUITS[c.s]+'</span></div>';
+  }
+  function pickCardHtml(c,idx){
+    var red=(c.s===1||c.s===2);
+    return '<div class="card pick'+(red?' red':'')+'" data-i="'+idx+'"><span class="cr">'+rankName(c.r)+'</span><span class="cs">'+SUITS[c.s]+'</span></div>';
+  }
+  function setRes(el,kind){ // kind: 'w' | 'l' | 'c' | ''
+    el.className='row-res'+(kind?' res-'+kind:'');
+    el.textContent=kind==='w'?'win':kind==='l'?'loss':kind==='c'?'copy':'';
+  }
+  function clearRes(){setRes(pLowRes,'');setRes(pHighRes,'');setRes(dLowRes,'');setRes(dHighRes,'');}
+
+  function setWagerHud(v){hudWager.textContent=v>0?fmt(v):'—';hudWager.classList.toggle('idle',!(v>0));}
+  function setHandHud(name){hudHand.textContent=name||'—';hudHand.classList.toggle('idle',!name);}
+  function setPayHud(v){hudPay.textContent=(v===null||v===undefined)?'—':fmt(v);hudPay.classList.toggle('idle',v===null||v===undefined);}
+
+  function validate(){
+    if(S.lowIdx.length!==2){
+      var need=2-S.lowIdx.length;
+      return {ok:false,bad:false,msg:'Tap '+need+' card'+(need===1?'':'s')+' below to set your 2-card low hand'};
+    }
+    var low=S.lowIdx.map(function(i){return S.player[i];});
+    var high=S.player.filter(function(c,i){return S.lowIdx.indexOf(i)<0;});
+    if(!isValidSplit(high,low))return {ok:false,bad:true,msg:'Fouled — your low hand outranks your 5-card high hand'};
+    return {ok:true,bad:false,msg:'High: '+handName(score5(high))+' · Low: '+lowName(low)};
+  }
+  function renderArrange(){
+    var lowHtml='';
+    S.lowIdx.forEach(function(i){lowHtml+=pickCardHtml(S.player[i],i);});
+    for(var k=S.lowIdx.length;k<2;k++)lowHtml+='<div class="card slot"></div>';
+    playerLowRow.innerHTML=lowHtml;
+    playerHighRow.innerHTML=S.player.map(function(c,i){return S.lowIdx.indexOf(i)>=0?'':pickCardHtml(c,i);}).join('');
+    document.querySelectorAll('#playerLowRow .pick, #playerHighRow .pick').forEach(function(el){
+      el.addEventListener('click',function(){toggleLow(parseInt(el.getAttribute('data-i'),10));});
+    });
+    var v=validate();
+    foulHint.className='foul'+(v.bad?' bad':'');
+    foulHint.textContent=v.msg;
+    renderActions();
+  }
+  function toggleLow(i){
+    if(S.phase!=='arrange')return;
+    var at=S.lowIdx.indexOf(i);
+    if(at>=0)S.lowIdx.splice(at,1);
+    else{if(S.lowIdx.length>=2)return;S.lowIdx.push(i);}
+    sPick();renderArrange();
+  }
+
+  function renderActions(){
+    if(S.phase==='idle'||S.phase==='settled'){
+      actions.className='actions';
+      actions.innerHTML='<button class="btn btn-go" id="goBtn"'+(S.busy?' disabled':'')+'>'+(S.phase==='settled'?'New hand':'Post bet &amp; deal')+'</button>';
+      $('goBtn').addEventListener('click',startHand);
+    }else if(S.phase==='arrange'){
+      var v=validate();
+      actions.className='actions two';
+      actions.innerHTML='<button class="btn btn-fold" id="hwBtn">House way<span class="btn-sub">auto-arrange</span></button>'
+        +'<button class="btn btn-go" id="confirmBtn"'+(v.ok?'':' disabled')+'>Confirm hands</button>';
+      $('hwBtn').addEventListener('click',applyHouseWay);
+      $('confirmBtn').addEventListener('click',confirmHands);
+    }else{ actions.className='actions'; actions.innerHTML='<button class="btn btn-go" disabled>Dealing…</button>'; }
+  }
+  function setControls(on){
+    betInput.disabled=!on;
+    document.querySelectorAll('.chip,.mini-btn').forEach(function(b){b.style.pointerEvents=on?'auto':'none';b.style.opacity=on?'1':'.5';});
+  }
+
+  async function startHand(){
+    if(S.busy)return;
+    var bet=clampBet(parseInt(betInput.value,10)||0);
+    if(bet>S.balance){flashInput();return;}
+    betInput.value=bet;S.busy=true;
+    S.bet=bet;S.balance-=bet;balanceEl.textContent=fmt(S.balance);
+    S.phase='dealing';S.lowIdx=[];
+    S.serverSeed=rndHex(64);S.clientSeed=(S.clientSeedPref||'').trim()||rndHex(20);S.nonce+=1;S.roundId=shortId();
+    S.serverHash=await sha256Hex(S.serverSeed);
+    S.deck=buildDeck(S.serverSeed+':'+S.clientSeed+':'+S.nonce);
+    S.player=S.deck.slice(0,7);S.dealer=S.deck.slice(7,14);
+    hideBanner();setControls(false);clearRes();renderActions();
+    dealerLabel.textContent='Dealer';
+    setWagerHud(bet);setHandHud(null);setPayHud(null);
+    feltMid.textContent='Dealing…';foulHint.className='foul';foulHint.textContent='';
+    playerLowRow.innerHTML='<div class="card slot"></div><div class="card slot"></div>';
+    playerHighRow.innerHTML='';dealerLowRow.innerHTML='';dealerHighRow.innerHTML='';
+    var k=0;
+    var iv=setInterval(function(){
+      sDeal();
+      if(k%2===0)dealerHighRow.innerHTML+=cardHtml(null,true,' deal');
+      else playerHighRow.innerHTML+=cardHtml(S.player[(k-1)/2],false,' deal');
+      if(++k>=14){clearInterval(iv);afterDeal();}
+    },110);
+  }
+  function afterDeal(){
+    S.phase='arrange';S.busy=false;
+    feltMid.innerHTML='Split your seven cards — <span class="hl">tap 2</span> for the low hand, or use <span class="hl">House way</span>';
+    renderArrange();
+  }
+  function applyHouseWay(){
+    if(S.phase!=='arrange')return;
+    var hw=houseWay(S.player);
+    S.lowIdx=hw.low.map(function(c){return S.player.indexOf(c);});
+    sFlip();renderArrange();
+  }
+
+  function confirmHands(){
+    if(S.phase!=='arrange'||S.busy)return;
+    var v=validate();if(!v.ok)return;
+    S.busy=true;S.phase='revealing';renderActions();
+    S.pLow=S.lowIdx.map(function(i){return S.player[i];}).sort(function(a,b){return b.r-a.r;});
+    S.pHigh=S.player.filter(function(c,i){return S.lowIdx.indexOf(i)<0;}).sort(function(a,b){return b.r-a.r;});
+    var hw=houseWay(S.dealer);
+    S.dLow=hw.low;S.dHigh=hw.high;
+    // lock player rows
+    playerLowRow.innerHTML=S.pLow.map(function(c){return cardHtml(c,false,'');}).join('');
+    playerHighRow.innerHTML=S.pHigh.map(function(c){return cardHtml(c,false,'');}).join('');
+    foulHint.className='foul';foulHint.textContent=v.msg;
+    setHandHud(handName(score5(S.pHigh)));
+    // dealer reveal
+    sFlip();
+    dealerLowRow.innerHTML=S.dLow.map(function(c){return cardHtml(c,false,' deal');}).join('');
+    dealerHighRow.innerHTML=S.dHigh.map(function(c){return cardHtml(c,false,' deal');}).join('');
+    feltMid.innerHTML='Dealer sets by the house way — high: <span class="hl">'+handName(score5(S.dHigh))+'</span> · low: <span class="hl">'+lowName(S.dLow)+'</span>';
+    setTimeout(settle,760);
+  }
+
+  function settle(){
+    var hCmp=cmpScore(score5(S.pHigh),score5(S.dHigh));
+    var lCmp=cmpScore(low2score(S.pLow),low2score(S.dLow));
+    var copyH=hCmp===0,copyL=lCmp===0;           // copies go to the dealer
+    var winH=hCmp>0,winL=lCmp>0;
+    var wins=(winH?1:0)+(winL?1:0);
+    var ret,net,kind,res;
+    if(wins===2){ ret=S.bet+Math.floor(S.bet*0.95); res='win'; kind='Win both · 5% commission'; }
+    else if(wins===1){ ret=S.bet; res='push'; kind='Split — one hand each'; }
+    else { ret=0; res='loss'; kind=(copyH||copyL)?'Dealer wins · copy → dealer':'Dealer wins both'; }
+    net=ret-S.bet;
+    S.balance+=ret;balanceEl.textContent=fmt(S.balance);
+    S.phase='settled';S.busy=false;
+    setPayHud(ret);
+    setRes(pHighRes,winH?'w':copyH?'c':'l');
+    setRes(pLowRes,winL?'w':copyL?'c':'l');
+    setRes(dHighRes,winH?'l':'w');
+    setRes(dLowRes,winL?'l':'w');
+    if(res==='win'){sWin();showBanner('win',kind,'+'+fmt(net)+' MORBIUS');}
+    else if(res==='push'){sPush();showBanner('push',kind,'±0 MORBIUS');}
+    else{sLose();showBanner('loss',kind,'−'+fmt(-net)+' MORBIUS');}
+    S.history.unshift({ id:S.roundId, at:new Date().toISOString(), bet:S.bet, res:res, wins:wins,
+      copyH:copyH, copyL:copyL, winH:winH, winL:winL,
+      player:S.player.slice(), dealer:S.dealer.slice(),
+      pLow:S.pLow.slice(), pHigh:S.pHigh.slice(), dLow:S.dLow.slice(), dHigh:S.dHigh.slice(),
+      ret:ret, net:net, serverSeed:S.serverSeed, serverHash:S.serverHash, clientSeed:S.clientSeed, nonce:S.nonce });
+    if(S.history.length>15)S.history.pop();
+    setControls(true);renderActions();renderHistory();
+  }
+
+  function showBanner(k,a,b){banner.className='banner show '+k+' arc-banner-in';bannerK.textContent=a;bannerV.textContent=b;}
+  function hideBanner(){banner.className='banner';}
+  function clampBet(v){if(isNaN(v)||v<MIN_BET)v=MIN_BET;if(v>MAX_BET)v=MAX_BET;return v;}
+  function flashInput(){betInput.style.color='#FB7185';setTimeout(function(){betInput.style.color='#fff';},400);}
+
+  function timeLabel(iso){var d=new Date(iso);return isNaN(d.getTime())?'—':d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});}
+  function renderHistory(){
+    histCount.textContent='last '+(S.history.length||'—');
+    if(!S.history.length){histBody.innerHTML='<p class="hist-empty">No hands yet — post your bet and deal.</p>';return;}
+    histBody.innerHTML='<ul class="hist-list">'+S.history.map(function(r){
+      var hl='H '+(r.winH?'✓':r.copyH?'=':'✗')+' · L '+(r.winL?'✓':r.copyL?'=':'✗');
+      var xcell=r.res==='win'?'<span class="x win">'+handName(score5(r.pHigh))+'</span>'
+        :r.res==='push'?'<span class="x push">push</span>':'<span class="x bust">loss</span>';
+      var pcell='<span class="p '+(r.net>0?'up':'flat')+'">'+(r.net>0?'+'+fmt(r.net):fmt(r.net))+'</span>';
+      return '<li class="hist-row"><span class="t">'+timeLabel(r.at)+'</span><span class="badge">bet '+fmt(r.bet)+'</span>'
+        +'<span class="m">'+hl+'</span>'+xcell+pcell
+        +'<button class="verify" data-id="'+r.id+'">Verify</button></li>';
+    }).join('')+'</ul>';
+    histBody.querySelectorAll('.verify').forEach(function(b){b.addEventListener('click',function(){openFairness(b.getAttribute('data-id'));});});
+  }
+
+  function recipeStr(){return 'fisherYates(serverSeed, clientSeed, nonce) → you = cards 1–7, dealer = cards 8–14 · dealer set by fixed house way';}
+  function ckHtml(ok,label){return '<div class="m-check"><span class="ck '+(ok?'ok':'no')+'">'+(ok?'✓':'✗')+'</span><span>'+label+'</span></div>';}
+  function fieldHtml(l,v){return '<div class="m-field"><div class="fl">'+l+'</div><div class="fv">'+v+'</div></div>';}
+  function miniCards(cards){return cards.map(function(c){var red=(c.s===1||c.s===2);return '<span class="m-card'+(red?' red':'')+'">'+rankName(c.r)+'<span>'+SUITS[c.s]+'</span></span>';}).join('');}
+  function findRound(id){id=String(id||'').trim();return S.history.filter(function(x){return x.id===id;})[0]||null;}
+  function openFairness(id){overlay.classList.add('open');$('clientSeedInput').value=S.clientSeedPref;
+    var target=id||(S.history[0]&&S.history[0].id);
+    if(target){$('verifyIdInput').value=target;runVerify(target);}else{$('verifyOut').innerHTML='<p class="note">Play a hand, then verify it here — or paste any hand ID.</p>';}}
+  function closeFairness(){overlay.classList.remove('open');}
+  async function runVerify(id){
+    var out=$('verifyOut'),r=findRound(id);
+    if(!r){out.innerHTML='<p class="note" style="color:var(--loss)">No hand found with that ID.</p>';return;}
+    out.innerHTML='<p class="note">Checking…</p>';
+    var hashOk=(await sha256Hex(r.serverSeed))===r.serverHash;
+    var deck=buildDeck(r.serverSeed+':'+r.clientSeed+':'+r.nonce);
+    function key(cs){return cs.map(function(c){return c.r+'-'+c.s;}).join(',');}
+    var dealOk=key(deck.slice(0,7))===key(r.player)&&key(deck.slice(7,14))===key(r.dealer);
+    var hw=houseWay(deck.slice(7,14));
+    var houseOk=key(hw.low)===key(r.dLow)&&key(hw.high)===key(r.dHigh);
+    var hCmp=cmpScore(score5(r.pHigh),score5(r.dHigh)),lCmp=cmpScore(low2score(r.pLow),low2score(r.dLow));
+    var wins=(hCmp>0?1:0)+(lCmp>0?1:0);
+    var expected=wins===2?r.bet+Math.floor(r.bet*0.95):wins===1?r.bet:0;
+    var payOk=expected===r.ret;
+    out.innerHTML='<div class="m-result">'
+      +ckHtml(hashOk,'Server seed matches its committed hash (checked locally)')
+      +ckHtml(dealOk,'All 14 cards re-derive from the shuffled deck')
+      +ckHtml(houseOk,'Dealer hands re-set by the fixed house way')
+      +ckHtml(payOk,'Settlement (copies to dealer, 5% commission) reconciles')
+      +'<div class="m-maplabel">The hands (re-derived)</div>'
+      +'<div class="m-hand"><span class="ml">Your low</span>'+miniCards(r.pLow)+'<span class="ml" style="width:auto;margin-left:8px;color:var(--cyan)">'+lowName(r.pLow)+'</span></div>'
+      +'<div class="m-hand"><span class="ml">Your high</span>'+miniCards(r.pHigh)+'<span class="ml" style="width:auto;margin-left:8px;color:var(--cyan)">'+handName(score5(r.pHigh))+'</span></div>'
+      +'<div class="m-hand"><span class="ml">Dealer low</span>'+miniCards(r.dLow)+'<span class="ml" style="width:auto;margin-left:8px">'+lowName(r.dLow)+'</span></div>'
+      +'<div class="m-hand"><span class="ml">Dealer high</span>'+miniCards(r.dHigh)+'<span class="ml" style="width:auto;margin-left:8px">'+handName(score5(r.dHigh))+'</span></div>'
+      +'<div class="m-fields">'+fieldHtml('Server seed hash (committed)',r.serverHash)+fieldHtml('Server seed (revealed)',r.serverSeed)
+        +fieldHtml('Client seed',r.clientSeed)+fieldHtml('Nonce',String(r.nonce))+fieldHtml('Recipe',recipeStr())+'</div>'
+      +'<div class="m-foot"><span>Bet: <span class="fv">'+fmt(r.bet)+'</span></span>'
+        +'<span>Result: <span class="fv b">'+(r.res==='win'?'Win':r.res==='push'?'Push':'Loss')+'</span></span>'
+        +'<span>Returned: <span class="fv '+(r.ret>0?'amber':'rose')+'">'+fmt(r.ret)+' chips</span></span></div>'
+      +'</div>';
+  }
+
+  var FAQS=[
+    {q:'How does Pai Gow Poker work?',a:'<p>You and the dealer each get <span class="hl">seven cards</span> from a standard 52-card deck. You split yours into a <span class="hl">5-card high hand</span> and a <span class="hl">2-card low hand</span> — and your high hand must outrank your low hand, or the set is a foul. The dealer splits by a fixed, published house way.</p><p>Both high hands are compared, both low hands are compared. Win <span class="hl">both</span> and you\'re paid 1:1 minus a 5% commission. Win one and lose one, it\'s a <span class="hl">push</span>. Lose both and the bet is gone.</p>'},
+    {q:'Is there a joker?',a:'<p>Not in this variant — we deal a clean <span class="hl">standard 52-card deck</span>. Classic casino pai gow adds a semi-wild joker (aces, straights, flushes), which also makes "five aces" possible; without it the odds are slightly cleaner to reason about and the deck matches every other table here. The house way and settlement rules are otherwise the standard ones.</p>'},
+    {q:'How does the 5% commission work?',a:'<p>Commission is charged only on hands you <span class="hl">win outright</span> (both hands). Bet 1,000 and win both: you get your 1,000 back plus <span class="mono">950</span> profit instead of 1,000 — the house keeps 5% of the win. Pushes and losses pay no commission.</p><p>That commission plus the copy rule is where the roughly <span class="hl">2.7% effective house edge</span> lives when you set your hands sensibly (the house way is close to optimal).</p>'},
+    {q:'Why do so many hands push?',a:'<p>Because you need to win <span class="hl">two separate comparisons</span> to get paid, and lose both to lose. Splitting one-each happens on roughly <span class="hl">41% of hands</span> — that\'s the charm of pai gow: long sessions, low variance, lots of "nothing happens". It\'s the slow-burn table, not the adrenaline one.</p>'},
+    {q:'What are copies?',a:'<p>A <span class="hl">copy</span> is an exact tie on one of the comparisons — say both low hands are A-Q, or both high hands are the identical straight. Copies go to the <span class="hl">dealer</span>. It sounds minor, but it\'s a meaningful chunk of the house edge, which is why the banker seat is coveted in live pai gow.</p>'},
+    {q:'What is the house way?',a:'<p>A fixed recipe for splitting seven cards, used by the dealer every hand — and available to you via the <span class="hl">House way</span> button. In short: no pair → 2nd and 3rd highest cards low; one pair → pair high, top kickers low; two pair → split (unless both are small and an ace can guard the low); trips → keep high (three aces split); full house → split; quads → split unless a pair rides along; straights and flushes stay intact when a decent low remains.</p><p>Setting your own hands is legal and sometimes better — the house way is a strong default, not a cage.</p>'},
+    {q:'Is the deal really fair?',a:'<p>Yes. Before your bet, the server commits to a secret <span class="hl">server seed</span> (you see only its SHA-256 hash). The deck is a Fisher-Yates shuffle of that seed, <span class="hl">your client seed</span>, and a nonce — all fourteen cards are fixed before you touch a thing, and the dealer\'s split is a pure function of its cards.</p><p>When the hand settles the seed is revealed. Hit <span class="hl">Verify</span> and anyone can re-shuffle the deck, re-run the house way, and confirm the settlement and the commitment hash.</p>'},
+    {q:'How do I get chips?',a:'<p>Chips are the play credits used at every table. Tap <span class="hl">Buy</span> next to your balance to swap MORBIUS for chips at a fixed <span class="hl">1 chip = 1 MORBIUS</span> — instant, gasless, and <span class="hl">no fee</span>. Cash back out any time at the same 1:1.</p>'},
+    {q:'How do I get MORBIUS?',a:'<p>MORBIUS is the project\'s token on <span class="hl">PulseChain</span> (chain ID 369). Buy it on <span class="hl">PulseX</span> by swapping PLS or WPLS for MORBIUS, then deposit and convert to chips.</p><p class="mono" style="font-size:11px">Contract: <a href="https://scan.pulsechain.com/token/0xB7d4eB5fDfE3d4d3B5C16a44A49948c6EC77c6F1" target="_blank" rel="noopener noreferrer">0xB7d4eB5fDfE3d4d3B5C16a44A49948c6EC77c6F1</a></p><p>Always confirm the contract address before swapping — never trust a ticker alone.</p>'},
+    {q:'What are the fees?',a:'<p>Aside from the 5% commission on won pai gow hands — which is part of the game\'s standard odds, not a platform fee — these chip games take <span class="hl">no per-bet or per-payout fee</span>. Buying and cashing chips is free, 1:1.</p>'}
+  ];
+  function renderFaq(){faqBody.innerHTML=FAQS.map(function(f){return '<div class="faq-item"><button class="faq-q">'+f.q+'</button><div class="faq-a">'+f.a+'</div></div>';}).join('');
+    faqBody.querySelectorAll('.faq-item').forEach(function(it){it.querySelector('.faq-q').addEventListener('click',function(){it.classList.toggle('open');});});}
+
+  document.querySelectorAll('.chip').forEach(function(c){c.addEventListener('click',function(){if(S.phase!=='idle'&&S.phase!=='settled')return;
+    if(c.getAttribute('data-set')==='max'){betInput.value=Math.max(MIN_BET,Math.min(MAX_BET,S.balance));}
+    else{betInput.value=clampBet((parseInt(betInput.value,10)||0)+parseInt(c.getAttribute('data-add'),10));}});});
+  document.querySelectorAll('.mini-btn').forEach(function(b){b.addEventListener('click',function(){if(S.phase!=='idle'&&S.phase!=='settled')return;var v=parseInt(betInput.value,10)||MIN_BET;betInput.value=clampBet(b.getAttribute('data-bet')==='half'?Math.floor(v/2):v*2);});});
+  betInput.addEventListener('change',function(){betInput.value=clampBet(parseInt(betInput.value,10)||0);});
+  soundBtn.addEventListener('click',function(){S.sound=!S.sound;soundBtn.style.color=S.sound?'':'#475569';soundBtn.textContent=S.sound?'♪':'✕';if(S.sound)tone(700,0.1,'sine',0.05);});
+  $('fairBtn').addEventListener('click',function(){openFairness(null);});
+  $('modalX').addEventListener('click',closeFairness);
+  overlay.addEventListener('click',function(e){if(e.target===overlay)closeFairness();});
+  window.addEventListener('keydown',function(e){if(e.key==='Escape')closeFairness();});
+  $('newSeedBtn').addEventListener('click',function(){S.clientSeedPref=rndHex(16);$('clientSeedInput').value=S.clientSeedPref;});
+  $('clientSeedInput').addEventListener('input',function(e){S.clientSeedPref=e.target.value.slice(0,128);});
+  $('verifyBtn').addEventListener('click',function(){runVerify($('verifyIdInput').value);});
+  document.querySelectorAll('.tab-btn').forEach(function(t){t.addEventListener('click',function(){
+    document.querySelectorAll('.tab-btn').forEach(function(x){x.classList.remove('active');});document.querySelectorAll('.tab-panel').forEach(function(x){x.classList.remove('active');});
+    t.classList.add('active');$('tab-'+t.getAttribute('data-tab')).classList.add('active');});});
+
+  // initial board: dealer 7 backs, player 7 backs, empty low slots
+  var backs='';for(var i=0;i<7;i++)backs+='<div class="card back">✦</div>';
+  dealerHighRow.innerHTML=backs;playerHighRow.innerHTML=backs;
+  dealerLowRow.innerHTML='<div class="card slot"></div><div class="card slot"></div>';
+  playerLowRow.innerHTML='<div class="card slot"></div><div class="card slot"></div>';
+  setPayHud(null);renderActions();renderHistory();renderFaq();
+})();
+</script>
+</body>
+</html>
