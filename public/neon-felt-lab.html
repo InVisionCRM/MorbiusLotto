@@ -1120,8 +1120,6 @@ h1 .title-chip{height:.74em;width:auto;vertical-align:-.05em;margin-left:.16em;b
       duelTimer(function(){
         playerFace.className='f '+suitCol(h.p.s);playerFace.innerHTML=cardFaceHtml(h.p);
         playerCard.classList.add('up');sSnap();
-        // shot-mode hold: lab/test hook — freeze mid-hand for the screenshot rig
-        if(window.__nfShotHold&&decIdx>=1){return;}
         // …dealer's second
         duelTimer(function(){
           dealerFace.className='f '+suitCol(h.d.s);dealerFace.innerHTML=cardFaceHtml(h.d);
@@ -1144,6 +1142,8 @@ h1 .title-chip{height:.74em;width:auto;vertical-align:-.05em;margin-left:.16em;b
               sDuelLose();
             }
             hi++;
+            // shot-mode hold: lab/test hook — freeze on a resolved hand for the screenshot rig
+            if(window.__nfShotHold&&decIdx>=2){return;}
             duelTimer(playHand,PACE);
           },PACE*0.7);
         },PACE*0.55);
