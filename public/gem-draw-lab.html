@@ -1,0 +1,612 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Gem Draw — Deep-Sea Neon lab</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+/* ── Gem Draw — Deep-Sea Neon (arcade2) prototype ──────────────────────────
+   Five-gem instant draw as a single-player house game. Mirrors the shared
+   arcade2-scope system (Greed Dice / Firewalk / Morb Flip / RPS): abyss
+   #050E16, cyan #22D3EE chrome, amber #F59E0B wins, rose losses, Chakra Petch
+   display + JetBrains Mono numerals, .panel glass, provably-fair
+   commit/verify, My-rounds / FAQ tab strip and fairness modal.
+
+   Mechanic: one tap draws 5 gems, each uniformly one of 7 colors from the
+   seeded stream. Payout by pattern rank (poker-style color matching):
+   all different pays 0. With 7^5 = 16,807 equally likely draws the exact
+   pattern counts are: one pair 8,400 · two pair 3,150 · trips 2,100 ·
+   full house 420 · four of a kind 210 · five of a kind 7 · none 2,520.
+
+   Multipliers 0.5 / 1.2 / 2 / 5 / 8 / 25 give
+   RTP = (8400·0.5 + 3150·1.2 + 2100·2 + 420·5 + 210·8 + 7·25) / 16807
+       = 16,135 / 16,807 ≈ 96.00%.
+   Self-contained client-side demo (illustrative seeded RNG). Currency:
+   MORBIUS. */
+:root{
+  --abyss:#050E16; --cyan:#22D3EE; --cyan-soft:rgba(34,211,238,0.12); --cyan-edge:rgba(34,211,238,0.35);
+  --win:#F59E0B; --loss:#FB7185;
+  --ink:#E2E8F0; --slate-300:#CBD5E1; --slate-400:#94A3B8; --slate-500:#64748B;
+  --panel:rgba(8,20,31,0.78); --field:#081420;
+  --font-disp:'Chakra Petch',system-ui,sans-serif;
+  --font-mono:'JetBrains Mono',ui-monospace,monospace;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  min-height:100svh;background-color:var(--abyss);
+  background-image:linear-gradient(to bottom,rgba(5,14,22,0.92),rgba(2,7,11,0.96) 55%,rgba(5,14,22,0.98));
+  color:var(--ink);font-family:var(--font-disp);-webkit-font-smoothing:antialiased;overflow-x:hidden;
+}
+.bg-light,.bg-vignette{position:fixed;inset:0;pointer-events:none;z-index:0}
+.bg-light{background:radial-gradient(ellipse 75% 55% at 50% -5%,rgba(34,211,238,0.13),transparent 70%)}
+.bg-vignette{background:radial-gradient(ellipse 120% 60% at 50% 115%,rgba(0,0,0,0.55),transparent 60%)}
+.mono{font-family:var(--font-mono);font-variant-numeric:tabular-nums}
+
+.wrap{position:relative;z-index:1;max-width:1000px;margin:0 auto;padding:18px 14px 64px}
+@media(min-width:700px){.wrap{padding:30px 22px 80px}}
+
+header{text-align:center;margin-bottom:16px}
+h1.title{margin:0;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#fff;font-size:clamp(28px,7vw,42px);line-height:1}
+h1.title .glyph{margin-left:.35rem;color:var(--cyan);filter:drop-shadow(0 0 12px rgba(34,211,238,0.65));vertical-align:middle}
+.tagline{margin:.55rem 0 0;font-size:clamp(11px,2.6vw,13.5px);color:var(--slate-500);letter-spacing:.01em}
+
+.topbar{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:14px}
+.topbar .right{display:flex;gap:8px}
+.balance{display:flex;align-items:center;gap:9px;background:rgba(8,20,31,0.7);border:1px solid var(--cyan-soft);border-radius:12px;padding:8px 13px}
+.coin{width:18px;height:18px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#7be9fb,#22D3EE 55%,#0e7490);box-shadow:0 0 10px rgba(34,211,238,.5);flex:none}
+.balance .amt{font-family:var(--font-mono);font-weight:700;font-size:16px;color:#fff}
+.balance .cur{font-size:10px;letter-spacing:.12em;color:var(--cyan);text-transform:uppercase}
+.pill-btn{display:inline-flex;align-items:center;gap:7px;height:40px;padding:0 13px;border-radius:11px;border:1px solid var(--cyan-soft);background:rgba(8,20,31,0.7);color:var(--slate-400);cursor:pointer;transition:.15s;font-family:var(--font-disp);font-size:12px;letter-spacing:.06em;text-transform:uppercase}
+.pill-btn:hover{color:var(--cyan);border-color:var(--cyan-edge)}
+.pill-btn .dot{width:7px;height:7px;border-radius:50%;background:var(--cyan);box-shadow:0 0 8px var(--cyan)}
+.icon-btn{width:40px;height:40px;display:grid;place-items:center;border-radius:11px;border:1px solid var(--cyan-soft);background:rgba(8,20,31,0.7);color:var(--slate-400);cursor:pointer;transition:.15s;font-size:15px}
+.icon-btn:hover{color:var(--cyan);border-color:var(--cyan-edge)}
+
+.game-grid{display:flex;flex-direction:column;gap:14px}
+.board{order:-1}
+@media(min-width:900px){.game-grid{display:grid;grid-template-columns:332px 1fr;align-items:start;gap:18px}.board{order:0}}
+
+.panel{background:linear-gradient(rgba(255,255,255,0.03),rgba(255,255,255,0) 18%),var(--panel);border:1px solid var(--cyan-soft);border-radius:16px;box-shadow:0 18px 40px -24px rgba(0,0,0,0.9);padding:16px}
+.panel + .panel{margin-top:14px}
+.panel-label{font-size:11px;text-transform:uppercase;letter-spacing:.16em;color:var(--slate-500);margin:0 0 10px}
+
+.bet-input-row{display:flex;align-items:stretch;gap:8px;margin-bottom:10px}
+.bet-field{flex:1;display:flex;align-items:center;gap:8px;background:rgba(2,8,13,.7);border:1px solid var(--cyan-soft);border-radius:12px;padding:0 12px}
+.bet-field input{flex:1;width:100%;background:none;border:0;outline:none;color:#fff;font-family:var(--font-mono);font-weight:700;font-size:17px;padding:12px 0}
+.mini-btn{width:42px;border:1px solid var(--cyan-soft);background:rgba(8,20,31,.7);color:var(--slate-400);border-radius:11px;font-family:var(--font-mono);font-weight:700;cursor:pointer;transition:.15s;font-size:14px}
+.mini-btn:hover{color:var(--cyan);border-color:var(--cyan-edge)}
+.chips{display:grid;grid-template-columns:repeat(4,1fr);gap:7px}
+.chip{border:1px solid var(--cyan-soft);background:rgba(6,16,25,.6);color:var(--slate-400);border-radius:10px;padding:9px 4px;font-family:var(--font-mono);font-weight:600;font-size:12.5px;cursor:pointer;transition:.15s}
+.chip:hover{color:var(--cyan);border-color:var(--cyan-edge)}
+.minmax{display:flex;justify-content:space-between;font-family:var(--font-mono);font-size:10.5px;color:var(--slate-500);margin-top:9px}
+.hl{color:var(--cyan)}
+
+.paytable{display:flex;flex-direction:column;gap:2px}
+.pt-row{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--slate-400);padding:5px 7px;border-radius:8px;transition:.2s}
+.pt-row .pt-n{flex:1}
+.pt-row .pt-x{font-family:var(--font-mono);font-weight:600;color:var(--slate-300);width:52px;text-align:right}
+.pt-row .pt-o{font-family:var(--font-mono);font-size:10.5px;color:var(--slate-500);width:64px;text-align:right}
+.pt-row.zero .pt-x{color:var(--slate-500)}
+.pt-row.hit{background:rgba(245,158,11,.12);box-shadow:inset 0 0 0 1px rgba(245,158,11,.5)}
+.pt-row.hit .pt-n,.pt-row.hit .pt-x{color:var(--win)}
+.pt-row.hit.zero{background:rgba(251,113,133,.1);box-shadow:inset 0 0 0 1px rgba(251,113,133,.45)}
+.pt-row.hit.zero .pt-n,.pt-row.hit.zero .pt-x{color:var(--loss)}
+.pt-head{display:flex;gap:8px;font-size:9.5px;text-transform:uppercase;letter-spacing:.12em;color:var(--slate-500);padding:0 7px 5px}
+.pt-head .pt-n{flex:1}
+.pt-head .pt-x{width:52px;text-align:right}
+.pt-head .pt-o{width:64px;text-align:right}
+
+.board-shell{background:linear-gradient(rgba(255,255,255,0.025),rgba(255,255,255,0) 16%),rgba(6,16,25,.72);border:1px solid var(--cyan-soft);border-radius:18px;overflow:hidden;box-shadow:0 24px 50px -30px rgba(0,0,0,.95)}
+.hud{display:flex;gap:1px;background:var(--cyan-soft)}
+.hud .cell{flex:1;background:rgba(4,12,19,.85);padding:11px 12px;text-align:center}
+.hud .k{font-size:9.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--slate-500)}
+.hud .v{font-family:var(--font-mono);font-weight:700;font-size:clamp(15px,4vw,21px);color:#fff;margin-top:3px}
+.hud .v.mult{color:var(--win)}
+.hud .v.mult.idle{color:var(--slate-400)}
+.hud .v.pat{color:var(--cyan);font-size:clamp(12px,3.2vw,15px);font-family:var(--font-disp);font-weight:600;letter-spacing:.05em;text-transform:uppercase;padding-top:4px}
+
+.felt{position:relative;min-height:clamp(220px,42vw,270px);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;padding:22px 14px;background:radial-gradient(ellipse 70% 60% at 50% 40%,rgba(34,211,238,.06),transparent 70%)}
+.felt.bustflash{animation:bustflash .55s ease}
+@keyframes bustflash{0%{background-color:rgba(251,113,133,.16)}100%{background-color:transparent}}
+.commit-chip{font-family:var(--font-mono);font-size:10.5px;color:var(--slate-500);background:rgba(2,8,13,.7);border:1px solid rgba(34,211,238,.14);border-radius:8px;padding:4px 10px;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.commit-chip .ok{color:var(--cyan)}
+
+.gem-row{display:flex;gap:clamp(10px,3vw,20px);justify-content:center}
+.gem-slot{width:clamp(52px,13vw,76px);aspect-ratio:1;display:grid;place-items:center}
+.gem{width:72%;aspect-ratio:1;border-radius:16%;transform:rotate(45deg);box-shadow:inset 0 0 0 1px rgba(255,255,255,.25),inset -6px -6px 14px rgba(0,0,0,.35),0 8px 18px -8px rgba(0,0,0,.8);transition:box-shadow .25s}
+.gem.empty{background:linear-gradient(160deg,#0b1c28,#06121b);box-shadow:inset 0 0 0 1px rgba(34,211,238,.14)}
+.gem-slot.drop{animation:gemdrop .5s cubic-bezier(.25,1.3,.4,1) both}
+@keyframes gemdrop{0%{transform:translateY(-56px) scale(.55);opacity:0}60%{transform:translateY(4px) scale(1.04);opacity:1}100%{transform:translateY(0) scale(1);opacity:1}}
+.gem.hit{box-shadow:inset 0 0 0 2px rgba(245,158,11,.9),0 0 22px -2px rgba(245,158,11,.85);animation:gempulse 1.1s ease-in-out infinite}
+@keyframes gempulse{0%,100%{filter:brightness(1)}50%{filter:brightness(1.35)}}
+.gem.dud{opacity:.45;filter:saturate(.5)}
+.g0{background:linear-gradient(150deg,#7be9fb,#22D3EE 55%,#0e7490)}
+.g1{background:linear-gradient(150deg,#fbd36b,#F59E0B 55%,#b45309)}
+.g2{background:linear-gradient(150deg,#fda4af,#FB7185 55%,#be123c)}
+.g3{background:linear-gradient(150deg,#c4b5fd,#A78BFA 55%,#6d28d9)}
+.g4{background:linear-gradient(150deg,#6ee7b7,#34D399 55%,#047857)}
+.g5{background:linear-gradient(150deg,#93c5fd,#60A5FA 55%,#1d4ed8)}
+.g6{background:linear-gradient(150deg,#ffffff,#E2E8F0 55%,#94A3B8)}
+
+.felt-status{font-size:13px;color:var(--slate-400);text-align:center;min-height:18px}
+.felt-status .gain{color:var(--win);font-family:var(--font-mono);font-weight:600}
+.felt-status.win{color:var(--win);font-weight:600;letter-spacing:.05em;text-transform:uppercase}
+.felt-status.part{color:var(--slate-300);font-weight:600;letter-spacing:.04em}
+.felt-status.bust{color:var(--loss);font-weight:600;letter-spacing:.06em;text-transform:uppercase}
+
+.actions{display:grid;grid-template-columns:1fr;gap:10px;margin-top:14px}
+.btn{border:0;border-radius:14px;padding:16px 18px;font-family:var(--font-disp);font-weight:700;font-size:16px;letter-spacing:.05em;text-transform:uppercase;cursor:pointer;transition:.15s;color:#04141b}
+.btn:active{transform:scale(.985)}
+.btn-go{background:linear-gradient(180deg,#3ee0f5,#22D3EE 60%,#0fb6d4);box-shadow:0 0 24px -6px rgba(34,211,238,.68),inset 0 1px 0 rgba(255,255,255,.4)}
+.btn:disabled{opacity:.45;cursor:not-allowed;filter:saturate(.4)}
+
+.banner-host{position:absolute;inset:0;display:grid;place-items:center;z-index:8;pointer-events:none}
+.banner{display:none;text-align:center;padding:18px 30px;border-radius:18px}
+.banner.show{display:block}
+.banner.win{background:radial-gradient(ellipse at center,rgba(245,158,11,.22),rgba(4,12,19,.55));border:1px solid rgba(245,158,11,.5);box-shadow:0 0 50px -8px rgba(245,158,11,.55)}
+.banner.loss{background:radial-gradient(ellipse at center,rgba(251,113,133,.16),rgba(4,12,19,.6));border:1px solid rgba(251,113,133,.4)}
+.banner .b-k{font-size:12px;letter-spacing:.22em;text-transform:uppercase;color:var(--slate-400)}
+.banner.win .b-k{color:var(--win)}.banner.loss .b-k{color:var(--loss)}
+.banner .b-v{font-family:var(--font-mono);font-weight:700;font-size:clamp(26px,8vw,40px);color:#fff;margin-top:4px}
+.arc-banner-in{animation:arc-banner-in .4s cubic-bezier(.34,1.56,.64,1) both}
+@keyframes arc-banner-in{0%{transform:scale(.7);opacity:0}55%{transform:scale(1.06);opacity:1}100%{transform:scale(1);opacity:1}}
+
+.info{margin-top:16px}
+.tabs-list{display:grid;grid-template-columns:1fr 1fr;gap:4px;background:rgba(8,20,31,.7);border:1px solid rgba(34,211,238,.12);border-radius:10px;padding:4px}
+.tab-btn{font-family:var(--font-disp);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.14em;color:var(--slate-500);background:none;border:0;border-radius:7px;padding:9px 6px;cursor:pointer;transition:.15s}
+.tab-btn:hover{color:var(--slate-300)}
+.tab-btn.active{background:rgba(34,211,238,.15);color:var(--cyan);box-shadow:inset 0 0 0 1px rgba(34,211,238,.5)}
+.tab-panel{display:none;margin-top:12px}
+.tab-panel.active{display:block}
+
+.hist-head{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:6px}
+.hist-head h2{font-family:var(--font-disp);font-weight:600;font-size:14px;text-transform:uppercase;letter-spacing:.08em;color:var(--slate-300);margin:0}
+.hist-head .count{font-size:11px;color:var(--slate-500)}
+.hist-empty{padding:18px 0;text-align:center;font-size:13px;color:var(--slate-500)}
+.hist-list{list-style:none;margin:0;padding:0}
+.hist-row{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;padding:9px 0;border-top:1px solid rgba(34,211,238,.08);font-size:13px}
+.hist-row:first-child{border-top:0}
+.hist-row .t{font-family:var(--font-mono);width:46px;flex:none;color:var(--slate-500)}
+.hist-row .gemdots{display:flex;gap:3px;flex:none}
+.hist-row .gd{width:12px;height:12px;border-radius:3px;transform:rotate(45deg);box-shadow:inset 0 0 0 1px rgba(255,255,255,.2)}
+.hist-row .badge{flex:none;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;padding:2px 7px;border-radius:5px;color:var(--cyan);background:rgba(34,211,238,.1);box-shadow:inset 0 0 0 1px rgba(34,211,238,.3)}
+.hist-row .m{font-family:var(--font-mono);color:var(--slate-400);flex:none}
+.hist-row .x{font-family:var(--font-mono);flex:none}
+.hist-row .x.win{color:var(--cyan)}.hist-row .x.bust{color:var(--loss);font-weight:600;text-transform:uppercase;font-family:var(--font-disp);font-size:11px;letter-spacing:.06em}
+.hist-row .p{font-family:var(--font-mono);font-weight:600;margin-left:auto;flex:none}
+.hist-row .p.up{color:var(--win)}.hist-row .p.flat{color:var(--slate-500)}
+.hist-row .verify{flex:none;font-size:11px;color:var(--slate-500);background:none;border:0;border-radius:5px;padding:3px 7px;cursor:pointer;transition:.15s}
+.hist-row .verify:hover{color:var(--cyan);background:rgba(34,211,238,.1)}
+
+.faq-item{border-top:1px solid rgba(34,211,238,.1)}
+.faq-item:first-child{border-top:0}
+.faq-q{width:100%;text-align:left;background:none;border:0;color:#E8EEF5;font-family:var(--font-disp);font-size:14px;font-weight:500;padding:13px 28px 13px 0;cursor:pointer;position:relative;transition:.15s}
+.faq-q:hover{color:var(--cyan)}
+.faq-q::after{content:"⌄";position:absolute;right:4px;top:12px;color:var(--slate-500);transition:transform .2s}
+.faq-item.open .faq-q::after{transform:rotate(180deg);color:var(--cyan)}
+.faq-a{display:none;padding:0 4px 14px;color:#AFC0CF;font-size:13.5px;line-height:1.65}
+.faq-item.open .faq-a{display:block}
+.faq-a p{margin:0 0 9px}.faq-a p:last-child{margin-bottom:0}
+.faq-a a{color:var(--cyan);text-decoration:underline;text-underline-offset:2px;word-break:break-all}
+.faq-a .math{font-family:var(--font-mono);font-size:11.5px;line-height:1.7;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:8px;padding:10px;color:var(--slate-400);margin:8px 0;overflow-x:auto}
+.faq-a .math .a{color:var(--win)}.faq-a .math .c{color:var(--cyan)}
+
+.overlay{position:fixed;inset:0;z-index:50;display:none;align-items:center;justify-content:center;padding:16px;background:rgba(2,6,10,.72);backdrop-filter:blur(3px)}
+.overlay.open{display:flex}
+.modal{width:100%;max-width:520px;max-height:85vh;overflow-y:auto;background:#050E16;border:1px solid #0e3a47;border-radius:16px;box-shadow:0 30px 80px -20px rgba(0,0,0,.9);padding:20px}
+.modal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
+.modal-head h2{font-family:var(--font-disp);font-weight:600;text-transform:uppercase;letter-spacing:.12em;color:var(--cyan);font-size:16px;margin:0}
+.modal-x{background:none;border:0;color:var(--slate-500);font-size:20px;cursor:pointer;line-height:1}
+.modal-x:hover{color:var(--cyan)}
+.m-sec{margin-bottom:18px}
+.m-sec h3{font-size:13.5px;font-weight:600;color:var(--slate-300);margin:0 0 4px}
+.m-sec p.note{font-size:12px;color:var(--slate-500);margin:0 0 9px;line-height:1.5}
+.m-input-row{display:flex;gap:8px}
+.m-input{flex:1;min-width:0;background:var(--field);border:1px solid #0e3a47;border-radius:9px;color:#cbd5e1;font-family:var(--font-mono);font-size:12px;padding:9px 11px;outline:none}
+.m-input:focus{border-color:var(--cyan-edge)}
+.m-btn{flex:none;border-radius:9px;padding:9px 14px;font-family:var(--font-disp);font-size:13px;cursor:pointer;border:1px solid transparent;transition:.15s}
+.m-btn.outline{background:transparent;border-color:#0e3a47;color:var(--cyan)}
+.m-btn.outline:hover{background:rgba(34,211,238,.1)}
+.m-btn.solid{background:#0891b2;color:#fff}
+.m-btn.solid:hover{background:#22D3EE;color:#03121B}
+.m-result{border:1px solid #0e3a47;background:rgba(7,19,31,.7);border-radius:12px;padding:13px;margin-top:6px}
+.m-check{display:flex;align-items:center;gap:9px;font-size:13px;color:var(--slate-300);margin-bottom:6px}
+.m-check .ck{font-weight:700}.m-check .ck.ok{color:var(--cyan)}.m-check .ck.no{color:var(--loss)}
+.m-meta{display:flex;flex-wrap:wrap;gap:3px 16px;font-size:12px;color:var(--slate-500);margin:10px 0}
+.m-meta .mv{font-family:var(--font-mono);color:var(--slate-300)}
+.m-meta .mv.cyan{color:var(--cyan)}
+.m-fields{display:grid;gap:8px;margin-top:6px}
+.m-field .fl{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--slate-500)}
+.m-field .fv{word-break:break-all;border-radius:7px;background:var(--field);padding:5px 9px;font-family:var(--font-mono);font-size:11.5px;color:var(--slate-300);margin-top:2px}
+.m-foot{display:flex;flex-wrap:wrap;gap:3px 16px;font-size:12px;color:var(--slate-500);margin-top:10px}
+.m-foot .fv{font-family:var(--font-mono)}.m-foot .fv.amber{color:var(--win)}.m-foot .fv.cyan{color:var(--cyan)}.m-foot .fv.rose{color:var(--loss)}
+.m-maplabel{font-size:11px;color:var(--slate-500);margin:10px 0 4px;text-transform:uppercase;letter-spacing:.06em}
+.m-gems{display:flex;gap:6px;margin:6px 0 2px}
+.m-gd{width:22px;height:22px;border-radius:5px;transform:rotate(45deg);box-shadow:inset 0 0 0 1px rgba(255,255,255,.25)}
+.m-gd.hit{box-shadow:inset 0 0 0 2px rgba(245,158,11,.9),0 0 10px rgba(245,158,11,.6)}
+
+.lab-note{margin-top:22px;text-align:center;font-size:11px;color:var(--slate-500);font-family:var(--font-mono);line-height:1.6}
+.lab-note b{color:var(--slate-400);font-weight:600}
+</style>
+</head>
+<body>
+<div class="bg-light"></div>
+<div class="bg-vignette"></div>
+
+<div class="wrap">
+  <header>
+    <h1 class="title">Gem Draw<span class="glyph">◈</span></h1>
+    <p class="tagline">one tap · five gems · seven colors · match a pattern, up to 25× · provably fair · played in chips</p>
+  </header>
+
+  <div class="topbar">
+    <div class="balance"><span class="coin"></span><span class="amt" id="balance">10,000</span><span class="cur">MORBIUS</span></div>
+    <div class="right">
+      <button class="pill-btn" id="fairBtn"><span class="dot"></span>Provably fair</button>
+      <button class="icon-btn" id="soundBtn" title="Sound" aria-label="Toggle sound">♪</button>
+    </div>
+  </div>
+
+  <div class="game-grid">
+    <section>
+      <div class="panel">
+        <p class="panel-label">Bet amount</p>
+        <div class="bet-input-row">
+          <div class="bet-field"><span class="coin"></span><input id="betInput" class="mono" inputmode="numeric" value="500" /></div>
+          <button class="mini-btn" data-bet="half">½</button>
+          <button class="mini-btn" data-bet="double">2×</button>
+        </div>
+        <div class="chips">
+          <button class="chip" data-add="100">+100</button>
+          <button class="chip" data-add="500">+500</button>
+          <button class="chip" data-add="1000">+1k</button>
+          <button class="chip" data-set="max">Max</button>
+        </div>
+        <div class="minmax"><span>Min 100</span><span>Max 100,000</span></div>
+      </div>
+      <div class="panel">
+        <p class="panel-label">Paytable — true odds</p>
+        <div class="pt-head"><span class="pt-n">Pattern</span><span class="pt-x">Pays</span><span class="pt-o">Odds</span></div>
+        <div class="paytable" id="paytable"></div>
+      </div>
+    </section>
+
+    <section class="board">
+      <div class="board-shell">
+        <div class="hud">
+          <div class="cell"><div class="k">Pattern</div><div class="v pat" id="hudPat">—</div></div>
+          <div class="cell"><div class="k">Multiplier</div><div class="v mult idle" id="hudMult">—</div></div>
+          <div class="cell"><div class="k">Payout</div><div class="v" id="hudPay">—</div></div>
+        </div>
+        <div class="felt" id="felt">
+          <div class="commit-chip" id="commitChip">server seed committed at draw · <span class="ok">sha-256</span></div>
+          <div class="gem-row" id="gemRow"></div>
+          <div class="felt-status" id="status">Set your bet and draw five gems</div>
+          <div class="banner-host"><div class="banner" id="banner"><div class="b-k" id="bannerK"></div><div class="b-v" id="bannerV"></div></div></div>
+        </div>
+      </div>
+      <div class="actions" id="actions"><button class="btn btn-go" id="goBtn">Place bet &amp; draw</button></div>
+    </section>
+  </div>
+
+  <section class="info panel" aria-label="Gem Draw information">
+    <div class="tabs-list">
+      <button class="tab-btn active" data-tab="rounds">My rounds</button>
+      <button class="tab-btn" data-tab="faq">FAQ</button>
+    </div>
+    <div class="tab-panel active" id="tab-rounds">
+      <div class="hist-head"><h2>Recent draws</h2><span class="count" id="histCount">last —</span></div>
+      <div id="histBody"></div>
+    </div>
+    <div class="tab-panel" id="tab-faq"><div id="faqBody"></div></div>
+  </section>
+
+  <p class="lab-note">
+    <b>Prototype</b> — Deep-Sea Neon style, single-player on the arcade2 pattern (like Greed Dice / Firewalk / Morb Flip).<br/>
+    Gem colors here come from an in-page seeded RNG for feel; the real build draws them from the server
+    <b>provably-fair HMAC</b> stream (<span class="mono">/api/arcade/gems/*</span>) with the same 96% RTP paytable.
+    Every draw re-runs from the seed in Verify. Currency: <b>MORBIUS</b> chips.
+  </p>
+</div>
+
+<div class="overlay" id="overlay">
+  <div class="modal" role="dialog" aria-modal="true" aria-label="Provably fair">
+    <div class="modal-head"><h2>Provably Fair</h2><button class="modal-x" id="modalX" aria-label="Close">✕</button></div>
+    <div class="m-sec">
+      <h3>Your client seed</h3>
+      <p class="note">Mixed into every draw. Change it any time — the next draw uses the new value.</p>
+      <div class="m-input-row">
+        <input class="m-input" id="clientSeedInput" placeholder="Leave blank for a random seed each draw" />
+        <button class="m-btn outline" id="newSeedBtn">New seed</button>
+      </div>
+    </div>
+    <div class="m-sec">
+      <h3>Verify a draw</h3>
+      <p class="note">All five gem colors are drawn from a server seed committed (hashed) before your bet — the seed is revealed once the draw settles, and the gems re-derive color-for-color.</p>
+      <div class="m-input-row">
+        <input class="m-input" id="verifyIdInput" placeholder="Round ID" />
+        <button class="m-btn solid" id="verifyBtn">Verify</button>
+      </div>
+    </div>
+    <div id="verifyOut"></div>
+  </div>
+</div>
+
+<script>
+"use strict";
+(function(){
+  var MIN_BET=100, MAX_BET=100000, N_GEMS=5, N_COLORS=7;
+  var COLORS=['Cyan','Amber','Rose','Violet','Emerald','Azure','Pearl'];
+  // Pattern table. counts out of 7^5 = 16,807 equally likely draws.
+  // RTP = (8400·0.5 + 3150·1.2 + 2100·2 + 420·5 + 210·8 + 7·25) / 16807
+  //     = 16,135 / 16,807 ≈ 96.00%
+  var PATTERNS={
+    five: {label:'Five of a kind', multX100:2500, count:7,    odds:'1 in 2,401'},
+    four: {label:'Four of a kind', multX100:800,  count:210,  odds:'1.25%'},
+    full: {label:'Full house',     multX100:500,  count:420,  odds:'2.50%'},
+    three:{label:'Three of a kind',multX100:200,  count:2100, odds:'12.49%'},
+    two:  {label:'Two pair',       multX100:120,  count:3150, odds:'18.74%'},
+    pair: {label:'One pair',       multX100:50,   count:8400, odds:'49.98%'},
+    none: {label:'All different',  multX100:0,    count:2520, odds:'14.99%'}
+  };
+  var PATTERN_ORDER=['five','four','full','three','two','pair','none'];
+
+  var S={ balance:10000, bet:500, phase:'idle',
+    serverSeed:'', clientSeed:'', clientSeedPref:'', nonce:0, serverHash:'', roundId:'',
+    sound:true, busy:false, history:[] };
+
+  var $=function(id){return document.getElementById(id);};
+  var balanceEl=$('balance'),betInput=$('betInput'),felt=$('felt'),gemRow=$('gemRow'),statusEl=$('status'),
+      actions=$('actions'),commitChip=$('commitChip'),paytableEl=$('paytable'),
+      hudPat=$('hudPat'),hudMult=$('hudMult'),hudPay=$('hudPay'),
+      banner=$('banner'),bannerK=$('bannerK'),bannerV=$('bannerV'),
+      soundBtn=$('soundBtn'),overlay=$('overlay'),histBody=$('histBody'),histCount=$('histCount'),faqBody=$('faqBody');
+
+  function fmt(n){return Math.round(n).toLocaleString('en-US');}
+  function multStr(x){return (x/100).toFixed(2)+'×';}
+  function rndHex(len){var s='';for(var i=0;i<len;i++)s+=Math.floor(Math.random()*16).toString(16);return s;}
+  function shortId(){return rndHex(8).toUpperCase();}
+
+  function xmur3(str){var h=1779033703^str.length;for(var i=0;i<str.length;i++){h=Math.imul(h^str.charCodeAt(i),3432918353);h=h<<13|h>>>19;}return function(){h=Math.imul(h^h>>>16,2246822507);h=Math.imul(h^h>>>13,3266489909);return (h^=h>>>16)>>>0;};}
+  function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;var t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return ((t^t>>>14)>>>0)/4294967296;};}
+  function makeRng(seedStr){return mulberry32(xmur3(seedStr)());}
+  async function sha256Hex(msg){try{var b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(msg));return Array.from(new Uint8Array(b)).map(function(x){return x.toString(16).padStart(2,'0');}).join('');}catch(e){return 'sha256-unavailable';}}
+  function drawGems(rng){var g=[];for(var i=0;i<N_GEMS;i++)g.push(Math.floor(rng()*N_COLORS));return g;}
+
+  // classify 5 gems → {key, hitIdx:[indices in the paying group(s)]}
+  function classify(gems){
+    var byColor={},i;
+    for(i=0;i<gems.length;i++){(byColor[gems[i]]=byColor[gems[i]]||[]).push(i);}
+    var groups=Object.keys(byColor).map(function(c){return byColor[c];})
+      .sort(function(a,b){return b.length-a.length;});
+    var shape=groups.map(function(g){return g.length;});
+    var key;
+    if(shape[0]===5)key='five';
+    else if(shape[0]===4)key='four';
+    else if(shape[0]===3&&shape[1]===2)key='full';
+    else if(shape[0]===3)key='three';
+    else if(shape[0]===2&&shape[1]===2)key='two';
+    else if(shape[0]===2)key='pair';
+    else key='none';
+    var hitIdx=[];
+    groups.forEach(function(g){if(g.length>=2)hitIdx=hitIdx.concat(g);});
+    return {key:key,hitIdx:hitIdx};
+  }
+
+  var actx=null;
+  function tone(f,d,t,g){if(!S.sound)return;try{actx=actx||new (window.AudioContext||window.webkitAudioContext)();var o=actx.createOscillator(),gn=actx.createGain();o.type=t||'sine';o.frequency.value=f;gn.gain.value=g||0.05;o.connect(gn);gn.connect(actx.destination);var n=actx.currentTime;o.start(n);gn.gain.exponentialRampToValueAtTime(0.0001,n+(d||0.12));o.stop(n+(d||0.12));}catch(e){}}
+  function sDrop(i){tone(300+i*70,0.09,'triangle',0.045);}
+  function sWin(big){if(big){[660,880,1175,1568].forEach(function(f,i){setTimeout(function(){tone(f,0.12,'sine',0.055);},i*80);});}else{tone(660,0.12,'sine',0.055);setTimeout(function(){tone(990,0.14,'sine',0.055);},90);}}
+  function sPart(){tone(440,0.14,'sine',0.045);}
+  function sBust(){tone(150,0.3,'sawtooth',0.065);}
+
+  function gemHtml(color,slotCls,gemCls,delay){
+    return '<div class="gem-slot'+(slotCls||'')+'"'+(delay!=null?' style="animation-delay:'+delay+'ms"':'')
+      +'><div class="gem '+(color==null?'empty':'g'+color)+(gemCls||'')+'"></div></div>';
+  }
+  function renderIdleGems(){
+    var html='';for(var i=0;i<N_GEMS;i++)html+=gemHtml(null);
+    gemRow.innerHTML=html;
+  }
+  function renderPaytable(hitKey){
+    paytableEl.innerHTML=PATTERN_ORDER.map(function(k){
+      var p=PATTERNS[k];
+      var cls='pt-row'+(p.multX100===0?' zero':'')+(hitKey===k?' hit':'');
+      return '<div class="'+cls+'" data-k="'+k+'"><span class="pt-n">'+p.label+'</span>'
+        +'<span class="pt-x">'+(p.multX100===0?'0×':multStr(p.multX100))+'</span>'
+        +'<span class="pt-o">'+p.odds+'</span></div>';
+    }).join('');
+  }
+  function syncHud(last){
+    if(last){
+      hudPat.textContent=PATTERNS[last.pattern].label;
+      hudMult.textContent=multStr(last.multX100);hudMult.classList.toggle('idle',last.multX100===0);
+      hudPay.textContent=fmt(last.payout);
+    }else{
+      hudPat.textContent='—';hudMult.textContent='—';hudMult.classList.add('idle');hudPay.textContent='—';
+    }
+    balanceEl.textContent=fmt(S.balance);
+  }
+  function renderCommit(active){
+    if(active&&S.serverHash){commitChip.innerHTML='gems locked · commit <span class="ok">'+S.serverHash.slice(0,16)+'…</span>';}
+    else{commitChip.innerHTML='server seed committed at draw · <span class="ok">sha-256</span>';}
+  }
+  function renderActions(){
+    actions.innerHTML='<button class="btn btn-go" id="goBtn"'+(S.busy?' disabled':'')+'>'+(S.history.length?'Draw again':'Place bet &amp; draw')+'</button>';
+    $('goBtn').addEventListener('click',startDraw);
+  }
+  function setControls(on){
+    betInput.disabled=!on;
+    document.querySelectorAll('.chip,.mini-btn').forEach(function(b){b.style.pointerEvents=on?'auto':'none';b.style.opacity=on?'1':'.5';});
+  }
+
+  async function startDraw(){
+    if(S.busy)return;
+    var bet=clampBet(parseInt(betInput.value,10)||0);
+    if(bet>S.balance){flashInput();return;}
+    betInput.value=bet;
+    S.busy=true;S.bet=bet;S.balance-=bet;S.phase='active';
+    S.serverSeed=rndHex(64);
+    S.clientSeed=(S.clientSeedPref||'').trim()||rndHex(20);
+    S.nonce+=1;S.roundId=shortId();
+    S.serverHash=await sha256Hex(S.serverSeed);
+    var rng=makeRng(S.serverSeed+':'+S.clientSeed+':'+S.nonce);
+    var gems=drawGems(rng), res=classify(gems);
+    hideBanner();setControls(false);renderCommit(true);renderActions();renderPaytable(null);
+    syncHud(null);
+    statusEl.className='felt-status';statusEl.textContent='Drawing…';
+    // staggered drop-in
+    var html='';
+    for(var i=0;i<N_GEMS;i++)html+=gemHtml(gems[i],' drop','',i*140);
+    gemRow.innerHTML=html;
+    for(var j=0;j<N_GEMS;j++)(function(k){setTimeout(function(){sDrop(k);},k*140+80);})(j);
+    setTimeout(function(){settle(gems,res);},N_GEMS*140+520);
+  }
+
+  function settle(gems,res){
+    var p=PATTERNS[res.key], payout=Math.floor(S.bet*p.multX100/100);
+    if(payout>0)S.balance+=payout;
+    S.phase='idle';
+    // glow the paying gems amber, dim the duds
+    var hit=new Set(res.hitIdx),html='';
+    for(var i=0;i<N_GEMS;i++)html+=gemHtml(gems[i],'',res.key==='none'?' dud':(hit.has(i)?' hit':' dud'));
+    gemRow.innerHTML=html;
+    renderPaytable(res.key);
+    var profit=payout-S.bet;
+    if(res.key==='none'){
+      felt.classList.remove('bustflash');void felt.offsetWidth;felt.classList.add('bustflash');
+      statusEl.className='felt-status bust';statusEl.textContent='All different — no pattern';
+      showBanner('loss','All different','−'+fmt(S.bet)+' MORBIUS');sBust();
+    }else if(profit>0){
+      statusEl.className='felt-status win';
+      statusEl.innerHTML=p.label+' · <span class="gain">'+multStr(p.multX100)+'</span>';
+      showBanner('win',p.label+' · '+multStr(p.multX100),'+'+fmt(payout)+' MORBIUS');
+      sWin(p.multX100>=500);
+    }else{
+      statusEl.className='felt-status part';
+      statusEl.textContent=p.label+' — '+multStr(p.multX100)+' back ('+fmt(payout)+' MORBIUS)';
+      sPart();
+    }
+    var rec={ id:S.roundId, at:new Date().toISOString(), bet:S.bet, gems:gems.slice(),
+      pattern:res.key, multX100:p.multX100, payout:payout,
+      serverSeed:S.serverSeed, serverHash:S.serverHash, clientSeed:S.clientSeed, nonce:S.nonce };
+    S.history.unshift(rec);
+    if(S.history.length>15)S.history.pop();
+    S.busy=false;setControls(true);renderCommit(false);syncHud(rec);renderActions();renderHistory();
+  }
+
+  function showBanner(k,a,b){banner.className='banner show '+k+' arc-banner-in';bannerK.textContent=a;bannerV.textContent=b;}
+  function hideBanner(){banner.className='banner';}
+  function clampBet(v){if(isNaN(v)||v<MIN_BET)v=MIN_BET;if(v>MAX_BET)v=MAX_BET;return v;}
+  function flashInput(){betInput.style.color='#FB7185';setTimeout(function(){betInput.style.color='#fff';},400);}
+
+  function timeLabel(iso){var d=new Date(iso);return isNaN(d.getTime())?'—':d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});}
+  function gemDots(gems){return '<span class="gemdots">'+gems.map(function(c){return '<span class="gd g'+c+'"></span>';}).join('')+'</span>';}
+  function renderHistory(){
+    histCount.textContent='last '+(S.history.length||'—');
+    if(S.history.length===0){histBody.innerHTML='<p class="hist-empty">No draws yet — set your bet and pull five gems.</p>';return;}
+    var rows=S.history.map(function(r){
+      var profit=r.payout-r.bet;
+      var xcell=r.multX100>0?'<span class="x win">'+multStr(r.multX100)+'</span>':'<span class="x bust">no hit</span>';
+      var pcell='<span class="p '+(profit>0?'up':'flat')+'">'+(profit>0?'+'+fmt(profit):fmt(profit))+'</span>';
+      return '<li class="hist-row"><span class="t">'+timeLabel(r.at)+'</span>'
+        +gemDots(r.gems)
+        +'<span class="badge">'+PATTERNS[r.pattern].label+'</span>'
+        +'<span class="m">bet '+fmt(r.bet)+'</span>'
+        +xcell+pcell
+        +'<button class="verify" data-id="'+r.id+'">Verify</button></li>';
+    }).join('');
+    histBody.innerHTML='<ul class="hist-list">'+rows+'</ul>';
+    histBody.querySelectorAll('.verify').forEach(function(b){b.addEventListener('click',function(){openFairness(b.getAttribute('data-id'));});});
+  }
+
+  function recipeStr(){return 'HMAC_SHA256(serverSeed, `${clientSeed}:${nonce}:gem`) → 5 colors 0–6, consumed in slot order';}
+  function ckHtml(ok,label){return '<div class="m-check"><span class="ck '+(ok?'ok':'no')+'">'+(ok?'✓':'✗')+'</span><span>'+label+'</span></div>';}
+  function fieldHtml(l,v){return '<div class="m-field"><div class="fl">'+l+'</div><div class="fv">'+v+'</div></div>';}
+  function gemsModalHtml(gems,hitIdx){
+    var hit=new Set(hitIdx||[]);
+    return '<div class="m-gems">'+gems.map(function(c,i){return '<span class="m-gd g'+c+(hit.has(i)?' hit':'')+'" title="'+COLORS[c]+'"></span>';}).join('')+'</div>';
+  }
+  function findRound(id){id=String(id||'').trim();return S.history.filter(function(x){return x.id===id;})[0]||null;}
+  function openFairness(id){
+    overlay.classList.add('open');
+    $('clientSeedInput').value=S.clientSeedPref;
+    var target=id||(S.history[0]&&S.history[0].id);
+    if(target){$('verifyIdInput').value=target;runVerify(target);}
+    else{$('verifyOut').innerHTML='<p class="note">Play a draw, then verify it here — or paste any round ID.</p>';}
+  }
+  function closeFairness(){overlay.classList.remove('open');}
+  async function runVerify(id){
+    var out=$('verifyOut'),r=findRound(id);
+    if(!r){out.innerHTML='<p class="note" style="color:var(--loss)">No round found with that ID.</p>';return;}
+    out.innerHTML='<p class="note">Checking…</p>';
+    var hashOk=(await sha256Hex(r.serverSeed))===r.serverHash;
+    var rng=makeRng(r.serverSeed+':'+r.clientSeed+':'+r.nonce);
+    var gems=drawGems(rng);
+    var gemsOk=gems.join(',')===r.gems.join(',');
+    var res=classify(gems);
+    var patternOk=res.key===r.pattern;
+    var expected=Math.floor(r.bet*PATTERNS[res.key].multX100/100),payoutOk=expected===r.payout;
+    out.innerHTML='<div class="m-result">'
+      +ckHtml(hashOk,'Server seed matches its committed hash (checked locally)')
+      +ckHtml(gemsOk,'All five gem colors re-derive from the seed stream')
+      +ckHtml(patternOk,'Pattern rank matches the replay')
+      +ckHtml(payoutOk,'Payout reconciles with floor(bet × multiplier)')
+      +'<div class="m-maplabel">The draw — amber ring = paying gems</div>'+gemsModalHtml(r.gems,res.hitIdx)
+      +'<div class="m-meta"><span>Gems: <span class="mv">'+r.gems.map(function(c){return COLORS[c];}).join(' · ')+'</span></span></div>'
+      +'<div class="m-meta"><span>Pattern: <span class="mv cyan">'+PATTERNS[r.pattern].label+'</span></span>'
+        +'<span>Multiplier: <span class="mv">'+(r.multX100?multStr(r.multX100):'0×')+'</span></span></div>'
+      +'<div class="m-fields">'+fieldHtml('Server seed hash (committed)',r.serverHash)+fieldHtml('Server seed (revealed)',r.serverSeed)
+        +fieldHtml('Client seed',r.clientSeed)+fieldHtml('Nonce',String(r.nonce))+fieldHtml('Recipe',recipeStr())+'</div>'
+      +'<div class="m-foot"><span>Bet: <span class="fv">'+fmt(r.bet)+'</span></span>'
+        +'<span>Returned: <span class="fv '+(r.payout>0?'amber':'rose')+'">'+fmt(r.payout)+' chips</span></span></div>'
+      +'</div>';
+  }
+
+  var FAQS=[
+    {q:'How does Gem Draw pay out?',a:'<p>One tap draws <span class="hl">five gems</span>, each independently and uniformly one of <span class="hl">seven colors</span>. Your payout depends only on the color-match pattern, ranked like poker hands: one pair 0.50×, two pair 1.20×, three of a kind 2.00×, full house 5.00×, four of a kind 8.00×, and five of a kind <span class="hl">25.00×</span>. If all five gems are different colors, the draw pays 0.</p><p>The gems in the paying group glow amber; a one-pair hit returns half your bet rather than winning outright.</p>'},
+    {q:'What are the exact odds of each pattern?',a:'<p>With 7 colors and 5 independent draws there are 7⁵ = <span class="hl">16,807</span> equally likely color sequences. Counting each pattern exactly:</p><div class="math">one pair <span class="c">8,400</span> (49.98%) · two pair <span class="c">3,150</span> (18.74%)<br/>trips <span class="c">2,100</span> (12.49%) · full house <span class="c">420</span> (2.50%)<br/>quads <span class="c">210</span> (1.25%) · five of a kind <span class="c">7</span> (1 in 2,401)<br/>all different <span class="c">2,520</span> (14.99%) — pays 0</div><p>Those seven counts sum to exactly 16,807, so every draw lands in exactly one row of the paytable. The same true odds are printed beside every multiplier in the paytable panel.</p>'},
+    {q:'Where does the house edge come from?',a:'<p>Multiply each pattern’s probability by its payout and add them up:</p><div class="math">RTP = (8,400×<span class="a">0.5</span> + 3,150×<span class="a">1.2</span> + 2,100×<span class="a">2</span> + 420×<span class="a">5</span> + 210×<span class="a">8</span> + 7×<span class="a">25</span>) / 16,807<br/>&nbsp;&nbsp;&nbsp;&nbsp;= 16,135 / 16,807 ≈ <span class="a">96.00%</span></div><p>So over the long run the game returns about <span class="hl">96 chips per 100 wagered</span> — a 4% house edge, all of it built into the multipliers. There is no per-bet or per-payout fee on top.</p>'},
+    {q:'Is it really fair — and reproducible?',a:'<p>Yes. Before your bet the server commits to a secret <span class="hl">server seed</span> — you see only its SHA-256 hash (the commit chip above the gems). All five colors are derived from that seed, <span class="hl">your client seed</span>, and a nonce, so the draw is fixed before the first gem lands.</p><p>When the draw settles the seed is revealed. Hit <span class="hl">Verify</span> and the five colors re-derive from the seed, the pattern re-ranks, and the payout reconciles — anyone can check the hash independently.</p>'},
+    {q:'Why does “all different” pay nothing when it’s rarer than one pair?',a:'<p>Good eye — a rainbow draw (14.99%) is indeed rarer than one pair (49.98%). But a paytable can’t pay <span class="hl">every</span> outcome, or the multipliers on real hits would have to shrink toward 1× to keep the math honest. Pairing off half of all draws at a 0.50× partial return, and letting the rainbow miss, is what funds the 25× top end while keeping total RTP at ≈96%.</p>'},
+    {q:'How do I get MORBIUS chips?',a:'<p>Chips are the play credits used at every table, swapped 1:1 for <span class="hl">MORBIUS</span> — the project’s token on <span class="hl">PulseChain</span> (chain ID 369), tradable on PulseX. Buying and cashing chips is instant, gasless, and fee-free; these chip games take no per-bet fee — the house keeps only the ≈4% edge built into the paytable.</p>'}
+  ];
+  function renderFaq(){
+    faqBody.innerHTML=FAQS.map(function(f,i){return '<div class="faq-item" data-i="'+i+'"><button class="faq-q">'+f.q+'</button><div class="faq-a">'+f.a+'</div></div>';}).join('');
+    faqBody.querySelectorAll('.faq-item').forEach(function(it){it.querySelector('.faq-q').addEventListener('click',function(){it.classList.toggle('open');});});
+  }
+
+  document.querySelectorAll('.chip').forEach(function(c){c.addEventListener('click',function(){
+    if(S.busy)return;
+    if(c.getAttribute('data-set')==='max'){betInput.value=Math.min(MAX_BET,S.balance);}
+    else{betInput.value=clampBet((parseInt(betInput.value,10)||0)+parseInt(c.getAttribute('data-add'),10));}
+  });});
+  document.querySelectorAll('.mini-btn').forEach(function(b){b.addEventListener('click',function(){
+    if(S.busy)return;var v=parseInt(betInput.value,10)||MIN_BET;
+    betInput.value=clampBet(b.getAttribute('data-bet')==='half'?Math.floor(v/2):v*2);
+  });});
+  betInput.addEventListener('change',function(){betInput.value=clampBet(parseInt(betInput.value,10)||0);});
+  soundBtn.addEventListener('click',function(){S.sound=!S.sound;soundBtn.style.color=S.sound?'':'#475569';soundBtn.textContent=S.sound?'♪':'✕';if(S.sound)tone(700,0.1,'sine',0.05);});
+
+  $('fairBtn').addEventListener('click',function(){openFairness(null);});
+  $('modalX').addEventListener('click',closeFairness);
+  overlay.addEventListener('click',function(e){if(e.target===overlay)closeFairness();});
+  window.addEventListener('keydown',function(e){if(e.key==='Escape')closeFairness();});
+  $('newSeedBtn').addEventListener('click',function(){S.clientSeedPref=rndHex(16);$('clientSeedInput').value=S.clientSeedPref;});
+  $('clientSeedInput').addEventListener('input',function(e){S.clientSeedPref=e.target.value.slice(0,128);});
+  $('verifyBtn').addEventListener('click',function(){runVerify($('verifyIdInput').value);});
+  document.querySelectorAll('.tab-btn').forEach(function(t){t.addEventListener('click',function(){
+    document.querySelectorAll('.tab-btn').forEach(function(x){x.classList.remove('active');});
+    document.querySelectorAll('.tab-panel').forEach(function(x){x.classList.remove('active');});
+    t.classList.add('active');$('tab-'+t.getAttribute('data-tab')).classList.add('active');
+  });});
+
+  renderIdleGems();renderPaytable(null);syncHud(null);renderActions();renderHistory();renderFaq();
+})();
+</script>
+</body>
+</html>

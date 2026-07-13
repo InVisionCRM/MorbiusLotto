@@ -1,0 +1,755 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Neon Scratch — Deep-Sea Neon lab</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+/* ── Neon Scratch — Deep-Sea Neon (arcade2) prototype ──────────────────────
+   Instant scratch tickets. Mirrors the shared arcade2-scope system (Greed
+   Dice / Firewalk / Abyss Reels): abyss #050E16, cyan #22D3EE chrome, amber
+   #F59E0B wins, rose losses, Chakra Petch display + JetBrains Mono numerals,
+   .panel glass, provably-fair commit/verify, My-rounds / FAQ tab strip and
+   fairness modal.
+
+   Mechanic: pick a tier (Bronze / Silver / Gold — bigger top prize, more
+   variance), set the ticket price (= bet), buy. A 3×3 grid of foil cells
+   hides symbols (◆ 🐙 🦑 🐚 ⚓ A); scratch by dragging across the foil
+   (per-cell canvas erased under the pointer) or hit Reveal All. Match 3
+   identical symbols anywhere and the ticket pays that symbol's multiplier
+   × ticket price. The whole ticket — prize roll AND cell layout — derives
+   from one seeded stream, so Verify re-prints it symbol-for-symbol. Ticket
+   number derives from the nonce.
+
+   Payout tuning: each tier's prize table is exact math — Σ p(prize)×mult
+   = 0.9600 (weights per 10,000 tickets stated in the FAQ), i.e. RTP = 96%
+   with a 4% house edge on every tier; tiers trade hit-rate for top prize
+   (Bronze 35.4% hit / ×25 top … Gold 29.5% hit / ×500 top).
+   Self-contained client-side demo (illustrative seeded RNG). Currency: MORBIUS. */
+:root{
+  --abyss:#050E16; --cyan:#22D3EE; --cyan-soft:rgba(34,211,238,0.12); --cyan-edge:rgba(34,211,238,0.35);
+  --win:#F59E0B; --loss:#FB7185;
+  --ink:#E2E8F0; --slate-300:#CBD5E1; --slate-400:#94A3B8; --slate-500:#64748B;
+  --panel:rgba(8,20,31,0.78); --field:#081420;
+  --font-disp:'Chakra Petch',system-ui,sans-serif;
+  --font-mono:'JetBrains Mono',ui-monospace,monospace;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  min-height:100svh;background-color:var(--abyss);
+  background-image:linear-gradient(to bottom,rgba(5,14,22,0.92),rgba(2,7,11,0.96) 55%,rgba(5,14,22,0.98));
+  color:var(--ink);font-family:var(--font-disp);-webkit-font-smoothing:antialiased;overflow-x:hidden;
+}
+.bg-light,.bg-vignette{position:fixed;inset:0;pointer-events:none;z-index:0}
+.bg-light{background:radial-gradient(ellipse 75% 55% at 50% -5%,rgba(34,211,238,0.13),transparent 70%)}
+.bg-vignette{background:radial-gradient(ellipse 120% 60% at 50% 115%,rgba(0,0,0,0.55),transparent 60%)}
+.mono{font-family:var(--font-mono);font-variant-numeric:tabular-nums}
+.wrap{position:relative;z-index:1;max-width:1000px;margin:0 auto;padding:18px 14px 64px}
+@media(min-width:700px){.wrap{padding:30px 22px 80px}}
+header{text-align:center;margin-bottom:16px}
+h1.title{margin:0;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#fff;font-size:clamp(26px,6.4vw,40px);line-height:1}
+h1.title .glyph{margin-left:.35rem;color:var(--cyan);filter:drop-shadow(0 0 12px rgba(34,211,238,0.65));vertical-align:middle}
+.tagline{margin:.55rem 0 0;font-size:clamp(11px,2.6vw,13.5px);color:var(--slate-500);letter-spacing:.01em}
+.topbar{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:14px}
+.topbar .right{display:flex;gap:8px}
+.balance{display:flex;align-items:center;gap:9px;background:rgba(8,20,31,0.7);border:1px solid var(--cyan-soft);border-radius:12px;padding:8px 13px}
+.coin{width:18px;height:18px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#7be9fb,#22D3EE 55%,#0e7490);box-shadow:0 0 10px rgba(34,211,238,.5);flex:none}
+.balance .amt{font-family:var(--font-mono);font-weight:700;font-size:16px;color:#fff}
+.balance .cur{font-size:10px;letter-spacing:.12em;color:var(--cyan);text-transform:uppercase}
+.pill-btn{display:inline-flex;align-items:center;gap:7px;height:40px;padding:0 13px;border-radius:11px;border:1px solid var(--cyan-soft);background:rgba(8,20,31,0.7);color:var(--slate-400);cursor:pointer;transition:.15s;font-family:var(--font-disp);font-size:12px;letter-spacing:.06em;text-transform:uppercase}
+.pill-btn:hover{color:var(--cyan);border-color:var(--cyan-edge)}
+.pill-btn .dot{width:7px;height:7px;border-radius:50%;background:var(--cyan);box-shadow:0 0 8px var(--cyan)}
+.icon-btn{width:40px;height:40px;display:grid;place-items:center;border-radius:11px;border:1px solid var(--cyan-soft);background:rgba(8,20,31,0.7);color:var(--slate-400);cursor:pointer;transition:.15s;font-size:15px}
+.icon-btn:hover{color:var(--cyan);border-color:var(--cyan-edge)}
+.game-grid{display:flex;flex-direction:column;gap:14px}
+.board{order:-1}
+@media(min-width:900px){.game-grid{display:grid;grid-template-columns:332px 1fr;align-items:start;gap:18px}.board{order:0}}
+.panel{background:linear-gradient(rgba(255,255,255,0.03),rgba(255,255,255,0) 18%),var(--panel);border:1px solid var(--cyan-soft);border-radius:16px;box-shadow:0 18px 40px -24px rgba(0,0,0,0.9);padding:16px}
+.panel + .panel{margin-top:14px}
+.panel-label{font-size:11px;text-transform:uppercase;letter-spacing:.16em;color:var(--slate-500);margin:0 0 10px}
+.diff-row{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.diff{border:1px solid var(--cyan-soft);background:rgba(6,16,25,.6);border-radius:12px;padding:11px 6px 9px;text-align:center;cursor:pointer;transition:.15s;color:var(--slate-400)}
+.diff:hover{border-color:var(--cyan-edge)}
+.diff .d-name{font-weight:600;font-size:13px;letter-spacing:.04em;text-transform:uppercase}
+.diff .d-meta{font-family:var(--font-mono);font-size:10.5px;color:var(--slate-500);margin-top:3px}
+.diff.active{border-color:var(--cyan);background:linear-gradient(rgba(34,211,238,.14),rgba(34,211,238,.04));color:#fff;box-shadow:0 0 18px -4px rgba(34,211,238,.5)}
+.diff.active .d-meta{color:var(--cyan)}
+.diff[aria-disabled=true]{opacity:.45;pointer-events:none}
+.bet-input-row{display:flex;align-items:stretch;gap:8px;margin-bottom:10px}
+.bet-field{flex:1;display:flex;align-items:center;gap:8px;background:rgba(2,8,13,.7);border:1px solid var(--cyan-soft);border-radius:12px;padding:0 12px}
+.bet-field input{flex:1;width:100%;background:none;border:0;outline:none;color:#fff;font-family:var(--font-mono);font-weight:700;font-size:17px;padding:12px 0}
+.mini-btn{width:42px;border:1px solid var(--cyan-soft);background:rgba(8,20,31,.7);color:var(--slate-400);border-radius:11px;font-family:var(--font-mono);font-weight:700;cursor:pointer;transition:.15s;font-size:14px}
+.mini-btn:hover{color:var(--cyan);border-color:var(--cyan-edge)}
+.chips{display:grid;grid-template-columns:repeat(4,1fr);gap:7px}
+.chip{border:1px solid var(--cyan-soft);background:rgba(6,16,25,.6);color:var(--slate-400);border-radius:10px;padding:9px 4px;font-family:var(--font-mono);font-weight:600;font-size:12.5px;cursor:pointer;transition:.15s}
+.chip:hover{color:var(--cyan);border-color:var(--cyan-edge)}
+.minmax{display:flex;justify-content:space-between;font-family:var(--font-mono);font-size:10.5px;color:var(--slate-500);margin-top:9px}
+.score-tbl{display:flex;flex-direction:column;gap:6px}
+.score-tbl .sr{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--slate-400)}
+.score-tbl .sr .sv{font-family:var(--font-mono);margin-left:auto;color:var(--slate-300)}
+.score-tbl .sr .so{font-family:var(--font-mono);font-size:10.5px;color:var(--slate-500);width:72px;text-align:right}
+.score-note{font-size:10.5px;font-family:var(--font-mono);color:var(--slate-500);margin:9px 0 0}
+.board-shell{background:linear-gradient(rgba(255,255,255,0.025),rgba(255,255,255,0) 16%),rgba(6,16,25,.72);border:1px solid var(--cyan-soft);border-radius:18px;overflow:hidden;box-shadow:0 24px 50px -30px rgba(0,0,0,.95)}
+.hud{display:flex;gap:1px;background:var(--cyan-soft)}
+.hud .cell{flex:1;background:rgba(4,12,19,.85);padding:11px 12px;text-align:center}
+.hud .k{font-size:9.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--slate-500)}
+.hud .v{font-family:var(--font-mono);font-weight:700;font-size:clamp(13px,3.4vw,19px);color:#fff;margin-top:3px}
+.hud .v.tick{color:var(--cyan)}
+.hud .v.rev{color:var(--slate-300)}
+.felt{position:relative;display:flex;flex-direction:column;align-items:center;gap:12px;padding:20px 14px 16px;background:radial-gradient(ellipse 70% 60% at 50% 40%,rgba(34,211,238,.06),transparent 70%)}
+/* the ticket */
+.ticket{width:min(380px,100%);background:linear-gradient(165deg,#0d2130,#071219 60%,#081826);border:1px solid var(--cyan-edge);border-radius:16px;padding:13px 13px 15px;box-shadow:0 14px 34px -16px rgba(0,0,0,.9),0 0 26px -10px rgba(34,211,238,.35);transition:box-shadow .4s,border-color .4s}
+.ticket.won{border-color:rgba(245,158,11,.55);box-shadow:0 14px 34px -16px rgba(0,0,0,.9),0 0 34px -8px rgba(245,158,11,.5)}
+.ticket-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:11px}
+.ticket-head .brand{font-weight:700;font-size:12px;letter-spacing:.18em;text-transform:uppercase;color:var(--cyan);text-shadow:0 0 10px rgba(34,211,238,.5)}
+.ticket-head .tno{font-family:var(--font-mono);font-size:11px;color:var(--slate-400)}
+.ticket-head .tbadge{font-size:9.5px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;padding:3px 8px;border-radius:6px;color:var(--cyan);background:rgba(34,211,238,.1);box-shadow:inset 0 0 0 1px rgba(34,211,238,.35)}
+.tgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;touch-action:none}
+.scell{position:relative;aspect-ratio:1;border-radius:12px;overflow:hidden;background:radial-gradient(circle at 50% 42%,#0c1e2c,#050d14 78%);box-shadow:inset 0 0 0 1px rgba(34,211,238,.14)}
+.scell .under{position:absolute;inset:0;display:grid;place-items:center;font-size:clamp(30px,9vw,44px);line-height:1;user-select:none}
+.scell .under .gem{color:var(--cyan);font-weight:700;text-shadow:0 0 18px rgba(34,211,238,.85),0 0 5px rgba(34,211,238,.9)}
+.scell .under .ace{font-family:var(--font-mono);font-weight:700;color:var(--slate-300);text-shadow:0 0 12px rgba(148,163,184,.4)}
+.scell .under .qm{color:#1d3444;font-weight:700}
+.scell canvas{position:absolute;inset:0;width:100%;height:100%;display:block;opacity:1;transition:opacity .5s ease;cursor:crosshair}
+.scell.revealed canvas{opacity:0;pointer-events:none}
+.scell.revealed .under{animation:cellpop .35s ease}
+@keyframes cellpop{0%{transform:scale(.7)}55%{transform:scale(1.12)}100%{transform:scale(1)}}
+.scell.winner{box-shadow:inset 0 0 0 2px rgba(245,158,11,.8),0 0 22px -3px rgba(245,158,11,.65);background:radial-gradient(circle at 50% 42%,rgba(245,158,11,.16),#050d14 82%)}
+.scell.winner .under{animation:winpulse 1.4s ease infinite}
+@keyframes winpulse{0%,100%{transform:scale(1)}50%{transform:scale(1.1)}}
+.felt-status{font-size:13px;color:var(--slate-400);text-align:center;min-height:18px}
+.felt-status .gain{color:var(--win);font-family:var(--font-mono);font-weight:600}
+.felt-status.lose{color:var(--loss)}
+.banner-host{position:absolute;inset:0;display:grid;place-items:center;z-index:8;pointer-events:none}
+.banner{display:none;text-align:center;padding:16px 28px;border-radius:18px}
+.banner.show{display:block}
+.banner.win{background:radial-gradient(ellipse at center,rgba(245,158,11,.24),rgba(4,12,19,.6));border:1px solid rgba(245,158,11,.5);box-shadow:0 0 50px -8px rgba(245,158,11,.55)}
+.banner.loss{background:radial-gradient(ellipse at center,rgba(251,113,133,.18),rgba(4,12,19,.62));border:1px solid rgba(251,113,133,.42)}
+.banner .b-k{font-size:12px;letter-spacing:.22em;text-transform:uppercase;color:var(--slate-400)}
+.banner.win .b-k{color:var(--win)}.banner.loss .b-k{color:var(--loss)}
+.banner .b-v{font-family:var(--font-mono);font-weight:700;font-size:clamp(24px,7vw,38px);color:#fff;margin-top:4px}
+.arc-banner-in{animation:arc-banner-in .4s cubic-bezier(.34,1.56,.64,1) both}
+@keyframes arc-banner-in{0%{transform:scale(.7);opacity:0}55%{transform:scale(1.06);opacity:1}100%{transform:scale(1);opacity:1}}
+.actions{display:grid;grid-template-columns:1fr;gap:10px;margin-top:14px}
+.actions.two{grid-template-columns:1fr 1fr}
+.btn{border:0;border-radius:14px;padding:16px 18px;font-family:var(--font-disp);font-weight:700;font-size:16px;letter-spacing:.05em;text-transform:uppercase;cursor:pointer;transition:.15s;color:#04141b}
+.btn:active{transform:scale(.985)}
+.btn-go{background:linear-gradient(180deg,#3ee0f5,#22D3EE 60%,#0fb6d4);box-shadow:0 0 24px -6px rgba(34,211,238,.68),inset 0 1px 0 rgba(255,255,255,.4)}
+.btn-cash{background:linear-gradient(180deg,#fbd36b,#F59E0B 60%,#d97f06);color:#2a1602;box-shadow:0 0 24px -5px rgba(245,158,11,.7),inset 0 1px 0 rgba(255,255,255,.4)}
+.btn:disabled{opacity:.45;cursor:not-allowed;filter:saturate(.4)}
+.cash-sub{display:block;font-family:var(--font-mono);font-size:11px;font-weight:600;letter-spacing:0;margin-top:2px;opacity:.85}
+.info{margin-top:16px}
+.tabs-list{display:grid;grid-template-columns:1fr 1fr;gap:4px;background:rgba(8,20,31,.7);border:1px solid rgba(34,211,238,.12);border-radius:10px;padding:4px}
+.tab-btn{font-family:var(--font-disp);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.14em;color:var(--slate-500);background:none;border:0;border-radius:7px;padding:9px 6px;cursor:pointer;transition:.15s}
+.tab-btn:hover{color:var(--slate-300)}
+.tab-btn.active{background:rgba(34,211,238,.15);color:var(--cyan);box-shadow:inset 0 0 0 1px rgba(34,211,238,.5)}
+.tab-panel{display:none;margin-top:12px}
+.tab-panel.active{display:block}
+.hist-head{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:6px}
+.hist-head h2{font-family:var(--font-disp);font-weight:600;font-size:14px;text-transform:uppercase;letter-spacing:.08em;color:var(--slate-300);margin:0}
+.hist-head .count{font-size:11px;color:var(--slate-500)}
+.hist-empty{padding:18px 0;text-align:center;font-size:13px;color:var(--slate-500)}
+.hist-list{list-style:none;margin:0;padding:0}
+.hist-row{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;padding:9px 0;border-top:1px solid rgba(34,211,238,.08);font-size:13px}
+.hist-row:first-child{border-top:0}
+.hist-row .t{font-family:var(--font-mono);width:46px;flex:none;color:var(--slate-500)}
+.hist-row .badge{flex:none;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;padding:2px 7px;border-radius:5px;color:var(--cyan);background:rgba(34,211,238,.1);box-shadow:inset 0 0 0 1px rgba(34,211,238,.3)}
+.hist-row .m{font-family:var(--font-mono);color:var(--slate-400);flex:none}
+.hist-row .x{font-family:var(--font-mono);flex:none}
+.hist-row .x.win{color:var(--cyan)}.hist-row .x.bust{color:var(--loss)}
+.hist-row .p{font-family:var(--font-mono);font-weight:600;margin-left:auto;flex:none}
+.hist-row .p.up{color:var(--win)}.hist-row .p.flat{color:var(--slate-500)}.hist-row .p.down{color:var(--loss)}
+.hist-row .verify{flex:none;font-size:11px;color:var(--slate-500);background:none;border:0;border-radius:5px;padding:3px 7px;cursor:pointer;transition:.15s}
+.hist-row .verify:hover{color:var(--cyan);background:rgba(34,211,238,.1)}
+.faq-item{border-top:1px solid rgba(34,211,238,.1)}
+.faq-item:first-child{border-top:0}
+.faq-q{width:100%;text-align:left;background:none;border:0;color:#E8EEF5;font-family:var(--font-disp);font-size:14px;font-weight:500;padding:13px 28px 13px 0;cursor:pointer;position:relative;transition:.15s}
+.faq-q:hover{color:var(--cyan)}
+.faq-q::after{content:"⌄";position:absolute;right:4px;top:12px;color:var(--slate-500);transition:transform .2s}
+.faq-item.open .faq-q::after{transform:rotate(180deg);color:var(--cyan)}
+.faq-a{display:none;padding:0 4px 14px;color:#AFC0CF;font-size:13.5px;line-height:1.65}
+.faq-item.open .faq-a{display:block}
+.faq-a p{margin:0 0 9px}.faq-a p:last-child{margin-bottom:0}
+.faq-a a{color:var(--cyan);text-decoration:underline;text-underline-offset:2px;word-break:break-all}
+.faq-a .odds{font-family:var(--font-mono);font-size:11px;line-height:1.7;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:8px;padding:10px;color:var(--slate-400);margin:8px 0}
+.hl{color:var(--cyan)}
+.overlay{position:fixed;inset:0;z-index:50;display:none;align-items:center;justify-content:center;padding:16px;background:rgba(2,6,10,.72);backdrop-filter:blur(3px)}
+.overlay.open{display:flex}
+.modal{width:100%;max-width:520px;max-height:85vh;overflow-y:auto;background:#050E16;border:1px solid #0e3a47;border-radius:16px;box-shadow:0 30px 80px -20px rgba(0,0,0,.9);padding:20px}
+.modal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
+.modal-head h2{font-family:var(--font-disp);font-weight:600;text-transform:uppercase;letter-spacing:.12em;color:var(--cyan);font-size:16px;margin:0}
+.modal-x{background:none;border:0;color:var(--slate-500);font-size:20px;cursor:pointer;line-height:1}
+.modal-x:hover{color:var(--cyan)}
+.m-sec{margin-bottom:18px}
+.m-sec h3{font-size:13.5px;font-weight:600;color:var(--slate-300);margin:0 0 4px}
+.m-sec p.note{font-size:12px;color:var(--slate-500);margin:0 0 9px;line-height:1.5}
+.m-input-row{display:flex;gap:8px}
+.m-input{flex:1;min-width:0;background:var(--field);border:1px solid #0e3a47;border-radius:9px;color:#cbd5e1;font-family:var(--font-mono);font-size:12px;padding:9px 11px;outline:none}
+.m-input:focus{border-color:var(--cyan-edge)}
+.m-btn{flex:none;border-radius:9px;padding:9px 14px;font-family:var(--font-disp);font-size:13px;cursor:pointer;border:1px solid transparent;transition:.15s}
+.m-btn.outline{background:transparent;border-color:#0e3a47;color:var(--cyan)}
+.m-btn.outline:hover{background:rgba(34,211,238,.1)}
+.m-btn.solid{background:#0891b2;color:#fff}
+.m-btn.solid:hover{background:#22D3EE;color:#03121B}
+.m-result{border:1px solid #0e3a47;background:rgba(7,19,31,.7);border-radius:12px;padding:13px;margin-top:6px}
+.m-check{display:flex;align-items:center;gap:9px;font-size:13px;color:var(--slate-300);margin-bottom:6px}
+.m-check .ck{font-weight:700}.m-check .ck.ok{color:var(--cyan)}.m-check .ck.no{color:var(--loss)}
+.m-meta{display:flex;flex-wrap:wrap;gap:3px 16px;font-size:12px;color:var(--slate-500);margin:10px 0}
+.m-meta .mv{font-family:var(--font-mono);color:var(--slate-300)}
+.m-meta .mv.cyan{color:var(--cyan)}.m-meta .mv.amber{color:var(--win)}
+.m-fields{display:grid;gap:8px;margin-top:6px}
+.m-field .fl{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--slate-500)}
+.m-field .fv{word-break:break-all;border-radius:7px;background:var(--field);padding:5px 9px;font-family:var(--font-mono);font-size:11.5px;color:var(--slate-300);margin-top:2px}
+.m-foot{display:flex;flex-wrap:wrap;gap:3px 16px;font-size:12px;color:var(--slate-500);margin-top:10px}
+.m-foot .fv{font-family:var(--font-mono)}.m-foot .fv.amber{color:var(--win)}.m-foot .fv.cyan{color:var(--cyan)}.m-foot .fv.rose{color:var(--loss)}
+.m-maplabel{font-size:11px;color:var(--slate-500);margin:10px 0 4px;text-transform:uppercase;letter-spacing:.06em}
+.m-tgrid{display:grid;grid-template-columns:repeat(3,34px);gap:4px;margin:4px 0}
+.m-tcell{width:34px;height:34px;border-radius:7px;display:grid;place-items:center;font-size:17px;background:var(--field);box-shadow:inset 0 0 0 1px rgba(34,211,238,.15)}
+.m-tcell.gemc{color:var(--cyan);font-weight:700;text-shadow:0 0 8px rgba(34,211,238,.8)}
+.m-tcell.acec{font-family:var(--font-mono);font-weight:700;font-size:14px;color:var(--slate-300)}
+.m-tcell.winc{box-shadow:inset 0 0 0 2px rgba(245,158,11,.75);background:rgba(245,158,11,.12)}
+.lab-note{margin-top:22px;text-align:center;font-size:11px;color:var(--slate-500);font-family:var(--font-mono);line-height:1.6}
+.lab-note b{color:var(--slate-400);font-weight:600}
+</style>
+</head>
+<body>
+<div class="bg-light"></div>
+<div class="bg-vignette"></div>
+
+<div class="wrap">
+  <header>
+    <h1 class="title">Neon Scratch<span class="glyph">✦</span></h1>
+    <p class="tagline">buy a ticket · scratch the foil · match 3 symbols anywhere · provably fair · played in MORBIUS</p>
+  </header>
+
+  <div class="topbar">
+    <div class="balance"><span class="coin"></span><span class="amt" id="balance">10,000</span><span class="cur">MORBIUS</span></div>
+    <div class="right">
+      <button class="pill-btn" id="fairBtn"><span class="dot"></span>Provably fair</button>
+      <button class="icon-btn" id="soundBtn" title="Sound" aria-label="Toggle sound">♪</button>
+    </div>
+  </div>
+
+  <div class="game-grid">
+    <section>
+      <div class="panel">
+        <p class="panel-label">Ticket tier</p>
+        <div class="diff-row" id="diffRow">
+          <button class="diff active" data-diff="bronze"><div class="d-name">Bronze</div><div class="d-meta">top ×25</div></button>
+          <button class="diff" data-diff="silver"><div class="d-name">Silver</div><div class="d-meta">top ×100</div></button>
+          <button class="diff" data-diff="gold"><div class="d-name">Gold</div><div class="d-meta">top ×500</div></button>
+        </div>
+      </div>
+      <div class="panel">
+        <p class="panel-label">Ticket price</p>
+        <div class="bet-input-row">
+          <div class="bet-field"><span class="coin"></span><input id="betInput" class="mono" inputmode="numeric" value="200" /></div>
+          <button class="mini-btn" data-bet="half">½</button>
+          <button class="mini-btn" data-bet="double">2×</button>
+        </div>
+        <div class="chips">
+          <button class="chip" data-add="100">+100</button>
+          <button class="chip" data-add="500">+500</button>
+          <button class="chip" data-add="1000">+1k</button>
+          <button class="chip" data-set="max">Max</button>
+        </div>
+        <div class="minmax"><span>Min 100</span><span>Max 100,000</span></div>
+      </div>
+      <div class="panel">
+        <p class="panel-label" id="ptLabel">Prizes — Bronze · × ticket price</p>
+        <div class="score-tbl" id="prizeTbl"></div>
+        <p class="score-note" id="prizeNote"></p>
+      </div>
+    </section>
+
+    <section class="board">
+      <div class="board-shell">
+        <div class="hud">
+          <div class="cell"><div class="k">Ticket</div><div class="v tick" id="hudTicket">—</div></div>
+          <div class="cell"><div class="k">Tier</div><div class="v" id="hudTier">Bronze</div></div>
+          <div class="cell"><div class="k">Price</div><div class="v" id="hudPrice">200</div></div>
+          <div class="cell"><div class="k">Revealed</div><div class="v rev" id="hudRev">0 / 9</div></div>
+        </div>
+        <div class="felt">
+          <div class="ticket" id="ticket">
+            <div class="ticket-head">
+              <span class="brand">Neon Scratch</span>
+              <span class="tno" id="ticketNo">№ —</span>
+              <span class="tbadge" id="ticketBadge">Bronze</span>
+            </div>
+            <div class="tgrid" id="tgrid"></div>
+          </div>
+          <div class="felt-status" id="status">Pick a tier and buy a ticket</div>
+          <div class="banner-host"><div class="banner" id="banner"><div class="b-k" id="bannerK"></div><div class="b-v" id="bannerV"></div></div></div>
+        </div>
+      </div>
+      <div class="actions" id="actions"><button class="btn btn-go" id="buyBtn">Buy ticket &amp; scratch</button></div>
+    </section>
+  </div>
+
+  <section class="info panel" aria-label="Neon Scratch information">
+    <div class="tabs-list">
+      <button class="tab-btn active" data-tab="rounds">My rounds</button>
+      <button class="tab-btn" data-tab="faq">FAQ</button>
+    </div>
+    <div class="tab-panel active" id="tab-rounds">
+      <div class="hist-head"><h2>Recent tickets</h2><span class="count" id="histCount">last —</span></div>
+      <div id="histBody"></div>
+    </div>
+    <div class="tab-panel" id="tab-faq"><div id="faqBody"></div></div>
+  </section>
+
+  <p class="lab-note">
+    <b>Prototype</b> — Deep-Sea Neon style, single-player on the arcade2 pattern (like Greed Dice / Firewalk / Abyss Reels).<br/>
+    Ticket layouts here come from an in-page seeded RNG for feel; the real build derives them from the server
+    <b>provably-fair HMAC</b> stream (<span class="mono">/api/arcade/scratch/*</span>). Every tier's prize table sums to exactly
+    <b>96% RTP</b>. Verify re-prints any ticket from its seed. Currency: <b>MORBIUS</b>.
+  </p>
+</div>
+
+<div class="overlay" id="overlay">
+  <div class="modal" role="dialog" aria-modal="true" aria-label="Provably fair">
+    <div class="modal-head"><h2>Provably Fair</h2><button class="modal-x" id="modalX" aria-label="Close">✕</button></div>
+    <div class="m-sec">
+      <h3>Your client seed</h3>
+      <p class="note">Mixed into every ticket. Change it any time — the next ticket uses the new value.</p>
+      <div class="m-input-row">
+        <input class="m-input" id="clientSeedInput" placeholder="Leave blank for a random seed each ticket" />
+        <button class="m-btn outline" id="newSeedBtn">New seed</button>
+      </div>
+    </div>
+    <div class="m-sec">
+      <h3>Verify a ticket</h3>
+      <p class="note">The prize roll AND the full cell layout derive from a server seed committed (hashed) before you buy — revealed once the ticket settles, so Verify re-prints it symbol-for-symbol.</p>
+      <div class="m-input-row">
+        <input class="m-input" id="verifyIdInput" placeholder="Round ID" />
+        <button class="m-btn solid" id="verifyBtn">Verify</button>
+      </div>
+    </div>
+    <div id="verifyOut"></div>
+  </div>
+</div>
+
+<script>
+"use strict";
+(function(){
+  var MIN_BET=100, MAX_BET=100000, GRID=9, COVER=10, REVEAL_AT=0.55;
+  // symbol catalog — id → display
+  var SYMS={
+    gem:{disp:'◆',cls:'gem',name:'MORB diamond'},
+    octo:{disp:'🐙',cls:'',name:'Octopus'},
+    squid:{disp:'🦑',cls:'',name:'Squid'},
+    shell:{disp:'🐚',cls:'',name:'Shell'},
+    anchor:{disp:'⚓',cls:'',name:'Anchor'},
+    ace:{disp:'A',cls:'ace',name:'Ace'}
+  };
+  var SYM_LIST=['gem','octo','squid','shell','anchor','ace'];
+  // prize tables — weights per 10,000 tickets; Σ w×mult = 9600 → RTP exactly 96.0% per tier
+  var TIERS={
+    bronze:{label:'Bronze',initial:'B',hit:35.40,table:[
+      {sym:'gem',mult:25,w:40},{sym:'octo',mult:10,w:150},{sym:'squid',mult:5,w:400},
+      {sym:'shell',mult:3,w:700},{sym:'anchor',mult:2,w:750},{sym:'ace',mult:1,w:1500}]},
+    silver:{label:'Silver',initial:'S',hit:32.35,table:[
+      {sym:'gem',mult:100,w:15},{sym:'octo',mult:25,w:60},{sym:'squid',mult:10,w:160},
+      {sym:'shell',mult:5,w:300},{sym:'anchor',mult:2,w:800},{sym:'ace',mult:1,w:1900}]},
+    gold:{label:'Gold',initial:'G',hit:29.53,table:[
+      {sym:'gem',mult:500,w:3},{sym:'octo',mult:50,w:30},{sym:'squid',mult:15,w:100},
+      {sym:'shell',mult:5,w:320},{sym:'anchor',mult:3,w:500},{sym:'ace',mult:1,w:2000}]}
+  };
+
+  var S={ balance:10000, tier:'bronze', bet:200, phase:'idle', busy:false, sound:true,
+    ticket:null, revealed:[], revealedCount:0, cover:[], payout:0,
+    serverSeed:'', clientSeed:'', clientSeedPref:'', nonce:0, serverHash:'', roundId:'', ticketNo:'',
+    scratching:false, lastPt:null, history:[] };
+
+  var $=function(id){return document.getElementById(id);};
+  var balanceEl=$('balance'),betInput=$('betInput'),tgrid=$('tgrid'),ticketEl=$('ticket'),
+      statusEl=$('status'),hudTicket=$('hudTicket'),hudTier=$('hudTier'),hudPrice=$('hudPrice'),hudRev=$('hudRev'),
+      ticketNoEl=$('ticketNo'),ticketBadge=$('ticketBadge'),banner=$('banner'),bannerK=$('bannerK'),bannerV=$('bannerV'),
+      soundBtn=$('soundBtn'),overlay=$('overlay'),histBody=$('histBody'),histCount=$('histCount'),
+      faqBody=$('faqBody'),actions=$('actions'),prizeTbl=$('prizeTbl'),prizeNote=$('prizeNote'),ptLabel=$('ptLabel');
+
+  function cfg(){return TIERS[S.tier];}
+  function fmt(n){return Math.round(n).toLocaleString('en-US');}
+  function rndHex(len){var s='';for(var i=0;i<len;i++)s+=Math.floor(Math.random()*16).toString(16);return s;}
+  function shortId(){return rndHex(8).toUpperCase();}
+  function xmur3(str){var h=1779033703^str.length;for(var i=0;i<str.length;i++){h=Math.imul(h^str.charCodeAt(i),3432918353);h=h<<13|h>>>19;}return function(){h=Math.imul(h^h>>>16,2246822507);h=Math.imul(h^h>>>13,3266489909);return (h^=h>>>16)>>>0;};}
+  function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;var t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return ((t^t>>>14)>>>0)/4294967296;};}
+  function makeRng(seedStr){return mulberry32(xmur3(seedStr)());}
+  async function sha256Hex(msg){try{var b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(msg));return Array.from(new Uint8Array(b)).map(function(x){return x.toString(16).padStart(2,'0');}).join('');}catch(e){return 'sha256-unavailable';}}
+
+  // one seed → whole ticket (prize roll + layout). Verify replays this exactly.
+  function deriveTicket(serverSeed,clientSeed,nonce,tierKey){
+    var rng=makeRng(serverSeed+':'+clientSeed+':'+nonce);
+    var t=TIERS[tierKey];
+    var roll=Math.floor(rng()*10000);
+    var cum=0,win=null;
+    for(var i=0;i<t.table.length;i++){cum+=t.table[i].w;if(roll<cum){win={sym:t.table[i].sym,mult:t.table[i].mult};break;}}
+    var order=[0,1,2,3,4,5,6,7,8];
+    for(var k=8;k>0;k--){var j=Math.floor(rng()*(k+1));var tmp=order[k];order[k]=order[j];order[j]=tmp;}
+    var cells=new Array(9).fill(null),winCells=[];
+    if(win){winCells=[order[0],order[1],order[2]].sort(function(a,b){return a-b;});winCells.forEach(function(c){cells[c]=win.sym;});}
+    var pool=SYM_LIST.filter(function(s){return !win||s!==win.sym;});
+    var counts={};
+    for(var c=0;c<9;c++){
+      if(cells[c])continue;
+      var s;
+      do{s=pool[Math.floor(rng()*pool.length)];}while((counts[s]||0)>=2);
+      counts[s]=(counts[s]||0)+1;cells[c]=s;
+    }
+    return {roll:roll,win:win,cells:cells,winCells:winCells};
+  }
+  function ticketNoFor(tierKey,nonce){return TIERS[tierKey].initial+'-'+String(nonce).padStart(6,'0');}
+
+  /* sound */
+  var actx=null,noiseBuf=null,lastScr=0;
+  function ac(){actx=actx||new (window.AudioContext||window.webkitAudioContext)();return actx;}
+  function tone(f,d,t,g){if(!S.sound)return;try{var x=ac(),o=x.createOscillator(),gn=x.createGain();o.type=t||'sine';o.frequency.value=f;gn.gain.value=g||0.05;o.connect(gn);gn.connect(x.destination);var n=x.currentTime;o.start(n);gn.gain.exponentialRampToValueAtTime(0.0001,n+(d||0.12));o.stop(n+(d||0.12));}catch(e){}}
+  function sScratch(){
+    if(!S.sound)return;
+    var now=Date.now();if(now-lastScr<70)return;lastScr=now;
+    try{
+      var x=ac();
+      if(!noiseBuf){var len=Math.floor(x.sampleRate*0.08);noiseBuf=x.createBuffer(1,len,x.sampleRate);var d=noiseBuf.getChannelData(0);for(var i=0;i<len;i++)d[i]=Math.random()*2-1;}
+      var src=x.createBufferSource(),bp=x.createBiquadFilter(),gn=x.createGain();
+      src.buffer=noiseBuf;src.playbackRate.value=0.8+Math.random()*0.5;
+      bp.type='bandpass';bp.frequency.value=2400+Math.random()*1200;bp.Q.value=1.2;
+      gn.gain.value=0.05;
+      src.connect(bp);bp.connect(gn);gn.connect(x.destination);
+      var n=x.currentTime;src.start(n);gn.gain.exponentialRampToValueAtTime(0.0001,n+0.08);src.stop(n+0.09);
+    }catch(e){}
+  }
+  function sPop(){tone(560,0.08,'triangle',0.05);}
+  function sWin(){[660,880,1175].forEach(function(f,i){setTimeout(function(){tone(f,0.12,'sine',0.06);},i*90);});}
+  function sBig(){[660,880,1175,1320,1568].forEach(function(f,i){setTimeout(function(){tone(f,0.11,'sine',0.05);},i*80);});}
+  function sLose(){tone(180,0.26,'sawtooth',0.06);}
+
+  /* ticket rendering + foil */
+  function symHtml(id){
+    if(id==null)return '<span class="qm">?</span>';
+    var s=SYMS[id];
+    return '<span class="'+(s.cls||'')+'">'+s.disp+'</span>';
+  }
+  function buildGrid(cells){
+    var html='';
+    for(var i=0;i<GRID;i++){
+      html+='<div class="scell" data-i="'+i+'"><div class="under">'+symHtml(cells?cells[i]:null)+'</div><canvas class="foil"></canvas></div>';
+    }
+    tgrid.innerHTML=html;
+    requestAnimationFrame(paintFoils);
+  }
+  function paintFoils(){
+    tgrid.querySelectorAll('.scell').forEach(function(cell){
+      var cv=cell.querySelector('canvas');if(!cv)return;
+      var rect=cell.getBoundingClientRect(),dpr=Math.min(2,window.devicePixelRatio||1);
+      cv.width=Math.max(2,Math.round(rect.width*dpr));cv.height=Math.max(2,Math.round(rect.height*dpr));
+      var ctx=cv.getContext('2d'),w=cv.width,h=cv.height;
+      var grad=ctx.createLinearGradient(0,0,w,h);
+      grad.addColorStop(0,'#2b3a49');grad.addColorStop(.35,'#465a6d');grad.addColorStop(.55,'#33475a');grad.addColorStop(.8,'#22303d');grad.addColorStop(1,'#2e4152');
+      ctx.fillStyle=grad;ctx.fillRect(0,0,w,h);
+      // brushed speckle (cosmetic only)
+      for(var i=0;i<Math.floor(w*h/260);i++){
+        ctx.fillStyle='rgba(255,255,255,'+(0.02+Math.random()*0.05)+')';
+        ctx.fillRect(Math.random()*w,Math.random()*h,1.5*Math.random()+0.5,1);
+      }
+      // diagonal sheen
+      ctx.strokeStyle='rgba(122,233,251,0.07)';ctx.lineWidth=Math.max(4,w*0.09);
+      for(var s2=-h;s2<w+h;s2+=Math.max(14,w*0.3)){
+        ctx.beginPath();ctx.moveTo(s2,0);ctx.lineTo(s2+h,h);ctx.stroke();
+      }
+      // glyph
+      ctx.fillStyle='rgba(8,20,32,0.55)';
+      ctx.font='700 '+Math.floor(h*0.34)+'px "Chakra Petch",sans-serif';
+      ctx.textAlign='center';ctx.textBaseline='middle';
+      ctx.fillText('✦',w/2,h/2);
+    });
+  }
+  function resetCover(){
+    S.cover=[];S.revealed=[];S.revealedCount=0;
+    for(var i=0;i<GRID;i++){S.cover.push(new Uint8Array(COVER*COVER));S.revealed.push(false);}
+  }
+
+  /* scratching */
+  function scratchPoint(clientX,clientY){
+    var cells=tgrid.querySelectorAll('.scell');
+    for(var i=0;i<cells.length;i++){
+      if(S.revealed[i])continue;
+      var rect=cells[i].getBoundingClientRect();
+      var R=rect.width*0.19;
+      if(clientX<rect.left-R||clientX>rect.right+R||clientY<rect.top-R||clientY>rect.bottom+R)continue;
+      var x=clientX-rect.left,y=clientY-rect.top;
+      var cv=cells[i].querySelector('canvas'),ctx=cv.getContext('2d');
+      var sx=cv.width/rect.width,sy=cv.height/rect.height;
+      ctx.globalCompositeOperation='destination-out';
+      ctx.beginPath();ctx.arc(x*sx,y*sy,R*sx,0,Math.PI*2);ctx.fill();
+      // coverage bookkeeping
+      var grid=S.cover[i],cw=rect.width/COVER,ch=rect.height/COVER,marked=0;
+      for(var gy=0;gy<COVER;gy++)for(var gx=0;gx<COVER;gx++){
+        var idx=gy*COVER+gx;
+        if(!grid[idx]){
+          var cxp=(gx+0.5)*cw,cyp=(gy+0.5)*ch;
+          if((cxp-x)*(cxp-x)+(cyp-y)*(cyp-y)<=R*R)grid[idx]=1;
+        }
+        if(grid[idx])marked++;
+      }
+      sScratch();
+      if(marked/(COVER*COVER)>=REVEAL_AT)revealCell(i,true);
+    }
+  }
+  function onPointerDown(e){
+    if(S.phase!=='active')return;
+    S.scratching=true;S.lastPt={x:e.clientX,y:e.clientY};
+    try{tgrid.setPointerCapture(e.pointerId);}catch(err){}
+    scratchPoint(e.clientX,e.clientY);
+    e.preventDefault();
+  }
+  function onPointerMove(e){
+    if(!S.scratching||S.phase!=='active')return;
+    var last=S.lastPt,x=e.clientX,y=e.clientY;
+    if(last){
+      var dx=x-last.x,dy=y-last.y,dist=Math.sqrt(dx*dx+dy*dy),steps=Math.max(1,Math.floor(dist/9));
+      for(var i=1;i<=steps;i++)scratchPoint(last.x+dx*i/steps,last.y+dy*i/steps);
+    }else{
+      scratchPoint(x,y);
+    }
+    S.lastPt={x:x,y:y};
+    e.preventDefault();
+  }
+  function onPointerUp(){S.scratching=false;S.lastPt=null;}
+
+  function revealCell(i,byHand){
+    if(S.revealed[i])return;
+    S.revealed[i]=true;S.revealedCount++;
+    var cell=tgrid.querySelector('.scell[data-i="'+i+'"]');
+    if(cell)cell.classList.add('revealed');
+    if(byHand)sPop();
+    hudRev.textContent=S.revealedCount+' / 9';
+    if(S.revealedCount>=GRID)settle();
+  }
+  function revealAll(){
+    if(S.phase!=='active'||S.busy)return;
+    S.busy=true;renderActions();
+    var pending=[];
+    for(var i=0;i<GRID;i++)if(!S.revealed[i])pending.push(i);
+    pending.forEach(function(i,k){
+      setTimeout(function(){sPop();revealCell(i,false);},k*90);
+    });
+    if(!pending.length)S.busy=false;
+  }
+
+  function syncHud(){
+    hudTicket.textContent=S.ticketNo||'—';
+    hudTier.textContent=cfg().label;
+    hudPrice.textContent=fmt(S.phase==='active'?S.bet:(parseInt(betInput.value,10)||S.bet));
+    hudRev.textContent=S.revealedCount+' / 9';
+    balanceEl.textContent=fmt(S.balance);
+  }
+  function renderActions(){
+    if(S.phase==='active'){
+      actions.className='actions';
+      actions.innerHTML='<button class="btn btn-cash" id="revealBtn"'+(S.busy?' disabled':'')+'>Reveal all<span class="cash-sub">'+(9-S.revealedCount)+' cells left</span></button>';
+      var rb=$('revealBtn');if(rb&&!rb.disabled)rb.addEventListener('click',revealAll);
+    }else{
+      actions.className='actions';
+      actions.innerHTML='<button class="btn btn-go" id="buyBtn"'+(S.busy?' disabled':'')+'>'+(S.phase==='settled'?'Buy another ticket':'Buy ticket &amp; scratch')+'</button>';
+      $('buyBtn').addEventListener('click',buyTicket);
+    }
+  }
+  function setControls(on){
+    document.querySelectorAll('#diffRow .diff').forEach(function(b){b.setAttribute('aria-disabled',on?'false':'true');});
+    betInput.disabled=!on;
+    document.querySelectorAll('.chip,.mini-btn').forEach(function(b){b.style.pointerEvents=on?'auto':'none';b.style.opacity=on?'1':'.5';});
+  }
+
+  async function buyTicket(){
+    if(S.busy||S.phase==='active')return;
+    var bet=clampBet(parseInt(betInput.value,10)||0);
+    if(bet>S.balance){flashInput();return;}
+    betInput.value=bet;
+    S.bet=bet;S.balance-=bet;S.phase='active';S.busy=false;
+    S.serverSeed=rndHex(64);
+    S.clientSeed=(S.clientSeedPref||'').trim()||rndHex(20);
+    S.nonce+=1;S.roundId=shortId();S.ticketNo=ticketNoFor(S.tier,S.nonce);
+    S.serverHash=await sha256Hex(S.serverSeed);
+    S.ticket=deriveTicket(S.serverSeed,S.clientSeed,S.nonce,S.tier);
+    S.payout=S.ticket.win?S.ticket.win.mult*S.bet:0;
+    resetCover();
+    ticketEl.classList.remove('won');
+    ticketNoEl.textContent='№ '+S.ticketNo;
+    ticketBadge.textContent=cfg().label;
+    buildGrid(S.ticket.cells);
+    hideBanner();setControls(false);syncHud();renderActions();
+    statusEl.className='felt-status';
+    statusEl.textContent='Scratch the foil — match 3 symbols anywhere to win';
+  }
+
+  function settle(){
+    S.phase='settled';S.busy=false;
+    var win=S.ticket.win,payout=S.payout;
+    if(win){
+      S.balance+=payout;
+      ticketEl.classList.add('won');
+      S.ticket.winCells.forEach(function(c){
+        var cell=tgrid.querySelector('.scell[data-i="'+c+'"]');
+        if(cell)cell.classList.add('winner');
+      });
+      showBanner('win','3× '+SYMS[win.sym].disp+' · ×'+win.mult,'+'+fmt(payout)+' MORBIUS');
+      statusEl.className='felt-status';
+      statusEl.innerHTML='Matched 3× '+symHtml(win.sym)+' — <span class="gain">+'+fmt(payout)+' MORBIUS</span>';
+      if(win.mult>=25)sBig();else sWin();
+    }else{
+      showBanner('loss','No match','−'+fmt(S.bet)+' MORBIUS');
+      statusEl.className='felt-status lose';
+      statusEl.textContent='No 3 of a kind — better luck on the next foil';
+      sLose();
+    }
+    S.history.unshift({ id:S.roundId, at:new Date().toISOString(), tier:S.tier, bet:S.bet, ticketNo:S.ticketNo,
+      winSym:win?win.sym:null, mult:win?win.mult:0, payout:payout,
+      cells:S.ticket.cells.slice(), winCells:S.ticket.winCells.slice(),
+      serverSeed:S.serverSeed, serverHash:S.serverHash, clientSeed:S.clientSeed, nonce:S.nonce });
+    if(S.history.length>15)S.history.pop();
+    setControls(true);syncHud();renderActions();renderHistory();
+  }
+
+  function showBanner(k,a,b){banner.className='banner show '+k+' arc-banner-in';bannerK.textContent=a;bannerV.textContent=b;}
+  function hideBanner(){banner.className='banner';}
+  function clampBet(v){if(isNaN(v)||v<MIN_BET)v=MIN_BET;if(v>MAX_BET)v=MAX_BET;return v;}
+  function flashInput(){betInput.style.color='#FB7185';setTimeout(function(){betInput.style.color='#fff';},400);}
+
+  function renderPrizes(){
+    var t=cfg();
+    ptLabel.textContent='Prizes — '+t.label+' · × ticket price';
+    prizeTbl.innerHTML=t.table.map(function(row){
+      var odds='1 in '+(10000/row.w%1===0?(10000/row.w):(10000/row.w).toFixed(1));
+      return '<div class="sr"><span>'+SYMS[row.sym].disp+' '+SYMS[row.sym].name+'</span><span class="so">'+odds+'</span><span class="sv">×'+row.mult+'</span></div>';
+    }).join('');
+    prizeNote.textContent='any-3-match · hit rate '+t.hit.toFixed(1)+'% · RTP 96.0% exact';
+  }
+
+  function timeLabel(iso){var d=new Date(iso);return isNaN(d.getTime())?'—':d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});}
+  function renderHistory(){
+    histCount.textContent='last '+(S.history.length||'—');
+    if(!S.history.length){histBody.innerHTML='<p class="hist-empty">No tickets yet — pick a tier and buy one.</p>';return;}
+    histBody.innerHTML='<ul class="hist-list">'+S.history.map(function(r){
+      var profit=r.payout-r.bet;
+      var xcell=r.winSym?'<span class="x win">3× '+SYMS[r.winSym].disp+' · ×'+r.mult+'</span>':'<span class="x bust">no match</span>';
+      var pcell='<span class="p '+(profit>0?'up':(profit<0?'down':'flat'))+'">'+(profit>0?'+':'')+fmt(profit)+'</span>';
+      return '<li class="hist-row"><span class="t">'+timeLabel(r.at)+'</span>'
+        +'<span class="badge">'+TIERS[r.tier].label+'</span>'
+        +'<span class="m">№ '+r.ticketNo+'</span>'
+        +'<span class="m">bet '+fmt(r.bet)+'</span>'
+        +xcell+pcell
+        +'<button class="verify" data-id="'+r.id+'">Verify</button></li>';
+    }).join('')+'</ul>';
+    histBody.querySelectorAll('.verify').forEach(function(b){b.addEventListener('click',function(){openFairness(b.getAttribute('data-id'));});});
+  }
+
+  /* fairness modal */
+  function recipeStr(){return 'HMAC_SHA256(serverSeed, `${clientSeed}:${nonce}:ticket`) → prize roll 0–9999 vs the tier table, then the same stream shuffles the 3 winning positions and fills the rest (max 2 of any other symbol) — the whole ticket re-prints from the seed';}
+  function ckHtml(ok,label){return '<div class="m-check"><span class="ck '+(ok?'ok':'no')+'">'+(ok?'✓':'✗')+'</span><span>'+label+'</span></div>';}
+  function fieldHtml(l,v){return '<div class="m-field"><div class="fl">'+l+'</div><div class="fv">'+v+'</div></div>';}
+  function mapHtml(cells,winCells){
+    var wc={};winCells.forEach(function(c){wc[c]=1;});
+    var h='';
+    for(var i=0;i<9;i++){
+      var s=SYMS[cells[i]];
+      var cls='m-tcell'+(s.cls==='gem'?' gemc':'')+(s.cls==='ace'?' acec':'')+(wc[i]?' winc':'');
+      h+='<span class="'+cls+'">'+s.disp+'</span>';
+    }
+    return '<div class="m-tgrid">'+h+'</div>';
+  }
+  function findRound(id){id=String(id||'').trim();return S.history.filter(function(x){return x.id===id;})[0]||null;}
+  function openFairness(id){
+    overlay.classList.add('open');
+    $('clientSeedInput').value=S.clientSeedPref;
+    var target=id||(S.history[0]&&S.history[0].id);
+    if(target){$('verifyIdInput').value=target;runVerify(target);}
+    else{$('verifyOut').innerHTML='<p class="note">Buy a ticket, then verify it here — or paste any round ID.</p>';}
+  }
+  function closeFairness(){overlay.classList.remove('open');}
+  async function runVerify(id){
+    var out=$('verifyOut'),r=findRound(id);
+    if(!r){out.innerHTML='<p class="note" style="color:var(--loss)">No ticket found with that ID.</p>';return;}
+    out.innerHTML='<p class="note">Checking…</p>';
+    var hashOk=(await sha256Hex(r.serverSeed))===r.serverHash;
+    var re=deriveTicket(r.serverSeed,r.clientSeed,r.nonce,r.tier);
+    var layoutOk=re.cells.join(',')===r.cells.join(',');
+    var outcomeOk=(re.win?re.win.sym:null)===r.winSym&&(re.win?re.win.mult:0)===r.mult;
+    var payoutOk=(re.win?re.win.mult*r.bet:0)===r.payout;
+    out.innerHTML='<div class="m-result">'
+      +ckHtml(hashOk,'Server seed matches its committed hash (checked locally)')
+      +ckHtml(layoutOk,'All 9 cells re-print from the seed stream')
+      +ckHtml(outcomeOk,'The prize roll matches the recorded outcome')
+      +ckHtml(payoutOk,'Payout reconciles with multiplier × ticket price')
+      +'<div class="m-maplabel">Ticket re-print — amber = the match</div>'+mapHtml(re.cells,re.winCells)
+      +'<div class="m-meta"><span>Ticket: <span class="mv cyan">№ '+r.ticketNo+'</span></span>'
+        +'<span>Tier: <span class="mv">'+TIERS[r.tier].label+'</span></span>'
+        +'<span>Result: <span class="mv '+(r.winSym?'amber':'')+'">'+(r.winSym?('3× '+SYMS[r.winSym].disp+' · ×'+r.mult):'no match')+'</span></span></div>'
+      +'<div class="m-fields">'+fieldHtml('Server seed hash (committed)',r.serverHash)+fieldHtml('Server seed (revealed)',r.serverSeed)
+        +fieldHtml('Client seed',r.clientSeed)+fieldHtml('Nonce',String(r.nonce))+fieldHtml('Recipe',recipeStr())+'</div>'
+      +'<div class="m-foot"><span>Price: <span class="fv">'+fmt(r.bet)+'</span></span>'
+        +'<span>Returned: <span class="fv '+(r.payout>0?'amber':'rose')+'">'+fmt(r.payout)+' MORBIUS</span></span></div>'
+      +'</div>';
+  }
+
+  var FAQS=[
+    {q:'How does Neon Scratch pay out?',a:'<p>Every ticket hides 9 symbols under the foil, drawn from ◆ 🐙 🦑 🐚 ⚓ A. Find <span class="hl">3 identical symbols anywhere</span> on the ticket and it pays that symbol’s multiplier × your ticket price — the losing layouts never contain three of a kind, so what you see is always the truth. Only one match can exist per ticket.</p><p>Scratch cell by cell for the slow burn, or hit <span class="hl">Reveal All</span> to flip the rest instantly — it changes nothing about the result, which was fixed the moment you bought.</p>'},
+    {q:'What do the tiers change?',a:'<p>The prize table. All three tiers return the same <span class="hl">96%</span> over time — they trade hit-rate for top-end. <span class="hl">Bronze</span> wins most often (35.4% of tickets) but tops out at ×25; <span class="hl">Silver</span> hits 32.4% with a ×100 top prize; <span class="hl">Gold</span> hits 29.5% but carries the ×500 ◆ jackpot. Pick your variance, not your edge.</p>'},
+    {q:'What are the exact odds and the RTP math?',a:'<p>Each tier’s table is exact — weights are per 10,000 tickets, and the expected return is the sum of probability × multiplier:</p><div class="odds">Bronze: ◆×25 (40) · 🐙×10 (150) · 🦑×5 (400) · 🐚×3 (700) · ⚓×2 (750) · A×1 (1500)<br/>Silver: ◆×100 (15) · 🐙×25 (60) · 🦑×10 (160) · 🐚×5 (300) · ⚓×2 (800) · A×1 (1900)<br/>Gold: ◆×500 (3) · 🐙×50 (30) · 🦑×15 (100) · 🐚×5 (320) · ⚓×3 (500) · A×1 (2000)</div><p>Multiply each weight by its prize and every tier sums to exactly <span class="hl">9,600 per 10,000</span> wagered — RTP = 96.0%, a 4% house edge. (Bronze: 40×25 + 150×10 + 400×5 + 700×3 + 750×2 + 1500×1 = 9,600.)</p>'},
+    {q:'Is it really fair — can the ticket change while I scratch?',a:'<p>No. Before you buy, the server commits to a secret <span class="hl">server seed</span> (you see only its SHA-256 hash). The prize roll <span class="hl">and the full 3×3 layout</span> derive from that seed, your client seed, and a nonce — the whole ticket is printed before your first scratch, and scratching only removes foil.</p><p>When the ticket settles the seed is revealed. Hit <span class="hl">Verify</span> and the ticket re-prints symbol-for-symbol from the seed, with the commitment hash checked locally.</p>'},
+    {q:'Does where or how I scratch matter?',a:'<p>Not to the outcome — the layout is fixed at purchase, so scratch order, speed, and direction are pure theatre (good theatre, though). A ticket only settles once <span class="hl">all 9 cells</span> are revealed, by hand or via Reveal All.</p>'},
+    {q:'How do I get MORBIUS?',a:'<p>MORBIUS is the project’s token on <span class="hl">PulseChain</span> (chain ID 369). Buy it on <span class="hl">PulseX</span>, the main PulseChain DEX, by swapping PLS or WPLS for MORBIUS, then deposit it to your play balance.</p><p class="mono" style="font-size:11px">Contract: <a href="https://scan.pulsechain.com/token/0xB7d4eB5fDfE3d4d3B5C16a44A49948c6EC77c6F1" target="_blank" rel="noopener noreferrer">0xB7d4eB5fDfE3d4d3B5C16a44A49948c6EC77c6F1</a></p><p>Always confirm the contract address before swapping — never trust a ticker alone.</p>'}
+  ];
+  function renderFaq(){
+    faqBody.innerHTML=FAQS.map(function(f){return '<div class="faq-item"><button class="faq-q">'+f.q+'</button><div class="faq-a">'+f.a+'</div></div>';}).join('');
+    faqBody.querySelectorAll('.faq-item').forEach(function(it){it.querySelector('.faq-q').addEventListener('click',function(){it.classList.toggle('open');});});
+  }
+
+  /* wiring */
+  tgrid.addEventListener('pointerdown',onPointerDown);
+  tgrid.addEventListener('pointermove',onPointerMove);
+  window.addEventListener('pointerup',onPointerUp);
+  window.addEventListener('pointercancel',onPointerUp);
+  document.querySelectorAll('#diffRow .diff').forEach(function(b){b.addEventListener('click',function(){
+    if(S.phase==='active')return;
+    document.querySelectorAll('#diffRow .diff').forEach(function(x){x.classList.remove('active');});
+    b.classList.add('active');S.tier=b.getAttribute('data-diff');
+    ticketBadge.textContent=cfg().label;
+    renderPrizes();syncHud();
+  });});
+  document.querySelectorAll('.chip').forEach(function(c){c.addEventListener('click',function(){
+    if(S.phase==='active')return;
+    if(c.getAttribute('data-set')==='max'){betInput.value=clampBet(Math.min(MAX_BET,S.balance));}
+    else{betInput.value=clampBet((parseInt(betInput.value,10)||0)+parseInt(c.getAttribute('data-add'),10));}
+    syncHud();
+  });});
+  document.querySelectorAll('.mini-btn').forEach(function(b){b.addEventListener('click',function(){
+    if(S.phase==='active')return;var v=parseInt(betInput.value,10)||MIN_BET;
+    betInput.value=clampBet(b.getAttribute('data-bet')==='half'?Math.floor(v/2):v*2);
+    syncHud();
+  });});
+  betInput.addEventListener('change',function(){betInput.value=clampBet(parseInt(betInput.value,10)||0);syncHud();});
+  soundBtn.addEventListener('click',function(){S.sound=!S.sound;soundBtn.style.color=S.sound?'':'#475569';soundBtn.textContent=S.sound?'♪':'✕';if(S.sound)tone(700,0.1,'sine',0.05);});
+  $('fairBtn').addEventListener('click',function(){openFairness(null);});
+  $('modalX').addEventListener('click',closeFairness);
+  overlay.addEventListener('click',function(e){if(e.target===overlay)closeFairness();});
+  window.addEventListener('keydown',function(e){if(e.key==='Escape')closeFairness();});
+  $('newSeedBtn').addEventListener('click',function(){S.clientSeedPref=rndHex(16);$('clientSeedInput').value=S.clientSeedPref;});
+  $('clientSeedInput').addEventListener('input',function(e){S.clientSeedPref=e.target.value.slice(0,128);});
+  $('verifyBtn').addEventListener('click',function(){runVerify($('verifyIdInput').value);});
+  document.querySelectorAll('.tab-btn').forEach(function(t){t.addEventListener('click',function(){
+    document.querySelectorAll('.tab-btn').forEach(function(x){x.classList.remove('active');});
+    document.querySelectorAll('.tab-panel').forEach(function(x){x.classList.remove('active');});
+    t.classList.add('active');$('tab-'+t.getAttribute('data-tab')).classList.add('active');
+  });});
+  window.addEventListener('resize',function(){if(S.phase!=='active')paintFoils();});
+
+  resetCover();buildGrid(null);renderPrizes();syncHud();renderActions();renderHistory();renderFaq();
+})();
+</script>
+</body>
+</html>

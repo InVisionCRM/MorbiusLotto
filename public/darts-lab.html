@@ -1,0 +1,732 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Bullseye — Deep-Sea Neon lab</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+/* ── Bullseye — Deep-Sea Neon (arcade2) prototype ──────────────────────────
+   Call-your-ring darts on the shared arcade2 system: abyss #050E16, cyan
+   #22D3EE chrome, amber #F59E0B wins, rose losses, Chakra Petch display +
+   JetBrains Mono numerals, .panel glass, provably-fair commit/verify,
+   My-rounds / FAQ tab strip and fairness modal.
+
+   Mechanic: an SVG board of 4 concentric rings — OUTER / MID / INNER / BULL.
+   Call a ring, throw; the dart lands uniformly over the board area (r = R·√u,
+   θ = 2π·v from the seed stream). A hit = landing in the called ring OR any
+   tighter ring, i.e. inside the called ring's outer radius.
+
+   Tuning (exact 96% RTP on every call): hit probability p = 0.96 / m and
+   radius fraction f = √p of the board radius R —
+     OUTER 1.5× → p = 64%  → f = 80.00% R
+     MID   3.2× → p = 30%  → f = 54.77% R
+     INNER 8×   → p = 12%  → f = 34.64% R
+     BULL  24×  → p = 4%   → f = 20.00% R
+   The rim beyond 0.8R (36% of the board) misses every call. Volley mode
+   throws 3 darts at the same ring, each settling a third of the stake.
+   Self-contained client-side demo (mulberry32 seeded from serverSeed+
+   clientSeed+nonce). Currency: MORBIUS. */
+:root{
+  --abyss:#050E16; --cyan:#22D3EE; --cyan-soft:rgba(34,211,238,0.12); --cyan-edge:rgba(34,211,238,0.35);
+  --win:#F59E0B; --loss:#FB7185;
+  --ink:#E2E8F0; --slate-300:#CBD5E1; --slate-400:#94A3B8; --slate-500:#64748B;
+  --panel:rgba(8,20,31,0.78); --field:#081420;
+  --font-disp:'Chakra Petch',system-ui,sans-serif;
+  --font-mono:'JetBrains Mono',ui-monospace,monospace;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  min-height:100svh;background-color:var(--abyss);
+  background-image:linear-gradient(to bottom,rgba(5,14,22,0.92),rgba(2,7,11,0.96) 55%,rgba(5,14,22,0.98));
+  color:var(--ink);font-family:var(--font-disp);-webkit-font-smoothing:antialiased;overflow-x:hidden;
+}
+.bg-light,.bg-vignette{position:fixed;inset:0;pointer-events:none;z-index:0}
+.bg-light{background:radial-gradient(ellipse 75% 55% at 50% -5%,rgba(34,211,238,0.13),transparent 70%)}
+.bg-vignette{background:radial-gradient(ellipse 120% 60% at 50% 115%,rgba(0,0,0,0.55),transparent 60%)}
+.mono{font-family:var(--font-mono);font-variant-numeric:tabular-nums}
+
+.wrap{position:relative;z-index:1;max-width:1000px;margin:0 auto;padding:18px 14px 64px}
+@media(min-width:700px){.wrap{padding:30px 22px 80px}}
+
+header{text-align:center;margin-bottom:16px}
+h1.title{margin:0;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#fff;font-size:clamp(28px,7vw,42px);line-height:1}
+h1.title .glyph{margin-left:.35rem;color:var(--cyan);filter:drop-shadow(0 0 12px rgba(34,211,238,0.65));vertical-align:middle}
+.tagline{margin:.55rem 0 0;font-size:clamp(11px,2.6vw,13.5px);color:var(--slate-500);letter-spacing:.01em}
+
+.topbar{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:14px}
+.topbar .right{display:flex;gap:8px}
+.balance{display:flex;align-items:center;gap:9px;background:rgba(8,20,31,0.7);border:1px solid var(--cyan-soft);border-radius:12px;padding:8px 13px}
+.coin{width:18px;height:18px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#7be9fb,#22D3EE 55%,#0e7490);box-shadow:0 0 10px rgba(34,211,238,.5);flex:none}
+.balance .amt{font-family:var(--font-mono);font-weight:700;font-size:16px;color:#fff}
+.balance .cur{font-size:10px;letter-spacing:.12em;color:var(--cyan);text-transform:uppercase}
+.pill-btn{display:inline-flex;align-items:center;gap:7px;height:40px;padding:0 13px;border-radius:11px;border:1px solid var(--cyan-soft);background:rgba(8,20,31,0.7);color:var(--slate-400);cursor:pointer;transition:.15s;font-family:var(--font-disp);font-size:12px;letter-spacing:.06em;text-transform:uppercase}
+.pill-btn:hover{color:var(--cyan);border-color:var(--cyan-edge)}
+.pill-btn .dot{width:7px;height:7px;border-radius:50%;background:var(--cyan);box-shadow:0 0 8px var(--cyan)}
+.icon-btn{width:40px;height:40px;display:grid;place-items:center;border-radius:11px;border:1px solid var(--cyan-soft);background:rgba(8,20,31,0.7);color:var(--slate-400);cursor:pointer;transition:.15s;font-size:15px}
+.icon-btn:hover{color:var(--cyan);border-color:var(--cyan-edge)}
+
+.game-grid{display:flex;flex-direction:column;gap:14px}
+.board{order:-1}
+@media(min-width:900px){.game-grid{display:grid;grid-template-columns:332px 1fr;align-items:start;gap:18px}.board{order:0}}
+
+.panel{background:linear-gradient(rgba(255,255,255,0.03),rgba(255,255,255,0) 18%),var(--panel);border:1px solid var(--cyan-soft);border-radius:16px;box-shadow:0 18px 40px -24px rgba(0,0,0,0.9);padding:16px}
+.panel + .panel{margin-top:14px}
+.panel-label{font-size:11px;text-transform:uppercase;letter-spacing:.16em;color:var(--slate-500);margin:0 0 10px}
+
+.diff-row{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+.diff{border:1px solid var(--cyan-soft);background:rgba(6,16,25,.6);border-radius:12px;padding:11px 6px 9px;text-align:center;cursor:pointer;transition:.15s;color:var(--slate-400)}
+.diff:hover{border-color:var(--cyan-edge)}
+.diff .d-name{font-weight:600;font-size:13px;letter-spacing:.04em;text-transform:uppercase}
+.diff .d-meta{font-family:var(--font-mono);font-size:10.5px;color:var(--slate-500);margin-top:3px}
+.diff.active{border-color:var(--cyan);background:linear-gradient(rgba(34,211,238,.14),rgba(34,211,238,.04));color:#fff;box-shadow:0 0 18px -4px rgba(34,211,238,.5)}
+.diff.active .d-meta{color:var(--cyan)}
+.diff[aria-disabled=true]{opacity:.45;pointer-events:none}
+
+.bet-input-row{display:flex;align-items:stretch;gap:8px;margin-bottom:10px}
+.bet-field{flex:1;display:flex;align-items:center;gap:8px;background:rgba(2,8,13,.7);border:1px solid var(--cyan-soft);border-radius:12px;padding:0 12px}
+.bet-field input{flex:1;width:100%;background:none;border:0;outline:none;color:#fff;font-family:var(--font-mono);font-weight:700;font-size:17px;padding:12px 0}
+.mini-btn{width:42px;border:1px solid var(--cyan-soft);background:rgba(8,20,31,.7);color:var(--slate-400);border-radius:11px;font-family:var(--font-mono);font-weight:700;cursor:pointer;transition:.15s;font-size:14px}
+.mini-btn:hover{color:var(--cyan);border-color:var(--cyan-edge)}
+.chips{display:grid;grid-template-columns:repeat(4,1fr);gap:7px}
+.chip{border:1px solid var(--cyan-soft);background:rgba(6,16,25,.6);color:var(--slate-400);border-radius:10px;padding:9px 4px;font-family:var(--font-mono);font-weight:600;font-size:12.5px;cursor:pointer;transition:.15s}
+.chip:hover{color:var(--cyan);border-color:var(--cyan-edge)}
+.minmax{display:flex;justify-content:space-between;font-family:var(--font-mono);font-size:10.5px;color:var(--slate-500);margin-top:9px}
+
+.score-tbl{display:flex;flex-direction:column;gap:6px}
+.score-tbl .sr{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--slate-400)}
+.score-tbl .sr .sv{font-family:var(--font-mono);margin-left:auto;color:var(--slate-300)}
+.hl{color:var(--cyan)}
+
+.board-shell{background:linear-gradient(rgba(255,255,255,0.025),rgba(255,255,255,0) 16%),rgba(6,16,25,.72);border:1px solid var(--cyan-soft);border-radius:18px;overflow:hidden;box-shadow:0 24px 50px -30px rgba(0,0,0,.95)}
+.hud{display:flex;gap:1px;background:var(--cyan-soft)}
+.hud .cell{flex:1;background:rgba(4,12,19,.85);padding:11px 12px;text-align:center}
+.hud .k{font-size:9.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--slate-500)}
+.hud .v{font-family:var(--font-mono);font-weight:700;font-size:clamp(15px,4vw,21px);color:#fff;margin-top:3px}
+.hud .v.mult{color:var(--win)}
+.hud .v.odds{color:var(--cyan)}
+
+.felt{position:relative;display:flex;flex-direction:column;align-items:center;gap:10px;padding:20px 14px 16px;background:radial-gradient(ellipse 70% 60% at 50% 40%,rgba(34,211,238,.06),transparent 70%);overflow:hidden}
+.board-sq{position:relative;width:min(78vw,340px);aspect-ratio:1}
+.board-sq svg{display:block;width:100%;height:100%;filter:drop-shadow(0 14px 24px rgba(0,0,0,.6))}
+.band{transition:.2s}
+.ringline{fill:none;stroke:rgba(34,211,238,.22);stroke-width:.8}
+.target-disc{fill:rgba(34,211,238,.07);stroke:var(--cyan);stroke-width:1.6;filter:drop-shadow(0 0 6px rgba(34,211,238,.7));transition:r .25s}
+.target-disc.hitflash{animation:ringwin .9s ease}
+@keyframes ringwin{0%{stroke:#F59E0B;fill:rgba(245,158,11,.4);filter:drop-shadow(0 0 14px rgba(245,158,11,.9))}100%{stroke:#F59E0B;fill:rgba(245,158,11,.06);filter:drop-shadow(0 0 6px rgba(245,158,11,.5))}}
+.mark{stroke-width:1}
+.mark.hit{fill:#F59E0B;stroke:#fff}
+.mark.miss{fill:#FB7185;stroke:#fecdd3}
+.ring-label{font-family:var(--font-mono);font-size:5.5px;fill:#64748B;letter-spacing:.12em;text-transform:uppercase}
+.dart{position:absolute;width:34px;height:8px;z-index:6;pointer-events:none;transform-origin:0 50%;margin-top:-4px}
+.dart .shaft{position:absolute;left:0;top:2.5px;width:26px;height:3px;border-radius:2px;background:linear-gradient(90deg,#e2e8f0 0 40%,#22D3EE 40% 75%,#0e7490 75%)}
+.dart .fin{position:absolute;right:0;top:0;width:9px;height:8px;background:linear-gradient(180deg,#fb7185,#be123c);clip-path:polygon(0 50%,100% 0,72% 50%,100% 100%)}
+.dart.fly{animation:dartfly .5s cubic-bezier(.3,.8,.4,1) both}
+@keyframes dartfly{0%{transform:translate(150px,-190px) rotate(38deg) scale(1.25);opacity:0}25%{opacity:1}88%{transform:translate(3px,-4px) rotate(30deg) scale(1)}100%{transform:translate(0,0) rotate(32deg)}}
+.dart.stuck{animation:dartwob .35s ease .5s both}
+@keyframes dartwob{0%{transform:translate(0,0) rotate(32deg)}30%{transform:translate(0,0) rotate(27deg)}60%{transform:translate(0,0) rotate(35deg)}100%{transform:translate(0,0) rotate(32deg)}}
+.dart .trail{position:absolute;left:20px;top:2px;width:120px;height:3px;border-radius:2px;transform:rotate(0deg);transform-origin:0 50%;background:linear-gradient(90deg,rgba(34,211,238,.75),transparent);opacity:0}
+.dart.fly .trail{animation:trailfade .5s ease both}
+@keyframes trailfade{0%{opacity:0}30%{opacity:1}100%{opacity:0}}
+.miss-flash{position:absolute;inset:0;z-index:5;pointer-events:none;background:radial-gradient(ellipse 60% 55% at 50% 45%,rgba(251,113,133,.35),transparent 70%);opacity:0}
+.miss-flash.on{animation:mflash .5s ease-out}
+@keyframes mflash{0%{opacity:0}22%{opacity:1}100%{opacity:0}}
+
+.felt-status{font-size:13px;color:var(--slate-400);text-align:center;min-height:18px;position:relative;z-index:5}
+.felt-status .gain{color:var(--cyan);font-family:var(--font-mono);font-weight:600}
+.felt-status.hit{color:var(--win);font-weight:600;letter-spacing:.06em;text-transform:uppercase}
+.felt-status.miss{color:var(--loss);font-weight:600;letter-spacing:.06em;text-transform:uppercase}
+.throw-row{display:flex;align-items:center;justify-content:center;gap:14px;min-height:56px}
+.minimap{width:56px;height:56px;flex:none}
+.minimap svg{display:block;width:100%;height:100%}
+.mm-label{font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--slate-500);text-align:center;margin-top:2px}
+.volley-dots{display:flex;gap:8px}
+.volley-dots .vd{width:11px;height:11px;border-radius:50%;background:rgba(148,163,184,.12);box-shadow:inset 0 0 0 1px rgba(148,163,184,.35)}
+.volley-dots .vd.hit{background:var(--win);box-shadow:0 0 10px rgba(245,158,11,.7)}
+.volley-dots .vd.miss{background:var(--loss);box-shadow:0 0 10px rgba(251,113,133,.7)}
+
+.pace-row{display:flex;align-items:center;gap:8px;margin-top:14px}
+.pace-row .pl{font-size:11px;text-transform:uppercase;letter-spacing:.12em;color:var(--slate-500)}
+.pace{flex:1;border:1px solid var(--cyan-soft);background:rgba(6,16,25,.6);color:var(--slate-400);border-radius:11px;padding:10px 4px;font-family:var(--font-disp);font-weight:600;font-size:13px;cursor:pointer;transition:.15s;text-align:center}
+.pace:hover{color:var(--cyan);border-color:var(--cyan-edge)}
+.pace.active{border-color:var(--cyan);background:linear-gradient(rgba(34,211,238,.14),rgba(34,211,238,.04));color:#fff}
+.pace .pm{display:block;font-family:var(--font-mono);font-size:10px;color:var(--slate-500);margin-top:2px}
+.pace.active .pm{color:var(--cyan)}
+.pace[aria-disabled=true]{opacity:.45;pointer-events:none}
+
+.actions{display:grid;grid-template-columns:1fr;gap:10px;margin-top:10px}
+.btn{border:0;border-radius:14px;padding:16px 18px;font-family:var(--font-disp);font-weight:700;font-size:16px;letter-spacing:.05em;text-transform:uppercase;cursor:pointer;transition:.15s;color:#04141b}
+.btn:active{transform:scale(.985)}
+.btn-go{background:linear-gradient(180deg,#3ee0f5,#22D3EE 60%,#0fb6d4);box-shadow:0 0 24px -6px rgba(34,211,238,.68),inset 0 1px 0 rgba(255,255,255,.4)}
+.btn:disabled{opacity:.45;cursor:not-allowed;filter:saturate(.4)}
+.cash-sub{display:block;font-family:var(--font-mono);font-size:11px;font-weight:600;letter-spacing:0;margin-top:2px;opacity:.85}
+
+.banner-host{position:absolute;inset:0;display:grid;place-items:center;z-index:8;pointer-events:none}
+.banner{display:none;text-align:center;padding:18px 30px;border-radius:18px}
+.banner.show{display:block}
+.banner.win{background:radial-gradient(ellipse at center,rgba(245,158,11,.22),rgba(4,12,19,.55));border:1px solid rgba(245,158,11,.5);box-shadow:0 0 50px -8px rgba(245,158,11,.55)}
+.banner.loss{background:radial-gradient(ellipse at center,rgba(251,113,133,.16),rgba(4,12,19,.6));border:1px solid rgba(251,113,133,.4)}
+.banner .b-k{font-size:12px;letter-spacing:.22em;text-transform:uppercase;color:var(--slate-400)}
+.banner.win .b-k{color:var(--win)}.banner.loss .b-k{color:var(--loss)}
+.banner .b-v{font-family:var(--font-mono);font-weight:700;font-size:clamp(24px,7vw,38px);color:#fff;margin-top:4px}
+.arc-banner-in{animation:arc-banner-in .4s cubic-bezier(.34,1.56,.64,1) both}
+@keyframes arc-banner-in{0%{transform:scale(.7);opacity:0}55%{transform:scale(1.06);opacity:1}100%{transform:scale(1);opacity:1}}
+
+.info{margin-top:16px}
+.tabs-list{display:grid;grid-template-columns:1fr 1fr;gap:4px;background:rgba(8,20,31,.7);border:1px solid rgba(34,211,238,.12);border-radius:10px;padding:4px}
+.tab-btn{font-family:var(--font-disp);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.14em;color:var(--slate-500);background:none;border:0;border-radius:7px;padding:9px 6px;cursor:pointer;transition:.15s}
+.tab-btn:hover{color:var(--slate-300)}
+.tab-btn.active{background:rgba(34,211,238,.15);color:var(--cyan);box-shadow:inset 0 0 0 1px rgba(34,211,238,.5)}
+.tab-panel{display:none;margin-top:12px}
+.tab-panel.active{display:block}
+
+.hist-head{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:6px}
+.hist-head h2{font-family:var(--font-disp);font-weight:600;font-size:14px;text-transform:uppercase;letter-spacing:.08em;color:var(--slate-300);margin:0}
+.hist-head .count{font-size:11px;color:var(--slate-500)}
+.hist-empty{padding:18px 0;text-align:center;font-size:13px;color:var(--slate-500)}
+.hist-list{list-style:none;margin:0;padding:0}
+.hist-row{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;padding:9px 0;border-top:1px solid rgba(34,211,238,.08);font-size:13px}
+.hist-row:first-child{border-top:0}
+.hist-row .t{font-family:var(--font-mono);width:46px;flex:none;color:var(--slate-500)}
+.hist-row .badge{flex:none;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;padding:2px 7px;border-radius:5px;color:var(--cyan);background:rgba(34,211,238,.1);box-shadow:inset 0 0 0 1px rgba(34,211,238,.3)}
+.hist-row .m{font-family:var(--font-mono);color:var(--slate-400);flex:none}
+.hist-row .x{font-family:var(--font-mono);flex:none}
+.hist-row .x.win{color:var(--cyan)}.hist-row .x.bust{color:var(--loss);font-weight:600;text-transform:uppercase;font-family:var(--font-disp);font-size:11px;letter-spacing:.06em}
+.hist-row .p{font-family:var(--font-mono);font-weight:600;margin-left:auto;flex:none}
+.hist-row .p.up{color:var(--win)}.hist-row .p.flat{color:var(--slate-500)}
+.hist-row .verify{flex:none;font-size:11px;color:var(--slate-500);background:none;border:0;border-radius:5px;padding:3px 7px;cursor:pointer;transition:.15s}
+.hist-row .verify:hover{color:var(--cyan);background:rgba(34,211,238,.1)}
+
+.faq-item{border-top:1px solid rgba(34,211,238,.1)}
+.faq-item:first-child{border-top:0}
+.faq-q{width:100%;text-align:left;background:none;border:0;color:#E8EEF5;font-family:var(--font-disp);font-size:14px;font-weight:500;padding:13px 28px 13px 0;cursor:pointer;position:relative;transition:.15s}
+.faq-q:hover{color:var(--cyan)}
+.faq-q::after{content:"⌄";position:absolute;right:4px;top:12px;color:var(--slate-500);transition:transform .2s}
+.faq-item.open .faq-q::after{transform:rotate(180deg);color:var(--cyan)}
+.faq-a{display:none;padding:0 4px 14px;color:#AFC0CF;font-size:13.5px;line-height:1.65}
+.faq-item.open .faq-a{display:block}
+.faq-a p{margin:0 0 9px}.faq-a p:last-child{margin-bottom:0}
+.faq-a a{color:var(--cyan);text-decoration:underline;text-underline-offset:2px;word-break:break-all}
+.faq-a table{border-collapse:collapse;font-family:var(--font-mono);font-size:11.5px;margin:8px 0}
+.faq-a th,.faq-a td{border:1px solid rgba(34,211,238,.15);padding:4px 9px;text-align:right;color:var(--slate-300)}
+.faq-a th{color:var(--slate-500);font-weight:600;text-transform:uppercase;font-size:10px;letter-spacing:.06em}
+
+.overlay{position:fixed;inset:0;z-index:50;display:none;align-items:center;justify-content:center;padding:16px;background:rgba(2,6,10,.72);backdrop-filter:blur(3px)}
+.overlay.open{display:flex}
+.modal{width:100%;max-width:520px;max-height:85vh;overflow-y:auto;background:#050E16;border:1px solid #0e3a47;border-radius:16px;box-shadow:0 30px 80px -20px rgba(0,0,0,.9);padding:20px}
+.modal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
+.modal-head h2{font-family:var(--font-disp);font-weight:600;text-transform:uppercase;letter-spacing:.12em;color:var(--cyan);font-size:16px;margin:0}
+.modal-x{background:none;border:0;color:var(--slate-500);font-size:20px;cursor:pointer;line-height:1}
+.modal-x:hover{color:var(--cyan)}
+.m-sec{margin-bottom:18px}
+.m-sec h3{font-size:13.5px;font-weight:600;color:var(--slate-300);margin:0 0 4px}
+.m-sec p.note{font-size:12px;color:var(--slate-500);margin:0 0 9px;line-height:1.5}
+.m-input-row{display:flex;gap:8px}
+.m-input{flex:1;min-width:0;background:var(--field);border:1px solid #0e3a47;border-radius:9px;color:#cbd5e1;font-family:var(--font-mono);font-size:12px;padding:9px 11px;outline:none}
+.m-input:focus{border-color:var(--cyan-edge)}
+.m-btn{flex:none;border-radius:9px;padding:9px 14px;font-family:var(--font-disp);font-size:13px;cursor:pointer;border:1px solid transparent;transition:.15s}
+.m-btn.outline{background:transparent;border-color:#0e3a47;color:var(--cyan)}
+.m-btn.outline:hover{background:rgba(34,211,238,.1)}
+.m-btn.solid{background:#0891b2;color:#fff}
+.m-btn.solid:hover{background:#22D3EE;color:#03121B}
+.m-result{border:1px solid #0e3a47;background:rgba(7,19,31,.7);border-radius:12px;padding:13px;margin-top:6px}
+.m-check{display:flex;align-items:center;gap:9px;font-size:13px;color:var(--slate-300);margin-bottom:6px}
+.m-check .ck{font-weight:700}.m-check .ck.ok{color:var(--cyan)}.m-check .ck.no{color:var(--loss)}
+.m-meta{display:flex;flex-wrap:wrap;gap:3px 16px;font-size:12px;color:var(--slate-500);margin:10px 0}
+.m-meta .mv{font-family:var(--font-mono);color:var(--slate-300)}
+.m-meta .mv.cyan{color:var(--cyan)}.m-meta .mv.rose{color:var(--loss)}
+.m-fields{display:grid;gap:8px;margin-top:6px}
+.m-field .fl{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--slate-500)}
+.m-field .fv{word-break:break-all;border-radius:7px;background:var(--field);padding:5px 9px;font-family:var(--font-mono);font-size:11.5px;color:var(--slate-300);margin-top:2px}
+.m-foot{display:flex;flex-wrap:wrap;gap:3px 16px;font-size:12px;color:var(--slate-500);margin-top:10px}
+.m-foot .fv{font-family:var(--font-mono)}.m-foot .fv.amber{color:var(--win)}.m-foot .fv.cyan{color:var(--cyan)}.m-foot .fv.rose{color:var(--loss)}
+.m-maplabel{font-size:11px;color:var(--slate-500);margin:10px 0 4px;text-transform:uppercase;letter-spacing:.06em}
+.m-darts{display:flex;flex-direction:column;gap:5px;margin:4px 0 2px}
+.m-dr{display:flex;align-items:center;gap:7px;font-size:12px;flex-wrap:wrap}
+.m-dr .rn{font-family:var(--font-mono);color:var(--slate-500);width:52px;flex:none}
+.m-dr .zv{font-family:var(--font-mono);color:var(--slate-300)}
+.m-dr .rp{font-family:var(--font-mono);margin-left:auto;flex:none}
+.m-dr .rp.up{color:var(--cyan)}.m-dr .rp.no{color:var(--loss)}
+
+.lab-note{margin-top:22px;text-align:center;font-size:11px;color:var(--slate-500);font-family:var(--font-mono);line-height:1.6}
+.lab-note b{color:var(--slate-400);font-weight:600}
+</style>
+</head>
+<body>
+<div class="bg-light"></div>
+<div class="bg-vignette"></div>
+
+<div class="wrap">
+  <header>
+    <h1 class="title">Bullseye<span class="glyph">◎</span></h1>
+    <p class="tagline">call your ring · tighter rings pay bigger · every landing seeded in advance · provably fair · played in chips</p>
+  </header>
+
+  <div class="topbar">
+    <div class="balance"><span class="coin"></span><span class="amt" id="balance">10,000</span><span class="cur">MORBIUS</span></div>
+    <div class="right">
+      <button class="pill-btn" id="fairBtn"><span class="dot"></span>Provably fair</button>
+      <button class="icon-btn" id="soundBtn" title="Sound" aria-label="Toggle sound">♪</button>
+    </div>
+  </div>
+
+  <div class="game-grid">
+    <section>
+      <div class="panel">
+        <p class="panel-label">Call your ring</p>
+        <div class="diff-row" id="diffRow">
+          <button class="diff active" data-diff="outer"><div class="d-name">Outer</div><div class="d-meta">1.5× · 64%</div></button>
+          <button class="diff" data-diff="mid"><div class="d-name">Mid</div><div class="d-meta">3.2× · 30%</div></button>
+          <button class="diff" data-diff="inner"><div class="d-name">Inner</div><div class="d-meta">8× · 12%</div></button>
+          <button class="diff" data-diff="bull"><div class="d-name">Bull</div><div class="d-meta">24× · 4%</div></button>
+        </div>
+      </div>
+      <div class="panel">
+        <p class="panel-label">Bet amount</p>
+        <div class="bet-input-row">
+          <div class="bet-field"><span class="coin"></span><input id="betInput" class="mono" inputmode="numeric" value="500" /></div>
+          <button class="mini-btn" data-bet="half">½</button>
+          <button class="mini-btn" data-bet="double">2×</button>
+        </div>
+        <div class="chips">
+          <button class="chip" data-add="100">+100</button>
+          <button class="chip" data-add="500">+500</button>
+          <button class="chip" data-add="1000">+1k</button>
+          <button class="chip" data-set="max">Max</button>
+        </div>
+        <div class="minmax"><span>Min 100</span><span>Max 100,000</span></div>
+      </div>
+      <div class="panel">
+        <p class="panel-label">Board sheet</p>
+        <div class="score-tbl">
+          <div class="sr"><span>Bull disc</span><span class="sv">≤ 20.0% R · 4%</span></div>
+          <div class="sr"><span>Inner edge</span><span class="sv">≤ 34.6% R · 12%</span></div>
+          <div class="sr"><span>Mid edge</span><span class="sv">≤ 54.8% R · 30%</span></div>
+          <div class="sr"><span>Outer edge</span><span class="sv">≤ 80.0% R · 64%</span></div>
+          <div class="sr"><span>Rim beyond 80% R</span><span class="sv" style="color:var(--loss)">always a miss</span></div>
+          <div class="sr"><span>Return on every call</span><span class="sv hl">96.0%</span></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="board">
+      <div class="board-shell">
+        <div class="hud">
+          <div class="cell"><div class="k">Target</div><div class="v" id="hudRing">OUTER</div></div>
+          <div class="cell"><div class="k">Hit odds</div><div class="v odds" id="hudOdds">64.0%</div></div>
+          <div class="cell"><div class="k">Pays</div><div class="v mult" id="hudPays">1.50×</div></div>
+        </div>
+        <div class="felt" id="felt">
+          <div class="miss-flash" id="missFlash"></div>
+          <div class="board-sq" id="boardSq">
+            <svg viewBox="0 0 200 200" id="boardSvg" xmlns="http://www.w3.org/2000/svg">
+              <circle cx="100" cy="100" r="93" fill="#0a1621" stroke="rgba(34,211,238,.3)" stroke-width="1.4"/>
+              <circle class="band" cx="100" cy="100" r="90" fill="#0d1d2b"/>
+              <circle class="band" cx="100" cy="100" r="72" fill="#12283a"/>
+              <circle class="band" cx="100" cy="100" r="49.3" fill="#0e3345"/>
+              <circle class="band" cx="100" cy="100" r="31.2" fill="#11445a"/>
+              <circle class="band" cx="100" cy="100" r="18" fill="#0e5468"/>
+              <circle class="ringline" cx="100" cy="100" r="72"/>
+              <circle class="ringline" cx="100" cy="100" r="49.3"/>
+              <circle class="ringline" cx="100" cy="100" r="31.2"/>
+              <circle class="ringline" cx="100" cy="100" r="18"/>
+              <text class="ring-label" x="100" y="21.5" text-anchor="middle">rim</text>
+              <text class="ring-label" x="100" y="35.5" text-anchor="middle">outer</text>
+              <text class="ring-label" x="100" y="58" text-anchor="middle">mid</text>
+              <text class="ring-label" x="100" y="76.5" text-anchor="middle">inner</text>
+              <circle class="target-disc" id="targetDisc" cx="100" cy="100" r="72"/>
+              <g id="marks"></g>
+            </svg>
+          </div>
+          <div class="throw-row">
+            <div><div class="minimap" id="minimap"></div><div class="mm-label">last 5</div></div>
+            <div class="volley-dots" id="volleyDots"></div>
+          </div>
+          <div class="felt-status" id="status">Call a ring and place a bet</div>
+          <div class="banner-host"><div class="banner" id="banner"><div class="b-k" id="bannerK"></div><div class="b-v" id="bannerV"></div></div></div>
+        </div>
+      </div>
+      <div class="pace-row" id="modeRow">
+        <span class="pl">Round</span>
+        <button class="pace active" data-mode="single">1 dart<span class="pm">full stake on one throw</span></button>
+        <button class="pace" data-mode="volley">3-dart volley<span class="pm">⅓ stake per dart</span></button>
+      </div>
+      <div class="actions" id="actions"><button class="btn btn-go" id="goBtn">Place bet &amp; throw</button></div>
+    </section>
+  </div>
+
+  <section class="info panel" aria-label="Bullseye information">
+    <div class="tabs-list">
+      <button class="tab-btn active" data-tab="rounds">My rounds</button>
+      <button class="tab-btn" data-tab="faq">FAQ</button>
+    </div>
+    <div class="tab-panel active" id="tab-rounds">
+      <div class="hist-head"><h2>Recent rounds</h2><span class="count" id="histCount">last —</span></div>
+      <div id="histBody"></div>
+    </div>
+    <div class="tab-panel" id="tab-faq"><div id="faqBody"></div></div>
+  </section>
+
+  <p class="lab-note">
+    <b>Prototype</b> — Deep-Sea Neon style, single-player on the arcade2 pattern (like Chicken / Firewalk / Greed Dice).<br/>
+    Landings here come from an in-page seeded RNG for feel; the real build draws them from the server
+    <b>provably-fair HMAC</b> stream (<span class="mono">/api/arcade/bullseye/*</span>). Every throw re-derives from the seed in Verify. Currency: <b>MORBIUS</b> chips.
+  </p>
+</div>
+
+<div class="overlay" id="overlay">
+  <div class="modal" role="dialog" aria-modal="true" aria-label="Provably fair">
+    <div class="modal-head"><h2>Provably Fair</h2><button class="modal-x" id="modalX" aria-label="Close">✕</button></div>
+    <div class="m-sec">
+      <h3>Your client seed</h3>
+      <p class="note">Mixed into every throw. Change it any time — the next round uses the new value.</p>
+      <div class="m-input-row">
+        <input class="m-input" id="clientSeedInput" placeholder="Leave blank for a random seed each round" />
+        <button class="m-btn outline" id="newSeedBtn">New seed</button>
+      </div>
+    </div>
+    <div class="m-sec">
+      <h3>Verify a round</h3>
+      <p class="note">Every landing point is drawn from a server seed committed (hashed) before your bet — the seed is revealed once the round settles, and each dart re-derives dart-for-dart.</p>
+      <div class="m-input-row">
+        <input class="m-input" id="verifyIdInput" placeholder="Round ID" />
+        <button class="m-btn solid" id="verifyBtn">Verify</button>
+      </div>
+    </div>
+    <div id="verifyOut"></div>
+  </div>
+</div>
+
+<script>
+"use strict";
+(function(){
+  // Exact 96% RTP on every call: p = 0.96 / m, ring radius fraction f = sqrt(p) of R.
+  var RINGS={
+    outer:{label:'Outer',m:1.5,p:0.64},
+    mid:{label:'Mid',m:3.2,p:0.30},
+    inner:{label:'Inner',m:8,p:0.12},
+    bull:{label:'Bull',m:24,p:0.04}
+  };
+  var RING_ORDER=['bull','inner','mid','outer'];
+  var MIN_BET=100, MAX_BET=100000, R=90, SVGNS='http://www.w3.org/2000/svg';
+
+  var S={ balance:10000, ring:'outer', mode:'single', bet:500, phase:'idle',
+    serverSeed:'', clientSeed:'', clientSeedPref:'', nonce:0, serverHash:'', roundId:'',
+    sound:true, busy:false, history:[], recent:[] };
+
+  var $=function(id){return document.getElementById(id);};
+  var balanceEl=$('balance'),betInput=$('betInput'),boardSq=$('boardSq'),marksG=$('marks'),
+      targetDisc=$('targetDisc'),missFlash=$('missFlash'),statusEl=$('status'),volleyDots=$('volleyDots'),
+      minimap=$('minimap'),actions=$('actions'),hudRing=$('hudRing'),hudOdds=$('hudOdds'),hudPays=$('hudPays'),
+      banner=$('banner'),bannerK=$('bannerK'),bannerV=$('bannerV'),
+      soundBtn=$('soundBtn'),overlay=$('overlay'),histBody=$('histBody'),histCount=$('histCount'),faqBody=$('faqBody');
+
+  function ring(){return RINGS[S.ring];}
+  function fOf(key){return Math.sqrt(RINGS[key].p);}
+  function fmt(n){return Math.round(n).toLocaleString('en-US');}
+  function multStr(m){return m.toFixed(2)+'×';}
+  function pct(p){return (p*100).toFixed(1)+'%';}
+  function rndHex(len){var s='';for(var i=0;i<len;i++)s+=Math.floor(Math.random()*16).toString(16);return s;}
+  function shortId(){return rndHex(8).toUpperCase();}
+
+  function xmur3(str){var h=1779033703^str.length;for(var i=0;i<str.length;i++){h=Math.imul(h^str.charCodeAt(i),3432918353);h=h<<13|h>>>19;}return function(){h=Math.imul(h^h>>>16,2246822507);h=Math.imul(h^h>>>13,3266489909);return (h^=h>>>16)>>>0;};}
+  function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;var t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return ((t^t>>>14)>>>0)/4294967296;};}
+  function makeRng(seedStr){return mulberry32(xmur3(seedStr)());}
+  async function sha256Hex(msg){try{var b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(msg));return Array.from(new Uint8Array(b)).map(function(x){return x.toString(16).padStart(2,'0');}).join('');}catch(e){return 'sha256-unavailable';}}
+  // two draws per dart, in order: u (area), v (angle). Uniform over the board disc.
+  function drawDart(rng,ringKey){
+    var u=rng(),v=rng();
+    var rFrac=Math.sqrt(u),theta=v*Math.PI*2;
+    return {u:u,v:v,rFrac:rFrac,theta:theta,hit:rFrac<=fOf(ringKey)};
+  }
+  function bandOf(rFrac){
+    if(rFrac<=fOf('bull'))return 'bull';
+    if(rFrac<=fOf('inner'))return 'inner';
+    if(rFrac<=fOf('mid'))return 'mid';
+    if(rFrac<=fOf('outer'))return 'outer';
+    return 'rim';
+  }
+
+  var actx=null;
+  function tone(f,d,t,g){if(!S.sound)return;try{actx=actx||new (window.AudioContext||window.webkitAudioContext)();var o=actx.createOscillator(),gn=actx.createGain();o.type=t||'sine';o.frequency.value=f;gn.gain.value=g||0.05;o.connect(gn);gn.connect(actx.destination);var n=actx.currentTime;o.start(n);gn.gain.exponentialRampToValueAtTime(0.0001,n+(d||0.12));o.stop(n+(d||0.12));}catch(e){}}
+  function sThrow(){tone(340,0.1,'square',0.04);}
+  function sStick(){tone(180,0.08,'square',0.06);}
+  function sHit(){tone(660,0.1,'triangle',0.06);setTimeout(function(){tone(880,0.14,'triangle',0.06);},90);}
+  function sMiss(){tone(150,0.28,'sawtooth',0.06);}
+  function sWin(){tone(660,0.12,'sine',0.06);setTimeout(function(){tone(990,0.16,'sine',0.06);},100);}
+
+  function landXY(d){return {x:100+d.rFrac*R*Math.cos(d.theta), y:100+d.rFrac*R*Math.sin(d.theta)};}
+  function clearThrows(){
+    marksG.innerHTML='';
+    boardSq.querySelectorAll('.dart').forEach(function(el){el.remove();});
+    targetDisc.classList.remove('hitflash');
+  }
+  function addMark(d){
+    var p=landXY(d),c=document.createElementNS(SVGNS,'circle');
+    c.setAttribute('cx',p.x.toFixed(2));c.setAttribute('cy',p.y.toFixed(2));c.setAttribute('r','2.6');
+    c.setAttribute('class','mark '+(d.hit?'hit':'miss'));
+    marksG.appendChild(c);
+  }
+  function throwDart(d,done){
+    var p=landXY(d);
+    var el=document.createElement('div');el.className='dart';
+    el.innerHTML='<span class="trail"></span><span class="shaft"></span><span class="fin"></span>';
+    el.style.left=(p.x/200*100)+'%';el.style.top=(p.y/200*100)+'%';
+    boardSq.appendChild(el);
+    sThrow();
+    el.classList.add('fly');
+    setTimeout(function(){
+      el.classList.add('stuck');sStick();
+      addMark(d);
+      if(d.hit){
+        targetDisc.classList.remove('hitflash');void targetDisc.getBBox;targetDisc.classList.add('hitflash');
+        sHit();
+      }else{
+        missFlash.classList.remove('on');void missFlash.offsetWidth;missFlash.classList.add('on');
+        sMiss();
+      }
+      done();
+    },520);
+  }
+
+  function syncHud(){
+    hudRing.textContent=ring().label.toUpperCase();
+    hudOdds.textContent=pct(ring().p);
+    hudPays.textContent=multStr(ring().m);
+    targetDisc.setAttribute('r',(fOf(S.ring)*R).toFixed(2));
+    balanceEl.textContent=fmt(S.balance);
+  }
+  function renderVolleyDots(results,total){
+    if(S.mode!=='volley'){volleyDots.innerHTML='';return;}
+    var html='';
+    for(var i=0;i<3;i++){
+      var cls='vd';
+      if(results&&i<results.length)cls+=results[i].hit?' hit':' miss';
+      html+='<span class="'+cls+'"></span>';
+    }
+    volleyDots.innerHTML=html;
+  }
+  function boardSvgStr(size,darts){
+    var s='<svg viewBox="0 0 200 200" xmlns="'+SVGNS+'">'
+      +'<circle cx="100" cy="100" r="93" fill="#0a1621" stroke="rgba(34,211,238,.3)" stroke-width="2"/>'
+      +'<circle cx="100" cy="100" r="90" fill="#0d1d2b"/>'
+      +'<circle cx="100" cy="100" r="72" fill="#12283a"/>'
+      +'<circle cx="100" cy="100" r="49.3" fill="#0e3345"/>'
+      +'<circle cx="100" cy="100" r="31.2" fill="#11445a"/>'
+      +'<circle cx="100" cy="100" r="18" fill="#0e5468"/>';
+    (darts||[]).forEach(function(d){
+      var p=landXY(d);
+      s+='<circle cx="'+p.x.toFixed(1)+'" cy="'+p.y.toFixed(1)+'" r="7" fill="'+(d.hit?'#F59E0B':'#FB7185')+'"/>';
+    });
+    return s+'</svg>';
+  }
+  function renderMinimap(){minimap.innerHTML=boardSvgStr(56,S.recent.slice(0,5));}
+  function renderActions(){
+    actions.innerHTML='<button class="btn btn-go" id="goBtn"'+(S.busy?' disabled':'')+'>'
+      +(S.busy?'Throwing…':'Place bet &amp; throw'+(S.mode==='volley'?' 3':''))
+      +'<span class="cash-sub">'+ring().label+' · '+multStr(ring().m)+' on a hit</span></button>';
+    $('goBtn').addEventListener('click',startRound);
+  }
+  function setControls(on){
+    document.querySelectorAll('#diffRow .diff').forEach(function(b){b.setAttribute('aria-disabled',on?'false':'true');});
+    document.querySelectorAll('#modeRow .pace').forEach(function(b){b.setAttribute('aria-disabled',on?'false':'true');});
+    betInput.disabled=!on;
+    document.querySelectorAll('.chip,.mini-btn').forEach(function(b){b.style.pointerEvents=on?'auto':'none';b.style.opacity=on?'1':'.5';});
+  }
+
+  async function startRound(){
+    if(S.busy)return;
+    var bet=clampBet(parseInt(betInput.value,10)||0);
+    if(bet>S.balance){flashInput();return;}
+    betInput.value=bet;
+    S.bet=bet;S.balance-=bet;S.busy=true;S.phase='active';
+    S.serverSeed=rndHex(64);
+    S.clientSeed=(S.clientSeedPref||'').trim()||rndHex(20);
+    S.nonce+=1;S.roundId=shortId();
+    S.serverHash=await sha256Hex(S.serverSeed);
+    var rng=makeRng(S.serverSeed+':'+S.clientSeed+':'+S.nonce);
+    var n=S.mode==='volley'?3:1,darts=[];
+    for(var i=0;i<n;i++)darts.push(drawDart(rng,S.ring));
+    hideBanner();setControls(false);clearThrows();renderVolleyDots(null);
+    syncHud();renderActions();
+    statusEl.className='felt-status';statusEl.textContent=n===3?'Volley away — 3 darts at the '+ring().label.toLowerCase():'Dart away…';
+    var idx=0,resolved=[];
+    (function next(){
+      if(idx>=n){setTimeout(function(){settle(darts);},450);return;}
+      var d=darts[idx];
+      setTimeout(function(){
+        throwDart(d,function(){
+          resolved.push(d);idx++;
+          renderVolleyDots(resolved);
+          var band=bandOf(d.rFrac);
+          if(d.hit){statusEl.className='felt-status hit';statusEl.textContent='Dart '+idx+': '+band.toUpperCase()+' — inside the call';}
+          else{statusEl.className='felt-status miss';statusEl.textContent='Dart '+idx+': '+(band==='rim'?'RIM':band.toUpperCase())+' — outside the call';}
+          next();
+        });
+      },idx===0?150:520);
+    })();
+  }
+
+  function settle(darts){
+    S.phase='settled';
+    var rk=S.ring,m=RINGS[rk].m,n=darts.length;
+    var hits=darts.filter(function(d){return d.hit;}).length;
+    var payout=Math.floor(hits*(S.bet/n)*m);
+    if(payout>0)S.balance+=payout;
+    darts.forEach(function(d){S.recent.unshift({rFrac:d.rFrac,theta:d.theta,hit:d.hit});});
+    S.recent=S.recent.slice(0,5);
+    var profit=payout-S.bet;
+    if(hits===0)showBanner('loss',(n===1?'Missed the ':'0 of '+n+' on the ')+RINGS[rk].label.toLowerCase(),'−'+fmt(S.bet)+' MORBIUS');
+    else if(profit>=0)showBanner('win',hits+' of '+n+' · '+multStr(m)+' each','+'+fmt(payout)+' MORBIUS');
+    else showBanner('loss',hits+' of '+n+' hit · partial return',fmt(profit)+' MORBIUS');
+    S.history.unshift({ id:S.roundId, at:new Date().toISOString(), ring:rk, mode:S.mode, bet:S.bet,
+      hits:hits, n:n, payout:payout,
+      darts:darts.map(function(d){return {u:d.u,v:d.v,rFrac:d.rFrac,theta:d.theta,hit:d.hit};}),
+      serverSeed:S.serverSeed, serverHash:S.serverHash, clientSeed:S.clientSeed, nonce:S.nonce });
+    if(S.history.length>15)S.history.pop();
+    if(hits>0&&profit>=0)sWin();
+    S.busy=false;
+    setControls(true);syncHud();renderActions();renderHistory();renderMinimap();
+  }
+
+  function showBanner(k,a,b){banner.className='banner show '+k+' arc-banner-in';bannerK.textContent=a;bannerV.textContent=b;}
+  function hideBanner(){banner.className='banner';}
+  function clampBet(v){if(isNaN(v)||v<MIN_BET)v=MIN_BET;if(v>MAX_BET)v=MAX_BET;return v;}
+  function flashInput(){betInput.style.color='#FB7185';setTimeout(function(){betInput.style.color='#fff';},400);}
+
+  function timeLabel(iso){var d=new Date(iso);return isNaN(d.getTime())?'—':d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});}
+  function renderHistory(){
+    histCount.textContent='last '+(S.history.length||'—');
+    if(S.history.length===0){histBody.innerHTML='<p class="hist-empty">No throws yet — call a ring and let fly.</p>';return;}
+    var rows=S.history.map(function(r){
+      var profit=r.payout-r.bet;
+      var xcell=r.hits>0?'<span class="x win">'+r.hits+'/'+r.n+' · '+multStr(RINGS[r.ring].m)+'</span>':'<span class="x bust">miss</span>';
+      var pcell='<span class="p '+(profit>0?'up':'flat')+'">'+(profit>0?'+'+fmt(profit):fmt(profit))+'</span>';
+      return '<li class="hist-row"><span class="t">'+timeLabel(r.at)+'</span>'
+        +'<span class="badge">'+RINGS[r.ring].label+'</span>'
+        +'<span class="m">bet '+fmt(r.bet)+'</span>'
+        +'<span class="m">'+r.n+' dart'+(r.n===1?'':'s')+'</span>'
+        +xcell+pcell
+        +'<button class="verify" data-id="'+r.id+'">Verify</button></li>';
+    }).join('');
+    histBody.innerHTML='<ul class="hist-list">'+rows+'</ul>';
+    histBody.querySelectorAll('.verify').forEach(function(b){b.addEventListener('click',function(){openFairness(b.getAttribute('data-id'));});});
+  }
+
+  function recipeStr(){return 'HMAC_SHA256(serverSeed, `${clientSeed}:${nonce}:dart`) → per dart: u then v; landing r = R·√u (uniform over area), θ = 2π·v; hit if r ≤ ring radius';}
+  function ckHtml(ok,label){return '<div class="m-check"><span class="ck '+(ok?'ok':'no')+'">'+(ok?'✓':'✗')+'</span><span>'+label+'</span></div>';}
+  function fieldHtml(l,v){return '<div class="m-field"><div class="fl">'+l+'</div><div class="fv">'+v+'</div></div>';}
+  function dartsHtml(darts){
+    if(!darts.length)return '<p class="note">No darts recorded.</p>';
+    return '<div class="m-darts">'+darts.map(function(d,i){
+      var band=bandOf(d.rFrac);
+      var res=d.hit?'<span class="rp up">hit</span>':'<span class="rp no">miss</span>';
+      return '<div class="m-dr"><span class="rn">dart '+(i+1)+'</span>'
+        +'<span class="zv">r = '+(d.rFrac*100).toFixed(1)+'% R</span>'
+        +'<span class="zv" style="color:var(--slate-500)">landed: '+band+'</span>'+res+'</div>';
+    }).join('')+'</div>';
+  }
+  function findRound(id){
+    id=String(id||'').trim();
+    return S.history.filter(function(x){return x.id===id;})[0]||null;
+  }
+  function openFairness(id){
+    overlay.classList.add('open');
+    $('clientSeedInput').value=S.clientSeedPref;
+    var target=id||(S.history[0]&&S.history[0].id);
+    if(target){$('verifyIdInput').value=target;runVerify(target);}
+    else{$('verifyOut').innerHTML='<p class="note">Play a round, then verify it here — or paste any round ID.</p>';}
+  }
+  function closeFairness(){overlay.classList.remove('open');}
+  async function runVerify(id){
+    var out=$('verifyOut'),r=findRound(id);
+    if(!r){out.innerHTML='<p class="note" style="color:var(--loss)">No round found with that ID.</p>';return;}
+    out.innerHTML='<p class="note">Checking…</p>';
+    var hashOk=(await sha256Hex(r.serverSeed))===r.serverHash;
+    var rng=makeRng(r.serverSeed+':'+r.clientSeed+':'+r.nonce);
+    var landOk=true,hitOk=true,hits=0;
+    for(var i=0;i<r.darts.length;i++){
+      var d=drawDart(rng,r.ring),rec=r.darts[i];
+      if(Math.abs(d.u-rec.u)>1e-12||Math.abs(d.v-rec.v)>1e-12)landOk=false;
+      if(d.hit!==rec.hit)hitOk=false;
+      if(d.hit)hits++;
+    }
+    var m=RINGS[r.ring].m;
+    var expected=Math.floor(hits*(r.bet/r.n)*m);
+    var payoutOk=hits===r.hits&&expected===r.payout;
+    out.innerHTML='<div class="m-result">'
+      +ckHtml(hashOk,'Server seed matches its committed hash (checked locally)')
+      +ckHtml(landOk,'Every landing point re-derives from the seed stream')
+      +ckHtml(hitOk,'Hit / miss calls match the ring radii')
+      +ckHtml(payoutOk,'Payout reconciles at '+multStr(m)+' per hit')
+      +'<div class="m-maplabel">Throw replay — amber hit · rose miss</div>'
+      +'<div style="width:96px">'+boardSvgStr(96,r.darts)+'</div>'
+      +dartsHtml(r.darts)
+      +'<div class="m-meta"><span>Call: <span class="mv">'+RINGS[r.ring].label+' ('+pct(RINGS[r.ring].p)+' at '+multStr(m)+')</span></span>'
+        +'<span>Darts: <span class="mv">'+r.n+'</span></span>'
+        +'<span>Hits: <span class="mv '+(r.hits>0?'cyan':'rose')+'">'+r.hits+'</span></span></div>'
+      +'<div class="m-fields">'+fieldHtml('Server seed hash (committed)',r.serverHash)+fieldHtml('Server seed (revealed)',r.serverSeed)
+        +fieldHtml('Client seed',r.clientSeed)+fieldHtml('Nonce',String(r.nonce))+fieldHtml('Recipe',recipeStr())+'</div>'
+      +'<div class="m-foot"><span>Bet: <span class="fv">'+fmt(r.bet)+'</span></span>'
+        +'<span>Returned: <span class="fv '+(r.payout>0?'amber':'rose')+'">'+fmt(r.payout)+' chips</span></span></div>'
+      +'</div>';
+  }
+
+  var FAQS=[
+    {q:'How does Bullseye pay out?',a:'<p>Call one of the four rings and throw. Your dart lands somewhere on the board; if it comes down <span class="hl">inside your called ring or any tighter ring</span>, you win the ring’s multiplier on your stake. Land outside the call — including the rim beyond the outer ring — and that dart’s stake is lost.</p><p>In a <span class="hl">3-dart volley</span> each dart carries a third of the stake and settles on its own, so you can go 2-of-3 and still profit on Mid or better.</p>'},
+    {q:'What are the exact odds?',a:'<p>The dart lands <span class="hl">uniformly over the board’s area</span>, so the chance of finishing inside radius r is (r/R)². The ring edges are placed to make every call worth exactly the same:</p><table><tr><th>Call</th><th>Edge (of R)</th><th>Hit chance</th><th>Pays</th><th>RTP</th></tr><tr><td>Outer</td><td>80.00%</td><td>64%</td><td>1.5×</td><td>96%</td></tr><tr><td>Mid</td><td>54.77%</td><td>30%</td><td>3.2×</td><td>96%</td></tr><tr><td>Inner</td><td>34.64%</td><td>12%</td><td>8×</td><td>96%</td></tr><tr><td>Bull</td><td>20.00%</td><td>4%</td><td>24×</td><td>96%</td></tr></table><p>Check it yourself: 0.8² = 0.64 and 0.64 × 1.5 = 0.96; √0.04 = 0.2 and 0.04 × 24 = 0.96. The rim past 80% of R (36% of the board’s area) misses every call.</p>'},
+    {q:'So what is the house edge?',a:'<p>Exactly <span class="hl">4%</span> on every call — hit chance × multiplier = 0.96 for all four rings, so 100 MORBIUS wagered returns 96 on average whichever ring you call. Ring choice is a pure volatility dial: Outer wins often and small, Bull almost never and huge. The 3-dart volley has the same 96% return per dart — it just splits the variance three ways.</p>'},
+    {q:'Does aiming matter? Why can’t I aim?',a:'<p>Bullseye is a betting game, not a skill throw — every dart is a fresh <span class="hl">uniform draw over the board</span>, sealed from the seed before you throw. Your call decides which landings count as hits and what they pay, not where the dart goes. That’s what keeps the posted odds exact and verifiable.</p>'},
+    {q:'Is it really fair — and reproducible?',a:'<p>Yes. Before you bet, the server commits to a secret <span class="hl">server seed</span> (you see only its SHA-256 hash). Each dart consumes two numbers from the stream — u and v — giving a landing at radius R·√u and angle 2π·v. When the round settles the seed is revealed; hit <span class="hl">Verify</span> and every landing re-derives dart-for-dart in your browser, along with the commitment-hash check.</p>'},
+    {q:'What do I play with — chips or MORBIUS?',a:'<p><span class="hl">MORBIUS</span> is the project’s token on PulseChain (chain ID 369) — it lives in your wallet and trades on PulseX. <span class="hl">Chips</span> are the off-chain 1:1 play credits you actually bet with: instant, gasless, and cashable back to MORBIUS any time at the same 1:1. The only thing you can ever lose is the chips you choose to bet.</p>'}
+  ];
+  function renderFaq(){
+    faqBody.innerHTML=FAQS.map(function(f,i){return '<div class="faq-item" data-i="'+i+'"><button class="faq-q">'+f.q+'</button><div class="faq-a">'+f.a+'</div></div>';}).join('');
+    faqBody.querySelectorAll('.faq-item').forEach(function(it){it.querySelector('.faq-q').addEventListener('click',function(){it.classList.toggle('open');});});
+  }
+
+  document.querySelectorAll('#diffRow .diff').forEach(function(b){b.addEventListener('click',function(){
+    if(S.busy)return;
+    document.querySelectorAll('#diffRow .diff').forEach(function(x){x.classList.remove('active');});
+    b.classList.add('active');S.ring=b.getAttribute('data-diff');
+    hideBanner();syncHud();renderActions();
+  });});
+  document.querySelectorAll('#modeRow .pace').forEach(function(b){b.addEventListener('click',function(){
+    if(S.busy)return;
+    document.querySelectorAll('#modeRow .pace').forEach(function(x){x.classList.remove('active');});
+    b.classList.add('active');S.mode=b.getAttribute('data-mode');
+    renderVolleyDots(null);renderActions();
+  });});
+  document.querySelectorAll('.chip').forEach(function(c){c.addEventListener('click',function(){
+    if(S.busy)return;
+    if(c.getAttribute('data-set')==='max'){betInput.value=Math.min(MAX_BET,S.balance);}
+    else{betInput.value=clampBet((parseInt(betInput.value,10)||0)+parseInt(c.getAttribute('data-add'),10));}
+  });});
+  document.querySelectorAll('.mini-btn').forEach(function(b){b.addEventListener('click',function(){
+    if(S.busy)return;var v=parseInt(betInput.value,10)||MIN_BET;
+    betInput.value=clampBet(b.getAttribute('data-bet')==='half'?Math.floor(v/2):v*2);
+  });});
+  betInput.addEventListener('change',function(){betInput.value=clampBet(parseInt(betInput.value,10)||0);});
+  soundBtn.addEventListener('click',function(){S.sound=!S.sound;soundBtn.style.color=S.sound?'':'#475569';soundBtn.textContent=S.sound?'♪':'✕';if(S.sound)tone(700,0.1,'sine',0.05);});
+
+  $('fairBtn').addEventListener('click',function(){openFairness(null);});
+  $('modalX').addEventListener('click',closeFairness);
+  overlay.addEventListener('click',function(e){if(e.target===overlay)closeFairness();});
+  window.addEventListener('keydown',function(e){if(e.key==='Escape')closeFairness();});
+  $('newSeedBtn').addEventListener('click',function(){S.clientSeedPref=rndHex(16);$('clientSeedInput').value=S.clientSeedPref;});
+  $('clientSeedInput').addEventListener('input',function(e){S.clientSeedPref=e.target.value.slice(0,128);});
+  $('verifyBtn').addEventListener('click',function(){runVerify($('verifyIdInput').value);});
+  document.querySelectorAll('.tab-btn').forEach(function(t){t.addEventListener('click',function(){
+    document.querySelectorAll('.tab-btn').forEach(function(x){x.classList.remove('active');});
+    document.querySelectorAll('.tab-panel').forEach(function(x){x.classList.remove('active');});
+    t.classList.add('active');$('tab-'+t.getAttribute('data-tab')).classList.add('active');
+  });});
+
+  syncHud();renderActions();renderHistory();renderMinimap();renderFaq();
+})();
+</script>
+</body>
+</html>

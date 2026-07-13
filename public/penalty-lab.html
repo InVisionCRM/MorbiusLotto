@@ -1,0 +1,782 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Penalty Strike — Deep-Sea Neon lab</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+/* ── Penalty Strike — Deep-Sea Neon (arcade2) prototype ────────────────────
+   Pick-a-corner shootout ladder on the shared arcade2 system: abyss #050E16,
+   cyan #22D3EE chrome, amber #F59E0B wins, rose losses, Chakra Petch display
+   + JetBrains Mono numerals, .panel glass, provably-fair commit/verify,
+   My-rounds / FAQ tab strip and fairness modal.
+
+   Mechanic: a CSS goal frame with 6 target zones (3×2). Pick a corner; the
+   ball flies there while the keeper dives to a seeded zone. Per shot the
+   seed stream draws (1) the keeper's zone, uniform over 6, and (2) a reach
+   roll — on PRO/LEGEND the keeper stretches and saves anyway 10%/20% of the
+   time even when beaten. Save probabilities: AMATEUR 1/6, PRO 1/4 (1/6 +
+   5/6·0.10), LEGEND 1/3 (1/6 + 5/6·0.20).
+
+   Tuning: per-goal multiplier m = 0.96 / P(goal) → 1.152 / 1.28 / 1.44, so
+   every shot returns exactly P(goal) × m = 0.96 of what it risks (4% edge
+   per shot; bank-after-n RTP = 0.96^n). 5-shot ladder, auto-bank after the
+   5th goal (max 2.03× / 3.44× / 6.19×). Self-contained client-side demo
+   (mulberry32 seeded from serverSeed+clientSeed+nonce). Currency: MORBIUS. */
+:root{
+  --abyss:#050E16; --cyan:#22D3EE; --cyan-soft:rgba(34,211,238,0.12); --cyan-edge:rgba(34,211,238,0.35);
+  --win:#F59E0B; --loss:#FB7185;
+  --ink:#E2E8F0; --slate-300:#CBD5E1; --slate-400:#94A3B8; --slate-500:#64748B;
+  --panel:rgba(8,20,31,0.78); --field:#081420;
+  --font-disp:'Chakra Petch',system-ui,sans-serif;
+  --font-mono:'JetBrains Mono',ui-monospace,monospace;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  min-height:100svh;background-color:var(--abyss);
+  background-image:linear-gradient(to bottom,rgba(5,14,22,0.92),rgba(2,7,11,0.96) 55%,rgba(5,14,22,0.98));
+  color:var(--ink);font-family:var(--font-disp);-webkit-font-smoothing:antialiased;overflow-x:hidden;
+}
+.bg-light,.bg-vignette{position:fixed;inset:0;pointer-events:none;z-index:0}
+.bg-light{background:radial-gradient(ellipse 75% 55% at 50% -5%,rgba(34,211,238,0.13),transparent 70%)}
+.bg-vignette{background:radial-gradient(ellipse 120% 60% at 50% 115%,rgba(0,0,0,0.55),transparent 60%)}
+.mono{font-family:var(--font-mono);font-variant-numeric:tabular-nums}
+
+.wrap{position:relative;z-index:1;max-width:1000px;margin:0 auto;padding:18px 14px 64px}
+@media(min-width:700px){.wrap{padding:30px 22px 80px}}
+
+header{text-align:center;margin-bottom:16px}
+h1.title{margin:0;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#fff;font-size:clamp(26px,6.4vw,40px);line-height:1}
+h1.title .glyph{margin-left:.35rem;color:var(--cyan);filter:drop-shadow(0 0 12px rgba(34,211,238,0.65));vertical-align:middle}
+.tagline{margin:.55rem 0 0;font-size:clamp(11px,2.6vw,13.5px);color:var(--slate-500);letter-spacing:.01em}
+
+.topbar{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:14px}
+.topbar .right{display:flex;gap:8px}
+.balance{display:flex;align-items:center;gap:9px;background:rgba(8,20,31,0.7);border:1px solid var(--cyan-soft);border-radius:12px;padding:8px 13px}
+.coin{width:18px;height:18px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#7be9fb,#22D3EE 55%,#0e7490);box-shadow:0 0 10px rgba(34,211,238,.5);flex:none}
+.balance .amt{font-family:var(--font-mono);font-weight:700;font-size:16px;color:#fff}
+.balance .cur{font-size:10px;letter-spacing:.12em;color:var(--cyan);text-transform:uppercase}
+.pill-btn{display:inline-flex;align-items:center;gap:7px;height:40px;padding:0 13px;border-radius:11px;border:1px solid var(--cyan-soft);background:rgba(8,20,31,0.7);color:var(--slate-400);cursor:pointer;transition:.15s;font-family:var(--font-disp);font-size:12px;letter-spacing:.06em;text-transform:uppercase}
+.pill-btn:hover{color:var(--cyan);border-color:var(--cyan-edge)}
+.pill-btn .dot{width:7px;height:7px;border-radius:50%;background:var(--cyan);box-shadow:0 0 8px var(--cyan)}
+.icon-btn{width:40px;height:40px;display:grid;place-items:center;border-radius:11px;border:1px solid var(--cyan-soft);background:rgba(8,20,31,0.7);color:var(--slate-400);cursor:pointer;transition:.15s;font-size:15px}
+.icon-btn:hover{color:var(--cyan);border-color:var(--cyan-edge)}
+
+.game-grid{display:flex;flex-direction:column;gap:14px}
+.board{order:-1}
+@media(min-width:900px){.game-grid{display:grid;grid-template-columns:332px 1fr;align-items:start;gap:18px}.board{order:0}}
+
+.panel{background:linear-gradient(rgba(255,255,255,0.03),rgba(255,255,255,0) 18%),var(--panel);border:1px solid var(--cyan-soft);border-radius:16px;box-shadow:0 18px 40px -24px rgba(0,0,0,0.9);padding:16px}
+.panel + .panel{margin-top:14px}
+.panel-label{font-size:11px;text-transform:uppercase;letter-spacing:.16em;color:var(--slate-500);margin:0 0 10px}
+
+.diff-row{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.diff{border:1px solid var(--cyan-soft);background:rgba(6,16,25,.6);border-radius:12px;padding:11px 6px 9px;text-align:center;cursor:pointer;transition:.15s;color:var(--slate-400)}
+.diff:hover{border-color:var(--cyan-edge)}
+.diff .d-name{font-weight:600;font-size:13px;letter-spacing:.04em;text-transform:uppercase}
+.diff .d-meta{font-family:var(--font-mono);font-size:10.5px;color:var(--slate-500);margin-top:3px}
+.diff.active{border-color:var(--cyan);background:linear-gradient(rgba(34,211,238,.14),rgba(34,211,238,.04));color:#fff;box-shadow:0 0 18px -4px rgba(34,211,238,.5)}
+.diff.active .d-meta{color:var(--cyan)}
+.diff[aria-disabled=true]{opacity:.45;pointer-events:none}
+
+.bet-input-row{display:flex;align-items:stretch;gap:8px;margin-bottom:10px}
+.bet-field{flex:1;display:flex;align-items:center;gap:8px;background:rgba(2,8,13,.7);border:1px solid var(--cyan-soft);border-radius:12px;padding:0 12px}
+.bet-field input{flex:1;width:100%;background:none;border:0;outline:none;color:#fff;font-family:var(--font-mono);font-weight:700;font-size:17px;padding:12px 0}
+.mini-btn{width:42px;border:1px solid var(--cyan-soft);background:rgba(8,20,31,.7);color:var(--slate-400);border-radius:11px;font-family:var(--font-mono);font-weight:700;cursor:pointer;transition:.15s;font-size:14px}
+.mini-btn:hover{color:var(--cyan);border-color:var(--cyan-edge)}
+.chips{display:grid;grid-template-columns:repeat(4,1fr);gap:7px}
+.chip{border:1px solid var(--cyan-soft);background:rgba(6,16,25,.6);color:var(--slate-400);border-radius:10px;padding:9px 4px;font-family:var(--font-mono);font-weight:600;font-size:12.5px;cursor:pointer;transition:.15s}
+.chip:hover{color:var(--cyan);border-color:var(--cyan-edge)}
+.minmax{display:flex;justify-content:space-between;font-family:var(--font-mono);font-size:10.5px;color:var(--slate-500);margin-top:9px}
+
+.score-tbl{display:flex;flex-direction:column;gap:6px}
+.score-tbl .sr{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--slate-400)}
+.score-tbl .sr .sv{font-family:var(--font-mono);margin-left:auto;color:var(--slate-300)}
+.hl{color:var(--cyan)}
+
+.board-shell{background:linear-gradient(rgba(255,255,255,0.025),rgba(255,255,255,0) 16%),rgba(6,16,25,.72);border:1px solid var(--cyan-soft);border-radius:18px;overflow:hidden;box-shadow:0 24px 50px -30px rgba(0,0,0,.95)}
+.hud{display:flex;gap:1px;background:var(--cyan-soft)}
+.hud .cell{flex:1;background:rgba(4,12,19,.85);padding:11px 12px;text-align:center}
+.hud .k{font-size:9.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--slate-500)}
+.hud .v{font-family:var(--font-mono);font-weight:700;font-size:clamp(15px,4vw,21px);color:#fff;margin-top:3px}
+.hud .v.mult{color:var(--win)}
+.hud .v.mult.idle{color:var(--slate-400)}
+.hud .v.shot{color:var(--cyan)}
+
+/* ladder rail */
+.rail{display:flex;gap:6px;padding:10px 12px;background:rgba(4,12,19,.7);border-bottom:1px solid var(--cyan-soft)}
+.step{flex:1;text-align:center;font-family:var(--font-mono);font-size:clamp(10.5px,2.4vw,12.5px);font-weight:600;color:var(--slate-500);border:1px solid rgba(34,211,238,.1);background:rgba(6,16,25,.5);border-radius:8px;padding:6px 2px;transition:.2s}
+.step .sn{display:block;font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--slate-500);font-family:var(--font-disp);font-weight:600}
+.step.done{color:#fff;border-color:rgba(34,211,238,.4);background:rgba(34,211,238,.12)}
+.step.done .sn{color:var(--cyan)}
+.step.cur{color:var(--cyan);border-color:var(--cyan);box-shadow:0 0 14px -3px rgba(34,211,238,.6)}
+.step.banked{color:#2a1602;background:linear-gradient(180deg,#fbd36b,#F59E0B);border-color:transparent}
+.step.banked .sn{color:#2a1602}
+
+/* pitch + goal */
+.pitch{position:relative;min-height:clamp(280px,56vw,360px);overflow:hidden;background:linear-gradient(180deg,#040d15 0%,#06121b 42%,#0a2231 100%)}
+.pitch::before{content:"";position:absolute;inset:0;background:radial-gradient(ellipse 80% 50% at 50% 100%,rgba(34,211,238,.08),transparent 65%);pointer-events:none}
+.turf-line{position:absolute;left:6%;right:6%;height:0;border-top:2px solid rgba(34,211,238,.12);border-radius:50%}
+.goal{position:absolute;left:50%;top:7%;transform:translateX(-50%);width:min(88%,470px);aspect-ratio:2.55/1}
+.goal .frame{position:absolute;inset:0;border:5px solid #dbe7f0;border-bottom:0;border-radius:5px 5px 0 0;box-shadow:0 0 20px -4px rgba(219,231,240,.35),inset 0 0 12px -6px rgba(219,231,240,.3);z-index:2;pointer-events:none}
+.goal .net{position:absolute;inset:5px 5px 0;z-index:1;background:
+  repeating-linear-gradient(0deg,rgba(148,163,184,.14) 0 1px,transparent 1px 11px),
+  repeating-linear-gradient(90deg,rgba(148,163,184,.14) 0 1px,transparent 1px 11px),
+  repeating-linear-gradient(45deg,rgba(148,163,184,.05) 0 1px,transparent 1px 16px)}
+.zones{position:absolute;inset:5px 5px 0;z-index:3;display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(2,1fr);gap:5px;padding:6px}
+.zone{position:relative;border:1px dashed rgba(34,211,238,.28);border-radius:9px;background:rgba(34,211,238,.03);cursor:pointer;transition:.15s;display:grid;place-items:center;font-family:var(--font-mono);font-size:10px;letter-spacing:.08em;color:transparent}
+.zone.armed{color:rgba(34,211,238,.55)}
+.zone.armed:hover{background:rgba(34,211,238,.14);border-color:var(--cyan);box-shadow:inset 0 0 18px -6px rgba(34,211,238,.6);color:var(--cyan)}
+.zone[aria-disabled=true]{pointer-events:none}
+.zone.picked{border-color:var(--cyan);border-style:solid;background:rgba(34,211,238,.1);color:var(--cyan)}
+.zone.scored{animation:zonewin .8s ease;border-color:var(--win);border-style:solid;color:var(--win)}
+@keyframes zonewin{0%{background:rgba(245,158,11,.45);box-shadow:inset 0 0 26px rgba(245,158,11,.7)}100%{background:rgba(245,158,11,.08)}}
+.zone.covered{border-color:var(--loss);border-style:solid;background:rgba(251,113,133,.12);color:var(--loss)}
+
+.keeper{position:absolute;left:50%;bottom:0;width:clamp(44px,10vw,58px);z-index:4;transform:translateX(-50%);transform-origin:50% 85%;transition:transform .2s}
+.keeper.dive{animation:kdive .5s cubic-bezier(.3,.9,.4,1) forwards}
+@keyframes kdive{0%{transform:translateX(-50%) translate(0,0) rotate(0)}100%{transform:translateX(-50%) translate(var(--kx,0),var(--ky,0)) rotate(var(--kr,0))}}
+.keeper.celebrate{animation:kparty .55s ease 2}
+@keyframes kparty{0%,100%{transform:translateX(-50%) translate(var(--kx,0),var(--ky,0)) rotate(var(--kr,0))}50%{transform:translateX(-50%) translate(var(--kx,0),calc(var(--ky,0) - 16px)) rotate(var(--kr,0))}}
+.ball{position:absolute;left:50%;bottom:22px;width:clamp(20px,4.6vw,26px);aspect-ratio:1;z-index:5;transform:translateX(-50%);filter:drop-shadow(0 4px 6px rgba(0,0,0,.5))}
+.ball .b{width:100%;height:100%;border-radius:50%;background:radial-gradient(circle at 34% 30%,#fff,#cbd5e1 55%,#64748b 95%);position:relative;overflow:hidden}
+.ball .b::after{content:"";position:absolute;inset:0;background:radial-gradient(circle at 50% 50%,transparent 55%,rgba(2,8,13,.35) 56%),conic-gradient(from 20deg,transparent 0 40deg,rgba(2,8,13,.3) 40deg 44deg,transparent 44deg 130deg,rgba(2,8,13,.3) 130deg 134deg,transparent 134deg 250deg,rgba(2,8,13,.3) 250deg 254deg,transparent 254deg)}
+.ball.fly{animation:bfly .55s cubic-bezier(.25,.9,.35,1) forwards}
+@keyframes bfly{0%{transform:translateX(-50%) translate(0,0) scale(1) rotate(0)}100%{transform:translateX(-50%) translate(var(--bx,0),var(--by,0)) scale(.55) rotate(540deg)}}
+.save-flash{position:absolute;inset:0;z-index:6;pointer-events:none;background:radial-gradient(ellipse 60% 50% at 50% 30%,rgba(251,113,133,.42),transparent 70%);opacity:0}
+.save-flash.on{animation:sflash .55s ease-out}
+@keyframes sflash{0%{opacity:0}20%{opacity:1}100%{opacity:0}}
+
+.felt-status{position:absolute;left:0;right:0;bottom:34px;text-align:center;font-size:13px;color:var(--slate-400);z-index:5;text-shadow:0 1px 4px #000}
+.felt-status .gain{color:var(--cyan);font-family:var(--font-mono);font-weight:600}
+.felt-status.goal{color:var(--win);font-weight:600;letter-spacing:.06em;text-transform:uppercase}
+.felt-status.saved{color:var(--loss);font-weight:600;letter-spacing:.06em;text-transform:uppercase}
+.shot-dots{position:absolute;left:0;right:0;bottom:12px;display:flex;justify-content:center;gap:8px;z-index:5}
+.shot-dots .sd{width:11px;height:11px;border-radius:50%;background:rgba(148,163,184,.12);box-shadow:inset 0 0 0 1px rgba(148,163,184,.35)}
+.shot-dots .sd.goal{background:var(--cyan);box-shadow:0 0 10px rgba(34,211,238,.7)}
+.shot-dots .sd.save{background:var(--loss);box-shadow:0 0 10px rgba(251,113,133,.7)}
+
+.actions{display:grid;grid-template-columns:1fr;gap:10px;margin-top:14px}
+.actions.two{grid-template-columns:1fr 1fr}
+.btn{border:0;border-radius:14px;padding:16px 18px;font-family:var(--font-disp);font-weight:700;font-size:16px;letter-spacing:.05em;text-transform:uppercase;cursor:pointer;transition:.15s;color:#04141b}
+.btn:active{transform:scale(.985)}
+.btn-go{background:linear-gradient(180deg,#3ee0f5,#22D3EE 60%,#0fb6d4);box-shadow:0 0 24px -6px rgba(34,211,238,.68),inset 0 1px 0 rgba(255,255,255,.4)}
+.btn-cash{background:linear-gradient(180deg,#fbd36b,#F59E0B 60%,#d97f06);color:#2a1602;box-shadow:0 0 24px -5px rgba(245,158,11,.7),inset 0 1px 0 rgba(255,255,255,.4)}
+.btn:disabled{opacity:.45;cursor:not-allowed;filter:saturate(.4)}
+.cash-sub{display:block;font-family:var(--font-mono);font-size:11px;font-weight:600;letter-spacing:0;margin-top:2px;opacity:.85}
+
+.banner-host{position:absolute;inset:0;display:grid;place-items:center;z-index:8;pointer-events:none}
+.banner{display:none;text-align:center;padding:18px 30px;border-radius:18px}
+.banner.show{display:block}
+.banner.win{background:radial-gradient(ellipse at center,rgba(245,158,11,.22),rgba(4,12,19,.55));border:1px solid rgba(245,158,11,.5);box-shadow:0 0 50px -8px rgba(245,158,11,.55)}
+.banner.loss{background:radial-gradient(ellipse at center,rgba(251,113,133,.16),rgba(4,12,19,.6));border:1px solid rgba(251,113,133,.4)}
+.banner .b-k{font-size:12px;letter-spacing:.22em;text-transform:uppercase;color:var(--slate-400)}
+.banner.win .b-k{color:var(--win)}.banner.loss .b-k{color:var(--loss)}
+.banner .b-v{font-family:var(--font-mono);font-weight:700;font-size:clamp(24px,7vw,38px);color:#fff;margin-top:4px}
+.arc-banner-in{animation:arc-banner-in .4s cubic-bezier(.34,1.56,.64,1) both}
+@keyframes arc-banner-in{0%{transform:scale(.7);opacity:0}55%{transform:scale(1.06);opacity:1}100%{transform:scale(1);opacity:1}}
+
+.info{margin-top:16px}
+.tabs-list{display:grid;grid-template-columns:1fr 1fr;gap:4px;background:rgba(8,20,31,.7);border:1px solid rgba(34,211,238,.12);border-radius:10px;padding:4px}
+.tab-btn{font-family:var(--font-disp);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.14em;color:var(--slate-500);background:none;border:0;border-radius:7px;padding:9px 6px;cursor:pointer;transition:.15s}
+.tab-btn:hover{color:var(--slate-300)}
+.tab-btn.active{background:rgba(34,211,238,.15);color:var(--cyan);box-shadow:inset 0 0 0 1px rgba(34,211,238,.5)}
+.tab-panel{display:none;margin-top:12px}
+.tab-panel.active{display:block}
+
+.hist-head{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:6px}
+.hist-head h2{font-family:var(--font-disp);font-weight:600;font-size:14px;text-transform:uppercase;letter-spacing:.08em;color:var(--slate-300);margin:0}
+.hist-head .count{font-size:11px;color:var(--slate-500)}
+.hist-empty{padding:18px 0;text-align:center;font-size:13px;color:var(--slate-500)}
+.hist-list{list-style:none;margin:0;padding:0}
+.hist-row{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;padding:9px 0;border-top:1px solid rgba(34,211,238,.08);font-size:13px}
+.hist-row:first-child{border-top:0}
+.hist-row .t{font-family:var(--font-mono);width:46px;flex:none;color:var(--slate-500)}
+.hist-row .badge{flex:none;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;padding:2px 7px;border-radius:5px;color:var(--cyan);background:rgba(34,211,238,.1);box-shadow:inset 0 0 0 1px rgba(34,211,238,.3)}
+.hist-row .m{font-family:var(--font-mono);color:var(--slate-400);flex:none}
+.hist-row .x{font-family:var(--font-mono);flex:none}
+.hist-row .x.win{color:var(--cyan)}.hist-row .x.bust{color:var(--loss);font-weight:600;text-transform:uppercase;font-family:var(--font-disp);font-size:11px;letter-spacing:.06em}
+.hist-row .p{font-family:var(--font-mono);font-weight:600;margin-left:auto;flex:none}
+.hist-row .p.up{color:var(--win)}.hist-row .p.flat{color:var(--slate-500)}
+.hist-row .verify{flex:none;font-size:11px;color:var(--slate-500);background:none;border:0;border-radius:5px;padding:3px 7px;cursor:pointer;transition:.15s}
+.hist-row .verify:hover{color:var(--cyan);background:rgba(34,211,238,.1)}
+
+.faq-item{border-top:1px solid rgba(34,211,238,.1)}
+.faq-item:first-child{border-top:0}
+.faq-q{width:100%;text-align:left;background:none;border:0;color:#E8EEF5;font-family:var(--font-disp);font-size:14px;font-weight:500;padding:13px 28px 13px 0;cursor:pointer;position:relative;transition:.15s}
+.faq-q:hover{color:var(--cyan)}
+.faq-q::after{content:"⌄";position:absolute;right:4px;top:12px;color:var(--slate-500);transition:transform .2s}
+.faq-item.open .faq-q::after{transform:rotate(180deg);color:var(--cyan)}
+.faq-a{display:none;padding:0 4px 14px;color:#AFC0CF;font-size:13.5px;line-height:1.65}
+.faq-item.open .faq-a{display:block}
+.faq-a p{margin:0 0 9px}.faq-a p:last-child{margin-bottom:0}
+.faq-a a{color:var(--cyan);text-decoration:underline;text-underline-offset:2px;word-break:break-all}
+
+.overlay{position:fixed;inset:0;z-index:50;display:none;align-items:center;justify-content:center;padding:16px;background:rgba(2,6,10,.72);backdrop-filter:blur(3px)}
+.overlay.open{display:flex}
+.modal{width:100%;max-width:520px;max-height:85vh;overflow-y:auto;background:#050E16;border:1px solid #0e3a47;border-radius:16px;box-shadow:0 30px 80px -20px rgba(0,0,0,.9);padding:20px}
+.modal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
+.modal-head h2{font-family:var(--font-disp);font-weight:600;text-transform:uppercase;letter-spacing:.12em;color:var(--cyan);font-size:16px;margin:0}
+.modal-x{background:none;border:0;color:var(--slate-500);font-size:20px;cursor:pointer;line-height:1}
+.modal-x:hover{color:var(--cyan)}
+.m-sec{margin-bottom:18px}
+.m-sec h3{font-size:13.5px;font-weight:600;color:var(--slate-300);margin:0 0 4px}
+.m-sec p.note{font-size:12px;color:var(--slate-500);margin:0 0 9px;line-height:1.5}
+.m-input-row{display:flex;gap:8px}
+.m-input{flex:1;min-width:0;background:var(--field);border:1px solid #0e3a47;border-radius:9px;color:#cbd5e1;font-family:var(--font-mono);font-size:12px;padding:9px 11px;outline:none}
+.m-input:focus{border-color:var(--cyan-edge)}
+.m-btn{flex:none;border-radius:9px;padding:9px 14px;font-family:var(--font-disp);font-size:13px;cursor:pointer;border:1px solid transparent;transition:.15s}
+.m-btn.outline{background:transparent;border-color:#0e3a47;color:var(--cyan)}
+.m-btn.outline:hover{background:rgba(34,211,238,.1)}
+.m-btn.solid{background:#0891b2;color:#fff}
+.m-btn.solid:hover{background:#22D3EE;color:#03121B}
+.m-result{border:1px solid #0e3a47;background:rgba(7,19,31,.7);border-radius:12px;padding:13px;margin-top:6px}
+.m-check{display:flex;align-items:center;gap:9px;font-size:13px;color:var(--slate-300);margin-bottom:6px}
+.m-check .ck{font-weight:700}.m-check .ck.ok{color:var(--cyan)}.m-check .ck.no{color:var(--loss)}
+.m-meta{display:flex;flex-wrap:wrap;gap:3px 16px;font-size:12px;color:var(--slate-500);margin:10px 0}
+.m-meta .mv{font-family:var(--font-mono);color:var(--slate-300)}
+.m-meta .mv.cyan{color:var(--cyan)}.m-meta .mv.rose{color:var(--loss)}
+.m-fields{display:grid;gap:8px;margin-top:6px}
+.m-field .fl{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--slate-500)}
+.m-field .fv{word-break:break-all;border-radius:7px;background:var(--field);padding:5px 9px;font-family:var(--font-mono);font-size:11.5px;color:var(--slate-300);margin-top:2px}
+.m-foot{display:flex;flex-wrap:wrap;gap:3px 16px;font-size:12px;color:var(--slate-500);margin-top:10px}
+.m-foot .fv{font-family:var(--font-mono)}.m-foot .fv.amber{color:var(--win)}.m-foot .fv.cyan{color:var(--cyan)}.m-foot .fv.rose{color:var(--loss)}
+.m-maplabel{font-size:11px;color:var(--slate-500);margin:10px 0 4px;text-transform:uppercase;letter-spacing:.06em}
+.m-shots{display:flex;flex-direction:column;gap:5px;margin:4px 0 2px}
+.m-sr{display:flex;align-items:center;gap:7px;font-size:12px;flex-wrap:wrap}
+.m-sr .rn{font-family:var(--font-mono);color:var(--slate-500);width:52px;flex:none}
+.m-sr .zv{font-family:var(--font-mono);color:var(--slate-300)}
+.m-sr .rp{font-family:var(--font-mono);margin-left:auto;flex:none}
+.m-sr .rp.up{color:var(--cyan)}.m-sr .rp.no{color:var(--loss)}
+
+.lab-note{margin-top:22px;text-align:center;font-size:11px;color:var(--slate-500);font-family:var(--font-mono);line-height:1.6}
+.lab-note b{color:var(--slate-400);font-weight:600}
+</style>
+</head>
+<body>
+<div class="bg-light"></div>
+<div class="bg-vignette"></div>
+
+<div class="wrap">
+  <header>
+    <h1 class="title">Penalty Strike<span class="glyph">⦿</span></h1>
+    <p class="tagline">pick a corner · beat the keeper · bank or shoot again · provably fair · played in chips</p>
+  </header>
+
+  <div class="topbar">
+    <div class="balance"><span class="coin"></span><span class="amt" id="balance">10,000</span><span class="cur">MORBIUS</span></div>
+    <div class="right">
+      <button class="pill-btn" id="fairBtn"><span class="dot"></span>Provably fair</button>
+      <button class="icon-btn" id="soundBtn" title="Sound" aria-label="Toggle sound">♪</button>
+    </div>
+  </div>
+
+  <div class="game-grid">
+    <section>
+      <div class="panel">
+        <p class="panel-label">Keeper</p>
+        <div class="diff-row" id="diffRow">
+          <button class="diff active" data-diff="amateur"><div class="d-name">Amateur</div><div class="d-meta">16.7% save</div></button>
+          <button class="diff" data-diff="pro"><div class="d-name">Pro</div><div class="d-meta">25% save</div></button>
+          <button class="diff" data-diff="legend"><div class="d-name">Legend</div><div class="d-meta">33.3% save</div></button>
+        </div>
+      </div>
+      <div class="panel">
+        <p class="panel-label">Bet amount</p>
+        <div class="bet-input-row">
+          <div class="bet-field"><span class="coin"></span><input id="betInput" class="mono" inputmode="numeric" value="500" /></div>
+          <button class="mini-btn" data-bet="half">½</button>
+          <button class="mini-btn" data-bet="double">2×</button>
+        </div>
+        <div class="chips">
+          <button class="chip" data-add="100">+100</button>
+          <button class="chip" data-add="500">+500</button>
+          <button class="chip" data-add="1000">+1k</button>
+          <button class="chip" data-set="max">Max</button>
+        </div>
+        <div class="minmax"><span>Min 100</span><span>Max 100,000</span></div>
+      </div>
+      <div class="panel">
+        <p class="panel-label">Tier sheet</p>
+        <div class="score-tbl">
+          <div class="sr"><span>Goal chance per shot</span><span class="sv" id="tsGoal">83.3%</span></div>
+          <div class="sr"><span>Multiplier per goal</span><span class="sv" id="tsMult">×1.152</span></div>
+          <div class="sr"><span>Shots in the ladder</span><span class="sv">5</span></div>
+          <div class="sr"><span>Max multiplier</span><span class="sv hl" id="tsMax">2.03×</span></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="board">
+      <div class="board-shell">
+        <div class="hud">
+          <div class="cell"><div class="k">Shot</div><div class="v shot" id="hudShot">— / 5</div></div>
+          <div class="cell"><div class="k">Multiplier</div><div class="v mult idle" id="hudMult">1.00×</div></div>
+          <div class="cell"><div class="k">Bank</div><div class="v" id="hudBank">—</div></div>
+        </div>
+        <div class="rail" id="rail"></div>
+        <div class="pitch" id="pitch">
+          <div class="turf-line" style="bottom:64px"></div>
+          <div class="turf-line" style="bottom:110px;opacity:.5"></div>
+          <div class="goal" id="goal">
+            <div class="net"></div>
+            <div class="zones" id="zones">
+              <button class="zone" data-z="0">TOP L</button>
+              <button class="zone" data-z="1">TOP C</button>
+              <button class="zone" data-z="2">TOP R</button>
+              <button class="zone" data-z="3">LOW L</button>
+              <button class="zone" data-z="4">LOW C</button>
+              <button class="zone" data-z="5">LOW R</button>
+            </div>
+            <div class="frame"></div>
+            <div class="keeper" id="keeper">
+              <svg viewBox="0 0 58 74" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <ellipse cx="29" cy="71" rx="16" ry="3" fill="rgba(0,0,0,.4)"/>
+                <circle cx="29" cy="10" r="7" fill="#fbd9a0"/>
+                <path d="M22 9c0-4 3-7 7-7s7 3 7 7c-2-2-4-3-7-3s-5 1-7 3z" fill="#FB7185"/>
+                <path d="M29 18c8 0 12 5 12 12v13c0 4-3 7-7 7H24c-4 0-7-3-7-7V30c0-7 4-12 12-12z" fill="#FB7185"/>
+                <path d="M17 26L5 18M41 26l12-8" stroke="#FB7185" stroke-width="5" stroke-linecap="round"/>
+                <circle cx="5" cy="17" r="4.4" fill="#fecdd3"/>
+                <circle cx="53" cy="17" r="4.4" fill="#fecdd3"/>
+                <path d="M23 50l-3 20M35 50l3 20" stroke="#0B1220" stroke-width="6" stroke-linecap="round"/>
+                <path d="M23 50l-3 20M35 50l3 20" stroke="#22303f" stroke-width="4" stroke-linecap="round"/>
+              </svg>
+            </div>
+          </div>
+          <div class="ball" id="ball"><div class="b"></div></div>
+          <div class="save-flash" id="saveFlash"></div>
+          <div class="felt-status" id="status">Pick your keeper and place a bet</div>
+          <div class="shot-dots" id="shotDots"></div>
+          <div class="banner-host"><div class="banner" id="banner"><div class="b-k" id="bannerK"></div><div class="b-v" id="bannerV"></div></div></div>
+        </div>
+      </div>
+      <div class="actions" id="actions"><button class="btn btn-go" id="goBtn">Place bet &amp; step up</button></div>
+    </section>
+  </div>
+
+  <section class="info panel" aria-label="Penalty Strike information">
+    <div class="tabs-list">
+      <button class="tab-btn active" data-tab="rounds">My rounds</button>
+      <button class="tab-btn" data-tab="faq">FAQ</button>
+    </div>
+    <div class="tab-panel active" id="tab-rounds">
+      <div class="hist-head"><h2>Recent shootouts</h2><span class="count" id="histCount">last —</span></div>
+      <div id="histBody"></div>
+    </div>
+    <div class="tab-panel" id="tab-faq"><div id="faqBody"></div></div>
+  </section>
+
+  <p class="lab-note">
+    <b>Prototype</b> — Deep-Sea Neon style, single-player on the arcade2 pattern (like Chicken / Firewalk / Greed Dice).<br/>
+    Keeper dives here come from an in-page seeded RNG for feel; the real build draws them from the server
+    <b>provably-fair HMAC</b> stream (<span class="mono">/api/arcade/penalty/*</span>). Every shootout re-derives shot-for-shot in Verify. Currency: <b>MORBIUS</b> chips.
+  </p>
+</div>
+
+<div class="overlay" id="overlay">
+  <div class="modal" role="dialog" aria-modal="true" aria-label="Provably fair">
+    <div class="modal-head"><h2>Provably Fair</h2><button class="modal-x" id="modalX" aria-label="Close">✕</button></div>
+    <div class="m-sec">
+      <h3>Your client seed</h3>
+      <p class="note">Mixed into every dive. Change it any time — the next round uses the new value.</p>
+      <div class="m-input-row">
+        <input class="m-input" id="clientSeedInput" placeholder="Leave blank for a random seed each round" />
+        <button class="m-btn outline" id="newSeedBtn">New seed</button>
+      </div>
+    </div>
+    <div class="m-sec">
+      <h3>Verify a shootout</h3>
+      <p class="note">Every keeper dive and reach roll is drawn from a server seed committed (hashed) before your bet — the seed is revealed once the round settles, and the whole shootout re-derives shot-for-shot.</p>
+      <div class="m-input-row">
+        <input class="m-input" id="verifyIdInput" placeholder="Round ID" />
+        <button class="m-btn solid" id="verifyBtn">Verify</button>
+      </div>
+    </div>
+    <div id="verifyOut"></div>
+  </div>
+</div>
+
+<script>
+"use strict";
+(function(){
+  var EDGE=0.04, SHOTS=5;
+  // save = keeper guesses your zone (1/6) OR reach roll < reach.
+  // P(save): amateur 1/6, pro 1/6+5/6*0.10=1/4, legend 1/6+5/6*0.20=1/3.
+  // per-goal multiplier m = (1-EDGE)/P(goal) → every shot returns 0.96 of what it risks.
+  var DIFFS={
+    amateur:{label:'Amateur',reach:0.00,save:1/6},
+    pro:{label:'Pro',reach:0.10,save:0.25},
+    legend:{label:'Legend',reach:0.20,save:1/3}
+  };
+  var ZONES=['top left','top centre','top right','low left','low centre','low right'];
+  var MIN_BET=100, MAX_BET=100000;
+
+  var S={ balance:10000, diff:'amateur', bet:500, phase:'idle', shots:[], goals:0,
+    serverSeed:'', clientSeed:'', clientSeedPref:'', nonce:0, serverHash:'', roundId:'', rng:null,
+    sound:true, busy:false, history:[] };
+
+  var $=function(id){return document.getElementById(id);};
+  var balanceEl=$('balance'),betInput=$('betInput'),pitch=$('pitch'),goal=$('goal'),zonesEl=$('zones'),
+      keeper=$('keeper'),ball=$('ball'),saveFlash=$('saveFlash'),statusEl=$('status'),shotDots=$('shotDots'),
+      rail=$('rail'),actions=$('actions'),hudShot=$('hudShot'),hudMult=$('hudMult'),hudBank=$('hudBank'),
+      banner=$('banner'),bannerK=$('bannerK'),bannerV=$('bannerV'),
+      soundBtn=$('soundBtn'),overlay=$('overlay'),histBody=$('histBody'),histCount=$('histCount'),faqBody=$('faqBody');
+
+  function cfg(){return DIFFS[S.diff];}
+  function goalMult(d){return (1-EDGE)/(1-DIFFS[d].save);}
+  function mult(k){return Math.pow(goalMult(S.diff),k);}
+  function fmt(n){return Math.round(n).toLocaleString('en-US');}
+  function multStr(m){return m.toFixed(2)+'×';}
+  function pct(p){return (p*100).toFixed(1)+'%';}
+  function rndHex(len){var s='';for(var i=0;i<len;i++)s+=Math.floor(Math.random()*16).toString(16);return s;}
+  function shortId(){return rndHex(8).toUpperCase();}
+
+  function xmur3(str){var h=1779033703^str.length;for(var i=0;i<str.length;i++){h=Math.imul(h^str.charCodeAt(i),3432918353);h=h<<13|h>>>19;}return function(){h=Math.imul(h^h>>>16,2246822507);h=Math.imul(h^h>>>13,3266489909);return (h^=h>>>16)>>>0;};}
+  function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;var t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return ((t^t>>>14)>>>0)/4294967296;};}
+  function makeRng(seedStr){return mulberry32(xmur3(seedStr)());}
+  async function sha256Hex(msg){try{var b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(msg));return Array.from(new Uint8Array(b)).map(function(x){return x.toString(16).padStart(2,'0');}).join('');}catch(e){return 'sha256-unavailable';}}
+  // two draws per shot, in order: keeper zone (0-5), reach roll (0-1)
+  function drawShot(rng){return {keeper:Math.floor(rng()*6),reachRoll:rng()};}
+
+  var actx=null;
+  function tone(f,d,t,g){if(!S.sound)return;try{actx=actx||new (window.AudioContext||window.webkitAudioContext)();var o=actx.createOscillator(),gn=actx.createGain();o.type=t||'sine';o.frequency.value=f;gn.gain.value=g||0.05;o.connect(gn);gn.connect(actx.destination);var n=actx.currentTime;o.start(n);gn.gain.exponentialRampToValueAtTime(0.0001,n+(d||0.12));o.stop(n+(d||0.12));}catch(e){}}
+  function sKick(){tone(200,0.1,'square',0.05);}
+  function sGoal(){tone(660,0.1,'triangle',0.06);setTimeout(function(){tone(880,0.14,'triangle',0.06);},90);}
+  function sBank(){tone(660,0.12,'sine',0.06);setTimeout(function(){tone(990,0.16,'sine',0.06);},100);}
+  function sSave(){tone(150,0.32,'sawtooth',0.07);}
+
+  function renderRail(){
+    var m=goalMult(S.diff),html='';
+    for(var k=1;k<=SHOTS;k++){
+      var cls='step';
+      if(S.phase!=='idle'&&k<=S.goals)cls+=' done';
+      if((S.phase==='aiming'||S.phase==='decide')&&k===S.goals+1&&S.phase==='aiming')cls+=' cur';
+      if(S.phase==='settled'&&S.lastOutcome==='banked'&&k===S.goals&&S.goals>0)cls+=' banked';
+      html+='<div class="'+cls+'"><span class="sn">shot '+k+'</span>'+multStr(Math.pow(m,k))+'</div>';
+    }
+    rail.innerHTML=html;
+  }
+  function renderDots(){
+    var html='';
+    for(var i=0;i<SHOTS;i++){
+      var cls='sd';
+      if(S.shots[i])cls+=S.shots[i].saved?' save':' goal';
+      html+='<span class="'+cls+'"></span>';
+    }
+    shotDots.innerHTML=html;
+  }
+  function syncHud(){
+    var taken=S.shots.length,next=Math.min(taken+1,SHOTS);
+    hudShot.textContent=(S.phase==='idle'||S.phase==='settled'?'—':next)+' / '+SHOTS;
+    hudMult.textContent=multStr(S.goals>0?mult(S.goals):1);
+    hudMult.classList.toggle('idle',S.goals===0);
+    hudBank.textContent=(S.phase==='aiming'||S.phase==='decide')&&S.goals>0?fmt(Math.floor(S.bet*mult(S.goals))):'—';
+    balanceEl.textContent=fmt(S.balance);
+  }
+  function renderTierSheet(){
+    var c=cfg(),m=goalMult(S.diff);
+    $('tsGoal').textContent=pct(1-c.save);
+    $('tsMult').textContent='×'+m.toFixed(3);
+    $('tsMax').textContent=multStr(Math.pow(m,SHOTS));
+  }
+  function setZonesArmed(on){
+    zonesEl.querySelectorAll('.zone').forEach(function(z){
+      z.classList.toggle('armed',on);
+      z.setAttribute('aria-disabled',on?'false':'true');
+    });
+  }
+  function clearZoneMarks(){zonesEl.querySelectorAll('.zone').forEach(function(z){z.classList.remove('picked','scored','covered');});}
+  function renderActions(){
+    if(S.phase==='idle'||S.phase==='settled'){
+      actions.className='actions';
+      actions.innerHTML='<button class="btn btn-go" id="goBtn"'+(S.busy?' disabled':'')+'>'+(S.phase==='settled'?'Play again':'Place bet &amp; step up')+'</button>';
+      $('goBtn').addEventListener('click',startRound);
+    }else if(S.phase==='aiming'){
+      actions.className='actions two';
+      var can=S.goals>0;
+      actions.innerHTML='<button class="btn btn-go" disabled>Pick a corner ↑</button>'
+        +'<button class="btn btn-cash" id="bankBtn"'+(can&&!S.busy?'':' disabled')+'>Bank<span class="cash-sub">'+(can?fmt(Math.floor(S.bet*mult(S.goals)))+' MORBIUS':'score first')+'</span></button>';
+      if(can)$('bankBtn').addEventListener('click',bank);
+    }else{ // decide
+      actions.className='actions two';
+      actions.innerHTML='<button class="btn btn-go" id="againBtn"'+(S.busy?' disabled':'')+'>Shoot again ▸</button>'
+        +'<button class="btn btn-cash" id="bankBtn"'+(S.busy?' disabled':'')+'>Bank<span class="cash-sub">'+fmt(Math.floor(S.bet*mult(S.goals)))+' MORBIUS</span></button>';
+      $('againBtn').addEventListener('click',shootAgain);
+      $('bankBtn').addEventListener('click',bank);
+    }
+  }
+  function setControls(on){
+    document.querySelectorAll('#diffRow .diff').forEach(function(b){b.setAttribute('aria-disabled',on?'false':'true');});
+    betInput.disabled=!on;
+    document.querySelectorAll('.chip,.mini-btn').forEach(function(b){b.style.pointerEvents=on?'auto':'none';b.style.opacity=on?'1':'.5';});
+  }
+
+  async function startRound(){
+    if(S.busy)return;
+    var bet=clampBet(parseInt(betInput.value,10)||0);
+    if(bet>S.balance){flashInput();return;}
+    betInput.value=bet;
+    S.bet=bet;S.balance-=bet;S.phase='aiming';S.shots=[];S.goals=0;S.lastOutcome='';
+    S.serverSeed=rndHex(64);
+    S.clientSeed=(S.clientSeedPref||'').trim()||rndHex(20);
+    S.nonce+=1;S.roundId=shortId();
+    S.serverHash=await sha256Hex(S.serverSeed);
+    S.rng=makeRng(S.serverSeed+':'+S.clientSeed+':'+S.nonce);
+    hideBanner();setControls(false);clearZoneMarks();resetFigures();
+    setZonesArmed(true);
+    statusEl.className='felt-status';statusEl.textContent='Shot 1 of '+SHOTS+' — pick a corner';
+    renderRail();renderDots();syncHud();renderActions();
+  }
+
+  function shootAgain(){
+    if(S.phase!=='decide'||S.busy)return;
+    S.phase='aiming';clearZoneMarks();resetFigures();hideBanner();
+    setZonesArmed(true);
+    statusEl.className='felt-status';statusEl.textContent='Shot '+(S.shots.length+1)+' of '+SHOTS+' — pick a corner';
+    renderRail();renderActions();
+  }
+
+  function centerOf(el,within){
+    var a=el.getBoundingClientRect(),b=within.getBoundingClientRect();
+    return {x:a.left+a.width/2-b.left, y:a.top+a.height/2-b.top};
+  }
+  function resetFigures(){
+    keeper.classList.remove('dive','celebrate');
+    keeper.style.removeProperty('--kx');keeper.style.removeProperty('--ky');keeper.style.removeProperty('--kr');
+    ball.classList.remove('fly');
+    ball.style.removeProperty('--bx');ball.style.removeProperty('--by');
+  }
+
+  function shoot(pick){
+    if(S.phase!=='aiming'||S.busy)return;
+    S.busy=true;setZonesArmed(false);renderActions();
+    var c=cfg(),d=drawShot(S.rng);
+    var saved=(d.keeper===pick)||(d.reachRoll<c.reach);
+    var shot={pick:pick,keeper:d.keeper,saved:saved,stretch:saved&&d.keeper!==pick};
+    S.shots.push(shot);
+    var pickEl=zonesEl.querySelector('.zone[data-z="'+pick+'"]');
+    var diveZone=saved?pick:d.keeper;
+    var diveEl=zonesEl.querySelector('.zone[data-z="'+diveZone+'"]');
+    pickEl.classList.add('picked');
+    // ball flight
+    var bc=centerOf(ball,pitch),zc=centerOf(pickEl,pitch);
+    ball.style.setProperty('--bx',(zc.x-bc.x)+'px');
+    ball.style.setProperty('--by',(zc.y-bc.y)+'px');
+    ball.classList.add('fly');
+    // keeper dive
+    var kc=centerOf(keeper,pitch),dc=centerOf(diveEl,pitch);
+    keeper.style.setProperty('--kx',(dc.x-kc.x)+'px');
+    keeper.style.setProperty('--ky',Math.min(0,dc.y-kc.y+14)+'px');
+    keeper.style.setProperty('--kr',((dc.x-kc.x)>=0?52:-52)+'deg');
+    keeper.classList.add('dive');
+    sKick();
+    setTimeout(function(){resolveShot(shot,pickEl);},620);
+  }
+
+  function resolveShot(shot,pickEl){
+    if(shot.saved){
+      pickEl.classList.remove('picked');pickEl.classList.add('covered');
+      saveFlash.classList.remove('on');void saveFlash.offsetWidth;saveFlash.classList.add('on');
+      keeper.classList.add('celebrate');
+      statusEl.className='felt-status saved';
+      statusEl.textContent='SAVED — keeper '+(shot.stretch?'stretched to ':'read ')+ZONES[shot.pick];
+      sSave();renderDots();
+      setTimeout(function(){settle('saved');},750);
+      return;
+    }
+    S.goals+=1;sGoal();
+    pickEl.classList.remove('picked');pickEl.classList.add('scored');
+    renderDots();renderRail();syncHud();
+    if(S.goals>=SHOTS){
+      statusEl.className='felt-status goal';statusEl.textContent='Perfect 5 — auto bank at '+multStr(mult(S.goals));
+      setTimeout(function(){settle('maxed');},650);
+      return;
+    }
+    statusEl.className='felt-status goal';
+    statusEl.textContent='GOAL! '+multStr(mult(S.goals))+' — bank it or shoot again';
+    showBanner('win','Goal '+S.goals+' of '+SHOTS,multStr(mult(S.goals)));
+    setTimeout(hideBanner,900);
+    S.phase='decide';S.busy=false;renderActions();
+  }
+
+  function bank(){if((S.phase!=='decide'&&S.phase!=='aiming')||S.goals<=0||S.busy)return;sBank();settle('banked');}
+
+  function settle(outcome){
+    S.phase='settled';S.busy=false;S.lastOutcome=outcome;
+    var won=outcome!=='saved';
+    var m=won?mult(S.goals):0;
+    var payout=won?Math.floor(S.bet*m):0;
+    if(won)S.balance+=payout;
+    if(outcome==='maxed')showBanner('win','Perfect shootout · '+multStr(m),'+'+fmt(payout)+' MORBIUS');
+    else if(won)showBanner('win',S.goals+' goal'+(S.goals===1?'':'s')+' · '+multStr(m),'+'+fmt(payout)+' MORBIUS');
+    else showBanner('loss','Saved on shot '+S.shots.length,'−'+fmt(S.bet)+' MORBIUS');
+    S.history.unshift({ id:S.roundId, at:new Date().toISOString(), diff:S.diff, bet:S.bet,
+      outcome:outcome, goals:S.goals, mult:won?m:0, payout:payout,
+      shots:S.shots.map(function(s){return {pick:s.pick,keeper:s.keeper,saved:s.saved,stretch:s.stretch};}),
+      serverSeed:S.serverSeed, serverHash:S.serverHash, clientSeed:S.clientSeed, nonce:S.nonce });
+    if(S.history.length>15)S.history.pop();
+    setZonesArmed(false);setControls(true);syncHud();renderRail();renderActions();renderHistory();
+  }
+
+  function showBanner(k,a,b){banner.className='banner show '+k+' arc-banner-in';bannerK.textContent=a;bannerV.textContent=b;}
+  function hideBanner(){banner.className='banner';}
+  function clampBet(v){if(isNaN(v)||v<MIN_BET)v=MIN_BET;if(v>MAX_BET)v=MAX_BET;return v;}
+  function flashInput(){betInput.style.color='#FB7185';setTimeout(function(){betInput.style.color='#fff';},400);}
+
+  function resetBoard(){
+    S.shots=[];S.goals=0;clearZoneMarks();resetFigures();setZonesArmed(false);
+    statusEl.className='felt-status';statusEl.textContent='Pick your keeper and place a bet';
+    renderRail();renderDots();
+  }
+
+  function timeLabel(iso){var d=new Date(iso);return isNaN(d.getTime())?'—':d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});}
+  function renderHistory(){
+    histCount.textContent='last '+(S.history.length||'—');
+    if(S.history.length===0){histBody.innerHTML='<p class="hist-empty">No shootouts yet — step up and pick a corner.</p>';return;}
+    var rows=S.history.map(function(r){
+      var profit=r.payout-r.bet,win=r.outcome!=='saved';
+      var xcell=win?'<span class="x win">'+multStr(r.mult)+'</span>':'<span class="x bust">saved</span>';
+      var pcell='<span class="p '+(profit>0?'up':'flat')+'">'+(profit>0?'+'+fmt(profit):fmt(profit))+'</span>';
+      return '<li class="hist-row"><span class="t">'+timeLabel(r.at)+'</span>'
+        +'<span class="badge">'+DIFFS[r.diff].label+'</span>'
+        +'<span class="m">bet '+fmt(r.bet)+'</span>'
+        +'<span class="m">'+r.goals+' goal'+(r.goals===1?'':'s')+'</span>'
+        +xcell+pcell
+        +'<button class="verify" data-id="'+r.id+'">Verify</button></li>';
+    }).join('');
+    histBody.innerHTML='<ul class="hist-list">'+rows+'</ul>';
+    histBody.querySelectorAll('.verify').forEach(function(b){b.addEventListener('click',function(){openFairness(b.getAttribute('data-id'));});});
+  }
+
+  function recipeStr(){return 'HMAC_SHA256(serverSeed, `${clientSeed}:${nonce}:shot`) → per shot: keeper zone (uniform 0–5), then reach roll (0–1); save if zone matches your pick or roll < reach';}
+  function ckHtml(ok,label){return '<div class="m-check"><span class="ck '+(ok?'ok':'no')+'">'+(ok?'✓':'✗')+'</span><span>'+label+'</span></div>';}
+  function fieldHtml(l,v){return '<div class="m-field"><div class="fl">'+l+'</div><div class="fv">'+v+'</div></div>';}
+  function shotsHtml(shots){
+    if(!shots.length)return '<p class="note">No shots recorded.</p>';
+    return '<div class="m-shots">'+shots.map(function(s,i){
+      var res=s.saved?'<span class="rp no">saved'+(s.stretch?' (stretch)':'')+'</span>':'<span class="rp up">goal</span>';
+      return '<div class="m-sr"><span class="rn">shot '+(i+1)+'</span>'
+        +'<span class="zv">you → '+ZONES[s.pick]+'</span>'
+        +'<span class="zv" style="color:var(--slate-500)">keeper → '+ZONES[s.keeper]+'</span>'+res+'</div>';
+    }).join('')+'</div>';
+  }
+  function findRound(id){
+    id=String(id||'').trim();
+    if(S.phase!=='idle'&&S.phase!=='settled' && id===S.roundId){
+      return { id:S.roundId, active:true, diff:S.diff, bet:S.bet, outcome:'active', goals:S.goals, mult:0, payout:0,
+        shots:S.shots.map(function(s){return {pick:s.pick,keeper:s.keeper,saved:s.saved,stretch:s.stretch};}),
+        serverSeed:'', serverHash:S.serverHash, clientSeed:S.clientSeed, nonce:S.nonce };
+    }
+    return S.history.filter(function(x){return x.id===id;})[0]||null;
+  }
+  function openFairness(id){
+    overlay.classList.add('open');
+    $('clientSeedInput').value=S.clientSeedPref;
+    var live=(S.phase!=='idle'&&S.phase!=='settled');
+    var target=id||(live?S.roundId:(S.history[0]&&S.history[0].id));
+    if(target){$('verifyIdInput').value=target;runVerify(target);}
+    else{$('verifyOut').innerHTML='<p class="note">Play a shootout, then verify it here — or paste any round ID.</p>';}
+  }
+  function closeFairness(){overlay.classList.remove('open');}
+  async function runVerify(id){
+    var out=$('verifyOut'),r=findRound(id);
+    if(!r){out.innerHTML='<p class="note" style="color:var(--loss)">No round found with that ID.</p>';return;}
+    out.innerHTML='<p class="note">Checking…</p>';
+    if(r.active){
+      out.innerHTML='<div class="m-result">'
+        +'<p class="note">This shootout is still in play — the server seed stays sealed until you bank or get saved. Only the commitment hash is published for now.</p>'
+        +'<div class="m-maplabel">Shots so far</div>'+shotsHtml(r.shots)
+        +'<div class="m-fields">'+fieldHtml('Server seed hash (committed)',r.serverHash)
+          +fieldHtml('Server seed (revealed)','— sealed until the round ends —')
+          +fieldHtml('Client seed',r.clientSeed)+fieldHtml('Nonce',String(r.nonce))
+          +fieldHtml('Recipe',recipeStr())+'</div>'
+        +'</div>';
+      return;
+    }
+    var c=DIFFS[r.diff];
+    var hashOk=(await sha256Hex(r.serverSeed))===r.serverHash;
+    var rng=makeRng(r.serverSeed+':'+r.clientSeed+':'+r.nonce);
+    var divesOk=true,outcomesOk=true,goals=0,endedSaved=false;
+    for(var i=0;i<r.shots.length;i++){
+      var d=drawShot(rng),s=r.shots[i];
+      if(d.keeper!==s.keeper)divesOk=false;
+      var saved=(d.keeper===s.pick)||(d.reachRoll<c.reach);
+      if(saved!==s.saved)outcomesOk=false;
+      if(saved){endedSaved=true;break;}
+      goals++;
+    }
+    var resultOk=(r.outcome==='saved')===endedSaved && (r.outcome==='saved'||goals===r.goals);
+    var m=(1-EDGE)/(1-c.save);
+    var expected=r.outcome==='saved'?0:Math.floor(r.bet*Math.pow(m,r.goals));
+    var payoutOk=expected===r.payout;
+    out.innerHTML='<div class="m-result">'
+      +ckHtml(hashOk,'Server seed matches its committed hash (checked locally)')
+      +ckHtml(divesOk,'Every keeper dive re-derives from the seed stream')
+      +ckHtml(outcomesOk&&resultOk,'Goal / save outcomes match the replay')
+      +ckHtml(payoutOk,'Payout reconciles with the '+m.toFixed(3)+'× per-goal ladder')
+      +'<div class="m-maplabel">Shootout replay</div>'+shotsHtml(r.shots)
+      +'<div class="m-meta"><span>Keeper: <span class="mv">'+c.label+'</span></span>'
+        +'<span>Goals: <span class="mv">'+r.goals+'</span></span>'
+        +'<span>Result: <span class="mv '+(r.outcome==='saved'?'rose':'cyan')+'">'+(r.outcome==='saved'?'Saved':(r.outcome==='maxed'?'Perfect 5':'Banked'))+'</span></span></div>'
+      +'<div class="m-fields">'+fieldHtml('Server seed hash (committed)',r.serverHash)+fieldHtml('Server seed (revealed)',r.serverSeed)
+        +fieldHtml('Client seed',r.clientSeed)+fieldHtml('Nonce',String(r.nonce))+fieldHtml('Recipe',recipeStr())+'</div>'
+      +'<div class="m-foot"><span>Bet: <span class="fv">'+fmt(r.bet)+'</span></span>'
+        +'<span>Multiplier: <span class="fv cyan">'+(r.mult?multStr(r.mult):'—')+'</span></span>'
+        +'<span>Returned: <span class="fv '+(r.payout>0?'amber':'rose')+'">'+fmt(r.payout)+' chips</span></span></div>'
+      +'</div>';
+  }
+
+  var FAQS=[
+    {q:'How does Penalty Strike pay out?',a:'<p>Pick one of the <span class="hl">6 zones</span> and shoot. Beat the keeper and your stake multiplies — ×1.152 vs the Amateur, ×1.28 vs the Pro, ×1.44 vs the Legend — then choose: <span class="hl">Bank</span> the pot, or shoot again and multiply it further. The ladder runs 5 shots; a perfect shootout auto-banks at 2.03× / 3.44× / 6.19×.</p><p>One save ends it — the whole stake is gone. That’s the push-your-luck tension.</p>'},
+    {q:'How does the keeper decide where to dive?',a:'<p>Two numbers per shot come from the committed seed stream: the keeper’s zone (uniform over all 6, so a <span class="hl">1-in-6</span> chance of guessing your corner) and a <span class="hl">reach roll</span>. The Amateur only saves on a correct guess. The Pro and Legend also stretch to a shot they guessed wrong 10% / 20% of the time.</p><p>Total save chance: Amateur 1/6 ≈ 16.7%, Pro 1/6 + 5/6×0.10 = <span class="hl">25%</span>, Legend 1/6 + 5/6×0.20 = <span class="hl">33.3%</span>. Both draws are sealed before you choose a corner, so the dive can’t react to your pick.</p>'},
+    {q:'What are the exact odds and house edge?',a:'<p>Each tier pays m = <span class="hl">0.96 ÷ P(goal)</span> per goal: Amateur 0.96 ÷ (5/6) = 1.152, Pro 0.96 ÷ 0.75 = 1.28, Legend 0.96 ÷ (2/3) = 1.44. So every shot returns exactly P(goal) × m = <span class="hl">0.96</span> of the amount it risks — a 4% edge per shot taken.</p><p>Expected return if you always bank after n goals: <span class="hl">0.96ⁿ</span> — 96% for one shot, ~92.2% for two, ~81.5% for the full five. Corner choice doesn’t change the odds (the dive is uniform); only how deep you push does.</p>'},
+    {q:'Does my corner choice matter?',a:'<p>Not to the math — the keeper’s dive is drawn uniformly and independently of your pick, and it’s sealed before you shoot, so every zone has an identical goal chance. Pick on vibes, superstition, or spite; the ladder treats them all the same. What changes your results is the <span class="hl">bank / shoot-again</span> decision.</p>'},
+    {q:'Is it really fair — and reproducible?',a:'<p>Yes. Before you bet, the server commits to a secret <span class="hl">server seed</span> (you see only its SHA-256 hash). Every dive and reach roll derives from that seed, <span class="hl">your client seed</span>, and a nonce. When the shootout ends the seed is revealed — hit <span class="hl">Verify</span> and the whole round replays shot-for-shot in your browser, including the commitment-hash check.</p>'},
+    {q:'What do I play with — chips or MORBIUS?',a:'<p><span class="hl">MORBIUS</span> is the project’s token on PulseChain (chain ID 369) — it lives in your wallet and trades on PulseX. <span class="hl">Chips</span> are the off-chain 1:1 play credits you actually bet with: instant, gasless, and cashable back to MORBIUS any time at the same 1:1. The only thing you can ever lose is the chips you choose to bet.</p>'}
+  ];
+  function renderFaq(){
+    faqBody.innerHTML=FAQS.map(function(f,i){return '<div class="faq-item" data-i="'+i+'"><button class="faq-q">'+f.q+'</button><div class="faq-a">'+f.a+'</div></div>';}).join('');
+    faqBody.querySelectorAll('.faq-item').forEach(function(it){it.querySelector('.faq-q').addEventListener('click',function(){it.classList.toggle('open');});});
+  }
+
+  zonesEl.querySelectorAll('.zone').forEach(function(z){z.addEventListener('click',function(){shoot(parseInt(z.getAttribute('data-z'),10));});});
+  document.querySelectorAll('#diffRow .diff').forEach(function(b){b.addEventListener('click',function(){
+    if(S.phase!=='idle'&&S.phase!=='settled')return;
+    document.querySelectorAll('#diffRow .diff').forEach(function(x){x.classList.remove('active');});
+    b.classList.add('active');S.diff=b.getAttribute('data-diff');
+    S.phase='idle';hideBanner();resetBoard();renderTierSheet();syncHud();renderActions();
+  });});
+  document.querySelectorAll('.chip').forEach(function(c){c.addEventListener('click',function(){
+    if(S.phase!=='idle'&&S.phase!=='settled')return;
+    if(c.getAttribute('data-set')==='max'){betInput.value=Math.min(MAX_BET,S.balance);}
+    else{betInput.value=clampBet((parseInt(betInput.value,10)||0)+parseInt(c.getAttribute('data-add'),10));}
+  });});
+  document.querySelectorAll('.mini-btn').forEach(function(b){b.addEventListener('click',function(){
+    if(S.phase!=='idle'&&S.phase!=='settled')return;var v=parseInt(betInput.value,10)||MIN_BET;
+    betInput.value=clampBet(b.getAttribute('data-bet')==='half'?Math.floor(v/2):v*2);
+  });});
+  betInput.addEventListener('change',function(){betInput.value=clampBet(parseInt(betInput.value,10)||0);});
+  soundBtn.addEventListener('click',function(){S.sound=!S.sound;soundBtn.style.color=S.sound?'':'#475569';soundBtn.textContent=S.sound?'♪':'✕';if(S.sound)tone(700,0.1,'sine',0.05);});
+
+  $('fairBtn').addEventListener('click',function(){openFairness(null);});
+  $('modalX').addEventListener('click',closeFairness);
+  overlay.addEventListener('click',function(e){if(e.target===overlay)closeFairness();});
+  window.addEventListener('keydown',function(e){if(e.key==='Escape')closeFairness();});
+  $('newSeedBtn').addEventListener('click',function(){S.clientSeedPref=rndHex(16);$('clientSeedInput').value=S.clientSeedPref;});
+  $('clientSeedInput').addEventListener('input',function(e){S.clientSeedPref=e.target.value.slice(0,128);});
+  $('verifyBtn').addEventListener('click',function(){runVerify($('verifyIdInput').value);});
+  document.querySelectorAll('.tab-btn').forEach(function(t){t.addEventListener('click',function(){
+    document.querySelectorAll('.tab-btn').forEach(function(x){x.classList.remove('active');});
+    document.querySelectorAll('.tab-panel').forEach(function(x){x.classList.remove('active');});
+    t.classList.add('active');$('tab-'+t.getAttribute('data-tab')).classList.add('active');
+  });});
+
+  resetBoard();renderTierSheet();syncHud();renderActions();renderHistory();renderFaq();
+})();
+</script>
+</body>
+</html>
