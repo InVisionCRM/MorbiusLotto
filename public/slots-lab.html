@@ -270,9 +270,11 @@ h1.title .glyph{margin-left:.35rem;color:var(--cyan);filter:drop-shadow(0 0 12px
 .lab-note{margin-top:22px;text-align:center;font-size:11px;color:var(--slate-500);font-family:var(--font-mono);line-height:1.6}
 .lab-note b{color:var(--slate-400);font-weight:600}
 @media (prefers-reduced-motion: reduce){
+  .strip{transition:none !important}
   .reel.spin .strip{filter:none}
   .board-shell.shake{animation:none}
   .reel.antic::after,.sym.mult .frame,.banner.mega .b-k{animation:none}
+  .reel.land,.reel.flash::before,.sym.hit,.sym .mbadge,.arc-banner-in{animation:none}
 }
 </style>
 </head>
@@ -463,7 +465,7 @@ h1.title .glyph{margin-left:.35rem;color:var(--cyan);filter:drop-shadow(0 0 12px
   var S={ balance:10000, speed:'normal', bet:200, phase:'idle', busy:false, sound:true,
     rng:null, roundWin:0, fsLeft:0, fsTotal:0, fsPlayed:0, inFs:false, spinLog:[],
     serverSeed:'', clientSeed:'', clientSeedPref:'', nonce:0, serverHash:'', roundId:'',
-    lastGrid:null, cycleIv:null, rollupRaf:null, rollupTickIv:null, anticIv:null, history:[] };
+    lastGrid:null, lastEv:null, cycleIv:null, rollupRaf:null, anticIv:null, history:[] };
 
   var REDUCED=window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -713,17 +715,19 @@ h1.title .glyph{margin-left:.35rem;color:var(--cyan);filter:drop-shadow(0 0 12px
     show();
     S.cycleIv=setInterval(show,800);
   }
+  function stopRollup(){
+    if(S.rollupRaf){cancelAnimationFrame(S.rollupRaf);S.rollupRaf=null;}
+  }
   function rollup(el,to,big){
-    if(S.rollupRaf)cancelAnimationFrame(S.rollupRaf);
-    if(S.rollupTickIv){clearInterval(S.rollupTickIv);S.rollupTickIv=null;}
-    var from=0,t0=null,dur=big?1300:600;
-    if(big)S.rollupTickIv=setInterval(sCoin,75);
+    stopRollup();
+    var from=0,t0=null,dur=big?1300:600,lastTick=0;
     function step(ts){
       if(t0===null)t0=ts;
       var k=Math.min(1,(ts-t0)/dur);
       el.textContent=fmt(from+(to-from)*(1-Math.pow(1-k,3)));
+      if(big&&ts-lastTick>75){sCoin();lastTick=ts;}
       if(k<1){S.rollupRaf=requestAnimationFrame(step);}
-      else if(S.rollupTickIv){clearInterval(S.rollupTickIv);S.rollupTickIv=null;}
+      else{S.rollupRaf=null;}
     }
     S.rollupRaf=requestAnimationFrame(step);
   }
@@ -763,7 +767,7 @@ h1.title .glyph{margin-left:.35rem;color:var(--cyan);filter:drop-shadow(0 0 12px
     S.nonce+=1;S.roundId=shortId();
     S.serverHash=await sha256Hex(S.serverSeed);
     S.rng=makeRng(S.serverSeed+':'+S.clientSeed+':'+S.nonce);
-    hideBanner();clearHighlights();setControls(false);syncHud();renderActions();
+    stopRollup();hideBanner();clearHighlights();setControls(false);syncHud();renderActions();
     statusEl.className='felt-status';statusEl.textContent='Reels spinning…';
     doSpin(false);
   }
@@ -773,6 +777,7 @@ h1.title .glyph{margin-left:.35rem;color:var(--cyan);filter:drop-shadow(0 0 12px
     var g=windowAt(stops);
     var mults=drawMults(S.rng,g);
     var sp=spd();
+    S.lastEv=null;
     clearHighlights();
     sSpinStart();
 
@@ -841,7 +846,6 @@ h1.title .glyph{margin-left:.35rem;color:var(--cyan);filter:drop-shadow(0 0 12px
   function resolveSpin(stops,g,mults,isFree){
     var ev=evalSpin(g,mults);
     var win=spinPayout(S.bet,ev.lineUnits,ev.sc);
-    var multList=Object.keys(mults).filter(function(k){return mults[k]>1;}).map(function(k){return mults[k];});
     S.spinLog.push({stops:stops.slice(),mults:multsToLog(g,mults),free:isFree,win:win,lines:ev.wins.length,sc:ev.sc});
     S.roundWin+=win;
     S.lastGrid=g;
@@ -856,6 +860,7 @@ h1.title .glyph{margin-left:.35rem;color:var(--cyan);filter:drop-shadow(0 0 12px
       setTimeout(hideBanner,spd().gap*1.4);
     }
     if(win>0){
+      S.lastEv=ev;
       presentWins(ev);
       var hotMult=ev.wins.reduce(function(a,w){return Math.max(a,w.mult||1);},1);
       var x=win/S.bet;
@@ -965,7 +970,9 @@ h1.title .glyph{margin-left:.35rem;color:var(--cyan);filter:drop-shadow(0 0 12px
     var out=$('verifyOut'),r=findRound(id);
     if(!r){out.innerHTML='<p class="note" style="color:var(--loss)">No round found with that ID.</p>';return;}
     out.innerHTML='<p class="note">Checking…</p>';
-    var hashOk=(await sha256Hex(r.serverSeed))===r.serverHash;
+    var reHash=await sha256Hex(r.serverSeed);
+    var hashAvail=reHash!=='sha256-unavailable'&&r.serverHash!=='sha256-unavailable';
+    var hashOk=hashAvail&&reHash===r.serverHash;
     var rng=makeRng(r.serverSeed+':'+r.clientSeed+':'+r.nonce);
     var stopsOk=true,multsOk=true,winsOk=true,reTotal=0;
     for(var i=0;i<r.spinLog.length;i++){
@@ -983,7 +990,7 @@ h1.title .glyph{margin-left:.35rem;color:var(--cyan);filter:drop-shadow(0 0 12px
     }
     var payoutOk=reTotal===r.win;
     out.innerHTML='<div class="m-result">'
-      +ckHtml(hashOk,'Server seed matches its committed hash (checked locally)')
+      +ckHtml(hashOk,hashAvail?'Server seed matches its committed hash (checked locally)':'Hash check unavailable — SHA-256 needs a secure (https) context')
       +ckHtml(stopsOk,'Every reel stop re-derives from the seed stream')
       +ckHtml(multsOk,'Every wild multiplier re-derives from the same stream')
       +ckHtml(winsOk,'Each spin’s win reconciles with the paytable & 20 lines')
@@ -1051,7 +1058,7 @@ h1.title .glyph{margin-left:.35rem;color:var(--cyan);filter:drop-shadow(0 0 12px
   document.querySelectorAll('.chip').forEach(function(c){c.addEventListener('click',function(){
     if(S.phase==='active')return;
     sClick();
-    if(c.getAttribute('data-set')==='max'){betInput.value=clampBet(Math.min(MAX_BET,S.balance));}
+    if(c.getAttribute('data-set')==='max'){betInput.value=clampBet(Math.floor(Math.min(MAX_BET,S.balance)/20)*20);}
     else{betInput.value=clampBet((parseInt(betInput.value,10)||0)+parseInt(c.getAttribute('data-add'),10));}
     hudBet.textContent=fmt(parseInt(betInput.value,10));
   });});
@@ -1078,7 +1085,10 @@ h1.title .glyph{margin-left:.35rem;color:var(--cyan);filter:drop-shadow(0 0 12px
     document.querySelectorAll('.tab-panel').forEach(function(x){x.classList.remove('active');});
     t.classList.add('active');$('tab-'+t.getAttribute('data-tab')).classList.add('active');
   });});
-  window.addEventListener('resize',function(){clearHighlights();fxResize();});
+  window.addEventListener('resize',function(){
+    clearHighlights();fxResize();
+    if(S.lastEv)presentWins(S.lastEv); // re-draw the win presentation at the new geometry
+  });
 
   // idle grid — a pretty static window showing off the art
   renderIdleGrid([['H1','A','H3'],['K','W','Q'],['H2','H4','J'],['Q','W','A'],['H3','K','H1']]);
