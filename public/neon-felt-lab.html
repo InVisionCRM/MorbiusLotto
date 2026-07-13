@@ -1311,7 +1311,7 @@ h1 .title-chip{height:.74em;width:auto;vertical-align:-.05em;margin-left:.16em;b
           var el=stripEls[c.r].children[c.row];
           if(el){el.classList.remove('jphit');void el.offsetWidth;el.classList.add('jphit');}
         });
-        showBanner('win mega',JP[jpTier].label+' JACKPOT!','+'+fmt(jpAmt)+' MORBIUS');
+        showBanner('win mega',JP[jpTier].label+' JACKPOT!','+'+fmt(jpAmt)+' MORBIUS','morbius/MorbiusChip.png');
         sJackpot();shake();feltFlashGo();burst('jackpot');
         rollup(hudWin,S.roundWin,true);hudWin.classList.remove('idle');
         setTimeout(function(){hideBanner();next();},3200);
@@ -1334,7 +1334,7 @@ h1 .title-chip{height:.74em;width:auto;vertical-align:-.05em;margin-left:.16em;b
     if(ev.sc>=3&&!isFree){
       chain.push(function(next){
         sFanfare();
-        showBanner('win','CHIP STACK!','+'+FS_AWARD+' FREE SPINS');
+        showBanner('win','CHIP STACK!','+'+FS_AWARD+' FREE SPINS','vip-badges/gold.png');
         S.fsLeft+=FS_AWARD;S.fsTotal+=FS_AWARD;S.inFs=true;S.gm=1;S.chips=0;
         boardShell.classList.add('fs');
         renderChipMeter(false);
@@ -1344,7 +1344,7 @@ h1 .title-chip{height:.74em;width:auto;vertical-align:-.05em;margin-left:.16em;b
       S.fsLeft+=FS_RETRIG;S.fsTotal+=FS_RETRIG;
       chain.push(function(next){
         sFanfare();
-        showBanner('win','Retrigger!','+'+FS_RETRIG+' FREE SPINS');
+        showBanner('win','Retrigger!','+'+FS_RETRIG+' FREE SPINS','vip-badges/gold.png');
         setTimeout(function(){hideBanner();next();},1100);
       });
     }
@@ -1412,7 +1412,7 @@ h1 .title-chip{height:.74em;width:auto;vertical-align:-.05em;margin-left:.16em;b
     if(win>0){
       var tier=x>=25?'mega':(x>=10?'big':'');
       var label=x>=25?'MEGA WIN':(x>=10?'BIG WIN':(S.fsTotal>0?(S.fsTotal+' free spins · win'):'Total win'));
-      showBanner('win'+(tier?' '+tier:''),label,'+'+fmt(win)+' MORBIUS');
+      showBanner('win'+(tier?' '+tier:''),label,'+'+fmt(win)+' MORBIUS','morbius/MorbiusChip.png');
       if(tier)burst(tier);
     }else{
       statusEl.className='felt-status lose';statusEl.textContent='No win — −'+fmt(S.bet)+' MORBIUS';
