@@ -1527,8 +1527,8 @@ h1 .title-glyph{height:.92em;width:auto;vertical-align:-0.1em;margin-left:.18em;
     histBody.innerHTML='<ul class="hist-list">'+S.history.map(function(r){
       var profit=r.win-r.bet,multX100=Math.round(r.win/r.bet*100);
       var badge=r.fs>0?'<span class="badge fsb">'+r.fs+' FS'+(r.respins>0?' ↻'+r.respins:'')+'</span>':'<span class="badge">base</span>';
-      var claws=r.claws>0?'<span class="badge">🕹'+r.claws+'</span>':'';
-      var jps=r.jackpots.map(function(j){return '<span class="badge jpb">🏆'+JP[j.tier].label+'</span>';}).join('');
+      var claws=r.claws>0?'<span class="badge"><img class="bimg" src="crash/rocket.webp" alt=""/>'+r.claws+'</span>':'';
+      var jps=r.jackpots.map(function(j){return '<span class="badge jpb"><img class="bimg" src="vip-badges/gold.png" alt=""/>'+JP[j.tier].label+'</span>';}).join('');
       var xcell=r.win>0?'<span class="x win">'+(multX100/100).toFixed(2)+'×</span>':'<span class="x bust">0.00×</span>';
       var pcell='<span class="p '+(profit>0?'up':(profit<0?'down':'flat'))+'">'+(profit>0?'+':'')+fmt(profit)+'</span>';
       return '<li class="hist-row"><span class="t">'+timeLabel(r.at)+'</span>'+badge+claws+jps
@@ -1550,8 +1550,8 @@ h1 .title-glyph{height:.92em;width:auto;vertical-align:-0.1em;margin-left:.18em;
       var stops=s.stops.map(function(v){return '<span class="md">'+v+'</span>';}).join('');
       var hot=s.mults.filter(function(m){return m.m>1;}).map(function(m){return '<span class="md hot">R'+(m.r+1)+'×'+m.m+'</span>';}).join('');
       var rsp=(s.respins||[]).map(function(rs,k){return '<span class="md rsp">↻'+(k+1)+(rs.improved?'▲':'·')+rs.units+'</span>';}).join('');
-      var clw=s.claw?s.claw.map(function(m){return '<span class="md clw">🕹'+m+'×</span>';}).join(''):'';
-      var jp=s.jackpot?'<span class="md jpx">🏆'+JP[s.jackpot.tier].label+'</span>':'';
+      var clw=s.claw?s.claw.map(function(m){return '<span class="md clw">⊓'+m+'×</span>';}).join(''):'';
+      var jp=s.jackpot?'<span class="md jpx">JP '+JP[s.jackpot.tier].label+'</span>':'';
       var pc=s.win>0?'<span class="rp up">+'+fmt(s.win)+'</span>':'<span class="rp no">0</span>';
       return '<div class="m-sr"><span class="rn'+(s.free?' fs':'')+'">'+(s.free?'free':'spin')+' '+(i+1)+'</span><span class="rd">'+stops+hot+rsp+clw+jp+'</span>'+pc+'</div>';
     }).join('')+'</div>';
@@ -1614,14 +1614,7 @@ h1 .title-glyph{height:.92em;width:auto;vertical-align:-0.1em;margin-left:.18em;
   /* paytable modal */
   function ptSymCell(id){
     var s=SYMS[id];
-    if(s.kind==='img')return '<img src="'+s.art+'" alt="'+s.name+'"/>'+s.name;
-    if(s.kind==='joy')return '<span class="tg">🕹️</span>'+s.name;
-    if(s.kind==='token')return '<span class="tg">🪙</span>'+s.name;
-    if(s.kind==='clawsym')return '<span class="tg" style="color:#7dd3fc;font-weight:700">⊓</span>'+s.name;
-    if(s.kind==='heart')return '<span class="tg" style="color:#ff2f7c">♥</span>'+s.name;
-    if(s.kind==='star')return '<span class="tg" style="color:#ffe24a">★</span>'+s.name;
-    if(s.kind==='cherry')return '<span class="tg" style="color:#ff3b46">🍒</span>'+s.name;
-    return '<span class="tg">'+s.em+'</span>'+s.name;
+    return '<img'+(s.pix?' class="pix"':'')+' src="'+s.art+'" alt="'+s.name+'"/>'+s.name;
   }
   function renderPaytable(){
     var order=['W','H1','H2','H3','H4','L1','L2','L3'];

@@ -662,7 +662,7 @@ h1 .title-chip{height:.74em;width:auto;vertical-align:-.05em;margin-left:.16em;b
   var balanceEl=$('balance'),betInput=$('betInput'),reelsEl=$('reels'),statusEl=$('status'),
       boardShell=$('boardShell'),hudBet=$('hudBet'),hudWin=$('hudWin'),hudFs=$('hudFs'),
       hudC1k=$('hudC1k'),hudC1v=$('hudC1v'),
-      banner=$('banner'),bannerK=$('bannerK'),bannerV=$('bannerV'),linesSvg=$('linesSvg'),
+      banner=$('banner'),bannerIco=$('bannerIco'),bannerK=$('bannerK'),bannerV=$('bannerV'),linesSvg=$('linesSvg'),
       chipMeter=$('chipMeter'),cmLabel=$('cmLabel'),feltFlash=$('feltFlash'),
       duelStage=$('duelStage'),duelHandLbl=$('duelHandLbl'),duelMid=$('duelMid'),duelResult=$('duelResult'),
       dealerCard=$('dealerCard'),dealerFace=$('dealerFace'),playerCard=$('playerCard'),playerFace=$('playerFace'),
@@ -1359,7 +1359,7 @@ h1 .title-chip{height:.74em;width:auto;vertical-align:-.05em;margin-left:.16em;b
         statusEl.className='felt-status';
         statusEl.innerHTML=ev.wins.length+' line'+(ev.wins.length===1?'':'s')
           +' · <span class="gain">+'+fmt(lineWinAmt)+' MORBIUS</span>'
-          +(hotMult>1?' · <span class="hot">🔥 ×'+hotMult+'</span>':'')
+          +(hotMult>1?' · <span class="hot">HOT ×'+hotMult+'</span>':'')
           +(isFree&&gmApplied>1?' · <span class="hot">stack '+fmtGm(gmApplied)+'</span>':'');
         if(x>=25){sWinMega();shake();burst('mega');}
         else if(x>=10){sWinBig();shake();burst('big');}
@@ -1432,8 +1432,12 @@ h1 .title-chip{height:.74em;width:auto;vertical-align:-.05em;margin-left:.16em;b
     setControls(true);syncHud();renderActions();renderHistory();
   }
 
-  function showBanner(k,a,b){banner.className='banner show '+k+' arc-banner-in';bannerK.textContent=a;bannerV.textContent=b;}
-  function hideBanner(){banner.className='banner';}
+  function showBanner(k,a,b,ico){
+    banner.className='banner show '+k+' arc-banner-in';
+    bannerIco.innerHTML=ico?'<img src="'+ico+'" alt="" draggable="false"/>':'';
+    bannerK.textContent=a;bannerV.textContent=b;
+  }
+  function hideBanner(){banner.className='banner';bannerIco.innerHTML='';}
   function clampBet(v){if(isNaN(v)||v<MIN_BET)v=MIN_BET;if(v>MAX_BET)v=MAX_BET;return Math.round(v/40)*40;}
   function flashInput(){betInput.style.color='#f4788a';setTimeout(function(){betInput.style.color='#fff';},400);}
 
@@ -1475,7 +1479,7 @@ h1 .title-chip{height:.74em;width:auto;vertical-align:-.05em;margin-left:.16em;b
       var hot=s.mults.filter(function(m){return m.m>1;}).map(function(m){return '<span class="md hot">R'+(m.r+1)+'×'+m.m+'</span>';}).join('');
       var stack=(s.free&&s.gm>1)?'<span class="md stackmd">'+fmtGm(s.gm)+'</span>':'';
       var du=s.duel?duelMdHtml(s.duel):'';
-      var jp=s.jackpot?'<span class="md jpmd">💰'+JP[s.jackpot.tier].label+'</span>':'';
+      var jp=s.jackpot?'<span class="md jpmd">JP '+JP[s.jackpot.tier].label+'</span>':'';
       var pc=s.win>0?'<span class="rp up">+'+fmt(s.win)+'</span>':'<span class="rp no">0</span>';
       return '<div class="m-sr"><span class="rn'+(s.free?' fs':'')+'">'+(s.free?'free':'spin')+' '+(i+1)+'</span><span class="rd">'+stops+hot+stack+du+jp+'</span>'+pc+'</div>';
     }).join('')+'</div>';
