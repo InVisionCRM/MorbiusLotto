@@ -23,9 +23,9 @@
       geometric-style hazard, alpha 1.12/1.18/1.25, cap 100×) decides when
       it all comes down. One button: SELL. Three rounds, escalating
       volatility.
-   4. Free spins — BULL RUN: 3+ 📈 scatters (~1-in-92) award 6 free spins
+   4. Free spins — BULL RUN: 3+ chart scatters (~1-in-92) award 6 free spins
       (+2 per retrigger). Each free spin a seeded draw (p=0.33) stampedes a
-      🐂 BULL WILD onto reel 5 at a seeded row; every bull walks one reel
+      BULL WILD onto reel 5 at a seeded row; every bull walks one reel
       left at the start of each later spin (derived state, replayed in
       Verify), acts as a wild at its cell, and leaves after reel 1. Each
       new bull = +1 extra spin. ~3.0 bulls & ~9.2 spins per bonus.
@@ -220,7 +220,10 @@ h1 .glyph{color:var(--gold);-webkit-text-fill-color:var(--gold);filter:drop-shad
 /* BULL RUN overlay layer */
 .bull-layer{position:absolute;inset:0;z-index:6;pointer-events:none;display:grid;grid-template-columns:repeat(5,1fr);grid-template-rows:repeat(3,var(--cell));gap:7px}
 .bullcell{position:relative;display:grid;place-items:center;border-radius:10px;background:radial-gradient(ellipse at 50% 60%,rgba(251,191,36,.18),rgba(4,10,5,.8) 78%)}
-.bullcell .bull-em{font-size:calc(var(--cell)*.62);line-height:1;filter:drop-shadow(0 0 10px rgba(251,191,36,.8)) drop-shadow(0 3px 6px rgba(0,0,0,.6))}
+.bullcell .bull-img{width:calc(var(--cell)*.68);height:calc(var(--cell)*.68);object-fit:cover;border-radius:50%;filter:drop-shadow(0 0 10px rgba(251,191,36,.8)) drop-shadow(0 3px 6px rgba(0,0,0,.6));box-shadow:0 0 0 2px rgba(251,191,36,.7)}
+.sym img.scatart{border-radius:14%;object-fit:cover;filter:drop-shadow(0 0 9px rgba(34,197,94,.6)) drop-shadow(0 3px 6px rgba(0,0,0,.6))}
+.mbull{width:14px;height:14px;object-fit:cover;border-radius:50%;vertical-align:-2px;margin-right:2px}
+.mchipp{width:13px;height:13px;object-fit:contain;vertical-align:-2px;margin-right:2px}
 .bullcell .frame{position:absolute;inset:2px;border-radius:9px;box-shadow:inset 0 0 0 2.5px rgba(251,191,36,.95),0 0 22px -2px rgba(251,191,36,.85);animation:bullpulse 1.6s ease-in-out infinite}
 @keyframes bullpulse{0%,100%{box-shadow:inset 0 0 0 2.5px rgba(251,191,36,.95),0 0 16px -2px rgba(251,191,36,.7)}50%{box-shadow:inset 0 0 0 2.5px #ffd370,0 0 30px -2px rgba(251,191,36,1)}}
 .bullcell .wildpin{position:absolute;bottom:4px;left:6px;font-family:var(--font-mono);font-weight:700;font-size:calc(var(--cell)*.14);color:#ffd370;text-shadow:0 0 6px rgba(251,191,36,.8)}
@@ -387,7 +390,7 @@ h1 .glyph{color:var(--gold);-webkit-text-fill-color:var(--gold);filter:drop-shad
 <div class="wrap">
   <header>
     <h1 class="title">Pulse Street<span class="glyph"> ▲</span></h1>
-    <p class="tagline">5×3 reels · 20 lines · 🐂 Bull Run walking wilds · Pump &amp; Dump crash bonus · progressive jackpots at 5/7/9 wilds · provably fair · played in MORBIUS</p>
+    <p class="tagline">5×3 reels · 20 lines · Bull Run walking wilds · Pump &amp; Dump crash bonus · progressive jackpots at 5/7/9 wilds · provably fair · played in MORBIUS</p>
   </header>
 
   <div class="topbar">
@@ -425,11 +428,11 @@ h1 .glyph{color:var(--gold);-webkit-text-fill-color:var(--gold);filter:drop-shad
       <div class="panel">
         <p class="panel-label">Top pays · per line bet</p>
         <div class="score-tbl">
-          <div class="sr"><span class="tg">🕯️</span><span>Green Candle wild ×5</span><span class="sv">850</span></div>
+          <div class="sr"><span class="tg"><span style="display:inline-block;width:10px;height:22px;border-radius:2px;background:linear-gradient(180deg,#b9ffcb,#22c55e 55%,#0e6b2f);box-shadow:0 0 8px rgba(34,197,94,.6)"></span></span><span>Green Candle wild ×5</span><span class="sv">850</span></div>
           <div class="sr"><img src="Logos/WHALE.png" alt="WHALE" /><span>WHALE ×5</span><span class="sv">280</span></div>
           <div class="sr"><img src="Logos/pTIGER.png" alt="pTIGER" /><span>pTIGER ×5</span><span class="sv">170</span></div>
-          <div class="sr"><span class="tg">📈</span><span>Chart ×3+</span><span class="sv hl">Bull Run spins</span></div>
-          <div class="sr"><span class="tg">🪙</span><span>PUMP on 1·3·5</span><span class="sv hl">Pump &amp; Dump</span></div>
+          <div class="sr"><img src="Logos/TMC.jpg" alt="TMC chart" style="border-radius:4px"/><span>TMC Chart ×3+</span><span class="sv hl">Bull Run spins</span></div>
+          <div class="sr"><span class="tg"><span class="coin"></span></span><span>PUMP on 1·3·5</span><span class="sv hl">Pump &amp; Dump</span></div>
         </div>
         <button class="pt-open" id="ptBtn">Full paytable &amp; features</button>
       </div>
@@ -560,7 +563,7 @@ h1 .glyph{color:var(--gold);-webkit-text-fill-color:var(--gold);filter:drop-shad
 
   var SYMS={
     W:{name:'Green Candle',frame:'wild',kind:'candle'},
-    S:{name:'Chart',frame:'scat',kind:'em',em:'📈'},
+    S:{name:'TMC Chart',frame:'scat',cls:'scatart',art:'Logos/TMC.jpg',kind:'img'},
     B:{name:'PUMP Coin',frame:'bon',kind:'coin'},
     H1:{name:'WHALE',art:'Logos/WHALE.png',kind:'img'},
     H2:{name:'pTIGER',art:'Logos/pTIGER.png',kind:'img'},
@@ -672,7 +675,7 @@ h1 .glyph{color:var(--gold);-webkit-text-fill-color:var(--gold);filter:drop-shad
   function walkBulls(bulls){
     for(var i=bulls.length-1;i>=0;i--){bulls[i].r--;if(bulls[i].r<0)bulls.splice(i,1);}
   }
-  // bulls trample whatever they cover (incl. 📈 and PUMP) and act as plain wilds
+  // bulls trample whatever they cover (incl. charts and PUMP) and act as plain wilds
   function overlayBulls(raw,rawMults,bulls){
     if(!bulls||!bulls.length)return {g:raw,mults:rawMults};
     var g=raw.map(function(col){return col.slice();});
@@ -882,7 +885,7 @@ h1 .glyph{color:var(--gold);-webkit-text-fill-color:var(--gold);filter:drop-shad
   /* ── rendering ── */
   function symInner(id){
     var s=SYMS[id];
-    if(s.kind==='img')return '<img src="'+s.art+'" alt="'+s.name+'" draggable="false"/>';
+    if(s.kind==='img')return '<img class="'+(s.cls||'')+'" src="'+s.art+'" alt="'+s.name+'" draggable="false"/>';
     if(s.kind==='candle')return '<div class="candle"></div>';
     if(s.kind==='coin')return '<div class="pumpcoin">PUMP</div>';
     if(s.kind==='tagup')return '<span class="tag up">'+s.txt+'</span>';
@@ -918,7 +921,7 @@ h1 .glyph{color:var(--gold);-webkit-text-fill-color:var(--gold);filter:drop-shad
     bullLayer.innerHTML=bulls.map(function(b,i){
       var isNew=stompNew&&i===bulls.length-1;
       return '<div class="bullcell'+((stompAll||isNew)?' stomp':'')+'" data-key="'+b.r+','+b.row+'" style="grid-column:'+(b.r+1)+';grid-row:'+(b.row+1)+'">'
-        +'<span class="bull-em">🐂</span><span class="frame"></span><span class="wildpin">WILD</span>'
+        +'<img class="bull-img" src="Logos/PITTBULL.jpg" alt="Bull wild" draggable="false"/><span class="frame"></span><span class="wildpin">WILD</span>'
         +'</div>';
     }).join('');
   }
@@ -1010,7 +1013,7 @@ h1 .glyph{color:var(--gold);-webkit-text-fill-color:var(--gold);filter:drop-shad
     var label,sub='';
     if(S.phase==='idle'){label='Place bet &amp; spin';}
     else if(S.phase==='settled'){label='Spin again';}
-    else if(S.inFs){label='Bull run running';sub=(S.fsTotal-S.fsPlayed)+' left · '+(S.bulls||[]).length+' 🐂';}
+    else if(S.inFs){label='Bull run running';sub=(S.fsTotal-S.fsPlayed)+' left · '+(S.bulls||[]).length+' bulls';}
     else{label='Spinning…';}
     actions.innerHTML='<button class="btn btn-go" id="spinBtn"'+((S.busy||S.phase==='active')?' disabled':'')+'>'+label
       +(sub?'<span class="cash-sub">'+sub+'</span>':'')+'</button>';
@@ -1181,7 +1184,7 @@ h1 .glyph{color:var(--gold);-webkit-text-fill-color:var(--gold);filter:drop-shad
     clearHighlights();
     startTicks();
 
-    // stop schedule — anticipation for the 3rd 📈 OR the 3rd PUMP coin (reels 1/3/5)
+    // stop schedule — anticipation for the 3rd chart OR the 3rd PUMP coin (reels 1/3/5)
     var stopAt=[],anticFrom=-1,scSoFar=0,bonSoFar=0,celebrateReel=-1;
     var t=REDUCED?260:sp.first;
     for(var r=0;r<5;r++){
@@ -1341,7 +1344,7 @@ h1 .glyph{color:var(--gold);-webkit-text-fill-color:var(--gold);filter:drop-shad
     if(bull&&bull.enter){
       chain.push(function(next){
         statusEl.className='felt-status fsmode';
-        statusEl.textContent='🐂 Bull stampedes in — +1 extra spin';
+        statusEl.textContent='Bull stampedes in — +1 extra spin';
         setTimeout(next,600);
       });
     }
@@ -1356,7 +1359,7 @@ h1 .glyph{color:var(--gold);-webkit-text-fill-color:var(--gold);filter:drop-shad
         statusEl.className='felt-status';
         statusEl.innerHTML=ev.wins.length+' line'+(ev.wins.length===1?'':'s')
           +' · <span class="gain">+'+fmt(lineWinAmt)+' MORBIUS</span>'
-          +(hotMult>1?' · <span class="hot">🔥 ×'+hotMult+'</span>':'')
+          +(hotMult>1?' · <span class="hot">HOT ×'+hotMult+'</span>':'')
           +(isFree?' · bull run':'');
         if(x>=25){sWinMega();shake();burst('mega');}
         else if(x>=10){sWinBig();shake();burst('big');}
@@ -1379,7 +1382,7 @@ h1 .glyph{color:var(--gold);-webkit-text-fill-color:var(--gold);filter:drop-shad
         renderActions();
         setTimeout(function(){
           statusEl.className='felt-status fsmode';
-          statusEl.textContent='Bull run '+(S.fsPlayed+1)+' of '+S.fsTotal+' · '+(S.bulls||[]).length+' 🐂 on the floor';
+          statusEl.textContent='Bull run '+(S.fsPlayed+1)+' of '+S.fsTotal+' · '+(S.bulls||[]).length+' bulls on the floor';
           doSpin(true);
         },spd().settle);
       }else{
@@ -1428,9 +1431,9 @@ h1 .glyph{color:var(--gold);-webkit-text-fill-color:var(--gold);filter:drop-shad
     if(!S.history.length){histBody.innerHTML='<p class="hist-empty">No spins yet — ring the opening bell.</p>';return;}
     histBody.innerHTML='<ul class="hist-list">'+S.history.map(function(r){
       var profit=r.win-r.bet,multX100=Math.round(r.win/r.bet*100);
-      var badge=r.fs>0?'<span class="badge fsb">'+r.fs+' FS 🐂'+r.bulls+'</span>':'<span class="badge">base</span>';
-      var pds=r.pds>0?'<span class="badge pdb">📉'+r.pds+'</span>':'';
-      var jps=r.jackpots.map(function(j){return '<span class="badge jpb">💰'+JP[j.tier].label+'</span>';}).join('');
+      var badge=r.fs>0?'<span class="badge fsb">'+r.fs+' FS <img class="mbull" src="Logos/PITTBULL.jpg" alt=""/>'+r.bulls+'</span>':'<span class="badge">base</span>';
+      var pds=r.pds>0?'<span class="badge pdb">▼'+r.pds+'</span>':'';
+      var jps=r.jackpots.map(function(j){return '<span class="badge jpb"><img class="mchipp" src="morbius/MorbiusChip.png" alt=""/>'+JP[j.tier].label+'</span>';}).join('');
       var xcell=r.win>0?'<span class="x win">'+(multX100/100).toFixed(2)+'×</span>':'<span class="x bust">0.00×</span>';
       var pcell='<span class="p '+(profit>0?'up':(profit<0?'down':'flat'))+'">'+(profit>0?'+':'')+fmt(profit)+'</span>';
       return '<li class="hist-row"><span class="t">'+timeLabel(r.at)+'</span>'+badge+pds+jps
@@ -1451,9 +1454,9 @@ h1 .glyph{color:var(--gold);-webkit-text-fill-color:var(--gold);filter:drop-shad
     return '<div class="m-spins">'+log.map(function(s,i){
       var stops=s.stops.map(function(v){return '<span class="md">'+v+'</span>';}).join('');
       var hot=s.mults.filter(function(m){return m.m>1;}).map(function(m){return '<span class="md hot">R'+(m.r+1)+'×'+m.m+'</span>';}).join('');
-      var bulls=(s.bulls&&s.bulls.length)?s.bulls.map(function(b){return '<span class="md bullmd">🐂R'+(b[0]+1)+'</span>';}).join(''):'';
+      var bulls=(s.bulls&&s.bulls.length)?s.bulls.map(function(b){return '<span class="md bullmd"><img class="mbull" src="Logos/PITTBULL.jpg" alt=""/>R'+(b[0]+1)+'</span>';}).join(''):'';
       var pd=s.pd?s.pd.map(function(p){return '<span class="md rugmd">'+(p.soldAt!=null?('✓'+p.soldAt.toFixed(2)+'×'):('rug '+p.rug.toFixed(2)+'×'))+'</span>';}).join(''):'';
-      var jp=s.jackpot?'<span class="md jpmd">💰'+JP[s.jackpot.tier].label+'</span>':'';
+      var jp=s.jackpot?'<span class="md jpmd"><img class="mchipp" src="morbius/MorbiusChip.png" alt=""/>'+JP[s.jackpot.tier].label+'</span>':'';
       var pc=s.win>0?'<span class="rp up">+'+fmt(s.win)+'</span>':'<span class="rp no">0</span>';
       return '<div class="m-sr"><span class="rn'+(s.free?' fs':'')+'">'+(s.free?'bull':'spin')+' '+(i+1)+'</span><span class="rd">'+stops+hot+bulls+pd+jp+'</span>'+pc+'</div>';
     }).join('')+'</div>';
@@ -1539,8 +1542,8 @@ h1 .glyph{color:var(--gold);-webkit-text-fill-color:var(--gold);filter:drop-shad
   function ptSymCell(id){
     var s=SYMS[id];
     if(s.kind==='img')return '<img src="'+s.art+'" alt="'+s.name+'"/>'+s.name;
-    if(s.kind==='candle')return '<span class="tg">🕯️</span>'+s.name;
-    if(s.kind==='coin')return '<span class="tg">🪙</span>'+s.name;
+    if(s.kind==='candle')return '<span class="tg"><span style="display:inline-block;width:8px;height:18px;border-radius:2px;background:linear-gradient(180deg,#b9ffcb,#22c55e 55%,#0e6b2f)"></span></span>'+s.name;
+    if(s.kind==='coin')return '<span class="tg"><span class="coin"></span></span>'+s.name;
     if(s.kind==='tagup')return '<span class="tg" style="color:var(--grn);font-size:11px;font-weight:700">+12%</span>'+s.name;
     if(s.kind==='tagdown')return '<span class="tg" style="color:#f87171;font-size:11px;font-weight:700">−5%</span>'+s.name;
     return '<span class="tg">'+s.em+'</span>'+s.name;
@@ -1557,9 +1560,9 @@ h1 .glyph{color:var(--gold);-webkit-text-fill-color:var(--gold);filter:drop-shad
       +'<tr><td>'+ptSymCell('S')+'</td><td>—</td><td colspan="3">3+ anywhere → Bull Run free spins</td></tr>'
       +'<tr><td>'+ptSymCell('B')+'</td><td>—</td><td colspan="3">on reels 1·3·5 → Pump &amp; Dump</td></tr>'
       +'</tbody></table>'
-      +'<p class="pt-note"><span class="rd">📉 Pump &amp; Dump</span> — three chart rounds of escalating volatility. Each round the price pumps from 1.00× and ONE '
+      +'<p class="pt-note"><span class="rd">▼ Pump &amp; Dump</span> — three chart rounds of escalating volatility. Each round the price pumps from 1.00× and ONE '
       +'pre-committed seeded rug point decides where it collapses; hit <span class="rd">SELL</span> before the rug and bank multiplier × bet, get caught and the round pays 0. '
-      +'<span class="hl">🐂 Bull Run</span> — 3+ 📈 award 6 free spins (+2 per retrigger). Each free spin a p=0.33 seeded draw stampedes a bull wild onto reel 5; bulls walk one '
+      +'<span class="hl">Bull Run</span> — 3+ TMC charts award 6 free spins (+2 per retrigger). Each free spin a p=0.33 seeded draw stampedes a bull wild onto reel 5; bulls walk one '
       +'reel left every spin, act as wilds where they stand, leave after reel 1, and every new bull adds +1 spin. '
       +'<span class="am">Hot wilds</span> (×2/×3/×5 badges on ~1-in-12 wilds) multiply a winning line by the highest badge in the run. '
       +'<span class="am">Progressive jackpots</span> — MINI at 5 wilds on screen (~1-in-138 spins), MAJOR at 7 (~1-in-4,300), GRAND at 9+ (~1-in-1M); bulls count as wilds; pools grow with every bet (0.9/0.5/0.1%) and reset to their seed after a hit. '
@@ -1569,7 +1572,7 @@ h1 .glyph{color:var(--gold);-webkit-text-fill-color:var(--gold);filter:drop-shad
   var FAQS=[
     {q:'How does the Pump & Dump bonus work?',a:'<p>Land the <span class="hl">PUMP coin on reels 1, 3 and 5</span> at once (measured ~1-in-128 spins — the board burns gold when two are waiting on the third) and the trading floor clears for a live candle chart. You get <span class="hl">three rounds</span> of escalating volatility. Each round the token price pumps tick by tick from 1.00× and you have exactly one button: <span class="hl">SELL</span> — cash out the current multiplier × your bet. But every round has a <span class="hl">RUG POINT</span> committed from the seeded stream <b>before the chart even opens</b> (one uniform draw mapped through a geometric-style hazard, α = 1.12 / 1.18 / 1.25, capped at 100×). If the price reaches the rug before you sell, the chart collapses and the round pays 0.</p><p>Later rounds pump faster <i>and</i> rug sooner on average — that\'s the escalating volatility. Verify shows every rug point re-derived from the seed and checks your recorded sells actually beat it.</p>'},
     {q:'What sell strategy does the advertised RTP assume?',a:'<p>The rug is seeded; <b>when you sell is up to you</b> — so the bonus\'s exact return depends on your behavior. For the published numbers, the Monte Carlo models a benchmark player who <span class="hl">auto-sells at 2.5× / 3× / 4×</span> in rounds 1 / 2 / 3. Under that policy the bonus contributes ≈ 1.8–1.9 RTP points. Selling earlier trades variance for consistency; greed pushes more rounds into the rug. The hazard curve means <b>no strategy changes the house edge much</b> — later exits pay more but survive less, by design of the α exponents.</p>'},
-    {q:'How does the Bull Run work?',a:'<p>Land <span class="hl">3+ 📈 charts</span> anywhere (measured ~1-in-92 spins) for <span class="hl">6 free spins</span>, +2 per retrigger. During the run, every spin makes a seeded draw: with <span class="hl">p = 0.33</span> a 🐂 <span class="hl">bull wild stampedes onto reel 5</span> at a seeded row — and every new bull that enters awards <span class="hl">+1 extra spin</span>.</p><p>At the start of each following spin, every bull on the floor <span class="hl">walks one reel to the left</span>, acting as a wild wherever it stands, and charges off the board after reel 1. The walk is pure derived state — no extra draws — so Verify replays the whole stampede spin-for-spin. A bull crossing the cheap right-side reels becomes brutal by the time it reaches reels 1–2, and the sim measured ≈ 3.0 bulls and ≈ 9.2 spins per bonus.</p>'},
+    {q:'How does the Bull Run work?',a:'<p>Land <span class="hl">3+ TMC charts</span> anywhere (measured ~1-in-92 spins) for <span class="hl">6 free spins</span>, +2 per retrigger. During the run, every spin makes a seeded draw: with <span class="hl">p = 0.33</span> a <span class="hl">bull wild stampedes onto reel 5</span> at a seeded row — and every new bull that enters awards <span class="hl">+1 extra spin</span>.</p><p>At the start of each following spin, every bull on the floor <span class="hl">walks one reel to the left</span>, acting as a wild wherever it stands, and charges off the board after reel 1. The walk is pure derived state — no extra draws — so Verify replays the whole stampede spin-for-spin. A bull crossing the cheap right-side reels becomes brutal by the time it reaches reels 1–2, and the sim measured ≈ 3.0 bulls and ≈ 9.2 spins per bonus.</p>'},
     {q:'How do the progressive jackpots hit?',a:'<p>Three pools sit above the reels and grow with every bet: <span class="hl">MINI</span> (0.9% of bets), <span class="hl">MAJOR</span> (0.5%) and <span class="hl">GRAND</span> (0.1%). They pay when enough <span class="hl">wilds are on screen at once</span> — green candles and bulls both count: 5 wilds = MINI (~1-in-138 spins), 7 = MAJOR (~1-in-4,300), 9+ = GRAND (~1-in-1,000,000). Only the biggest qualifying tier pays, the pool then resets to its seed value (25,000 / 500,000 / 10,000,000 MORBIUS).</p><p>The <b>hit</b> is provably fair — wild positions come from the seeded reel stops and the replayable bull walk. The <b>pool size</b> is account state (in this demo it lives in your browser under <span class="hl">pulsestreet-jp</span> and grows as you play).</p>'},
     {q:'What are hot (multiplier) wilds?',a:'<p>About <span class="hl">1 in 12 green-candle wilds</span> lands hot with a <span class="hl">×2, ×3 or ×5 badge</span> (4.5% / 2.3% / 1.2%) and a pulsing gold border. A winning line through hot wilds is multiplied by the <span class="hl">highest badge in the run</span> — badges don\'t compound with each other. Bulls are plain wilds (no badge), but a hot candle under a line with a bull still applies its badge.</p>'},
     {q:'What is the RTP — where does the math come from?',a:'<p>The reel strips, 20 lines, hot-wild odds, Bull Run and Pump &amp; Dump were tuned with <span class="hl">multi-million-spin Monte Carlo simulations</span> of these exact rules (1M-spin tune + 2M-spin confirm on separate seeds, both landing on the same number): the playable game returns <span class="hl">95.2%</span> (hit rate ≈ 50.6%, Bull Run ≈ 24.3 points at ~1-in-92, Pump &amp; Dump ≈ 1.8–1.9 points at ~1-in-128 under the benchmark 2.5×/3×/4× sell policy, max observed round ≈ 388×) and the progressive contribution adds 1.5% — <span class="hl">RTP ≈ 96.7%</span> total, a house edge of ≈ 3.3%.</p><p>Individual sessions swing far wider than the long-run edge; the jackpot pools especially reward whoever is on the floor when they burst.</p>'},

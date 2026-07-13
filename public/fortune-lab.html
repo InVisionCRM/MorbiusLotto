@@ -24,7 +24,7 @@
       multiplier wheel (×2/×3/×5/×8) that applies to EVERY line win for the
       whole session; 6 spins, +2 per retrigger.
    5. Vegas Gold theme: gold chrome + violet accents on the shared arcade2
-      skeleton, marquee-bulb board frame, classic 7/BAR/bell/fruit symbols
+      skeleton, marquee-bulb board frame, classic 7/BAR symbols with real badge & chip art
       (CSS + open emoji) with the MORB shield wild and Pulse-orb scatter.
 
    Hot wilds carry ×2/×3/×5 badges (4.5/2.3/1.2% of wilds) — highest badge
@@ -158,6 +158,9 @@ h1 .glyph{color:var(--vio);-webkit-text-fill-color:var(--vio);filter:drop-shadow
 .sym img{width:74%;height:74%;object-fit:contain;filter:drop-shadow(0 3px 6px rgba(0,0,0,.65));pointer-events:none}
 .sym img.wildart{filter:drop-shadow(0 0 9px rgba(34,211,238,.6)) drop-shadow(0 3px 6px rgba(0,0,0,.6))}
 .sym img.orbart{filter:drop-shadow(0 0 9px rgba(168,85,247,.65)) drop-shadow(0 3px 6px rgba(0,0,0,.6))}
+.sym img.goldart{filter:drop-shadow(0 0 9px rgba(246,196,69,.55)) drop-shadow(0 3px 6px rgba(0,0,0,.6))}
+.mw{display:inline-block;width:12px;height:12px;border-radius:50%;vertical-align:-2px;margin-right:2px;background:conic-gradient(#F6C445 0 60deg,#A855F7 0 120deg,#F6C445 0 180deg,#22D3EE 0 240deg,#F6C445 0 300deg,#FB7185 0 360deg);box-shadow:0 0 5px rgba(246,196,69,.7)}
+.mchip{width:13px;height:13px;object-fit:contain;vertical-align:-2px;margin-right:2px}
 .sym .em{font-size:calc(var(--cell) * .52);line-height:1;filter:drop-shadow(0 3px 5px rgba(0,0,0,.6))}
 .sym .seven{font-family:var(--font-mono);font-weight:700;font-size:calc(var(--cell) * .58);line-height:1;background:linear-gradient(180deg,#ffe9a8,#F6C445 55%,#a87b12);-webkit-background-clip:text;background-clip:text;color:transparent;filter:drop-shadow(0 0 8px rgba(246,196,69,.55))}
 .sym .bar{font-family:var(--font-disp);font-weight:700;font-size:calc(var(--cell) * .26);letter-spacing:.06em;color:#120b04;background:linear-gradient(180deg,#ffe9a8,#F6C445);border-radius:6px;padding:calc(var(--cell)*.07) calc(var(--cell)*.12);box-shadow:0 2px 6px rgba(0,0,0,.6),inset 0 1px 0 rgba(255,255,255,.6)}
@@ -369,7 +372,7 @@ h1 .glyph{color:var(--vio);-webkit-text-fill-color:var(--vio);filter:drop-shadow
         <div class="score-tbl">
           <div class="sr"><img src="morbius/MorbiusChip.png" alt="MORB wild" /><span>MORB wild ×5</span><span class="sv">1000</span></div>
           <div class="sr"><span class="glyph7">7</span><span>Gold Seven ×5</span><span class="sv">400</span></div>
-          <div class="sr"><span class="glyph7">💎</span><span>Diamond ×5</span><span class="sv">250</span></div>
+          <div class="sr"><img src="vip-badges/diamond.png" alt="Diamond badge" /><span>Diamond Badge ×5</span><span class="sv">250</span></div>
           <div class="sr"><img src="Pulse Branding/Logo/ball.png" alt="Pulse orb" /><span>Orb ×3+</span><span class="sv hl">Wheel free spins</span></div>
         </div>
         <button class="pt-open" id="ptBtn">Full paytable &amp; wheel</button>
@@ -495,13 +498,13 @@ h1 .glyph{color:var(--vio);-webkit-text-fill-color:var(--vio);filter:drop-shadow
     S:{name:'Pulse Orb',art:'Pulse Branding/Logo/ball.png',cls:'orbart',frame:'scat',kind:'img'},
     B:{name:'Golden Wheel',frame:'bon',kind:'wheel'},
     H1:{name:'Gold Seven',kind:'seven'},
-    H2:{name:'Diamond',kind:'em',em:'💎'},
-    H3:{name:'Bell',kind:'em',em:'🔔'},
+    H2:{name:'Diamond Badge',art:'vip-badges/diamond.png',cls:'goldart',kind:'img'},
+    H3:{name:'Gold Crown',art:'vip-badges/gold.png',cls:'goldart',kind:'img'},
     H4:{name:'BAR',kind:'bar'},
-    L1:{name:'Cherry',kind:'em',em:'🍒'},
-    L2:{name:'Lemon',kind:'em',em:'🍋'},
-    L3:{name:'Clover',kind:'em',em:'🍀'},
-    L4:{name:'Star',kind:'em',em:'⭐'}
+    L1:{name:'Red Chip',art:'PokerChips/redpokerchip015.png',kind:'img'},
+    L2:{name:'Green Chip',art:'PokerChips/greenpokerchip005.png',kind:'img'},
+    L3:{name:'Blue Chip',art:'PokerChips/bluepokerchip010.png',kind:'img'},
+    L4:{name:'Cyan Chip',art:'PokerChips/cyanpokerchip020.png',kind:'img'}
   };
   // pays per LINE BET (bet ÷ 40) — Monte-Carlo tuned with all features (see head comment)
   var PAYS={
@@ -1219,7 +1222,7 @@ h1 .glyph{color:var(--vio);-webkit-text-fill-color:var(--vio);filter:drop-shadow
         statusEl.className='felt-status';
         statusEl.innerHTML=ev.wins.length+' line'+(ev.wins.length===1?'':'s')
           +' · <span class="gain">+'+fmt(lineWinAmt)+' MORBIUS</span>'
-          +(hotMult>1?' · <span class="hot">🔥 ×'+hotMult+'</span>':'')
+          +(hotMult>1?' · <span class="hot">HOT ×'+hotMult+'</span>':'')
           +(isFree?' · ×'+S.gm+' free spin':'');
         if(x>=25){sWinMega();shake();burst('mega');}
         else if(x>=10){sWinBig();shake();burst('big');}
@@ -1289,8 +1292,8 @@ h1 .glyph{color:var(--vio);-webkit-text-fill-color:var(--vio);filter:drop-shadow
     histBody.innerHTML='<ul class="hist-list">'+S.history.map(function(r){
       var profit=r.win-r.bet,multX100=Math.round(r.win/r.bet*100);
       var badge=r.fs>0?'<span class="badge fsb">'+r.fs+' FS ×'+r.gm+'</span>':'<span class="badge">base</span>';
-      var wheels=r.wheels>0?'<span class="badge">🎡'+r.wheels+'</span>':'';
-      var jps=r.jackpots.map(function(j){return '<span class="badge jpb">💰'+JP[j.tier].label+'</span>';}).join('');
+      var wheels=r.wheels>0?'<span class="badge"><span class="mw"></span>'+r.wheels+'</span>':'';
+      var jps=r.jackpots.map(function(j){return '<span class="badge jpb"><img class="mchip" src="morbius/MorbiusChip.png" alt=""/>'+JP[j.tier].label+'</span>';}).join('');
       var xcell=r.win>0?'<span class="x win">'+(multX100/100).toFixed(2)+'×</span>':'<span class="x bust">0.00×</span>';
       var pcell='<span class="p '+(profit>0?'up':(profit<0?'down':'flat'))+'">'+(profit>0?'+':'')+fmt(profit)+'</span>';
       return '<li class="hist-row"><span class="t">'+timeLabel(r.at)+'</span>'+badge+wheels+jps
@@ -1311,9 +1314,9 @@ h1 .glyph{color:var(--vio);-webkit-text-fill-color:var(--vio);filter:drop-shadow
     return '<div class="m-spins">'+log.map(function(s,i){
       var stops=s.stops.map(function(v){return '<span class="md">'+v+'</span>';}).join('');
       var hot=s.mults.filter(function(m){return m.m>1;}).map(function(m){return '<span class="md hot">R'+(m.r+1)+'×'+m.m+'</span>';}).join('');
-      var whl=s.wheel?s.wheel.map(function(ix){var v=WHEEL_SEGS[ix];return '<span class="md whl">🎡'+(v==='AGAIN'?'↻':(v==='FS'?'FS':v+'×'))+'</span>';}).join(''):'';
+      var whl=s.wheel?s.wheel.map(function(ix){var v=WHEEL_SEGS[ix];return '<span class="md whl"><span class="mw"></span>'+(v==='AGAIN'?'↻':(v==='FS'?'FS':v+'×'))+'</span>';}).join(''):'';
       var fsw=s.fsWheel!=null?'<span class="md fsw">×'+FS_WHEEL_SEGS[s.fsWheel]+'</span>':'';
-      var jp=s.jackpot?'<span class="md whl">💰'+JP[s.jackpot.tier].label+'</span>':'';
+      var jp=s.jackpot?'<span class="md whl"><img class="mchip" src="morbius/MorbiusChip.png" alt=""/>'+JP[s.jackpot.tier].label+'</span>':'';
       var pc=s.win>0?'<span class="rp up">+'+fmt(s.win)+'</span>':'<span class="rp no">0</span>';
       return '<div class="m-sr"><span class="rn'+(s.free?' fs':'')+'">'+(s.free?'free':'spin')+' '+(i+1)+'</span><span class="rd">'+stops+hot+whl+fsw+jp+'</span>'+pc+'</div>';
     }).join('')+'</div>';
@@ -1387,7 +1390,7 @@ h1 .glyph{color:var(--vio);-webkit-text-fill-color:var(--vio);filter:drop-shadow
     if(s.kind==='img')return '<img src="'+s.art+'" alt="'+s.name+'"/>'+s.name;
     if(s.kind==='seven')return '<span class="tg" style="color:var(--gold);font-weight:700">7</span>'+s.name;
     if(s.kind==='bar')return '<span class="tg" style="font-size:11px;font-weight:700;color:var(--gold)">BAR</span>'+s.name;
-    if(s.kind==='wheel')return '<span class="tg">🎡</span>'+s.name;
+    if(s.kind==='wheel')return '<span class="tg"><span class="mw" style="width:16px;height:16px"></span></span>'+s.name;
     return '<span class="tg">'+s.em+'</span>'+s.name;
   }
   function renderPaytable(){
@@ -1402,7 +1405,7 @@ h1 .glyph{color:var(--vio);-webkit-text-fill-color:var(--vio);filter:drop-shadow
       +'<tr><td>'+ptSymCell('S')+'</td><td>—</td><td colspan="3">3+ anywhere → multiplier-wheel free spins</td></tr>'
       +'<tr><td>'+ptSymCell('B')+'</td><td>—</td><td colspan="3">on reels 1·3·5 → Wheel of Fortune</td></tr>'
       +'</tbody></table>'
-      +'<p class="pt-note"><span class="hl">🎡 Wheel of Fortune</span> — 24 segments: cash 5× to 75× your total bet, '
+      +'<p class="pt-note"><span class="hl"><span class="mw"></span> Wheel of Fortune</span> — 24 segments: cash 5× to 75× your total bet, '
       +'<span class="hl">SPIN AGAIN</span> (keeps the wheel alive) and a <span class="vi">+6 free spins ×2</span> segment. '
       +'<span class="vi">Free spins</span> — 3+ orbs first spin the 20-segment multiplier wheel (×2 / ×3 / ×5 / ×8) and that multiplier applies to every line win for the whole session; +2 spins per retrigger. '
       +'<span class="am">Hot wilds</span> (×2/×3/×5 badges on ~1-in-12 wilds) multiply a winning line by the highest badge in the run and stack with the session multiplier. '
