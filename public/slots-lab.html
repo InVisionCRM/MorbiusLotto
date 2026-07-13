@@ -31,20 +31,22 @@
 
    Mechanic: bet = total per spin (line bet = bet ÷ 20). Per spin the seeded
    stream yields 5 reel stops, then ONE multiplier draw per natural wild in
-   the window (reel-major). Base game: ×2/×3/×5 on 4.5/2.3/1.2% of wilds; a
-   line win through hot wilds is multiplied by the HIGHEST badge in the run.
-   3+ rockets pay 1/5/25× total bet and award 3 free spins (+1 per
-   retrigger). SHIELD LOCK: during free spins EVERY wild that lands LOCKS in
-   place for the rest of the bonus — hot ones keep their ×2/×3/×5 badge
-   (drawn on 12/7/3% of bonus wilds), plain ones lock at ×1 and upgrade if a
-   hot wild later lands on the same cell. Locked cells act as that wild on
-   every later spin, so each new lock makes every remaining spin stronger.
+   the window (reel-major). ×2/×3/×5 hot wilds land on 4.5/2.3/1.2% of
+   wilds; a line win through hot wilds is multiplied by the HIGHEST badge in
+   the run. 3+ rockets (reels 1/3/5 carry an extra rocket → bonus hits about
+   1-in-41 spins) award 10 SHIELD LOCK free spins (+1 per retrigger); there
+   is no instant scatter pay — the bonus is the pay. During free spins the
+   reels switch to their own leaner strip set (wilds only on reels 2–5,
+   fewer highs, fewer rockets) and EVERY wild that lands LOCKS in place for
+   the rest of the bonus — hot ones keep their badge, plain ones lock at ×1
+   and upgrade if a hot wild later lands on the same cell. Locked cells act
+   as that wild on every later spin, so the long ride builds spin by spin.
 
-   Payout tuning: same 52/53-symbol strips as v1; this exact ruleset was
-   tuned by Monte Carlo (2M + 4M spins, two seeds): RTP ≈ 96.3% (hit ≈ 49%,
-   free spins 1-in-80 contributing ≈ 14 points, ≈2.9 locked shields per
-   bonus, max observed round ≈ 813×) — ≈ 3.7% house edge, stated in the FAQ.
-   Self-contained client-side demo (illustrative seeded RNG). Currency: MORBIUS. */
+   Payout tuning: this exact ruleset (both strip sets, lock-all, no scatter
+   pay) was tuned by Monte Carlo (1M + 4M spins, two seeds): RTP ≈ 97.0%
+   (hit ≈ 49%, bonus 1-in-41 contributing ≈ 19.5 points, ≈1.8 locked shields
+   per bonus, max observed round ≈ 426×) — ≈ 3.0% house edge, stated in the
+   FAQ. Self-contained client-side demo (illustrative seeded RNG). Currency: MORBIUS. */
 :root{
   --abyss:#050E16; --cyan:#22D3EE; --cyan-soft:rgba(34,211,238,0.12); --cyan-edge:rgba(34,211,238,0.35);
   --win:#F59E0B; --loss:#FB7185;
@@ -318,7 +320,7 @@ h1.title .glyph{margin-left:.35rem;color:var(--cyan);filter:drop-shadow(0 0 12px
 <div class="wrap">
   <header>
     <h1 class="title">Abyss Reels<span class="glyph">◆</span></h1>
-    <p class="tagline">5×3 reels · 20 lines · hot MORB wilds up to ×5 · 🚀 Shield Lock free spins · provably fair · played in MORBIUS</p>
+    <p class="tagline">5×3 reels · 20 lines · hot MORB wilds up to ×5 · 🚀 10 Shield Lock free spins · provably fair · played in MORBIUS</p>
   </header>
 
   <div class="topbar">
@@ -359,7 +361,7 @@ h1.title .glyph{margin-left:.35rem;color:var(--cyan);filter:drop-shadow(0 0 12px
           <div class="sr"><img src="morbius/MorbiusChip.png" alt="MORB wild" /><span>MORB wild ×5</span><span class="sv">1000</span></div>
           <div class="sr"><img src="vip-badges/obsidian.png" alt="Obsidian" /><span>Obsidian ×5</span><span class="sv">325</span></div>
           <div class="sr"><img src="vip-badges/diamond.png" alt="Diamond" /><span>Diamond ×5</span><span class="sv">200</span></div>
-          <div class="sr"><img src="crash/rocket.webp" alt="Rocket scatter" /><span>Rocket ×3+</span><span class="sv hl">Shield Lock spins</span></div>
+          <div class="sr"><img src="crash/rocket.webp" alt="Rocket scatter" /><span>Rocket ×3+</span><span class="sv hl">10 free spins</span></div>
         </div>
         <button class="pt-open" id="ptBtn">Full paytable</button>
       </div>
@@ -409,7 +411,7 @@ h1.title .glyph{margin-left:.35rem;color:var(--cyan);filter:drop-shadow(0 0 12px
     <b>Prototype</b> — Deep-Sea Neon style, single-player on the arcade2 pattern (like Greed Dice / Firewalk / Mines).<br/>
     Reel stops and wild multipliers here come from an in-page seeded RNG for feel; the real build draws them from the server
     <b>provably-fair HMAC</b> stream (<span class="mono">/api/arcade/reels/*</span>). Strips + paytable + Shield Lock bonus are
-    Monte-Carlo tuned to <b>≈ 96.3% RTP</b>. Every round (base spin + its free spins) re-derives from the seed in Verify. Currency: <b>MORBIUS</b>.
+    Monte-Carlo tuned to <b>≈ 97.0% RTP</b>. Every round (base spin + its free spins) re-derives from the seed in Verify. Currency: <b>MORBIUS</b>.
   </p>
 </div>
 
@@ -426,7 +428,7 @@ h1.title .glyph{margin-left:.35rem;color:var(--cyan);filter:drop-shadow(0 0 12px
     </div>
     <div class="m-sec">
       <h3>Verify a round</h3>
-      <p class="note">Every spin draws 5 reel stops, then one multiplier per natural wild (reel-major order) — all from one stream derived from a server seed committed (hashed) before your bet. Shield Lock state is derived, not drawn: locked cells replay exactly from the same sequence. The seed is revealed once the round settles and everything re-derives draw-for-draw.</p>
+      <p class="note">Every spin draws 5 reel stops (base spins on the base strips, free spins on the bonus strips), then one multiplier per natural wild (reel-major order) — all from one stream derived from a server seed committed (hashed) before your bet. Shield Lock state is derived, not drawn: locked cells replay exactly from the same sequence. The seed is revealed once the round settles and everything re-derives draw-for-draw.</p>
       <div class="m-input-row">
         <input class="m-input" id="verifyIdInput" placeholder="Round ID" />
         <button class="m-btn solid" id="verifyBtn">Verify</button>
@@ -452,11 +454,11 @@ h1.title .glyph{margin-left:.35rem;color:var(--cyan);filter:drop-shadow(0 0 12px
     normal:{first:1300,gap:1000,anticGap:2000,settle:1100,cruise:17,label:'Normal'},
     turbo:{first:420,gap:170,anticGap:650,settle:550,cruise:26,label:'Turbo'}
   };
-  var FS_AWARD=3, FS_RETRIG=1;
-  var SCAT_PAY={3:1,4:5,5:25}; // × total bet
+  var FS_AWARD=10, FS_RETRIG=1;
+  var SCAT_PAY={}; // no instant scatter pay — the 10-spin bonus IS the pay
   // hot-wild odds — one draw per natural wild, reel-major (Monte-Carlo tuned, see head comment)
   var BASE_MULT=[[0.92,1],[0.045,2],[0.023,3],[0.012,5]];
-  var FS_MULT=[[0.78,1],[0.12,2],[0.07,3],[0.03,5]];
+  var FS_MULT=[[0.92,1],[0.045,2],[0.023,3],[0.012,5]];
 
   // symbol catalog — real MORBlotto art; ids/order match the strips & RTP sim
   var SYMS={
@@ -490,13 +492,23 @@ h1.title .glyph{margin-left:.35rem;color:var(--cyan);filter:drop-shadow(0 0 12px
     [1,2,1,2,1],[0,1,0,1,0],[2,1,2,1,2],[1,1,0,1,1],[1,1,2,1,1],
     [0,1,1,1,0],[2,1,1,1,2],[0,2,0,2,0],[2,0,2,0,2],[0,2,2,2,0]
   ];
-  // reel strip composition (counts per symbol) — reels 1&5 carry 3 wilds, 2–4 carry 4
+  // base reel strips — reels 1/3/5 carry 3 rockets (bonus 1-in-41), 2/4 carry 2
   var STRIP_COUNTS=[
-    [['W',3],['S',2],['H1',4],['H2',4],['H3',5],['H4',5],['A',7],['K',7],['Q',7],['J',8]],
+    [['W',3],['S',3],['H1',4],['H2',4],['H3',5],['H4',5],['A',7],['K',7],['Q',7],['J',8]],
     [['W',4],['S',2],['H1',4],['H2',4],['H3',5],['H4',5],['A',7],['K',7],['Q',7],['J',8]],
+    [['W',4],['S',3],['H1',4],['H2',4],['H3',5],['H4',5],['A',7],['K',7],['Q',7],['J',8]],
     [['W',4],['S',2],['H1',4],['H2',4],['H3',5],['H4',5],['A',7],['K',7],['Q',7],['J',8]],
-    [['W',4],['S',2],['H1',4],['H2',4],['H3',5],['H4',5],['A',7],['K',7],['Q',7],['J',8]],
-    [['W',3],['S',2],['H1',4],['H2',4],['H3',5],['H4',5],['A',7],['K',7],['Q',7],['J',8]]
+    [['W',3],['S',3],['H1',4],['H2',4],['H3',5],['H4',5],['A',7],['K',7],['Q',7],['J',8]]
+  ];
+  // free-spin reel strips — their own leaner set so the 10-spin lock-all ride
+  // stays balanced: wilds only on reels 2–5 (locks build across the bonus),
+  // fewer highs, fewer rockets (retriggers stay rare)
+  var STRIP_COUNTS_FS=[
+    [['W',0],['S',2],['H1',2],['H2',2],['H3',2],['H4',3],['A',12],['K',12],['Q',13],['J',13]],
+    [['W',1],['S',1],['H1',2],['H2',2],['H3',2],['H4',3],['A',12],['K',12],['Q',13],['J',13]],
+    [['W',1],['S',2],['H1',2],['H2',2],['H3',2],['H4',3],['A',12],['K',12],['Q',13],['J',13]],
+    [['W',1],['S',1],['H1',2],['H2',2],['H3',2],['H4',3],['A',12],['K',12],['Q',13],['J',13]],
+    [['W',1],['S',2],['H1',2],['H2',2],['H3',2],['H4',3],['A',12],['K',12],['Q',13],['J',13]]
   ];
 
   var S={ balance:10000, speed:'normal', bet:200, phase:'idle', busy:false, sound:true,
@@ -539,11 +551,13 @@ h1.title .glyph{margin-left:.35rem;color:var(--cyan);filter:drop-shadow(0 0 12px
     return s;
   }
   var STRIPS=STRIP_COUNTS.map(buildStrip);
+  var STRIPS_FS=STRIP_COUNTS_FS.map(buildStrip);
+  function stripsFor(isFree){return isFree?STRIPS_FS:STRIPS;}
 
   /* ── provably-fair draws (identical order in play & verify & Monte Carlo) ── */
-  function drawStops(rng){var st=[];for(var r=0;r<5;r++)st.push(Math.floor(rng()*STRIPS[r].length));return st;}
-  function windowAt(stops){
-    var g=[];for(var r=0;r<5;r++){var st=STRIPS[r],col=[];for(var row=0;row<3;row++)col.push(st[(stops[r]+row)%st.length]);g.push(col);}
+  function drawStops(rng,SP){var st=[];for(var r=0;r<5;r++)st.push(Math.floor(rng()*SP[r].length));return st;}
+  function windowAt(stops,SP){
+    var g=[];for(var r=0;r<5;r++){var st=SP[r],col=[];for(var row=0;row<3;row++)col.push(st[(stops[r]+row)%st.length]);g.push(col);}
     return g; // g[reel][row]
   }
   function drawMultFrom(rng,table){
@@ -895,15 +909,16 @@ h1.title .glyph{margin-left:.35rem;color:var(--cyan);filter:drop-shadow(0 0 12px
     if(u<=b)return s*a/2+s*(u-a);
     return 1-s*(1-u)*(1-u)/(2*(1-b));
   }
-  function stripHtml(r){
-    var L=STRIPS[r].length,html='';
-    for(var i=0;i<L+3;i++)html+=symHtml(STRIPS[r][i%L],1);
+  function stripHtml(r,SP){
+    var L=SP[r].length,html='';
+    for(var i=0;i<L+3;i++)html+=symHtml(SP[r][i%L],1);
     return html;
   }
 
   function doSpin(isFree){
-    var stops=drawStops(S.rng);
-    var raw=windowAt(stops);
+    var SP=stripsFor(isFree);
+    var stops=drawStops(S.rng,SP);
+    var raw=windowAt(stops,SP);
     var rawMults=drawMults(S.rng,raw,isFree);
     var ov=overlaySticky(raw,rawMults,isFree?S.sticky:null);
     var newLocks=(isFree&&S.sticky)?lockNewShields(raw,rawMults,S.sticky):[];
@@ -928,13 +943,13 @@ h1.title .glyph{margin-left:.35rem;color:var(--cyan);filter:drop-shadow(0 0 12px
 
     var cellH=reelEls[0].clientHeight/3;
     var reels=stops.map(function(stop,r){
-      var L=STRIPS[r].length;
+      var L=SP[r].length;
       var start=Math.floor(Math.random()*L);
       var T=stopAt[r];
       var ideal=sp.cruise*T/1000;
       var base=((stop-start)%L+L)%L;
       var D=base+Math.max(1,Math.round((ideal-base)/L))*L; // ≥1 full loop, near cruise speed
-      stripEls[r].innerHTML=stripHtml(r);
+      stripEls[r].innerHTML=stripHtml(r,SP);
       reelEls[r].classList.add('spin');
       return {r:r,L:L,start:start,D:D,T:T,done:false};
     });
@@ -1105,7 +1120,7 @@ h1.title .glyph{margin-left:.35rem;color:var(--cyan);filter:drop-shadow(0 0 12px
   }
 
   /* fairness modal */
-  function recipeStr(){return 'demo: mulberry32(xmur3(`${serverSeed}:${clientSeed}:${nonce}`)) → 5 reel stops per spin, then 1 multiplier draw per natural wild (reel-major), consumed in spin order (base spin first, then each free spin). Shield Lock cells are derived from prior draws, never drawn. Production draws the same sequence from the server HMAC_SHA256 stream.';}
+  function recipeStr(){return 'demo: mulberry32(xmur3(`${serverSeed}:${clientSeed}:${nonce}`)) → 5 reel stops per spin (base spins use the base strips, free spins the bonus strips), then 1 multiplier draw per natural wild (reel-major), consumed in spin order. Shield Lock cells are derived from prior draws, never drawn. Production draws the same sequence from the server HMAC_SHA256 stream.';}
   function ckHtml(ok,label){return '<div class="m-check"><span class="ck '+(ok?'ok':'no')+'">'+(ok?'✓':'✗')+'</span><span>'+label+'</span></div>';}
   function fieldHtml(l,v){return '<div class="m-field"><div class="fl">'+l+'</div><div class="fv">'+v+'</div></div>';}
   function spinsHtml(log){
@@ -1141,9 +1156,10 @@ h1.title .glyph{margin-left:.35rem;color:var(--cyan);filter:drop-shadow(0 0 12px
     for(var i=0;i<r.spinLog.length;i++){
       var lg=r.spinLog[i];
       if(!lg.free)sticky=null; // base spin — Shield Lock only exists inside the bonus
-      var st=drawStops(rng);
+      var SP=stripsFor(lg.free);
+      var st=drawStops(rng,SP);
       if(st.join(',')!==lg.stops.join(','))stopsOk=false;
-      var raw=windowAt(st);
+      var raw=windowAt(st,SP);
       var m=drawMults(rng,raw,lg.free);
       if(JSON.stringify(multsToLog(raw,m))!==JSON.stringify(lg.mults))multsOk=false;
       var ov=overlaySticky(raw,m,lg.free?sticky:null);
@@ -1189,26 +1205,26 @@ h1.title .glyph{margin-left:.35rem;color:var(--cyan);filter:drop-shadow(0 0 12px
     $('ptBody').innerHTML=
       '<table class="pt-tbl"><thead><tr><th>Symbol</th><th>×2</th><th>×3</th><th>×4</th><th>×5</th></tr></thead>'
       +'<tbody>'+rows
-      +'<tr><td>'+ptSymCell('S')+'</td><td>—</td><td>1× bet</td><td>5× bet</td><td>25× bet</td></tr>'
+      +'<tr><td>'+ptSymCell('S')+'</td><td>—</td><td colspan="3">3+ anywhere → 10 free spins</td></tr>'
       +'</tbody></table>'
       +'<div class="pt-mults">'
-        +'<div class="pm"><div class="pmx">×2</div><div class="pmp">4.5% · 12% in bonus</div></div>'
-        +'<div class="pm"><div class="pmx">×3</div><div class="pmp">2.3% · 7% in bonus</div></div>'
-        +'<div class="pm"><div class="pmx">×5</div><div class="pmp">1.2% · 3% in bonus</div></div>'
+        +'<div class="pm"><div class="pmx">×2</div><div class="pmp">4.5% of wilds</div></div>'
+        +'<div class="pm"><div class="pmx">×3</div><div class="pmp">2.3% of wilds</div></div>'
+        +'<div class="pm"><div class="pmx">×5</div><div class="pmp">1.2% of wilds</div></div>'
       +'</div>'
       +'<p class="pt-note">Line pays are in <span class="hl">line bets</span> (total bet ÷ 20) and pay leftmost-consecutive on the 20 fixed lines; only the best win per line counts. '
       +'The <span class="hl">MORB wild</span> substitutes for every symbol except the 🚀 rocket and pays as its own top symbol. '
       +'<span class="am">Hot wilds</span> land with a ×2 / ×3 / ×5 badge — a winning line through hot wilds is multiplied by the <span class="am">highest</span> badge in the run. '
-      +'<span class="am">🚀 Rockets</span> pay anywhere (× total bet); 3+ award <span class="am">3 Shield Lock free spins</span> (+1 per retrigger). '
-      +'During the bonus <span class="am">every wild locks in place</span> for the remaining spins — hot ones keep their badge, and a higher badge landing on a locked cell upgrades it. '
-      +'Strips, paytable &amp; bonus are tuned to ≈ 96.3% RTP.</p>';
+      +'<span class="am">3+ 🚀 rockets</span> (about 1-in-41 spins) award <span class="am">10 Shield Lock free spins</span> (+1 per retrigger); there is no instant scatter pay. '
+      +'The bonus runs on its own leaner reel set (wilds appear on reels 2–5 only) and <span class="am">every wild locks in place</span> for the remaining spins — hot ones keep their badge, and a higher badge landing on a locked cell upgrades it. '
+      +'Strips, paytable &amp; bonus are tuned to ≈ 97.0% RTP.</p>';
   }
 
   var FAQS=[
     {q:'How do the 20 lines pay?',a:'<p>Your bet covers all <span class="hl">20 fixed paylines</span>, so each line stakes 1/20th of the bet. A line wins when <span class="hl">2+ (top symbols) or 3+ identical symbols</span> land left-to-right consecutively from reel 1 along that line — check the full paytable for every value. Only the single best win counts per line, but every winning line pays, so a good spin stacks several lines at once.</p><p>The <span class="hl">MORB wild</span> substitutes for every paying symbol (not the 🚀 rocket) and is also the top-paying symbol in its own right — five wilds on a line pay 1000× the line bet.</p>'},
-    {q:'How does the Shield Lock bonus work?',a:'<p>Land <span class="hl">3+ 🚀 rockets</span> and you win an instant scatter pay (1× / 5× / 25× your total bet for 3 / 4 / 5) plus <span class="hl">3 free spins</span>; rockets during the bonus retrigger <span class="hl">+1 spin</span> each time.</p><p>During free spins <span class="hl">every wild that lands locks in place</span> for the rest of the bonus — about one in five comes in hot with a ×2 / ×3 / ×5 badge, and plain shields lock at ×1 and <span class="hl">upgrade</span> if a hot wild later lands on the same cell. Locked cells count as that wild on <span class="hl">every remaining spin</span>, so the board strengthens with every lock — an average bonus banks about three shields, and stacking hot ones is the game’s ceiling (813× was the biggest round in 4 million simulated spins).</p>'},
-    {q:'What are hot (multiplier) wilds?',a:'<p>Every wild can land <span class="hl">hot</span>, carrying a <span class="hl">×2, ×3 or ×5 badge</span> — in the base game 4.5% / 2.3% / 1.2% of wilds (about 1 in 12), and during Shield Lock spins 12% / 7% / 3% (about 1 in 5). You’ll see it instantly: hot wilds land with a pulsing amber border and the badge in the corner, regular wilds carry a cyan border, rockets a rose one.</p><p>A winning line that runs through hot wilds is multiplied by the <span class="hl">highest badge in that run</span> — badges don’t compound, so one ×5 is the best case, turning a 200× line into 1000×. Every multiplier draw comes from the same seeded stream as the reel stops, so Verify replays it exactly.</p>'},
-    {q:'What is the RTP — where does the math come from?',a:'<p>The reel strips (52–53 symbols per reel, with 2 rockets and 3–4 wilds each), the hot-wild odds in and out of the bonus, the Shield Lock rules, and the paytable were tuned with <span class="hl">multi-million-spin Monte Carlo simulations</span> of these exact rules (2M + 4M spins on separate seeds). The result: <span class="hl">RTP ≈ 96.3%</span>, hit rate ≈ 49%, free spins about once in 80 spins contributing ≈ 14 points of return with ≈ 2.9 locked shields per bonus, and a maximum observed round of ≈ 813× bet.</p><p>That means a built-in house edge of about <span class="hl">3.7%</span> — over a long session the game keeps ~3.7 of every 100 MORBIUS wagered. Individual sessions swing far wider than that; the edge only shows up over many spins.</p>'},
+    {q:'How does the Shield Lock bonus work?',a:'<p>Land <span class="hl">3+ 🚀 rockets</span> — reels 1, 3 and 5 carry an extra rocket, so the bonus hits about <span class="hl">once every 41 spins</span> — and you win <span class="hl">10 free spins</span>; rockets during the bonus retrigger <span class="hl">+1 spin</span> each time. There’s no instant scatter pay: the bonus itself is the pay.</p><p>Free spins run on their own reel set (wilds appear on <span class="hl">reels 2–5</span> only, and the reels are a little leaner) — and <span class="hl">every wild that lands locks in place</span> for the rest of the bonus. Hot shields keep their ×2 / ×3 / ×5 badge; plain shields lock at ×1 and <span class="hl">upgrade</span> if a hot wild later lands on the same cell. Locked cells count as that wild on <span class="hl">every remaining spin</span>, so a bonus that starts quiet builds spin by spin — stack shields early and the back half of the ride pays over and over (426× was the biggest round in 4 million simulated spins).</p>'},
+    {q:'What are hot (multiplier) wilds?',a:'<p>Every wild can land <span class="hl">hot</span>, carrying a <span class="hl">×2, ×3 or ×5 badge</span> — 4.5% / 2.3% / 1.2% of wilds (about 1 in 12), in and out of the bonus. You’ll see it instantly: hot wilds land with a pulsing amber border and the badge in the corner, regular wilds carry a cyan border, rockets a rose one. During Shield Lock spins a hot wild is the jackpot moment — it locks with its badge for every remaining spin.</p><p>A winning line that runs through hot wilds is multiplied by the <span class="hl">highest badge in that run</span> — badges don’t compound, so one ×5 is the best case, turning a 200× line into 1000×. Every multiplier draw comes from the same seeded stream as the reel stops, so Verify replays it exactly.</p>'},
+    {q:'What is the RTP — where does the math come from?',a:'<p>Both reel sets (the base strips with their extra rockets, and the leaner free-spin strips), the hot-wild odds, the Shield Lock rules, and the paytable were tuned with <span class="hl">multi-million-spin Monte Carlo simulations</span> of these exact rules (1M + 4M spins on separate seeds). The result: <span class="hl">RTP ≈ 97.0%</span>, hit rate ≈ 49%, the bonus about once in 41 spins contributing ≈ 19.5 points of return with ≈ 1.8 locked shields per bonus, and a maximum observed round of ≈ 426× bet.</p><p>That means a built-in house edge of about <span class="hl">3.0%</span> — over a long session the game keeps ~3 of every 100 MORBIUS wagered. Individual sessions swing far wider than that; the edge only shows up over many spins.</p>'},
     {q:'Is it really fair — and reproducible?',a:'<p>Yes. Before you bet, the server commits to a secret <span class="hl">server seed</span> (you see only its SHA-256 hash). Every draw of every spin — the five reel stops <span class="hl">and</span> each wild’s multiplier — comes from a stream derived from that seed, <span class="hl">your client seed</span>, and a nonce, so the entire round is fixed the instant you press spin. Shield Lock positions are pure consequences of those draws, so they replay too.</p><p>When the round settles the seed is revealed. Hit <span class="hl">Verify</span> and the whole sequence re-derives draw-for-draw — stops, multipliers, locks — the wins recompute from the paytable, and the commitment hash is checked locally.</p>'},
     {q:'Does spin speed change the odds?',a:'<p>No — <span class="hl">Turbo</span> only shortens the reel ride, and the rocket-tease slowdown (reels stretching to two seconds apart while they burn amber) is pure theatre. The stops and multipliers are already drawn from the seeded stream before the reels start moving, so Normal and Turbo have identical math. Pick whichever feels better.</p>'},
     {q:'How do I get MORBIUS?',a:'<p>MORBIUS is the project’s token on <span class="hl">PulseChain</span> (chain ID 369). Buy it on <span class="hl">PulseX</span>, the main PulseChain DEX, by swapping PLS or WPLS for MORBIUS, then deposit it to your play balance.</p><p class="mono" style="font-size:11px">Contract: <a href="https://scan.pulsechain.com/token/0xB7d4eB5fDfE3d4d3B5C16a44A49948c6EC77c6F1" target="_blank" rel="noopener noreferrer">0xB7d4eB5fDfE3d4d3B5C16a44A49948c6EC77c6F1</a></p><p>Always confirm the contract address before swapping — never trust a ticker alone.</p>'}
