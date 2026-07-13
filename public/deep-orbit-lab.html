@@ -248,8 +248,8 @@ h1 .glyph{color:var(--ice);-webkit-text-fill-color:var(--ice);filter:drop-shadow
 .burn-stage.open{display:flex}
 .burn-title{font-size:clamp(15px,3.6vw,22px);font-weight:700;letter-spacing:.24em;text-transform:uppercase;color:var(--eng);text-shadow:0 0 16px rgba(251,146,60,.7)}
 .burn-scene{position:relative;width:min(74vw,320px);height:clamp(120px,26vw,180px);border-radius:14px;overflow:hidden;background:linear-gradient(180deg,#05061c,#0b0d33);box-shadow:inset 0 0 0 1px rgba(129,140,248,.25),0 12px 30px -18px rgba(0,0,0,.9)}
-.burn-scene .burn-planet{position:absolute;left:50%;top:34%;transform:translateX(-50%);width:210%;opacity:.9;filter:saturate(.9);pointer-events:none;transition:top 1s ease;-webkit-mask:linear-gradient(180deg,#000 45%,transparent 92%);mask:linear-gradient(180deg,#000 45%,transparent 92%)}
-.burn-scene.climb .burn-planet{top:62%}
+.burn-scene .burn-planet{position:absolute;left:50%;top:26%;transform:translateX(-50%);width:210%;filter:brightness(1.12);pointer-events:none;transition:top 1s ease}
+.burn-scene.climb .burn-planet{top:58%}
 .burn-scene .streaks{position:absolute;inset:0;background:repeating-linear-gradient(180deg,rgba(148,163,255,.35) 0 2px,transparent 2px 44px);background-size:100% 44px;opacity:.14}
 .burn-scene.climb .streaks{opacity:.4;animation:streakfall .38s linear infinite}
 @keyframes streakfall{from{background-position-y:0}to{background-position-y:44px}}
