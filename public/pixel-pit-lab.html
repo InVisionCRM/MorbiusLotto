@@ -1699,6 +1699,14 @@ h1 .title-glyph{height:.92em;width:auto;vertical-align:-0.1em;margin-left:.18em;
     if(S.lastEv)presentWins(S.lastEv);
   });
 
+  // preload every symbol + claw-prize image so first spins render instantly
+  (function(){
+    var seen={};
+    Object.keys(SYMS).map(function(k){return SYMS[k].art;})
+      .concat(PRIZES.map(function(p){return p.img;}))
+      .forEach(function(src){if(!seen[src]){seen[src]=1;var im=new Image();im.src=src;}});
+  })();
+
   S.pools=loadPools();renderPools();
   renderIdleGrid([['H1','L1','H3'],['L2','W','L3'],['H2','B','L1'],['L3','W','L2'],['H3','S','L1']]);
   renderPaytable();syncHud();renderActions();renderHistory();renderFaq();fxResize();
