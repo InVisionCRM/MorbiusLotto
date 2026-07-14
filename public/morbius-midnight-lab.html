@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<title>MORBIUS MIDNIGHT — Circuit City lab</title>
+<title>MORBIUS MIDNIGHT — Night Hunt lab</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
@@ -17,17 +17,20 @@
       ultra-rare by design). Pools persist in localStorage
       ('morbiusmidnight-jp', seeds 25,000 / 500,000 / 10,000,000); the hit
       condition is provably fair, pool size is account state.
-   3. CIRCUIT BREACH bonus — 3 glowing circuit nodes on reels 1/3/5
-      (measured ~1-in-137 spins incl. free spins) open a full-screen circuit
-      board with a 12-node winding path. All 12 node outcomes are drawn
-      up-front from the seeded stream (2 uniforms per node, ICE hazard
-      8% + 4% per depth, ×2 boost p=0.15, else cash 1–10× bet). You choose
-      ADVANCE or EXTRACT; ICE wipes the whole unbanked haul.
-   4. Free spins — BAT SWARM: 3+ blood moons (~1-in-107) award 6 free spins
-      (+2 per retrigger). EVERY free spin, seeded draws pick 2–5 bats (one
-      count uniform, then one cell uniform per bat) that fly in and land as
-      wilds for that spin's evaluation. Bats stack with reel wilds; a bat
-      over a hot wild keeps the badge. Bats do NOT count toward jackpots.
+   3. NIGHT HUNT bonus (Cash Hunt style) — 3 glowing circuit nodes on reels
+      1/3/5 (measured ~1-in-140 spins incl. free spins) open a full-screen
+      wall of 24 tiles. All 24 multipliers are drawn up-front from the seeded
+      stream (one weighted pick per tile, mostly 2×–15×, some 25×/50×, rare
+      75×/100×), shown face-up, then flipped face-down and shuffled by a
+      seeded Fisher-Yates permutation (23 uniforms). You AIM a crossbow and
+      SHOOT ONE tile → it flips to reveal its multiplier × your total bet.
+      Your aim consumes ZERO rng (uniform over 24 tiles → EV = table mean);
+      the board values and shuffle are fully committed before you shoot.
+   4. Free spins — SIGIL SWARM with STICKY wilds: 3+ blood moons (~1-in-107)
+      award free spins. EVERY free spin, seeded draws pick 2–5 night sigils
+      (one count uniform, then one cell uniform per sigil) that fly in and
+      LOCK IN PLACE as wilds for the rest of the free spins. Locked cells
+      stack with reel wilds and persist spin to spin, building the board.
    5. Circuit City theme: the purple circuit-city banner as a fixed page
       backdrop under a heavy dark overlay, violet chrome + magenta accents
       (amber reserved for wins), MORB chip wild, blood-moon scatter,
@@ -36,16 +39,14 @@
    Hot wilds carry ×2/×3/×5 badges (4.5/2.3/1.2% of wilds) — highest badge
    in the run multiplies the line.
 
-   Payout tuning: Monte Carlo of this exact ruleset (midnight-sim.js;
-   tune run 1M spins seed 'midnight-1': game RTP 95.15%; confirm run
-   2M spins seed 'midnight-confirm-7': game RTP 95.35%): line game +
-   Bat Swarm + Circuit Breach (benchmark policy: advance to node 6 then
-   extract) ≈ 95.2–95.4% + 1.5% jackpot contribution → RTP ≈ 96.7%
-   (hit ≈ 63.3%, Bat Swarm ≈ 22.5–22.7 pts at ~1-in-107, Circuit Breach
-   ≈ 7.5 pts at ~1-in-137 with avg ≈ 9.8× bet per breach and 78% ICE under
-   the benchmark policy, max observed round ≈ 254×). ≈3.3% house edge,
-   stated in the FAQ. Self-contained client-side demo (illustrative seeded
-   RNG). Currency: MORBIUS. */
+   Payout tuning: Monte Carlo of this exact ruleset (midnight-sim2.js,
+   1M spins seed 'midnight2-1'): line game + Sigil Swarm (sticky wilds) +
+   Night Hunt ≈ 95.1% + 1.5% flat jackpot contribution → RTP ≈ 96.6%
+   (hit ≈ 63.5%, Sigil Swarm ≈ 37 pts at ~1-in-107 with ≈ 8.3 sticky wilds
+   locked per round, Night Hunt ≈ 7.1 pts at ~1-in-140 with mean tile ≈ 9.5×
+   bet and max 100×, max observed round ≈ 395×). ≈3.4% house edge, stated in
+   the FAQ. Self-contained client-side demo (illustrative seeded RNG).
+   Currency: MORBIUS. */
 :root{
   --abyss:#0a0514; --vio:#A855F7; --vio-soft:rgba(168,85,247,0.14); --vio-edge:rgba(168,85,247,0.45);
   --mag:#EC4899; --mag-soft:rgba(236,72,153,0.14);
@@ -172,6 +173,7 @@ h1 .title-sigil{width:clamp(22px,4.6vw,30px);height:auto;vertical-align:-.06em;m
 .reel::after{content:"";position:absolute;inset:0;pointer-events:none;z-index:2;border-radius:12px;background:linear-gradient(180deg,rgba(8,4,18,.7) 0%,transparent 18%,transparent 82%,rgba(8,4,18,.7) 100%)}
 .strip{display:flex;flex-direction:column;will-change:transform}
 .reel.spin .strip{filter:blur(2.2px)}
+.reel.spin .sym img{filter:none}
 .reel.antic{box-shadow:inset 0 0 0 2px rgba(236,72,153,.7),0 0 22px -4px rgba(236,72,153,.6)}
 .reel.antic::before{content:"";position:absolute;inset:0;border-radius:12px;z-index:3;background:radial-gradient(ellipse at 50% 50%,rgba(236,72,153,.18),transparent 70%);animation:anticpulse .55s ease-in-out infinite;pointer-events:none}
 @keyframes anticpulse{0%,100%{opacity:.35}50%{opacity:1}}
@@ -222,24 +224,25 @@ h1 .title-sigil{width:clamp(22px,4.6vw,30px);height:auto;vertical-align:-.06em;m
 @keyframes scathit{0%{transform:scale(1)}30%{transform:scale(1.28)}55%{transform:scale(1.06)}75%{transform:scale(1.16)}100%{transform:scale(1)}}
 .reel.land{animation:reelland .22s cubic-bezier(.34,1.56,.64,1)}
 @keyframes reelland{0%{transform:translateY(-6px)}55%{transform:translateY(3px)}100%{transform:translateY(0)}}
-/* BAT SWARM overlay layer */
-.bat-layer{position:absolute;inset:0;z-index:6;pointer-events:none;display:grid;grid-template-columns:repeat(5,1fr);grid-template-rows:repeat(4,var(--cell));gap:7px}
-.batcell{position:relative;display:grid;place-items:center;border-radius:10px;background:radial-gradient(ellipse at 50% 60%,rgba(236,72,153,.2),rgba(14,8,26,.82) 78%)}
-.batcell .bat-img{width:calc(var(--cell)*.62);height:calc(var(--cell)*.62);object-fit:contain;
-  filter:drop-shadow(0 0 10px rgba(236,72,153,.85)) drop-shadow(0 3px 6px rgba(0,0,0,.6));
-  animation:sigilhover 2.2s ease-in-out infinite}
-@keyframes sigilhover{0%,100%{transform:translateY(0) scaleX(1)}50%{transform:translateY(-2px) scaleX(.94)}}
-.batcell .frame{position:absolute;inset:2px;border-radius:9px;box-shadow:inset 0 0 0 2.5px rgba(236,72,153,.95),0 0 22px -2px rgba(236,72,153,.85);animation:batpulse 1.6s ease-in-out infinite}
-@keyframes batpulse{0%,100%{box-shadow:inset 0 0 0 2.5px rgba(236,72,153,.95),0 0 16px -2px rgba(236,72,153,.7)}50%{box-shadow:inset 0 0 0 2.5px #f9a8d4,0 0 30px -2px rgba(236,72,153,1)}}
-.batcell .wildpin{position:absolute;bottom:4px;left:6px;font-family:var(--font-mono);font-weight:700;font-size:calc(var(--cell)*.14);color:#f9a8d4;text-shadow:0 0 6px rgba(236,72,153,.8)}
-.batcell.pop{animation:batpop .5s cubic-bezier(.34,1.56,.64,1) both}
-@keyframes batpop{0%{transform:scale(1.7);opacity:0}55%{transform:scale(.92);opacity:1}80%{transform:scale(1.06)}100%{transform:scale(1)}}
-.batcell.hit{background:radial-gradient(circle at 50% 50%,rgba(236,72,153,.36),rgba(14,8,26,.82) 78%)}
-.bat-fly{position:absolute;z-index:12;width:clamp(34px,calc(var(--cell)*.6),44px);height:clamp(34px,calc(var(--cell)*.6),44px);pointer-events:none;will-change:transform}
-.bat-fly img{width:100%;height:100%;object-fit:contain;
+/* SIGIL SWARM sticky-wild layer — each locked sigil is drawn ONLY here; the
+   strip cell beneath it goes visibility:hidden so two wild images never stack */
+.sigil-layer{position:absolute;inset:0;z-index:6;pointer-events:none;display:grid;grid-template-columns:repeat(5,1fr);grid-template-rows:repeat(4,var(--cell));gap:7px}
+.lockcell{position:relative;display:grid;place-items:center;border-radius:10px;background:radial-gradient(ellipse at 50% 60%,rgba(236,72,153,.2),rgba(14,8,26,.82) 78%)}
+.lockcell .lock-img{width:calc(var(--cell)*.66);height:calc(var(--cell)*.66);object-fit:contain;
+  filter:drop-shadow(0 0 9px rgba(236,72,153,.75)) drop-shadow(0 0 5px rgba(168,85,247,.6)) drop-shadow(0 3px 6px rgba(0,0,0,.6));
+  animation:sigilhover 2.4s ease-in-out infinite}
+@keyframes sigilhover{0%,100%{transform:translateY(0) scale(1)}50%{transform:translateY(-2px) scale(1.03)}}
+.lockcell .frame{position:absolute;inset:2px;border-radius:9px;box-shadow:inset 0 0 0 2.5px rgba(236,72,153,.95),0 0 22px -2px rgba(236,72,153,.85);animation:lockpulse 1.8s ease-in-out infinite}
+@keyframes lockpulse{0%,100%{box-shadow:inset 0 0 0 2.5px rgba(236,72,153,.9),0 0 16px -2px rgba(236,72,153,.6)}50%{box-shadow:inset 0 0 0 2.5px #f9a8d4,0 0 28px -2px rgba(236,72,153,1)}}
+.lockcell .lockpin{position:absolute;bottom:4px;left:6px;font-family:var(--font-mono);font-weight:700;font-size:calc(var(--cell)*.13);letter-spacing:.06em;color:#f9a8d4;text-shadow:0 0 6px rgba(236,72,153,.8)}
+.lockcell.pop{animation:lockpop .5s cubic-bezier(.34,1.56,.64,1) both}
+@keyframes lockpop{0%{transform:scale(1.7);opacity:0}55%{transform:scale(.92);opacity:1}80%{transform:scale(1.06)}100%{transform:scale(1)}}
+.lockcell.hit{background:radial-gradient(circle at 50% 50%,rgba(236,72,153,.36),rgba(14,8,26,.82) 78%)}
+.sigil-fly{position:absolute;z-index:12;width:clamp(34px,calc(var(--cell)*.62),46px);height:clamp(34px,calc(var(--cell)*.62),46px);pointer-events:none;will-change:transform}
+.sigil-fly img{width:100%;height:100%;object-fit:contain;
   filter:drop-shadow(0 0 10px rgba(236,72,153,.9)) drop-shadow(0 3px 6px rgba(0,0,0,.6));
-  animation:sigilflap .34s ease-in-out infinite alternate}
-@keyframes sigilflap{from{transform:scaleX(1)}to{transform:scaleX(.55)}}
+  animation:sigilflap .38s ease-in-out infinite alternate}
+@keyframes sigilflap{from{transform:rotate(-7deg)}to{transform:rotate(7deg)}}
 .lines-svg{position:absolute;inset:0;pointer-events:none;z-index:5}
 .lines-svg polyline{fill:none;stroke-linecap:round;stroke-linejoin:round}
 .lines-svg .pl-faint{stroke:rgba(168,85,247,.3);stroke-width:2.5}
@@ -274,51 +277,58 @@ h1 .title-sigil{width:clamp(22px,4.6vw,30px);height:auto;vertical-align:-.06em;m
 .btn-go{background:linear-gradient(180deg,#e9d5ff,#A855F7 60%,#7e22ce);box-shadow:0 0 24px -6px rgba(168,85,247,.7),inset 0 1px 0 rgba(255,255,255,.5)}
 .btn:disabled{opacity:.45;cursor:not-allowed;filter:saturate(.4)}
 .cash-sub{display:block;font-family:var(--font-mono);font-size:11px;font-weight:600;letter-spacing:0;margin-top:2px;opacity:.85}
-/* ── CIRCUIT BREACH stage ── */
-.breach-stage{position:absolute;inset:0;z-index:20;display:none;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:14px;background:radial-gradient(ellipse at 50% 40%,rgba(20,10,38,.92),rgba(6,3,14,.97));backdrop-filter:blur(2px)}
-.breach-stage.open{display:flex}
-.breach-head{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;justify-content:center}
-.breach-title{font-size:clamp(15px,3.6vw,22px);font-weight:700;letter-spacing:.22em;text-transform:uppercase;color:var(--vio);text-shadow:0 0 16px rgba(168,85,247,.7)}
-.breach-node-k{font-family:var(--font-mono);font-size:12px;letter-spacing:.14em;color:var(--slate-400)}
-.breach-node-k .risk{color:var(--moon)}
-.breach-board{position:relative;width:min(92%,560px);aspect-ratio:56/30;border:1px solid rgba(168,85,247,.4);border-radius:12px;overflow:hidden;
+/* ── NIGHT HUNT (Cash Hunt) stage — shuffled multiplier wall ── */
+.hunt-stage{position:absolute;inset:0;z-index:20;display:none;flex-direction:column;align-items:center;justify-content:center;gap:11px;padding:14px;background:radial-gradient(ellipse at 50% 38%,rgba(22,10,40,.94),rgba(6,3,14,.98));backdrop-filter:blur(2px)}
+.hunt-stage.open{display:flex}
+.hunt-head{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;justify-content:center}
+.hunt-title{font-size:clamp(16px,3.8vw,24px);font-weight:700;letter-spacing:.22em;text-transform:uppercase;color:var(--vio);text-shadow:0 0 18px rgba(168,85,247,.75)}
+.hunt-sub{font-family:var(--font-mono);font-size:12px;letter-spacing:.1em;color:var(--slate-400)}
+.hunt-sub .aim{color:#f9a8d4}
+.hunt-wall{position:relative;width:min(94%,560px);aspect-ratio:6/4;border:1px solid rgba(168,85,247,.4);border-radius:14px;
   background:
-    repeating-linear-gradient(0deg,transparent 0 26px,rgba(168,85,247,.09) 26px 27px),
-    repeating-linear-gradient(90deg,transparent 0 26px,rgba(168,85,247,.09) 26px 27px),
-    radial-gradient(ellipse at 60% 20%,rgba(236,72,153,.10),transparent 55%),
+    radial-gradient(ellipse at 60% 15%,rgba(236,72,153,.10),transparent 55%),
     linear-gradient(180deg,#160a2c,#0a0514);
   box-shadow:inset 0 0 34px rgba(0,0,0,.7),0 0 30px -10px rgba(168,85,247,.5)}
-.breach-board.iced{border-color:rgba(248,113,113,.8);box-shadow:inset 0 0 44px rgba(127,29,29,.55),0 0 34px -8px rgba(248,113,113,.7);animation:icedshake .5s cubic-bezier(.36,.07,.19,.97)}
-@keyframes icedshake{0%,100%{transform:translate(0,0)}20%{transform:translate(-7px,3px)}40%{transform:translate(7px,-3px)}60%{transform:translate(-5px,-2px)}80%{transform:translate(4px,2px)}}
-.breach-board .redflood{position:absolute;inset:0;z-index:4;pointer-events:none;background:radial-gradient(ellipse at 50% 50%,rgba(239,68,68,.5),rgba(127,29,29,.25) 65%,transparent 85%);opacity:0;transition:opacity .3s}
-.breach-board.iced .redflood{opacity:1}
-.breach-svg{position:absolute;inset:0;width:100%;height:100%;z-index:1}
-.breach-svg polyline{fill:none;stroke-linecap:round;stroke-linejoin:round}
-.breach-svg .trace-dim{stroke:rgba(168,85,247,.22);stroke-width:2.5;stroke-dasharray:5 7}
-.breach-svg .trace-lit{stroke:rgba(236,72,153,.85);stroke-width:3;filter:drop-shadow(0 0 5px rgba(236,72,153,.8))}
-.bnode{position:absolute;z-index:3;width:clamp(26px,7vw,38px);height:clamp(26px,7vw,38px);transform:translate(-50%,-50%);border-radius:50%;display:grid;place-items:center;
-  font-family:var(--font-mono);font-weight:700;font-size:clamp(9px,2.2vw,12px);color:var(--slate-500);
-  background:radial-gradient(circle at 38% 32%,#241245,#140b24);box-shadow:inset 0 0 0 2px rgba(168,85,247,.3)}
-.bnode.cur{box-shadow:inset 0 0 0 2px rgba(236,72,153,1),0 0 18px rgba(236,72,153,.9);animation:bnodecur .8s ease-in-out infinite}
-@keyframes bnodecur{0%,100%{box-shadow:inset 0 0 0 2px rgba(236,72,153,.9),0 0 12px rgba(236,72,153,.7)}50%{box-shadow:inset 0 0 0 2px #f9a8d4,0 0 24px rgba(236,72,153,1)}}
-.bnode.cash{color:#ffd370;background:radial-gradient(circle at 38% 32%,#4a3208,#1c1204);box-shadow:inset 0 0 0 2px rgba(245,158,11,.9),0 0 14px rgba(245,158,11,.6)}
-.bnode.boost{color:#f9a8d4;background:radial-gradient(circle at 38% 32%,#4a1033,#1e0715);box-shadow:inset 0 0 0 2px rgba(236,72,153,.9),0 0 14px rgba(236,72,153,.6)}
-.bnode.ice{color:#ffc9c9;background:radial-gradient(circle at 38% 32%,#5a1212,#210505);box-shadow:inset 0 0 0 2px rgba(248,113,113,1),0 0 18px rgba(248,113,113,.8)}
-.bnode.reveal{animation:bnodein .45s cubic-bezier(.34,1.56,.64,1) both}
-@keyframes bnodein{0%{transform:translate(-50%,-50%) scale(.4)}60%{transform:translate(-50%,-50%) scale(1.25)}100%{transform:translate(-50%,-50%) scale(1)}}
-.breach-bank{font-family:var(--font-mono);font-weight:700;font-size:clamp(15px,4.4vw,22px);color:var(--win);text-shadow:0 0 12px rgba(245,158,11,.6)}
-.breach-bank .bk{font-size:11px;font-weight:600;letter-spacing:.16em;color:var(--slate-500);text-transform:uppercase;margin-right:8px}
-.breach-result{min-height:20px;font-family:var(--font-mono);font-weight:700;font-size:clamp(13px,3.6vw,17px);color:#fff}
-.breach-result .up{color:var(--win);text-shadow:0 0 12px rgba(245,158,11,.8)}
-.breach-result .ice{color:var(--moon);text-shadow:0 0 12px rgba(248,113,113,.8)}
-.breach-result .bst{color:#f9a8d4;text-shadow:0 0 12px rgba(236,72,153,.8)}
-.breach-btns{display:flex;gap:10px}
-.btn-adv{border:0;border-radius:13px;padding:13px 30px;font-family:var(--font-disp);font-weight:700;font-size:15px;letter-spacing:.12em;text-transform:uppercase;cursor:pointer;color:#170724;
-  background:linear-gradient(180deg,#e9d5ff,#A855F7 60%,#7e22ce);box-shadow:0 0 24px -4px rgba(168,85,247,.8),inset 0 1px 0 rgba(255,255,255,.4)}
-.btn-ext{border:0;border-radius:13px;padding:13px 30px;font-family:var(--font-disp);font-weight:700;font-size:15px;letter-spacing:.12em;text-transform:uppercase;cursor:pointer;color:#1c1204;
-  background:linear-gradient(180deg,#ffe9a8,#F59E0B 60%,#b45309);box-shadow:0 0 24px -4px rgba(245,158,11,.8),inset 0 1px 0 rgba(255,255,255,.4)}
-.btn-adv:disabled,.btn-ext:disabled{opacity:.4;cursor:default;filter:saturate(.4)}
-.btn-adv:active,.btn-ext:active{transform:scale(.97)}
+.hunt-wall.aiming{cursor:crosshair}
+.hunt-wall.shuffling{cursor:default}
+/* each tile is absolutely positioned; its slot sets left/top, shuffle animates transform */
+.htile{position:absolute;width:15.5%;height:23%;border-radius:9px;transition:left .5s cubic-bezier(.5,0,.2,1),top .5s cubic-bezier(.5,0,.2,1);
+  transform-style:preserve-3d;perspective:520px}
+.htile .face{position:absolute;inset:0;border-radius:9px;display:grid;place-items:center;backface-visibility:hidden;transition:transform .45s cubic-bezier(.5,0,.5,1);overflow:hidden}
+.htile .front{background:radial-gradient(circle at 40% 30%,#3a1466,#160a2c);box-shadow:inset 0 0 0 1.5px rgba(168,85,247,.5),0 4px 10px -4px rgba(0,0,0,.7);
+  transform:rotateY(0deg);font-family:var(--font-mono);font-weight:700;color:#ffd370;font-size:clamp(13px,3.4vw,20px);text-shadow:0 0 10px rgba(245,158,11,.55)}
+.htile .front.big{color:#f9a8d4;text-shadow:0 0 12px rgba(236,72,153,.8)}
+.htile .front.mega{color:#ffe9a8;text-shadow:0 0 16px rgba(245,158,11,.95)}
+.htile .back{background:radial-gradient(circle at 40% 30%,#241245,#0d0720);box-shadow:inset 0 0 0 1.5px rgba(168,85,247,.4),0 4px 10px -4px rgba(0,0,0,.7);transform:rotateY(180deg)}
+.htile .back img{width:62%;height:62%;object-fit:contain;filter:drop-shadow(0 0 6px rgba(168,85,247,.55)) drop-shadow(0 2px 4px rgba(0,0,0,.6));opacity:.92}
+.htile.down .front{transform:rotateY(-180deg)}
+.htile.down .back{transform:rotateY(0deg)}
+.htile.aimable{cursor:crosshair}
+.htile.aimable:hover .back{box-shadow:inset 0 0 0 2px rgba(236,72,153,.9),0 0 20px -2px rgba(236,72,153,.7)}
+.htile.shot .back{box-shadow:inset 0 0 0 2px rgba(245,158,11,1),0 0 26px 0 rgba(245,158,11,.85)}
+.htile.shot{animation:tileburst .5s cubic-bezier(.34,1.56,.64,1)}
+@keyframes tileburst{0%{transform:scale(1)}35%{transform:scale(1.16)}100%{transform:scale(1)}}
+.htile.revealed .front{transform:rotateY(0deg)}
+.htile.revealed .back{transform:rotateY(180deg)}
+.htile.dud{opacity:.42;filter:grayscale(.6)}
+.htile.win .front{background:radial-gradient(circle at 40% 30%,#5a3d08,#241204);box-shadow:inset 0 0 0 2px rgba(245,158,11,1),0 0 26px 0 rgba(245,158,11,.8)}
+.htile.reveal-in{animation:tilepop .4s cubic-bezier(.34,1.56,.64,1) both}
+@keyframes tilepop{0%{transform:scale(.4);opacity:0}60%{transform:scale(1.12)}100%{transform:scale(1);opacity:1}}
+/* crosshair follows the pointer */
+.crosshair{position:absolute;z-index:8;width:clamp(40px,11vw,64px);height:clamp(40px,11vw,64px);transform:translate(-50%,-50%);pointer-events:none;display:none;
+  border-radius:50%;box-shadow:0 0 0 2px rgba(236,72,153,.85),0 0 22px -2px rgba(236,72,153,.7)}
+.crosshair.on{display:block}
+.crosshair::before,.crosshair::after{content:"";position:absolute;background:rgba(236,72,153,.9);box-shadow:0 0 8px rgba(236,72,153,.9)}
+.crosshair::before{left:50%;top:8%;bottom:8%;width:2px;transform:translateX(-50%)}
+.crosshair::after{top:50%;left:8%;right:8%;height:2px;transform:translateY(-50%)}
+.crosshair .laser{position:absolute;left:50%;top:50%;width:6px;height:6px;border-radius:50%;transform:translate(-50%,-50%);background:#fff;box-shadow:0 0 10px 2px rgba(236,72,153,1)}
+.bolt{position:absolute;z-index:9;width:5px;height:26px;border-radius:3px;background:linear-gradient(180deg,#fff,#f9a8d4 40%,rgba(236,72,153,0));transform:translate(-50%,-100%);pointer-events:none;filter:drop-shadow(0 0 8px rgba(236,72,153,.9))}
+.hunt-foot{display:flex;flex-direction:column;align-items:center;gap:5px;min-height:40px}
+.hunt-hint{font-family:var(--font-mono);font-size:12px;letter-spacing:.06em;color:var(--slate-400);text-align:center}
+.hunt-hint .go{color:#f9a8d4;font-weight:700}
+.hunt-result{min-height:22px;font-family:var(--font-mono);font-weight:700;font-size:clamp(15px,4.4vw,22px);color:var(--win);text-shadow:0 0 12px rgba(245,158,11,.6)}
+.hunt-result .up{color:var(--win)}
+.hunt-result .mg{color:#f9a8d4;text-shadow:0 0 12px rgba(236,72,153,.8)}
 .info{margin-top:16px}
 .tabs-list{display:grid;grid-template-columns:1fr 1fr;gap:4px;background:rgba(20,12,36,.75);border:1px solid rgba(168,85,247,.12);border-radius:10px;padding:4px}
 .tab-btn{font-family:var(--font-disp);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.14em;color:var(--slate-500);background:none;border:0;border-radius:7px;padding:9px 6px;cursor:pointer;transition:.15s}
@@ -413,11 +423,13 @@ h1 .title-sigil{width:clamp(22px,4.6vw,30px);height:auto;vertical-align:-.06em;m
 .lab-note b{color:var(--slate-400);font-weight:600}
 @media (prefers-reduced-motion: reduce){
   .reel.spin .strip{filter:none}
-  .board-shell.shake,.breach-board.iced{animation:none}
+  .board-shell.shake{animation:none}
   .circuitstrip,.sym .cnode,.sym .bmoon::after{animation:none}
-  .reel.antic::before,.sym.mult .frame,.banner.mega .b-k,.batcell .frame,.bnode.cur{animation:none}
-  .reel.land,.reel.flash::before,.sym.hit,.sym.jphit,.sym.scathit,.sym .mbadge,.arc-banner-in,.felt-flash.go,.jp.hitflash,.batcell.pop,.bnode.reveal{animation:none}
-  .bat-fly img,.batcell .bat-img{animation:none}
+  .reel.antic::before,.sym.mult .frame,.banner.mega .b-k,.lockcell .frame{animation:none}
+  .reel.land,.reel.flash::before,.sym.hit,.sym.jphit,.sym.scathit,.sym .mbadge,.arc-banner-in,.felt-flash.go,.jp.hitflash,.lockcell.pop{animation:none}
+  .sigil-fly img,.lockcell .lock-img{animation:none}
+  .htile,.htile .face{transition:none}
+  .htile.shot,.htile.reveal-in{animation:none}
 }
 </style>
 </head>
@@ -428,7 +440,7 @@ h1 .title-sigil{width:clamp(22px,4.6vw,30px);height:auto;vertical-align:-.06em;m
 <div class="wrap">
   <header>
     <h1 class="title">Morbius Midnight<img class="title-sigil" src="morbius/OfficialMorbiusLogo.png" alt="" /></h1>
-    <p class="tagline">5×4 reels · 40 lines · Sigil Swarm free spins · Circuit Breach bonus · progressive jackpots at 5/7/9 wilds · provably fair · played in MORBIUS</p>
+    <p class="tagline">5×4 reels · 40 lines · Sigil Swarm sticky wilds · Night Hunt bonus · progressive jackpots at 5/7/9 wilds · provably fair · played in MORBIUS</p>
   </header>
 
   <div class="topbar">
@@ -470,7 +482,7 @@ h1 .title-sigil{width:clamp(22px,4.6vw,30px);height:auto;vertical-align:-.06em;m
           <div class="sr"><img src="morbius/OfficialMorbiusLogo.png" alt="Morbius sigil" /><span>Morbius Sigil ×5</span><span class="sv">290</span></div>
           <div class="sr"><img src="vip-badges/obsidian.png" alt="Obsidian seal" /><span>Obsidian Seal ×5</span><span class="sv">190</span></div>
           <div class="sr"><span class="tg"><span class="tg-moon"></span></span><span>Blood Moon ×3+</span><span class="sv hl">Sigil Swarm spins</span></div>
-          <div class="sr"><span class="tg">◉</span><span>Node on 1·3·5</span><span class="sv hl">Circuit Breach</span></div>
+          <div class="sr"><span class="tg">◉</span><span>Node on 1·3·5</span><span class="sv hl">Night Hunt</span></div>
         </div>
         <button class="pt-open" id="ptBtn">Full paytable &amp; features</button>
       </div>
@@ -498,26 +510,23 @@ h1 .title-sigil{width:clamp(22px,4.6vw,30px);height:auto;vertical-align:-.06em;m
             <div class="reel"><div class="strip"></div></div>
             <div class="reel"><div class="strip"></div></div>
             <svg class="lines-svg" id="linesSvg"></svg>
-            <div class="bat-layer" id="batLayer"></div>
+            <div class="sigil-layer" id="sigilLayer"></div>
           </div>
           <div class="felt-status" id="status">Set your bet — the city hums after dark</div>
           <div class="banner-host"><div class="banner" id="banner"><div class="b-k" id="bannerK"></div><div class="b-v" id="bannerV"></div></div></div>
           <div class="felt-flash" id="feltFlash"></div>
         </div>
-        <div class="breach-stage" id="breachStage">
-          <div class="breach-head">
-            <div class="breach-title">Circuit Breach</div>
-            <div class="breach-node-k" id="breachK">NODE 0 / 12</div>
+        <div class="hunt-stage" id="huntStage">
+          <div class="hunt-head">
+            <div class="hunt-title">Night Hunt</div>
+            <div class="hunt-sub" id="huntSub">24 bounties on the wall</div>
           </div>
-          <div class="breach-board" id="breachBoard">
-            <svg class="breach-svg" id="breachSvg" viewBox="0 0 560 300" preserveAspectRatio="none"></svg>
-            <div class="redflood"></div>
+          <div class="hunt-wall" id="huntWall">
+            <div class="crosshair" id="crosshair"><span class="laser"></span></div>
           </div>
-          <div class="breach-bank"><span class="bk">Banked</span><span id="breachBank">0</span> MORBIUS</div>
-          <div class="breach-result" id="breachResult"></div>
-          <div class="breach-btns">
-            <button class="btn-adv" id="advBtn">Advance</button>
-            <button class="btn-ext" id="extBtn" disabled>Extract</button>
+          <div class="hunt-foot">
+            <div class="hunt-hint" id="huntHint">Reading the wall…</div>
+            <div class="hunt-result" id="huntResult"></div>
           </div>
         </div>
         <canvas class="fx-canvas" id="fxCanvas"></canvas>
@@ -540,9 +549,9 @@ h1 .title-sigil{width:clamp(22px,4.6vw,30px);height:auto;vertical-align:-.06em;m
 
   <p class="lab-note">
     <b>Prototype</b> — Circuit City on the slot-series pattern. Reel stops, hot wilds, every night sigil and every
-    breach node come from an in-page seeded RNG for feel; the real build draws them from the server <b>provably-fair HMAC</b> stream.
-    Ruleset Monte-Carlo tuned to <b>≈ 96.7% RTP</b> including the 1.5% progressive contribution
-    (Circuit Breach modelled at an advance-to-node-6 benchmark). Currency: <b>MORBIUS</b>.
+    Night Hunt tile come from an in-page seeded RNG for feel; the real build draws them from the server <b>provably-fair HMAC</b> stream.
+    Ruleset Monte-Carlo tuned to <b>≈ 96.6% RTP</b> including the 1.5% flat progressive contribution
+    (Night Hunt pick modelled uniform over 24 tiles → EV = table mean). Currency: <b>MORBIUS</b>.
   </p>
 </div>
 
@@ -559,7 +568,7 @@ h1 .title-sigil{width:clamp(22px,4.6vw,30px);height:auto;vertical-align:-.06em;m
     </div>
     <div class="m-sec">
       <h3>Verify a round</h3>
-      <p class="note">Every spin draws, in fixed order: 5 reel stops → one multiplier per wild (reel-major) → on free spins the sigil draws (1 count uniform, then 1 cell uniform per sigil) → the full 12-node Circuit Breach sequence if the bonus hit (2 uniforms per node) — all from one stream derived from a server seed committed (hashed) before your bet. Your ADVANCE/EXTRACT choices are recorded and re-scored against the committed sequence. Jackpot hits are re-checked from the wild count; pool sizes are account state.</p>
+      <p class="note">Every spin draws, in fixed order: 5 reel stops → one multiplier per wild (reel-major) → on free spins the sigil draws (1 count uniform, then 1 cell uniform per sigil) → if the bonus hit, the 24 Night Hunt tile values (row-major) then a Fisher-Yates shuffle permutation (23 uniforms) — all from one stream derived from a server seed committed (hashed) before your bet. Where you aim consumes no randomness: your shot tile index is recorded and the revealed multiplier is re-derived from the committed board and shuffle. Jackpot hits are re-checked from the wild count; pool sizes are account state.</p>
       <div class="m-input-row">
         <input class="m-input" id="verifyIdInput" placeholder="Round ID" />
         <button class="m-btn solid" id="verifyBtn">Verify</button>
@@ -584,14 +593,15 @@ h1 .title-sigil{width:clamp(22px,4.6vw,30px);height:auto;vertical-align:-.06em;m
     normal:{first:1300,gap:1000,anticGap:2000,settle:1100,cruise:17,label:'Normal'},
     turbo:{first:420,gap:170,anticGap:650,settle:550,cruise:26,label:'Turbo'}
   };
-  var FS_AWARD=6, FS_RETRIG=2;
-  var BAT_MIN=2, BAT_SPAN=4;             // bat count per free spin = 2 + floor(u*4) → 2..5
+  var FS_AWARD=3, FS_RETRIG=1;           // mirrors midnight-sim2.js
+  var SIGIL_MIN=2, SIGIL_SPAN=4;         // sigil count per free spin = 2 + floor(u*4) → 2..5
   // hot-wild odds — one draw per natural wild, reel-major
   var MULT_TABLE=[[0.92,1],[0.045,2],[0.023,3],[0.012,5]];
-  // CIRCUIT BREACH — 12 nodes, all outcomes drawn up-front (2 uniforms per
-  // node): ICE hazard 8% + 4% per depth, ×2 boost p=0.15, else cash 1–10× bet
-  var BREACH_STEPS=12, BREACH_ICE_BASE=0.08, BREACH_ICE_STEP=0.04;
-  var BREACH_MULT_P=0.15, BREACH_CASH_MAX=10;
+  // NIGHT HUNT (Cash Hunt) — 24 tiles, one weighted pick per tile from this
+  // table (row-major), then a seeded Fisher-Yates shuffle (23 uniforms). The
+  // player's shot is uniform over 24 tiles → EV = table mean (≈ 9.53× bet).
+  var HUNT_TILES=[[0.173,2],[0.163,3],[0.14,4],[0.13,5],[0.12,8],[0.10,10],[0.08,15],[0.05,25],[0.02,50],[0.013,75],[0.011,100]];
+  var HUNT_N=24;
   // progressive jackpots — pools fed per bet, hit by MORB-chip wilds on screen
   // (bat wilds are spin-local phantoms and do NOT count)
   var JP={
@@ -614,14 +624,14 @@ h1 .title-sigil{width:clamp(22px,4.6vw,30px);height:auto;vertical-align:-.06em;m
   };
   // pays per LINE BET (bet ÷ 40) — Monte-Carlo tuned with all features (see head comment)
   var PAYS={
-    W:[0,0,3,30,140,700],
-    H1:[0,0,3,20,80,290],
-    H2:[0,0,0,16,62,190],
-    H3:[0,0,0,12,46,150],
-    H4:[0,0,0,9,30,95],
-    L1:[0,0,0,6,17,52],
-    L2:[0,0,0,4,14,40],
-    L3:[0,0,0,4,12,32]
+    W:[0,0,2,25,110,550],
+    H1:[0,0,2,16,65,230],
+    H2:[0,0,0,13,50,150],
+    H3:[0,0,0,10,36,120],
+    H4:[0,0,0,7,24,75],
+    L1:[0,0,0,5,14,40],
+    L2:[0,0,0,3,11,32],
+    L3:[0,0,0,3,10,26]
   };
   // 40 fixed lines — row index (0 top … 3 bottom) per reel (series-shared)
   var LINES=[
@@ -646,9 +656,9 @@ h1 .title-sigil{width:clamp(22px,4.6vw,30px);height:auto;vertical-align:-.06em;m
   ];
 
   var S={ balance:10000, speed:'normal', bet:200, phase:'idle', busy:false, sound:true,
-    rng:null, roundWin:0, fsLeft:0, fsTotal:0, fsPlayed:0, inFs:false, batsNow:0, spinLog:[],
+    rng:null, roundWin:0, fsLeft:0, fsTotal:0, fsPlayed:0, inFs:false, sigilsNow:0, locks:null, spinLog:[],
     serverSeed:'', clientSeed:'', clientSeedPref:'', nonce:0, serverHash:'', roundId:'',
-    lastEv:null, cycleIv:null, rollupRaf:null, anticIv:null, tickIv:null, spinRaf:null, batRafs:[],
+    lastEv:null, cycleIv:null, rollupRaf:null, anticIv:null, tickIv:null, spinRaf:null, sigilRafs:[],
     pools:null, history:[] };
 
   var REDUCED=window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -658,10 +668,9 @@ h1 .title-sigil{width:clamp(22px,4.6vw,30px);height:auto;vertical-align:-.06em;m
       boardShell=$('boardShell'),hudBet=$('hudBet'),hudWin=$('hudWin'),hudFs=$('hudFs'),
       hudC1k=$('hudC1k'),hudC1v=$('hudC1v'),
       banner=$('banner'),bannerK=$('bannerK'),bannerV=$('bannerV'),linesSvg=$('linesSvg'),
-      batLayer=$('batLayer'),feltFlash=$('feltFlash'),
-      breachStage=$('breachStage'),breachBoard=$('breachBoard'),breachSvg=$('breachSvg'),
-      breachK=$('breachK'),breachBank=$('breachBank'),breachResult=$('breachResult'),
-      advBtn=$('advBtn'),extBtn=$('extBtn'),
+      sigilLayer=$('sigilLayer'),feltFlash=$('feltFlash'),
+      huntStage=$('huntStage'),huntWall=$('huntWall'),huntSub=$('huntSub'),
+      huntHint=$('huntHint'),huntResult=$('huntResult'),crosshair=$('crosshair'),
       soundBtn=$('soundBtn'),overlay=$('overlay'),ptOverlay=$('ptOverlay'),
       histBody=$('histBody'),histCount=$('histCount'),faqBody=$('faqBody'),actions=$('actions'),
       fxCanvas=$('fxCanvas');
@@ -677,8 +686,22 @@ h1 .title-sigil{width:clamp(22px,4.6vw,30px);height:auto;vertical-align:-.06em;m
   function makeRng(seedStr){return mulberry32(xmur3(seedStr)());}
   async function sha256Hex(msg){try{var b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(msg));return Array.from(new Uint8Array(b)).map(function(x){return x.toString(16).padStart(2,'0');}).join('');}catch(e){return 'sha256-unavailable';}}
 
+  // decode()-preload ALL art (reel symbols + Night Hunt tile icons) before spin
   var ART={};
-  ['W','H1','H2','H3','H4','L1','L2','L3'].forEach(function(id){var im=new Image();im.src=SYMS[id].art;ART[id]=im;});
+  var HUNT_ICONS=['morbius/MorbiusChip.png','vip-badges/gold.png','Logos/Diamond-Heart.jpg','vip-badges/obsidian.png','morbius/OfficialMorbiusLogo.png'];
+  var artReady=false;
+  (function preloadArt(){
+    var srcs=['W','H1','H2','H3','H4','L1','L2','L3'].map(function(id){return SYMS[id].art;}).concat(HUNT_ICONS);
+    var pending=srcs.length;
+    srcs.forEach(function(src,idx){
+      var im=new Image();im.src=src;
+      var syms=['W','H1','H2','H3','H4','L1','L2','L3'];
+      if(idx<syms.length)ART[syms[idx]]=im;
+      var done=function(){if(--pending<=0)artReady=true;};
+      if(im.decode)im.decode().then(done,done);else{im.onload=done;im.onerror=done;}
+    });
+    setTimeout(function(){artReady=true;},2500); // never block spin forever
+  })();
 
   function buildStrip(counts){
     var s=[];counts.forEach(function(p){for(var i=0;i<p[1];i++)s.push(p[0]);});
@@ -692,11 +715,14 @@ h1 .title-sigil{width:clamp(22px,4.6vw,30px);height:auto;vertical-align:-.06em;m
      Per spin, consumed from ONE stream in this documented order:
        1. 5 reel stops
        2. one multiplier draw per natural wild in the window (reel-major)
-       3. free spins only: bat count (1 uniform → 2–5), then one cell uniform
-          per bat (cell = floor(u*20); reel = floor(cell/4), row = cell%4)
-       4. if circuit nodes hit reels 1/3/5: the FULL 12-node breach sequence
-          (2 uniforms per node — hazard/type then cash size)
-     ADVANCE/EXTRACT consumes nothing — it is player input, re-scored in Verify. */
+       3. free spins only: sigil count (1 uniform → 2–5), then one cell uniform
+          per sigil (cell = floor(u*20); reel = floor(cell/4), row = cell%4);
+          sigil cells LOCK for the rest of the free spins (sticky wilds)
+       4. NIGHT HUNT (if circuit nodes hit reels 1/3/5): the 24 tile values
+          row-major (one weighted pick each), then a Fisher-Yates shuffle
+          permutation (23 uniforms)
+     Where you aim consumes nothing — the shot tile index is player input,
+     re-scored against the committed board+shuffle in Verify. */
   function drawStops(rng){var st=[];for(var r=0;r<5;r++)st.push(Math.floor(rng()*STRIPS[r].length));return st;}
   function windowAt(stops){
     var g=[];for(var r=0;r<5;r++){var st=STRIPS[r],col=[];for(var row=0;row<ROWS;row++)col.push(st[(stops[r]+row)%st.length]);g.push(col);}
@@ -712,43 +738,39 @@ h1 .title-sigil{width:clamp(22px,4.6vw,30px);height:auto;vertical-align:-.06em;m
     for(var r=0;r<5;r++)for(var row=0;row<ROWS;row++)if(g[r][row]==='W')m[r+','+row]=drawMultFrom(rng);
     return m;
   }
-  // bat swarm — free spins only: count uniform, then one cell uniform per bat
-  function drawBats(rng){
-    var n=BAT_MIN+Math.floor(rng()*BAT_SPAN);
+  // sigil swarm — free spins only: count uniform, then one cell uniform per sigil
+  function drawSigils(rng){
+    var n=SIGIL_MIN+Math.floor(rng()*SIGIL_SPAN);
     var cells=[];for(var i=0;i<n;i++)cells.push(Math.floor(rng()*20));
     return cells;
   }
-  // bats land as wilds for THIS spin's evaluation (natural grid untouched)
-  function overlayBats(raw,bats){
-    if(!bats||!bats.length)return raw;
+  // locked sigil cells act as wilds for evaluation (natural grid untouched)
+  function overlaySticky(raw,locks){
+    if(!locks||!locks.size)return raw;
     var g=raw.map(function(col){return col.slice();});
-    bats.forEach(function(c){g[Math.floor(c/4)][c%4]='W';});
+    locks.forEach(function(c){g[Math.floor(c/4)][c%4]='W';});
     return g;
   }
-  // circuit breach — full sequence drawn up-front, 2 uniforms per node
-  function drawBreach(rng){
-    var seq=[];
-    for(var k=1;k<=BREACH_STEPS;k++){
-      var u=rng(),v=rng();
-      var pIce=BREACH_ICE_BASE+BREACH_ICE_STEP*k;
-      if(u<pIce)seq.push({t:'I'});
-      else if(u<pIce+BREACH_MULT_P)seq.push({t:'M'});
-      else seq.push({t:'C',x:1+Math.floor(v*BREACH_CASH_MAX)});
-    }
-    return seq;
+  // NIGHT HUNT weighted pick (same shape as the multiplier table)
+  function pickHunt(rng){
+    var r=rng(),acc=0;
+    for(var i=0;i<HUNT_TILES.length;i++){acc+=HUNT_TILES[i][0];if(r<acc)return HUNT_TILES[i][1];}
+    return HUNT_TILES[HUNT_TILES.length-1][1];
   }
-  function iceChanceAt(k){return BREACH_ICE_BASE+BREACH_ICE_STEP*k;}
-  // replay a recorded path: resolve the first `steps` nodes of seq
-  function breachScore(seq,bet,steps){
-    var bank=0;
-    for(var i=0;i<steps&&i<seq.length;i++){
-      var s=seq[i];
-      if(s.t==='I')return {win:0,iced:true,icedAt:i+1};
-      if(s.t==='M')bank*=2;else bank+=s.x*bet;
-    }
-    return {win:bank,iced:false,icedAt:null};
+  // 24 tile values, row-major
+  function drawHuntBoard(rng){var b=[];for(var i=0;i<HUNT_N;i++)b.push(pickHunt(rng));return b;}
+  // Fisher-Yates permutation of [0..23] — order[displaySlot] = boardIndex
+  function drawHuntPerm(rng){
+    var o=[];for(var i=0;i<HUNT_N;i++)o.push(i);
+    for(var i=HUNT_N-1;i>0;i--){var j=Math.floor(rng()*(i+1));var t=o[i];o[i]=o[j];o[j]=t;}
+    return o;
   }
-  function seqToLog(seq){return seq.map(function(s){return s.t==='C'?['C',s.x]:[s.t];});}
+  // resolve a recorded shot: revealed value = board[order[shot]] × bet
+  function huntScore(board,order,bet,shot){
+    var idx=order[shot],mult=board[idx];
+    return {tileIndex:idx,mult:mult,win:mult*bet};
+  }
+  var HUNT_MEAN=HUNT_TILES.reduce(function(a,t){return a+t[0]*t[1];},0);
   function lineWin(raw,gE,line,mults){
     var syms=line.map(function(row,r){return gE[r][row];});
     var best=0,bestSym=null,bestRun=0,bestMult=1;
@@ -768,16 +790,17 @@ h1 .title-sigil{width:clamp(22px,4.6vw,30px);height:auto;vertical-align:-.06em;m
     }
     return {pay:best,sym:bestSym,run:bestRun,mult:bestMult};
   }
-  // scatters, jackpot wilds & bonus reels come from the NATURAL grid;
-  // line wins are evaluated on the bat-overlaid grid
-  function evalSpin(raw,mults,bats){
+  // scatters & bonus reels come from the NATURAL grid; line wins & the wild
+  // count (for jackpots) are evaluated on the sticky-overlaid grid, so locked
+  // sigil wilds count toward the 5/7/9-wild progressives
+  function evalSpin(raw,mults,locks){
     var wins=[],lineUnits=0,scCells=[],wildCells=[],bReels={};
+    var gE=overlaySticky(raw,locks);
     for(var r=0;r<5;r++)for(var w=0;w<ROWS;w++){
       if(raw[r][w]==='S')scCells.push({r:r,row:w});
-      if(raw[r][w]==='W')wildCells.push({r:r,row:w});
+      if(gE[r][w]==='W')wildCells.push({r:r,row:w});
       if(raw[r][w]==='B')bReels[r]=true;
     }
-    var gE=overlayBats(raw,bats);
     for(var i=0;i<LINES_N;i++){
       var lw=lineWin(raw,gE,LINES[i],mults);
       if(lw.pay>0){wins.push({line:i,sym:lw.sym,run:lw.run,units:lw.pay,mult:lw.mult});lineUnits+=lw.pay;}
@@ -868,9 +891,9 @@ h1 .title-sigil{width:clamp(22px,4.6vw,30px);height:auto;vertical-align:-.06em;m
     blip(f,0.14,'triangle',g*0.5,w+0.17);
     blip(f,0.12,'triangle',g*0.24,w+0.34);
   }
-  // bat screech — fast upward pitch slides
+  // sigil screech — fast upward pitch slides
   function sScreech(){blip(850,0.16,'sawtooth',0.05,0,2600);blip(1300,0.11,'sawtooth',0.04,0.06,3200);}
-  function sBatLand(){noise(0.07,300,0.1,0,2.2);blip(120,0.16,'sine',0.08,0,55);}
+  function sSigilLand(){noise(0.07,300,0.1,0,2.2);blip(120,0.16,'sine',0.08,0,55);}
   // rolling thunder — big wins
   function sThunder(){noise(1.5,110,0.16,0,0.8);noise(0.9,60,0.12,0.15,0.6);blip(48,1.3,'sine',0.1,0,28);}
   function sTick(){blip(600+Math.random()*200,0.03,'square',0.022);}
@@ -885,17 +908,20 @@ h1 .title-sigil{width:clamp(22px,4.6vw,30px);height:auto;vertical-align:-.06em;m
   function sWinBig(){sThunder();[523,659,784,1047,1319,1568].forEach(function(f,i){sPluck(f,0.055,0.15+i*0.08);});}
   function sWinMega(){sThunder();[392,523,659,784,1047,1319,1568,2093].forEach(function(f,i){sPluck(f,0.06,0.2+i*0.09);blip(f*0.5,0.2,'sine',0.03,0.2+i*0.09);});noise(1.1,2800,0.025,0.5,0.5);}
   function sFanfare(){[440,554,659,880].forEach(function(f,i){blip(f,0.16,'square',0.04,i*0.1);sPluck(f,0.05,i*0.1);});}
-  // rising synthwave pulse per breach node
-  function sNodePulse(k){var f=196*Math.pow(1.11,k);sPluck(f,0.065);blip(f/2,0.22,'sawtooth',0.035,0,f/2*0.96);}
-  function sCashNode(){blip(1046,0.12,'triangle',0.06);blip(1568,0.14,'triangle',0.05,0.07);}
-  function sBoostNode(){blip(500,0.2,'sawtooth',0.05,0,1500);sPluck(1318,0.05,0.12);}
-  // ICE klaxon — two-tone alarm + power-down dive
-  function sIce(){
-    for(var i=0;i<3;i++){blip(660,0.22,'sawtooth',0.07,i*0.46,620);blip(440,0.22,'sawtooth',0.07,i*0.46+0.23,410);}
-    blip(320,1.0,'sawtooth',0.05,1.4,40);noise(0.9,140,0.06,1.4,1);
+  // NIGHT HUNT — reveal sting as each preview value pops
+  function sHuntPop(k){var f=440*Math.pow(1.03,k);blip(f,0.05,'triangle',0.03);}
+  // shuffle whoosh — filtered noise sweep as the tiles slide
+  function sShuffle(){noise(0.9,500,0.05,0,0.6);blip(220,0.7,'sawtooth',0.04,0,90);blip(900,0.5,'sine',0.02,0.1,300);}
+  // crossbow draw — creaking tension
+  function sDraw(){blip(160,0.35,'sawtooth',0.05,0,300);noise(0.2,1200,0.03,0,3);}
+  // bolt hit — sharp thwack into the tile
+  function sBoltHit(){noise(0.06,1800,0.09,0,4);blip(180,0.14,'square',0.07,0,70);blip(90,0.2,'sine',0.06,0.02,45);}
+  // reveal sting — the multiplier bursts open
+  function sRevealSting(x){
+    var big=x>=25;
+    [523,659,784,big?1319:1047].forEach(function(f,i){blip(f,0.24,'triangle',0.06,i*0.05);blip(f/2,0.28,'sine',0.035,i*0.05);});
+    if(big)sThunder();
   }
-  // triumphant extraction chord
-  function sExtract(){[392,494,587,784].forEach(function(f,i){blip(f,0.5,'triangle',0.06,i*0.05);blip(f,0.6,'sine',0.04,i*0.05);});sPluck(1175,0.05,0.3);}
   function sJackpot(){
     sThunder();
     [523,659,784,1047,784,1047,1319,1568,2093].forEach(function(f,i){blip(f,0.22,'triangle',0.07,0.2+i*0.12);blip(f/2,0.26,'sine',0.04,0.2+i*0.12);});
@@ -979,33 +1005,74 @@ h1 .title-sigil{width:clamp(22px,4.6vw,30px);height:auto;vertical-align:-.06em;m
   }
   function renderIdleGrid(g){
     for(var r=0;r<5;r++){
-      stripEls[r].style.transform='translateY(0)';
+      stripEls[r].style.transform='translate3d(0,0,0)';
       stripEls[r].innerHTML=colHtml(g,r,null);
+      hideLockedUnder(r);
     }
   }
-  function batCellHtml(c,pop){
+  // a locked sigil cell is drawn ONLY by the sigil layer — the strip cell
+  // beneath it goes visibility:hidden so two wild images never stack
+  function hideLockedUnder(r){
+    for(var row=0;row<ROWS;row++){
+      var cell=stripEls[r].children[row];
+      if(!cell)continue;
+      cell.style.visibility=(S.locks&&S.locks.has(r*4+row))?'hidden':'';
+    }
+  }
+  // settle a reel by REUSING the strip's existing cells for the landing
+  // window — same <img> nodes, nothing re-decodes, so no settle flash
+  function settleStrip(R,raw,mults){
+    var strip=stripEls[R.r],cells=[];
+    for(var row=0;row<ROWS;row++)cells.push(strip.children[R.stop+row]);
+    strip.replaceChildren.apply(strip,cells);
+    strip.style.transform='translate3d(0,0,0)';
+    for(var row=0;row<ROWS;row++){
+      var cell=cells[row];if(!cell)continue;
+      var m=(mults&&raw[R.r][row]==='W')?(mults[R.r+','+row]||1):1;
+      if(raw[R.r][row]==='W'&&m>1){
+        cell.className='sym wild mult';
+        if(!cell.querySelector('.frame')){var f=document.createElement('span');f.className='frame';cell.appendChild(f);}
+        var bd=cell.querySelector('.mbadge');
+        if(!bd){bd=document.createElement('span');bd.className='mbadge';cell.appendChild(bd);}
+        bd.textContent='×'+m;
+      }
+    }
+    hideLockedUnder(R.r);
+  }
+  function lockCellHtml(c,pop){
     var r=Math.floor(c/4),row=c%4;
-    return '<div class="batcell'+(pop?' pop':'')+'" data-key="'+r+','+row+'" style="grid-column:'+(r+1)+';grid-row:'+(row+1)+'">'
-      +'<img class="bat-img" src="morbius/OfficialMorbiusLogo.png" alt="Night sigil wild" draggable="false"/><span class="frame"></span><span class="wildpin">WILD</span>'
+    return '<div class="lockcell'+(pop?' pop':'')+'" data-key="'+r+','+row+'" style="grid-column:'+(r+1)+';grid-row:'+(row+1)+'">'
+      +'<img class="lock-img" src="morbius/OfficialMorbiusLogo.png" alt="Locked sigil wild" draggable="false"/><span class="frame"></span><span class="lockpin">LOCKED</span>'
       +'</div>';
   }
-  function clearBats(){
-    S.batRafs.forEach(function(id){cancelAnimationFrame(id);});
-    S.batRafs=[];
-    batLayer.innerHTML='';
-    reelsEl.querySelectorAll('.bat-fly').forEach(function(el){el.remove();});
+  // redraw the whole sticky layer from S.locks (idempotent); newCells pop in
+  function renderLocks(newCells){
+    if(!S.locks){sigilLayer.innerHTML='';return;}
+    var arr=[];S.locks.forEach(function(c){arr.push(c);});
+    sigilLayer.innerHTML=arr.map(function(c){
+      return lockCellHtml(c,newCells&&newCells.indexOf(c)>=0);
+    }).join('');
+    for(var r=0;r<5;r++)hideLockedUnder(r);
   }
-  // fly each bat along a curved path onto its cell, then pin the wild there
-  function flyBats(bats,cont){
-    if(REDUCED||!bats.length){
-      batLayer.innerHTML=bats.map(function(c){return batCellHtml(c,false);}).join('');
-      if(bats.length)sBatLand();
+  function clearSigils(){
+    S.sigilRafs.forEach(function(id){cancelAnimationFrame(id);});
+    S.sigilRafs=[];
+    sigilLayer.innerHTML='';
+    reelsEl.querySelectorAll('.sigil-fly').forEach(function(el){el.remove();});
+    for(var r=0;r<5;r++)hideLockedUnder(r);
+  }
+  // fly each NEW sigil along a curved path onto its cell, then pin it as a
+  // locked wild; existing locks stay put (this only appends the new ones)
+  function flySigils(newCells,cont){
+    if(REDUCED||!newCells.length){
+      newCells.forEach(function(c){sigilLayer.insertAdjacentHTML('beforeend',lockCellHtml(c,true));hideLockedUnder(Math.floor(c/4));});
+      if(newCells.length)sSigilLand();
       cont();
       return;
     }
     var box=reelsEl.getBoundingClientRect();
     var landed=0;
-    bats.forEach(function(c,i){
+    newCells.forEach(function(c,i){
       setTimeout(function(){
         sScreech();
         var r=Math.floor(c/4),row=c%4;
@@ -1014,7 +1081,7 @@ h1 .title-sigil{width:clamp(22px,4.6vw,30px);height:auto;vertical-align:-.06em;m
         var x0=fromLeft?-40:box.width+40, y0=box.height*(0.1+0.5*Math.random());
         var cx=box.width*(fromLeft?0.25:0.75), cy=-30-40*Math.random(); // curve over the top
         var el=document.createElement('div');
-        el.className='bat-fly';
+        el.className='sigil-fly';
         el.innerHTML='<img src="morbius/OfficialMorbiusLogo.png" alt="" draggable="false"/>';
         el.style.left='0';el.style.top='0';
         reelsEl.appendChild(el);
@@ -1025,17 +1092,18 @@ h1 .title-sigil{width:clamp(22px,4.6vw,30px);height:auto;vertical-align:-.06em;m
           var iu=1-u;
           var x=iu*iu*x0+2*iu*u*cx+u*u*target.x;
           var y=iu*iu*y0+2*iu*u*cy+u*u*target.y;
-          el.style.transform='translate('+(x-19)+'px,'+(y-19)+'px) rotate('+(Math.sin(u*9)*16)+'deg)';
-          if(u<1){S.batRafs.push(requestAnimationFrame(step));}
+          el.style.transform='translate3d('+(x-20)+'px,'+(y-20)+'px,0) rotate('+(Math.sin(u*9)*16)+'deg)';
+          if(u<1){S.sigilRafs.push(requestAnimationFrame(step));}
           else{
             el.remove();
-            batLayer.insertAdjacentHTML('beforeend',batCellHtml(c,true));
-            sBatLand();
+            sigilLayer.insertAdjacentHTML('beforeend',lockCellHtml(c,true));
+            hideLockedUnder(r);
+            sSigilLand();
             landed++;
-            if(landed===bats.length)setTimeout(cont,260);
+            if(landed===newCells.length)setTimeout(cont,260);
           }
         }
-        S.batRafs.push(requestAnimationFrame(step));
+        S.sigilRafs.push(requestAnimationFrame(step));
       },i*190);
     });
   }
@@ -1043,7 +1111,7 @@ h1 .title-sigil{width:clamp(22px,4.6vw,30px);height:auto;vertical-align:-.06em;m
     if(S.cycleIv){clearInterval(S.cycleIv);S.cycleIv=null;}
     linesSvg.innerHTML='';
     reelsEl.querySelectorAll('.sym.hit').forEach(function(el){el.classList.remove('hit');});
-    batLayer.querySelectorAll('.batcell.hit').forEach(function(el){el.classList.remove('hit');});
+    sigilLayer.querySelectorAll('.lockcell.hit').forEach(function(el){el.classList.remove('hit');});
   }
   function cellCenter(r,row){
     var reel=reelEls[r],box=reelsEl.getBoundingClientRect(),rb=reel.getBoundingClientRect();
@@ -1063,14 +1131,14 @@ h1 .title-sigil{width:clamp(22px,4.6vw,30px);height:auto;vertical-align:-.06em;m
   }
   function highlightEntry(entry){
     reelsEl.querySelectorAll('.sym.hit').forEach(function(el){el.classList.remove('hit');});
-    batLayer.querySelectorAll('.batcell.hit').forEach(function(el){el.classList.remove('hit');});
+    sigilLayer.querySelectorAll('.lockcell.hit').forEach(function(el){el.classList.remove('hit');});
     var cells=entry.line!=null
       ? LINES[entry.line].map(function(row,r){return {r:r,row:row};}).slice(0,entry.run)
       : entry.cells;
     cells.forEach(function(c){
       var el=stripEls[c.r].children[c.row];
       if(el)el.classList.add('hit');
-      var bc=batLayer.querySelector('.batcell[data-key="'+c.r+','+c.row+'"]');
+      var bc=sigilLayer.querySelector('.lockcell[data-key="'+c.r+','+c.row+'"]');
       if(bc)bc.classList.add('hit');
     });
   }
@@ -1109,9 +1177,9 @@ h1 .title-sigil{width:clamp(22px,4.6vw,30px);height:auto;vertical-align:-.06em;m
   function syncHud(){
     hudBet.textContent=fmt(S.bet);
     if(S.inFs){
-      hudC1k.textContent='Sigils';
+      hudC1k.textContent='Locked';
       hudC1v.className='v lines-v bat-v';
-      hudC1v.textContent=String(S.batsNow);
+      hudC1v.textContent=String(S.locks?S.locks.size:0);
     }else{
       hudC1k.textContent='Lines';
       hudC1v.className='v lines-v';
@@ -1126,7 +1194,7 @@ h1 .title-sigil{width:clamp(22px,4.6vw,30px);height:auto;vertical-align:-.06em;m
     var label,sub='';
     if(S.phase==='idle'){label='Place bet &amp; spin';}
     else if(S.phase==='settled'){label='Spin again';}
-    else if(S.inFs){label='Sigil swarm running';sub=(S.fsTotal-S.fsPlayed)+' left · '+S.batsNow+' sigils';}
+    else if(S.inFs){label='Sigil swarm running';sub=(S.fsTotal-S.fsPlayed)+' left · '+(S.locks?S.locks.size:0)+' locked';}
     else{label='Spinning…';}
     actions.innerHTML='<button class="btn btn-go" id="spinBtn"'+((S.busy||S.phase==='active')?' disabled':'')+'>'+label
       +(sub?'<span class="cash-sub">'+sub+'</span>':'')+'</button>';
@@ -1138,102 +1206,125 @@ h1 .title-sigil{width:clamp(22px,4.6vw,30px);height:auto;vertical-align:-.06em;m
     document.querySelectorAll('.chip,.mini-btn').forEach(function(b){b.style.pointerEvents=on?'auto':'none';b.style.opacity=on?'1':'.5';});
   }
 
-  /* ── CIRCUIT BREACH stage — sequence pre-committed, ADVANCE/EXTRACT is yours ── */
-  // 12-node winding path (percent coords inside the 560×300 board)
-  var BREACH_PATH=[
-    [8,84],[27,76],[46,86],[65,76],[84,84],
-    [90,56],[71,48],[52,58],[33,48],[14,54],
-    [22,26],[48,16]
-  ];
-  function breachNodeXY(i){return {x:BREACH_PATH[i][0]*5.6,y:BREACH_PATH[i][1]*3};}
-  function renderBreachBoard(seq,step){
-    // traces
-    var lit='',dim='';
-    for(var i=0;i<BREACH_PATH.length;i++){
-      var p=breachNodeXY(i);
-      var pt=p.x+','+p.y;
-      if(i<step)lit+=(lit?' ':'')+pt;
-      dim+=(dim?' ':'')+pt;
+  /* ── NIGHT HUNT (Cash Hunt) stage — 24 tile values + shuffle pre-committed;
+     you AIM the crossbow and SHOOT one tile. The aim consumes no randomness. ── */
+  var HUNT_COLS=6, HUNT_ROWS=4;
+  function tilePos(slot){var col=slot%HUNT_COLS,row=Math.floor(slot/HUNT_COLS);
+    return {left:(col+0.5)*100/HUNT_COLS-7.75, top:(row+0.5)*100/HUNT_ROWS-11.5};}
+  function huntFrontCls(v){return v>=75?' mega':(v>=25?' big':'');}
+  // board: 24 committed values (row-major). order: shuffle perm, order[slot]=boardIndex.
+  // cont(win, huntLog). The player's shot (display slot) is recorded in huntLog.shot.
+  function playHunt(board,order,bet,cont){
+    var fast=(S.speed==='turbo')||REDUCED;
+    var previewMs=REDUCED?400:(fast?1400:2500), shuffleMs=REDUCED?200:(fast?700:1200);
+    huntStage.classList.add('open');
+    huntResult.textContent='';huntWall.classList.remove('aiming');huntWall.classList.add('shuffling');
+    crosshair.classList.remove('on');
+    // clear any prior tiles (keep the crosshair node)
+    huntWall.querySelectorAll('.htile').forEach(function(t){t.remove();});
+    // inverse permutation: boardIndex j sits at display slot inv[j] after shuffle
+    var inv=new Array(HUNT_N);for(var s=0;s<HUNT_N;s++)inv[order[s]]=s;
+    var tiles=[];
+    for(var j=0;j<HUNT_N;j++){
+      var pos=tilePos(j);
+      var el=document.createElement('div');
+      el.className='htile reveal-in';
+      el.style.left=pos.left+'%';el.style.top=pos.top+'%';
+      el.style.animationDelay=(j*14)+'ms';
+      el.innerHTML='<div class="face front'+huntFrontCls(board[j])+'">'+board[j]+'×</div>'
+        +'<div class="face back"><img src="'+HUNT_ICONS[j%HUNT_ICONS.length]+'" alt="" draggable="false"/></div>';
+      huntWall.appendChild(el);
+      tiles.push(el);
+      if(!REDUCED)sHuntPop(j);
     }
-    breachSvg.innerHTML='<polyline class="trace-dim" points="'+dim+'"/>'
-      +(step>1?'<polyline class="trace-lit" points="'+lit+'"/>':'');
-    // nodes
-    var old=breachBoard.querySelectorAll('.bnode');
-    old.forEach(function(n){n.remove();});
-    var html='';
-    for(var k=0;k<BREACH_STEPS;k++){
-      var cls='bnode',txt=String(k+1);
-      if(k<step){
-        var s=seq[k];
-        if(s.t==='I'){cls+=' ice';txt='ICE';}
-        else if(s.t==='M'){cls+=' boost';txt='×2';}
-        else{cls+=' cash';txt='+'+s.x+'×';}
-        if(k===step-1)cls+=' cur reveal';
+    huntSub.textContent='24 bounties on the wall';
+    huntHint.innerHTML='All values shown — <span class="go">memorise the wall</span>';
+    var over=false, moveHandler=null;
+
+    function cleanupAim(){
+      if(moveHandler){huntWall.removeEventListener('pointermove',moveHandler);moveHandler=null;}
+      crosshair.classList.remove('on');huntWall.classList.remove('aiming');
+    }
+    function finish(win,shot,value){
+      over=true;cleanupAim();
+      var log={board:board.slice(),order:order.slice(),shot:shot,value:value,win:win};
+      setTimeout(function(){huntStage.classList.remove('open');cont(win,log);},1500);
+    }
+    // fire a bolt from the wall's bottom-centre into the chosen tile, then reveal
+    function shoot(slot){
+      if(over)return;over=true;
+      cleanupAim();
+      var sc=huntScore(board,order,bet,slot); // idx, mult, win
+      var el=tiles.filter(function(t){return +t.dataset.slot===slot;})[0]||tiles[slot];
+      // find the tile currently occupying display slot `slot` (boardIndex order[slot])
+      el=tiles[order[slot]];
+      sDraw();
+      var wb=huntWall.getBoundingClientRect(),tb=el.getBoundingClientRect();
+      var bolt=document.createElement('div');bolt.className='bolt';
+      bolt.style.left=(tb.left-wb.left+tb.width/2)+'px';bolt.style.top=wb.height+'px';
+      huntWall.appendChild(bolt);
+      var ty=(tb.top-wb.top+tb.height/2);
+      var t0=null,dur=REDUCED?1:230;
+      function fly(ts){
+        if(t0===null)t0=ts;var u=Math.min(1,(ts-t0)/dur);
+        bolt.style.top=(wb.height+(ty-wb.height)*u)+'px';
+        if(u<1)requestAnimationFrame(fly);else{bolt.remove();impact();}
       }
-      html+='<div class="'+cls+'" style="left:'+BREACH_PATH[k][0]+'%;top:'+BREACH_PATH[k][1]+'%">'+txt+'</div>';
+      function impact(){
+        sBoltHit();
+        el.classList.add('shot');
+        setTimeout(function(){
+          el.classList.add('revealed','win');
+          sRevealSting(sc.mult);burst(sc.mult>=25?'mega':(sc.mult>=10?'big':'small'));
+          // reveal every other tile grayed
+          tiles.forEach(function(t,bi){
+            if(t===el)return;
+            t.classList.add('revealed','dud');
+          });
+          huntResult.innerHTML='<span class="'+(sc.mult>=25?'mg':'up')+'">'+sc.mult+'× · +'+fmt(sc.win)+' MORBIUS</span>';
+          huntHint.textContent='Bounty claimed';
+          finish(sc.win,slot,sc.mult);
+        },REDUCED?1:260);
+      }
+      requestAnimationFrame(fly);
     }
-    breachBoard.insertAdjacentHTML('beforeend',html);
-  }
-  // seq: the pre-committed 12 nodes. cont(cash, breachLog)
-  function playBreach(seq,bet,cont){
-    breachStage.classList.add('open');
-    breachBoard.classList.remove('iced');
-    var step=0,bank=0,over=false;
-    function riskLabel(){
-      return step<BREACH_STEPS
-        ? 'NODE '+step+' / 12 · next-node ICE risk <span class="risk">'+Math.round(iceChanceAt(step+1)*100)+'%</span>'
-        : 'NODE 12 / 12 · path exhausted';
-    }
-    function sync(){
-      breachK.innerHTML=riskLabel();
-      breachBank.textContent=fmt(bank);
-      renderBreachBoard(seq,step);
-      advBtn.disabled=over||step>=BREACH_STEPS;
-      extBtn.disabled=over||step<1;
-      extBtn.textContent='Extract'+(bank>0?' +'+fmt(bank):'');
-    }
-    function finish(iced){
-      over=true;
-      advBtn.disabled=true;extBtn.disabled=true;
-      var log={seq:seqToLog(seq),steps:step,iced:iced,win:iced?0:bank};
+    // expose for the headless driver
+    window.__mmShoot=function(slot){shoot(slot);};
+
+    // PHASE 1 preview → PHASE 2 flip+shuffle → PHASE 3 aim
+    setTimeout(function(){
+      // flip all face-down
+      tiles.forEach(function(t){t.classList.remove('reveal-in');t.classList.add('down');});
+      huntSub.textContent='Sigils shuffled — tiles hidden';
+      huntHint.textContent='Shuffling the wall…';
+      sShuffle();
+      // shuffle: move each tile (boardIndex j) to display slot inv[j]
       setTimeout(function(){
-        breachStage.classList.remove('open');
-        cont(iced?0:bank,log);
-      },iced?2000:1500);
-    }
-    advBtn.onclick=function(){
-      if(over||step>=BREACH_STEPS)return;
-      step++;
-      var s=seq[step-1];
-      sNodePulse(step);
-      if(s.t==='I'){
-        sync();
-        breachBoard.classList.remove('iced');void breachBoard.offsetWidth;breachBoard.classList.add('iced');
-        breachResult.innerHTML='<span class="ice">ICE — security lockout · unbanked haul lost</span>';
-        sIce();
-        finish(true);
-        return;
-      }
-      if(s.t==='M'){bank*=2;breachResult.innerHTML='<span class="bst">×2 BOOST — haul doubled</span>';sBoostNode();}
-      else{bank+=s.x*bet;breachResult.innerHTML='<span class="up">+'+s.x+'× bet · +'+fmt(s.x*bet)+' MORBIUS</span>';sCashNode();}
-      sync();
-      if(step>=BREACH_STEPS){
-        // end of the path — extraction is forced
-        breachResult.innerHTML='<span class="up">END OF PATH — auto-extract +'+fmt(bank)+' MORBIUS</span>';
-        sExtract();
-        finish(false);
-      }
-    };
-    extBtn.onclick=function(){
-      if(over||step<1)return;
-      breachResult.innerHTML='<span class="up">EXTRACTED +'+fmt(bank)+' MORBIUS</span>';
-      sExtract();
-      if(bank>=bet*5){sWinBig();burst('big');}
-      finish(false);
-    };
-    breachResult.textContent='';
-    sync();
-    breachK.innerHTML='JACKED IN · next-node ICE risk <span class="risk">'+Math.round(iceChanceAt(1)*100)+'%</span>';
+        tiles.forEach(function(t,j){
+          var pos=tilePos(inv[j]);
+          t.style.left=pos.left+'%';t.style.top=pos.top+'%';
+          t.dataset.slot=inv[j];
+        });
+        // PHASE 3 — aiming
+        setTimeout(function(){
+          if(over)return;
+          huntWall.classList.remove('shuffling');huntWall.classList.add('aiming');
+          huntSub.innerHTML='<span class="aim">Aim the crossbow</span> — one shot';
+          huntHint.innerHTML='<span class="go">Click a tile to shoot</span>';
+          crosshair.classList.add('on');
+          tiles.forEach(function(t){t.classList.add('aimable');
+            t.addEventListener('click',function(){shoot(+t.dataset.slot);});});
+          moveHandler=function(e){
+            var wb=huntWall.getBoundingClientRect();
+            crosshair.style.left=(e.clientX-wb.left)+'px';
+            crosshair.style.top=(e.clientY-wb.top)+'px';
+          };
+          huntWall.addEventListener('pointermove',moveHandler);
+          // park the crosshair over the centre so it is visible before first move
+          crosshair.style.left='50%';crosshair.style.top='50%';
+        },shuffleMs+120);
+      },REDUCED?1:60);
+    },previewMs);
   }
 
   async function startRound(){
@@ -1242,14 +1333,14 @@ h1 .title-sigil{width:clamp(22px,4.6vw,30px);height:auto;vertical-align:-.06em;m
     if(bet>S.balance){flashInput();return;}
     betInput.value=bet;
     S.bet=bet;S.balance-=bet;S.phase='active';S.busy=true;
-    S.roundWin=0;S.fsLeft=0;S.fsTotal=0;S.fsPlayed=0;S.inFs=false;S.batsNow=0;S.spinLog=[];
+    S.roundWin=0;S.fsLeft=0;S.fsTotal=0;S.fsPlayed=0;S.inFs=false;S.locks=null;S.spinLog=[];
     S.serverSeed=window.__forceServerSeed||rndHex(64); // __forceServerSeed: test hook only
     S.clientSeed=(S.clientSeedPref||'').trim()||rndHex(20);
     S.nonce+=1;S.roundId=shortId();
     S.serverHash=await sha256Hex(S.serverSeed);
     S.rng=makeRng(S.serverSeed+':'+S.clientSeed+':'+S.nonce);
     feedPools(bet);
-    stopRollup();hideBanner();clearHighlights();clearBats();setControls(false);syncHud();renderActions();
+    stopRollup();hideBanner();clearHighlights();clearSigils();setControls(false);syncHud();renderActions();
     statusEl.className='felt-status';statusEl.textContent='Reels spinning — the grid crackles…';
     sDrone();
     doSpin(false);
@@ -1272,15 +1363,21 @@ h1 .title-sigil{width:clamp(22px,4.6vw,30px);height:auto;vertical-align:-.06em;m
 
   function doSpin(isFree){
     // ALL seeded draws happen here, before any animation — the visuals just deliver them.
-    // Fixed order: stops → wild mults (reel-major) → bats (FS only) → breach sequence.
-    clearBats();
+    // Fixed order: stops → wild mults (reel-major) → sigils (FS only) → Night Hunt
+    // board (24 tiles row-major) + shuffle permutation.
     var stops=drawStops(S.rng);
     var raw=windowAt(stops);
     var mults=drawMults(S.rng,raw);
-    var bats=isFree?drawBats(S.rng):null;
-    S.batsNow=bats?bats.length:0;
-    var ev=evalSpin(raw,mults,bats);
-    var breachSeq=ev.bonusHit?drawBreach(S.rng):null;
+    // sigils drawn every free spin; NEW cells (not already locked) will fly in & lock
+    var sigils=isFree?drawSigils(S.rng):null;
+    var newLocks=[];
+    if(isFree){
+      if(!S.locks)S.locks=new Set();
+      sigils.forEach(function(c){if(!S.locks.has(c)){newLocks.push(c);}S.locks.add(c);});
+    }
+    var ev=evalSpin(raw,mults,isFree?S.locks:null);
+    var huntBoard=ev.bonusHit?drawHuntBoard(S.rng):null;
+    var huntOrder=ev.bonusHit?drawHuntPerm(S.rng):null;
     var sp=spd();
     S.lastEv=null;
     clearHighlights();
@@ -1309,7 +1406,7 @@ h1 .title-sigil{width:clamp(22px,4.6vw,30px);height:auto;vertical-align:-.06em;m
       var D=base+Math.max(1,Math.round((ideal-base)/L))*L;
       stripEls[r].innerHTML=stripHtml(r);
       reelEls[r].classList.add('spin');
-      return {r:r,L:L,start:start,D:D,T:T,done:false};
+      return {r:r,L:L,start:start,D:D,T:T,stop:stop,done:false};
     });
 
     if(anticFrom>=0){
@@ -1330,8 +1427,7 @@ h1 .title-sigil{width:clamp(22px,4.6vw,30px);height:auto;vertical-align:-.06em;m
           R.done=true;
           var reel=reelEls[R.r],strip=stripEls[R.r];
           reel.classList.remove('spin');reel.classList.remove('antic');
-          strip.style.transform='translateY(0)';
-          strip.innerHTML=colHtml(raw,R.r,mults);
+          settleStrip(R,raw,mults);
           reel.classList.add('land');reel.classList.add('flash');
           (function(reel){setTimeout(function(){reel.classList.remove('land');reel.classList.remove('flash');},260);})(reel);
           sStop(R.r);
@@ -1359,7 +1455,7 @@ h1 .title-sigil{width:clamp(22px,4.6vw,30px);height:auto;vertical-align:-.06em;m
           }
         }else{
           var off=(R.start+R.D*easeProfile(u))%R.L;
-          stripEls[R.r].style.transform='translateY('+(-off*cellH)+'px)';
+          stripEls[R.r].style.transform='translate3d(0,'+(-off*cellH)+'px,0)';
           if(R.T-el<240)reelEls[R.r].classList.remove('spin');
           allDone=false;
         }
@@ -1367,7 +1463,7 @@ h1 .title-sigil{width:clamp(22px,4.6vw,30px);height:auto;vertical-align:-.06em;m
       if(allDone){
         S.spinRaf=null;
         stopTicks();stopAnticLoop();
-        setTimeout(function(){resolveSpin(stops,raw,mults,bats,ev,breachSeq,isFree);},140);
+        setTimeout(function(){resolveSpin(stops,raw,mults,sigils,newLocks,ev,huntBoard,huntOrder,isFree);},140);
       }else{
         S.spinRaf=requestAnimationFrame(frame);
       }
@@ -1375,25 +1471,26 @@ h1 .title-sigil{width:clamp(22px,4.6vw,30px);height:auto;vertical-align:-.06em;m
     S.spinRaf=requestAnimationFrame(frame);
   }
 
-  function resolveSpin(stops,raw,mults,bats,ev,breachSeq,isFree){
+  function resolveSpin(stops,raw,mults,sigils,newLocks,ev,huntBoard,huntOrder,isFree){
     var lineWinAmt=linePayout(S.bet,ev.lineUnits);
     var jpTier=jackpotTier(ev.wilds);
     var jpAmt=jpTier?payJackpot(jpTier):0;
     var entry={stops:stops.slice(),mults:multsToLog(raw,mults),free:isFree,
-      bats:bats?bats.slice():null,
+      sigils:sigils?sigils.slice():null,
       win:lineWinAmt,lineWin:lineWinAmt,lines:ev.wins.length,sc:ev.sc,wilds:ev.wilds,
-      breach:null,jackpot:jpTier?{tier:jpTier,amount:jpAmt}:null};
+      locked:isFree&&S.locks?S.locks.size:0,
+      hunt:null,jackpot:jpTier?{tier:jpTier,amount:jpAmt}:null};
     S.spinLog.push(entry);
     S.roundWin+=lineWinAmt+jpAmt;
     if(isFree)S.fsPlayed++;
 
     var chain=[];
-    // the swarm dives in first — its wilds are part of this spin's result
-    if(bats&&bats.length){
+    // new sigils dive in first and LOCK — they are wilds for the rest of the FS
+    if(isFree&&newLocks&&newLocks.length){
       chain.push(function(next){
         statusEl.className='felt-status fsmode';
-        statusEl.textContent=bats.length+' night sigils dive from the skyline…';
-        flyBats(bats,next);
+        statusEl.textContent=newLocks.length+' night sigil'+(newLocks.length===1?'':'s')+' lock in — '+(S.locks?S.locks.size:0)+' held';
+        flySigils(newLocks,next);
       });
     }
     // jackpot celebration — it outranks everything else
@@ -1409,21 +1506,16 @@ h1 .title-sigil{width:clamp(22px,4.6vw,30px);height:auto;vertical-align:-.06em;m
         setTimeout(function(){hideBanner();next();},3200);
       });
     }
-    // CIRCUIT BREACH — sequence already committed; you just walk the path
-    if(breachSeq){
+    // NIGHT HUNT — board & shuffle already committed; you aim and shoot
+    if(huntBoard){
       chain.push(function(next){
-        playBreach(breachSeq,S.bet,function(cash,blog){
-          entry.breach=blog;
-          entry.win+=cash;
-          S.roundWin+=cash;
-          if(cash>0){
-            rollup(hudWin,S.roundWin,cash>=S.bet*3);hudWin.classList.remove('idle');
-            statusEl.className='felt-status';
-            statusEl.innerHTML='Breach extracted · <span class="gain">+'+fmt(cash)+' MORBIUS</span>';
-          }else{
-            statusEl.className='felt-status lose';
-            statusEl.textContent='ICE got the haul — the grid keeps what it catches';
-          }
+        playHunt(huntBoard,huntOrder,S.bet,function(win,hlog){
+          entry.hunt=hlog;
+          entry.win+=win;
+          S.roundWin+=win;
+          rollup(hudWin,S.roundWin,win>=S.bet*10);hudWin.classList.remove('idle');
+          statusEl.className='felt-status';
+          statusEl.innerHTML='Night Hunt · <span class="gain">'+hlog.value+'× · +'+fmt(win)+' MORBIUS</span>';
           syncHud();next();
         });
       });
@@ -1433,7 +1525,7 @@ h1 .title-sigil{width:clamp(22px,4.6vw,30px);height:auto;vertical-align:-.06em;m
       chain.push(function(next){
         sFanfare();sScreech();
         showBanner('win','SIGIL SWARM!','+'+FS_AWARD+' FREE SPINS');
-        S.fsLeft+=FS_AWARD;S.fsTotal+=FS_AWARD;S.inFs=true;
+        S.fsLeft+=FS_AWARD;S.fsTotal+=FS_AWARD;S.inFs=true;S.locks=new Set();
         boardShell.classList.add('fs');
         setTimeout(function(){hideBanner();syncHud();next();},1400);
       });
@@ -1464,7 +1556,7 @@ h1 .title-sigil{width:clamp(22px,4.6vw,30px);height:auto;vertical-align:-.06em;m
         else sWinSmall();
         next();
       });
-    }else if(!jpTier&&!breachSeq&&!(ev.sc>=3)){
+    }else if(!jpTier&&!huntBoard&&!(ev.sc>=3)){
       chain.push(function(next){
         statusEl.className='felt-status'+(isFree?' fsmode':'');
         statusEl.textContent=isFree?'Swarm spin — no win':'No win this spin';
@@ -1491,7 +1583,7 @@ h1 .title-sigil{width:clamp(22px,4.6vw,30px);height:auto;vertical-align:-.06em;m
 
   function settle(){
     S.phase='settled';S.busy=false;
-    var hadFs=S.inFs;S.inFs=false;S.batsNow=0;
+    var hadFs=S.inFs;S.inFs=false;S.locks=null;
     boardShell.classList.remove('fs');
     var win=S.roundWin,x=win/S.bet;
     if(win>0)S.balance+=win;
@@ -1505,14 +1597,15 @@ h1 .title-sigil{width:clamp(22px,4.6vw,30px);height:auto;vertical-align:-.06em;m
     }
     S.history.unshift({ id:S.roundId, at:new Date().toISOString(), bet:S.bet, win:win,
       spins:S.spinLog.length, fs:S.fsTotal,
-      bats:S.spinLog.reduce(function(a,s){return a+(s.bats?s.bats.length:0);},0),
+      sigils:S.spinLog.reduce(function(a,s){return a+(s.sigils?s.sigils.length:0);},0),
+      locked:S.spinLog.reduce(function(a,s){return Math.max(a,s.locked||0);},0),
       lines:S.spinLog.reduce(function(a,s){return a+s.lines;},0),
-      breaches:S.spinLog.filter(function(s){return s.breach;}).length,
+      hunts:S.spinLog.filter(function(s){return s.hunt;}).length,
       jackpots:S.spinLog.filter(function(s){return s.jackpot;}).map(function(s){return s.jackpot;}),
       spinLog:S.spinLog.map(function(s){return JSON.parse(JSON.stringify(s));}),
       serverSeed:S.serverSeed, serverHash:S.serverHash, clientSeed:S.clientSeed, nonce:S.nonce });
     if(S.history.length>15)S.history.pop();
-    if(hadFs)setTimeout(clearBats,1600);
+    if(hadFs)setTimeout(clearSigils,1600);
     setControls(true);syncHud();renderActions();renderHistory();
   }
 
@@ -1531,8 +1624,8 @@ h1 .title-sigil{width:clamp(22px,4.6vw,30px);height:auto;vertical-align:-.06em;m
     if(!S.history.length){histBody.innerHTML='<p class="hist-empty">No spins yet — the city is waiting.</p>';return;}
     histBody.innerHTML='<ul class="hist-list">'+S.history.map(function(r){
       var profit=r.win-r.bet,multX100=Math.round(r.win/r.bet*100);
-      var badge=r.fs>0?'<span class="badge fsb">'+r.fs+' FS · '+r.bats+' sigils</span>':'<span class="badge">base</span>';
-      var brs=r.breaches>0?'<span class="badge brb">◉'+r.breaches+'</span>':'';
+      var badge=r.fs>0?'<span class="badge fsb">'+r.fs+' FS · '+r.locked+' locked</span>':'<span class="badge">base</span>';
+      var brs=r.hunts>0?'<span class="badge brb">◉ Hunt'+(r.hunts>1?' ×'+r.hunts:'')+'</span>':'';
       var jps=r.jackpots.map(function(j){return '<span class="badge jpb">JP '+JP[j.tier].label+'</span>';}).join('');
       var xcell=r.win>0?'<span class="x win">'+(multX100/100).toFixed(2)+'×</span>':'<span class="x bust">0.00×</span>';
       var pcell='<span class="p '+(profit>0?'up':(profit<0?'down':'flat'))+'">'+(profit>0?'+':'')+fmt(profit)+'</span>';
@@ -1546,7 +1639,7 @@ h1 .title-sigil{width:clamp(22px,4.6vw,30px);height:auto;vertical-align:-.06em;m
   }
 
   /* fairness modal */
-  function recipeStr(){return 'demo: mulberry32(xmur3(`${serverSeed}:${clientSeed}:${nonce}`)) → per spin: 5 reel stops, 1 multiplier draw per wild (reel-major), then on free spins the sigil draws (1 count uniform → 2–5 sigils, then 1 cell uniform per sigil: cell=floor(u*20), reel=floor(cell/4), row=cell%4), then the full 12-node Circuit Breach sequence if nodes landed on reels 1/3/5 (per node: hazard uniform vs 8%+4%·depth ICE then 15% ×2, plus one cash uniform 1–10× bet) — consumed in spin order. ADVANCE/EXTRACT is player input, re-scored against the committed sequence. Jackpot hits are re-checked from the natural wild count (sigils excluded); pool amounts are account state. Production draws the same sequence from the server HMAC_SHA256 stream.';}
+  function recipeStr(){return 'demo: mulberry32(xmur3(`${serverSeed}:${clientSeed}:${nonce}`)) → per spin: 5 reel stops, 1 multiplier draw per wild (reel-major), then on free spins the sigil draws (1 count uniform → 2–5 sigils, then 1 cell uniform per sigil: cell=floor(u*20), reel=floor(cell/4), row=cell%4) which LOCK for the rest of the free spins, then — if circuit nodes hit reels 1/3/5 — the 24 Night Hunt tile values row-major (one weighted pick each) followed by a Fisher-Yates shuffle permutation (23 uniforms) — consumed in spin order. Where you aim is player input: the shot tile index is recorded and the revealed multiplier is re-derived as board[shuffle[shot]] × bet. Jackpot hits are re-checked from the wild count (natural + locked sigils); pool amounts are account state. Production draws the same sequence from the server HMAC_SHA256 stream.';}
   function ckHtml(ok,label){return '<div class="m-check"><span class="ck '+(ok?'ok':'no')+'">'+(ok?'✓':'✗')+'</span><span>'+label+'</span></div>';}
   function fieldHtml(l,v){return '<div class="m-field"><div class="fl">'+l+'</div><div class="fv">'+v+'</div></div>';}
   function spinsHtml(log){
@@ -1554,18 +1647,15 @@ h1 .title-sigil{width:clamp(22px,4.6vw,30px);height:auto;vertical-align:-.06em;m
     return '<div class="m-spins">'+log.map(function(s,i){
       var stops=s.stops.map(function(v){return '<span class="md">'+v+'</span>';}).join('');
       var hot=s.mults.filter(function(m){return m.m>1;}).map(function(m){return '<span class="md hot">R'+(m.r+1)+'×'+m.m+'</span>';}).join('');
-      var bats=(s.bats&&s.bats.length)?s.bats.map(function(c){return '<span class="md batmd">sg '+(Math.floor(c/4)+1)+','+((c%4)+1)+'</span>';}).join(''):'';
-      var br='';
-      if(s.breach){
-        br=s.breach.seq.slice(0,s.breach.steps).map(function(n){
-          if(n[0]==='I')return '<span class="md icemd">ICE</span>';
-          if(n[0]==='M')return '<span class="md brmd">×2</span>';
-          return '<span class="md brmd">+'+n[1]+'×</span>';
-        }).join('')+(s.breach.iced?'':'<span class="md brmd">✓out</span>');
+      var sg=(s.sigils&&s.sigils.length)?s.sigils.map(function(c){return '<span class="md batmd">sg '+(Math.floor(c/4)+1)+','+((c%4)+1)+'</span>';}).join(''):'';
+      var lk=(s.locked>0)?'<span class="md batmd">'+s.locked+' locked</span>':'';
+      var hn='';
+      if(s.hunt){
+        hn='<span class="md brmd">shot #'+(s.hunt.shot+1)+'</span><span class="md brmd">'+s.hunt.value+'×</span>';
       }
       var jp=s.jackpot?'<span class="md jpmd">JP '+JP[s.jackpot.tier].label+'</span>':'';
       var pc=s.win>0?'<span class="rp up">+'+fmt(s.win)+'</span>':'<span class="rp no">0</span>';
-      return '<div class="m-sr"><span class="rn'+(s.free?' fs':'')+'">'+(s.free?'swarm':'spin')+' '+(i+1)+'</span><span class="rd">'+stops+hot+bats+br+jp+'</span>'+pc+'</div>';
+      return '<div class="m-sr"><span class="rn'+(s.free?' fs':'')+'">'+(s.free?'swarm':'spin')+' '+(i+1)+'</span><span class="rd">'+stops+hot+sg+lk+hn+jp+'</span>'+pc+'</div>';
     }).join('')+'</div>';
   }
   function findRound(id){id=String(id||'').trim();return S.history.filter(function(x){return x.id===id;})[0]||null;}
@@ -1585,7 +1675,8 @@ h1 .title-sigil{width:clamp(22px,4.6vw,30px);height:auto;vertical-align:-.06em;m
     var hashAvail=reHash!=='sha256-unavailable'&&r.serverHash!=='sha256-unavailable';
     var hashOk=hashAvail&&reHash===r.serverHash;
     var rng=makeRng(r.serverSeed+':'+r.clientSeed+':'+r.nonce);
-    var stopsOk=true,multsOk=true,batsOk=true,breachOk=true,winsOk=true,jpOk=true,reTotal=0;
+    var locks=new Set();
+    var stopsOk=true,multsOk=true,sigilsOk=true,huntOk=true,winsOk=true,jpOk=true,reTotal=0;
     for(var i=0;i<r.spinLog.length;i++){
       var lg=r.spinLog[i];
       var st=drawStops(rng);
@@ -1593,23 +1684,27 @@ h1 .title-sigil{width:clamp(22px,4.6vw,30px);height:auto;vertical-align:-.06em;m
       var raw=windowAt(st);
       var m=drawMults(rng,raw);
       if(JSON.stringify(multsToLog(raw,m))!==JSON.stringify(lg.mults))multsOk=false;
-      var bats=lg.free?drawBats(rng):null;
-      if(JSON.stringify(bats)!==JSON.stringify(lg.bats))batsOk=false;
-      var ev=evalSpin(raw,m,bats);
-      var seq=ev.bonusHit?drawBreach(rng):null;
-      var breachCash=0;
-      if(!!seq!==!!lg.breach)breachOk=false;
-      if(seq&&lg.breach){
-        if(JSON.stringify(seqToLog(seq))!==JSON.stringify(lg.breach.seq))breachOk=false; // sequence re-derives
-        var steps=lg.breach.steps;
-        if(!(steps>=1&&steps<=BREACH_STEPS))breachOk=false;
-        var sc2=breachScore(seq,r.bet,steps);
-        if(sc2.iced!==lg.breach.iced)breachOk=false;                  // recorded path hits ICE exactly where the seq says
-        if(sc2.iced&&sc2.icedAt!==steps)breachOk=false;               // an iced run must stop AT the ICE node
-        if(sc2.win!==lg.breach.win)breachOk=false;                    // bank reconciles (cash + ×2 boosts)
-        breachCash=sc2.iced?0:sc2.win;
+      // sticky sigils: drawn every free spin, accumulate into the lock set
+      var sigils=lg.free?drawSigils(rng):null;
+      if(JSON.stringify(sigils)!==JSON.stringify(lg.sigils))sigilsOk=false;
+      if(lg.free){sigils.forEach(function(c){locks.add(c);});if(locks.size!==(lg.locked||0))sigilsOk=false;}
+      var ev=evalSpin(raw,m,lg.free?locks:null);
+      // NIGHT HUNT: 24 tile values then the shuffle permutation
+      var board=ev.bonusHit?drawHuntBoard(rng):null;
+      var order=ev.bonusHit?drawHuntPerm(rng):null;
+      var huntWin=0;
+      if(!!board!==!!lg.hunt)huntOk=false;
+      if(board&&lg.hunt){
+        if(JSON.stringify(board)!==JSON.stringify(lg.hunt.board))huntOk=false;   // 24 values re-derive
+        if(JSON.stringify(order)!==JSON.stringify(lg.hunt.order))huntOk=false;   // shuffle re-derives
+        var shot=lg.hunt.shot;
+        if(!(shot>=0&&shot<HUNT_N))huntOk=false;                                  // shot tile in range
+        var sc=huntScore(board,order,r.bet,shot);
+        if(sc.mult!==lg.hunt.value)huntOk=false;    // revealed value == board[permutation[shot]]
+        if(sc.win!==lg.hunt.win)huntOk=false;       // payout == value × total bet
+        huntWin=sc.win;
       }
-      var w=linePayout(r.bet,ev.lineUnits)+breachCash;
+      var w=linePayout(r.bet,ev.lineUnits)+huntWin;
       if(w!==lg.win)winsOk=false;
       var tier=jackpotTier(ev.wilds);
       if((tier||null)!==(lg.jackpot?lg.jackpot.tier:null))jpOk=false;
@@ -1620,16 +1715,16 @@ h1 .title-sigil{width:clamp(22px,4.6vw,30px);height:auto;vertical-align:-.06em;m
       +ckHtml(hashOk,hashAvail?'Server seed matches its committed hash (checked locally)':'Hash check unavailable — SHA-256 needs a secure (https) context')
       +ckHtml(stopsOk,'Every reel stop re-derives from the seed stream')
       +ckHtml(multsOk,'Every wild multiplier re-derives from the same stream')
-      +ckHtml(batsOk,'Every sigil count & landing cell re-derives (free spins)')
-      +ckHtml(breachOk,'Breach sequences re-derive; your recorded path pays exactly right')
-      +ckHtml(jpOk,'Jackpot hits match the on-screen MORB-chip wild counts')
+      +ckHtml(sigilsOk,'Every sigil count, landing cell & sticky-lock count re-derives (free spins)')
+      +ckHtml(huntOk,'Night Hunt board & shuffle re-derive; your shot tile pays board[shuffle][shot]×bet')
+      +ckHtml(jpOk,'Jackpot hits match the on-screen wild counts')
       +ckHtml(winsOk,'Each spin’s win reconciles with the paytable & 40 lines')
-      +ckHtml(payoutOk,'Round payout equals spins + breach + recorded jackpots')
-      +'<div class="m-maplabel">Spin replay — stops · hot wilds · sigils · breach nodes · jackpots</div>'+spinsHtml(r.spinLog)
+      +ckHtml(payoutOk,'Round payout equals spins + Night Hunt + recorded jackpots')
+      +'<div class="m-maplabel">Spin replay — stops · hot wilds · locked sigils · Night Hunt · jackpots</div>'+spinsHtml(r.spinLog)
       +'<div class="m-meta"><span>Spins: <span class="mv">'+r.spins+'</span></span>'
         +'<span>Free spins: <span class="mv">'+r.fs+'</span></span>'
-        +'<span>Sigils: <span class="mv mag">'+r.bats+'</span></span>'
-        +'<span>Breaches: <span class="mv vio">'+r.breaches+'</span></span>'
+        +'<span>Sigils locked: <span class="mv mag">'+r.locked+'</span></span>'
+        +'<span>Night Hunts: <span class="mv vio">'+r.hunts+'</span></span>'
         +'<span>Lines hit: <span class="mv vio">'+r.lines+'</span></span></div>'
       +'<div class="m-fields">'+fieldHtml('Server seed hash (committed)',r.serverHash)+fieldHtml('Server seed (revealed)',r.serverSeed)
         +fieldHtml('Client seed',r.clientSeed)+fieldHtml('Nonce',String(r.nonce))+fieldHtml('Recipe',recipeStr())+'</div>'
@@ -1656,25 +1751,23 @@ h1 .title-sigil{width:clamp(22px,4.6vw,30px);height:auto;vertical-align:-.06em;m
       '<table class="pt-tbl"><thead><tr><th>Symbol</th><th>×2</th><th>×3</th><th>×4</th><th>×5</th></tr></thead>'
       +'<tbody>'+rows
       +'<tr><td>'+ptSymCell('S')+'</td><td>—</td><td colspan="3">3+ anywhere → Sigil Swarm free spins</td></tr>'
-      +'<tr><td>'+ptSymCell('B')+'</td><td>—</td><td colspan="3">on reels 1·3·5 → Circuit Breach</td></tr>'
+      +'<tr><td>'+ptSymCell('B')+'</td><td>—</td><td colspan="3">on reels 1·3·5 → Night Hunt</td></tr>'
       +'</tbody></table>'
-      +'<p class="pt-note"><span class="hl">◉ Circuit Breach</span> — a 12-node path whose every outcome is committed from the seed before the board opens: '
-      +'cash <span class="am">1–10× bet</span>, <span class="mg">×2 boost</span> on your whole haul, or <span class="rd">ICE</span> that wipes everything unbanked. '
-      +'ICE risk rises 8% + 4% per node deep. <span class="am">EXTRACT</span> any time after node 1 to keep the haul. '
-      +'<span class="mg">Sigil Swarm</span> — 3+ blood moons award 6 free spins (+2 per retrigger). Every free spin, seeded draws send 2–5 night sigils onto the board; each lands as a wild for that spin, stacking with reel wilds (a sigil over a hot wild keeps the badge). '
-      +'<span class="am">Hot wilds</span> (×2/×3/×5 badges on ~1-in-12 wilds) multiply a winning line by the highest badge in the run. '
-      +'<span class="am">Progressive jackpots</span> — DUSK at 5 MORB-chip wilds on screen (~1-in-592 spins), MIDNIGHT at 7 (~1-in-150,000), ECLIPSE at 9+ (not seen in 2M simulated spins); sigil wilds do not count; pools grow with every bet (0.9/0.5/0.1%) and reset to their seed after a hit. '
-      +'Line pays are in <span class="hl">line bets</span> (total bet ÷ 40), leftmost-consecutive, best win per line. Ruleset tuned to ≈ 96.7% RTP including the jackpot contribution.</p>';
+      +'<p class="pt-note"><span class="hl">◉ Night Hunt</span> — a wall of <span class="am">24 tiles</span> whose multipliers are committed from the seed before the wall opens (mostly <span class="am">2×–15×</span>, some 25×/50×, rare <span class="mg">75×/100×</span>). The values flash up, the tiles flip face-down and a seeded shuffle scrambles them, then you <span class="am">aim the crossbow and shoot one tile</span> — it pays that multiplier × your total bet. Your aim adds no randomness (uniform over 24 → EV = table mean ≈ 9.5× bet). '
+      +'<span class="mg">Sigil Swarm</span> — 3+ blood moons award free spins. Every free spin, seeded draws send 2–5 night sigils onto the board; each <span class="am">LOCKS IN PLACE</span> as a wild for the rest of the free spins, stacking with reel wilds and building the board spin by spin. '
+      +'<span class="am">Hot wilds</span> (×2/×3/×5 badges on ~1-in-12 reel wilds) multiply a winning line by the highest badge in the run. '
+      +'<span class="am">Progressive jackpots</span> — DUSK at 5 wilds on screen, MIDNIGHT at 7, ECLIPSE at 9+ (locked sigils count toward the total); pools grow with every bet (0.9/0.5/0.1%) and reset to their seed after a hit. '
+      +'Line pays are in <span class="hl">line bets</span> (total bet ÷ 40), leftmost-consecutive, best win per line. Ruleset tuned to ≈ 96.6% RTP including the 1.5% flat jackpot contribution.</p>';
   }
 
   var FAQS=[
-    {q:'How does the Circuit Breach bonus work?',a:'<p>Land the <span class="hl">glowing circuit node on reels 1, 3 and 5</span> at once (measured ~1-in-137 spins, free spins included — the board burns magenta when two are waiting on the third) and the reels clear for the city\'s security grid: a <span class="hl">12-node winding path</span>. Advancing reveals the next node: <span class="hl">cash 1–10× your bet</span> added to the haul, a <span class="hl">×2 boost</span> that doubles everything you\'ve gathered, or <span class="hl">ICE</span> — a security lockout that ends the breach and takes the entire unbanked haul with it.</p><p>The trick: <b>all 12 outcomes are drawn from the seeded stream before the board even opens</b> (two uniforms per node — ICE hazard is 8% + 4% per node of depth, then 15% for ×2, else cash). Your only inputs are <span class="hl">ADVANCE</span> and <span class="hl">EXTRACT</span> — extract any time after the first node to keep the haul. Verify re-derives the full sequence and re-scores your recorded path against it.</p>'},
-    {q:'What breach strategy does the advertised RTP assume?',a:'<p>The sequence is seeded; <b>when you extract is up to you</b> — so the bonus\'s exact return depends on your nerve. For the published numbers, the Monte Carlo models a benchmark player who <span class="hl">advances to node 6, then extracts</span>. Under that policy the breach contributes ≈ 7.5 RTP points, pays ≈ 9.8× bet on average per breach, and gets ICEd about 78% of the time (the average is carried by the runs that survive the deep cash and ×2 nodes). Extracting earlier trades ceiling for consistency; pressing deeper raises both the haul and the hazard — the rising 8% + 4%/node ICE curve keeps every stopping rule near the same long-run edge.</p>'},
-    {q:'How does the Sigil Swarm work?',a:'<p>Land <span class="hl">3+ blood moons</span> anywhere (measured ~1-in-107 spins) for <span class="hl">6 free spins</span>, +2 per retrigger. On <b>every</b> free spin, the seeded stream draws a swarm: first a count (<span class="hl">2–5 night sigils</span>), then a landing cell for each sigil. The sigils dive across the skyline and pin themselves to their cells as <span class="hl">wilds for that spin\'s evaluation</span>, stacking with the natural reel wilds — a sigil that lands on a hot wild keeps the badge.</p><p>The swarm re-draws every spin (sigils don\'t persist), the count and every landing cell replay in Verify, and the sim measured the feature at ≈ 22.5 RTP points — roughly 4× bet back per swarm spin on average. Sigil wilds are spin-local phantoms: they win lines but do <b>not</b> count toward the wild-count jackpots.</p>'},
-    {q:'How do the progressive jackpots hit?',a:'<p>Three pools sit above the reels and grow with every bet: <span class="hl">DUSK</span> (0.9% of bets), <span class="hl">MIDNIGHT</span> (0.5%) and <span class="hl">ECLIPSE</span> (0.1%). They pay when enough <span class="hl">MORB-chip wilds are on screen at once</span>: 5 = DUSK (measured ~1-in-592 spins), 7 = MIDNIGHT (~1-in-150,000), 9+ = ECLIPSE (not observed in 2M simulated spins — it is the city\'s white whale). Only the biggest qualifying tier pays, then the pool resets to its seed value (25,000 / 500,000 / 10,000,000 MORBIUS). Sigil wilds do not count.</p><p>The <b>hit</b> is provably fair — wild positions come from the seeded reel stops. The <b>pool size</b> is account state (in this demo it lives in your browser under <span class="hl">morbiusmidnight-jp</span> and grows as you play).</p>'},
-    {q:'What are hot (multiplier) wilds?',a:'<p>About <span class="hl">1 in 12 MORB-chip wilds</span> lands hot with a <span class="hl">×2, ×3 or ×5 badge</span> (4.5% / 2.3% / 1.2%) and a pulsing amber border. A winning line through hot wilds is multiplied by the <span class="hl">highest badge in the run</span> — badges don\'t compound with each other. Sigil wilds are plain (no badge of their own), but a sigil covering a hot reel wild keeps that wild\'s badge in play.</p>'},
-    {q:'What is the RTP — where does the math come from?',a:'<p>The reel strips, 40 lines, hot-wild odds, Sigil Swarm and Circuit Breach were tuned with <span class="hl">multi-million-spin Monte Carlo simulations</span> of these exact rules (1M-spin tune, seed midnight-1: game 95.15%; 2M-spin confirm on a separate seed: 95.35%): the playable game returns <span class="hl">≈ 95.2–95.4%</span> (hit rate ≈ 63.3%, Sigil Swarm ≈ 22.5–22.7 points at ~1-in-107, Circuit Breach ≈ 7.5 points at ~1-in-137 under the benchmark advance-to-node-6 policy, max observed round ≈ 254×) and the progressive contribution adds 1.5% — <span class="hl">RTP ≈ 96.7%</span> total, a house edge of ≈ 3.3%.</p><p>Individual sessions swing far wider than the long-run edge; the jackpot pools especially reward whoever is under the blood moon when they burst.</p>'},
-    {q:'Is it really fair — and reproducible?',a:'<p>Yes. Before you bet, the server commits to a secret <span class="hl">server seed</span> (you see its SHA-256 hash). Every draw — reel stops, each wild\'s badge, every sigil count and landing cell, all 12 breach nodes — comes from one stream derived from that seed, your client seed and a nonce, consumed in a fixed documented order. The whole round\'s randomness is fixed the instant you press spin; the reels, the swarm and the circuit board are just theatre delivering it. The only thing that isn\'t pre-committed is <b>your own ADVANCE/EXTRACT nerve</b>, and Verify re-scores your recorded path against the committed sequence node for node.</p><p>When the round settles the seed is revealed and <span class="hl">Verify</span> re-derives the entire sequence draw-for-draw, recomputes every win, and checks the commitment hash locally.</p>'},
+    {q:'How does the Night Hunt bonus work?',a:'<p>Land the <span class="hl">glowing circuit node on reels 1, 3 and 5</span> at once (measured ~1-in-140 spins, free spins included — the board burns magenta when two are waiting on the third) and the reels clear for a <span class="hl">wall of 24 tiles</span>. First every tile\'s multiplier flashes face-up (<span class="hl">mostly 2×–15×, some 25×/50×, rare 75×/100×</span>) — memorise the wall. Then the tiles flip face-down and a <span class="hl">seeded shuffle</span> scrambles them into new positions. Finally you <span class="hl">aim the crossbow and shoot one tile</span>; it flips to reveal its multiplier and pays that <span class="hl">× your total bet</span>.</p><p>The trick: <b>all 24 tile values and the exact shuffle are drawn from the seeded stream before the wall even opens</b> (one weighted pick per tile, then a Fisher-Yates permutation). <b>Where you aim adds no randomness</b> — it is modelled as a uniform pick over the 24 tiles, so the average return equals the table mean (≈ 9.5× bet). Verify re-derives the board and the shuffle and confirms your shot tile pays exactly <span class="hl">board[shuffle[shot]] × bet</span>.</p>'},
+    {q:'Why is the Night Hunt fair even though I choose the tile?',a:'<p>Because the board is committed <b>before</b> you shoot. The 24 multipliers and the shuffle that scrambles them are fixed by the seed the instant you press spin — your crossbow can\'t change what\'s under a tile, only which committed tile you reveal. Since every tile is equally likely to be picked, the long-run value of the bonus is just the average of the 24 values, i.e. the table mean. That is exactly what the Monte Carlo models (uniform pick), and it contributes ≈ 7.1 RTP points at the ~1-in-140 trigger rate, with a 100× ceiling per tile.</p>'},
+    {q:'How does the Sigil Swarm work — and what makes it sticky?',a:'<p>Land <span class="hl">3+ blood moons</span> anywhere (measured ~1-in-107 spins) for free spins. On <b>every</b> free spin, the seeded stream draws a swarm: first a count (<span class="hl">2–5 night sigils</span>), then a landing cell for each sigil. The sigils dive across the skyline and pin themselves to their cells as wilds — and here\'s the difference: those wilds <span class="hl">LOCK IN PLACE for the rest of the free spins</span>. They don\'t clear between spins, so the board fills with held wilds and the back half of the feature pays over and over.</p><p>Each spin\'s count and landing cells replay in Verify, and the accumulating lock set is re-derived draw-for-draw. The sim measured the sticky feature at ≈ 37 RTP points with about <span class="hl">8.3 wilds locked per round</span> on average. Locked sigils win lines and <b>count toward the wild-count jackpots</b>.</p>'},
+    {q:'How do the progressive jackpots hit?',a:'<p>Three pools sit above the reels and grow with every bet: <span class="hl">DUSK</span> (0.9% of bets), <span class="hl">MIDNIGHT</span> (0.5%) and <span class="hl">ECLIPSE</span> (0.1%). They pay when enough <span class="hl">wilds are on screen at once</span>: 5 = DUSK, 7 = MIDNIGHT, 9+ = ECLIPSE. Natural MORB-chip reel wilds <b>and locked sigil wilds</b> both count, so the sticky Sigil Swarm is your best route to the deeper tiers. Only the biggest qualifying tier pays, then the pool resets to its seed value (25,000 / 500,000 / 10,000,000 MORBIUS).</p><p>The <b>hit</b> is provably fair — wild positions come from the seeded reel stops and sigil draws. The <b>pool size</b> is account state (in this demo it lives in your browser under <span class="hl">morbiusmidnight-jp</span> and grows as you play). The advertised RTP includes a flat 1.5-point steady-state jackpot contribution.</p>'},
+    {q:'What are hot (multiplier) wilds?',a:'<p>About <span class="hl">1 in 12 MORB-chip reel wilds</span> lands hot with a <span class="hl">×2, ×3 or ×5 badge</span> (4.5% / 2.3% / 1.2%) and a pulsing amber border. A winning line through hot wilds is multiplied by the <span class="hl">highest badge in the run</span> — badges don\'t compound with each other. Locked sigil wilds are plain (×1, no badge of their own).</p>'},
+    {q:'What is the RTP — where does the math come from?',a:'<p>The reel strips, 40 lines, hot-wild odds, the sticky Sigil Swarm and the Night Hunt were tuned with a <span class="hl">1,000,000-spin Monte Carlo simulation</span> of these exact rules (midnight-sim2.js, seed midnight2-1): the playable game returns <span class="hl">≈ 95.1%</span> (hit rate ≈ 63.5%, Sigil Swarm ≈ 37 points at ~1-in-107 with ≈ 8.3 wilds locked per round, Night Hunt ≈ 7.1 points at ~1-in-140 with a mean tile of ≈ 9.5× bet and a 100× ceiling, max observed round ≈ 395×) and a flat 1.5-point progressive contribution brings the total to <span class="hl">RTP ≈ 96.6%</span> — a house edge of ≈ 3.4%.</p><p>Individual sessions swing far wider than the long-run edge; the jackpot pools especially reward whoever is under the blood moon when they burst.</p>'},
+    {q:'Is it really fair — and reproducible?',a:'<p>Yes. Before you bet, the server commits to a secret <span class="hl">server seed</span> (you see its SHA-256 hash). Every draw — reel stops, each wild\'s badge, every sigil count and landing cell, all 24 Night Hunt tile values and the shuffle that scrambles them — comes from one stream derived from that seed, your client seed and a nonce, consumed in a fixed documented order. The whole round\'s randomness is fixed the instant you press spin; the reels, the swarm and the tile wall are just theatre delivering it. The only thing that isn\'t pre-committed is <b>which tile you shoot</b>, and Verify re-derives the board and shuffle and confirms your recorded shot pays exactly board[shuffle[shot]] × bet.</p><p>When the round settles the seed is revealed and <span class="hl">Verify</span> re-derives the entire sequence draw-for-draw, recomputes every win, and checks the commitment hash locally.</p>'},
     {q:'How do I get MORBIUS?',a:'<p>MORBIUS is the project\'s token on <span class="hl">PulseChain</span> (chain ID 369). Buy it on <span class="hl">PulseX</span> by swapping PLS or WPLS for MORBIUS, then deposit it to your play balance.</p><p class="mono" style="font-size:11px">Contract: <a href="https://scan.pulsechain.com/token/0xB7d4eB5fDfE3d4d3B5C16a44A49948c6EC77c6F1" target="_blank" rel="noopener noreferrer">0xB7d4eB5fDfE3d4d3B5C16a44A49948c6EC77c6F1</a></p><p>Always confirm the contract address before swapping — never trust a ticker alone.</p>'}
   ];
   function renderFaq(){
