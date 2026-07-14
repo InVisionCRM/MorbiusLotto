@@ -11,47 +11,47 @@
 /* ── DEEP ORBIT — Deep-Space Expedition (slot series) prototype ────────────
    5×4 video slot, 40 fixed lines, with the full series spec:
    1. 5 columns × 4 rows, 40 fixed paylines (shared with MORB Fortune).
-   2. Progressive jackpots — LUNAR / SOLAR / GALACTIC pools fed by every bet
-      (0.9% / 0.5% / 0.1%), hit by 5 / 7 / 9+ rocket wilds on screen
-      (measured: ~1-in-179 / ~1-in-3.7k / ~1-in-250k spins on 20 cells with
-      drifting wilds counting). Pools persist in localStorage
-      ('deeporbit-jp', seeds 25,000 / 500,000 / 10,000,000); the hit
-      condition is provably fair, pool size is account state.
-   3. STAGE BURN bonus — 3 launch pads on reels 1/3/5 (measured ~1-in-122)
-      trigger a 4-stage launch. 2× bet is held at the pad; each IGNITE risks
-      the held amount on a pre-committed seeded survive/explode draw
-      (survive odds 60% / 31% / 33% / 33%) to climb the 3× → 8× → 20× → 50×
-      ladder. EJECT banks the ladder; an explosion pays the 25% escape pod.
-      Odds are tuned so EV(ignite) ≈ EV(eject) at every rung.
-   4. Free spins — ZERO GRAVITY: 3+ warp gates (~1-in-61) award 6 free
-      spins (+2 per retrigger). Every rocket wild that lands starts
-      DRIFTING one row down at the start of each later free spin (derived
-      state, replayed in Verify), staying wild at its cell until it slides
-      off the bottom. A drifting rocket meeting a newly landed wild merges
-      into a ×2 hot wild (or keeps the higher badge).
+   2. HOLD & SPIN — Energy Cores (money orbs) land on every reel. 6+ cores at
+      once LOCK and open a 3-respin Hold & Spin on a 4×5 socket grid: every
+      empty socket independently redraws a core-or-empty each respin, any new
+      core LOCKS and resets the respin counter to 3, and the round pays the sum
+      of every locked core value. Filling all 20 sockets awards the GALACTIC
+      GRAND. MINI / MAJOR cores collect those jackpot pools. This is the sole
+      grand path (the old on-screen 5/7/9-wild jackpots are folded in).
+   3. Progressive jackpots — MINI / MAJOR / GRAND pools fed by every bet
+      (0.9% / 0.5% / 0.1%). MINI & MAJOR are collected by locking a MINI/MAJOR
+      core in a Hold & Spin; GRAND is the full 20-socket fill. Pools persist in
+      localStorage ('deeporbit-jp', seeds 25,000 / 500,000 / 10,000,000); the
+      hit condition is provably fair, pool size is account state.
+   4. Free spins — ZERO GRAVITY: 3+ warp gates (~1-in-61) award 6 free spins
+      (+2 per retrigger). Every rocket wild that lands LOCKS IN PLACE for the
+      rest of the free spins — no drift, no movement — staying wild at its cell;
+      a higher hot-wild badge landing on a locked cell upgrades it. Sticky
+      state is derived (replayed spin-for-spin in Verify).
    5. Deep-space expedition theme: near-black indigo, canvas starfield
       (3 parallax layers + comet streaks), ice-blue/indigo chrome with
       engine-orange win accents, planets from /crash as the high symbols,
       the crash rocket as the WILD, the EMIT ring as the warp-gate scatter,
-      glowing hex beacons/probes as the lows, and a gantry launch-pad bonus
-      symbol (rocket art on the pad) on reels 1/3/5 only.
+      glowing hex beacons/probes as the lows, and the Pulse orb as the Energy
+      Core money symbol with a stamped MORBIUS value.
 
    Hot wilds carry ×2/×3/×5 badges (4.5/2.3/1.2% of wilds) — highest badge
    in the run multiplies the line.
 
-   Payout tuning: Monte Carlo of this exact ruleset (deep-orbit-sim.js;
-   tune run 1M spins seed 'orbit-1': game RTP 95.04%; confirm run 2M spins
-   seed 'orbit-confirm-9': game RTP 95.13%): line game + Zero Gravity +
-   Stage Burn (benchmark policy: ignite through stage 3, then eject)
-   ≈ 95.0–95.1% + 1.5% jackpot contribution → RTP ≈ 96.6% (hit ≈ 66.5%,
-   Zero Gravity ≈ 21 pts at 1-in-61 / ~6.2 spins per bonus, Stage Burn
-   ≈ 1.6 pts at ~1-in-122, max observed round ≈ 360×). ≈3.4% house edge,
+   Payout tuning: Monte Carlo of this exact ruleset (deep-orbit-sim2.js;
+   HS_FILL 0.0475, cores [6,6,5,6,6], wilds [2,3,2,3,2], scatters [2,1,2,1,2]).
+   1M tune run seed 'orbit2-tune-1': game RTP 95.33%; 2M confirm run seed
+   'orbit2-confirm-9': game RTP 95.02%. Line game + Zero Gravity + Hold & Spin
+   ≈ 95.0–95.3% + 1.5% progressive contribution → RTP ≈ 96.5–96.8% (hit ≈ 61%,
+   Zero Gravity ≈ 20 pts at 1-in-104 / ~6.1 spins per bonus, Hold & Spin
+   ≈ 22.6 pts at ~1-in-120 spins / ~10.5 cores / ~8.7 respins, GRAND full-grid
+   ~1-in-235k spins, max observed round ≈ 740×). ≈3.3–3.5% house edge,
    stated in the FAQ. Self-contained client-side demo (illustrative seeded
    RNG). Currency: MORBIUS. */
 :root{
   --abyss:#04040f; --ind:#818cf8; --ind-soft:rgba(129,140,248,0.14); --ind-edge:rgba(129,140,248,0.45);
   --ice:#38bdf8; --ice-soft:rgba(56,189,248,0.14);
-  --eng:#fb923c; --win:#fb923c; --loss:#fb7185;
+  --eng:#fb923c; --win:#fb923c; --loss:#fb7185; --gold:#fbbf24;
   --ink:#e6e9ff; --slate-300:#c7cdf2; --slate-400:#8b93c4; --slate-500:#5d6490;
   --panel:rgba(10,11,32,0.82); --field:#080a20;
   --font-disp:'Chakra Petch',system-ui,sans-serif;
@@ -120,9 +120,11 @@ h1 .glyph{color:var(--ice);-webkit-text-fill-color:var(--ice);filter:drop-shadow
 /* jackpot ticker */
 .jackbar{display:flex;gap:8px;margin-bottom:10px}
 .jp{flex:1;text-align:center;border-radius:12px;padding:8px 4px 7px;border:1px solid rgba(129,140,248,.3);background:linear-gradient(rgba(129,140,248,.09),rgba(129,140,248,.02));position:relative;overflow:hidden}
-.jp .k{font-size:9px;letter-spacing:.18em;text-transform:uppercase;color:var(--slate-500)}
+.jp .k{font-size:9px;letter-spacing:.16em;text-transform:uppercase;color:var(--slate-500)}
 .jp .v{font-family:var(--font-mono);font-weight:700;font-size:clamp(12px,3vw,16px);color:var(--ice);margin-top:2px}
 .jp .req{font-size:8.5px;letter-spacing:.1em;color:var(--slate-500);text-transform:uppercase;margin-top:1px}
+.jp.mini{border-color:rgba(203,213,225,.4)}.jp.mini .v{color:#e2e8f0}
+.jp.major{border-color:rgba(251,191,36,.45)}.jp.major .v{color:var(--gold)}
 .jp.grand{border-color:var(--ind);box-shadow:0 0 18px -6px rgba(129,140,248,.6)}
 .jp.grand .v{font-size:clamp(13px,3.4vw,18px);text-shadow:0 0 12px rgba(56,189,248,.7)}
 .jp.hitflash{animation:jphit 1s ease 3}
@@ -161,56 +163,56 @@ h1 .glyph{color:var(--ice);-webkit-text-fill-color:var(--ice);filter:drop-shadow
 .reel::after{content:"";position:absolute;inset:0;pointer-events:none;z-index:2;border-radius:12px;background:linear-gradient(180deg,rgba(3,3,10,.7) 0%,transparent 18%,transparent 82%,rgba(3,3,10,.7) 100%)}
 .strip{display:flex;flex-direction:column;will-change:transform}
 .reel.spin .strip{filter:blur(2.2px)}
+/* disable per-image glow filters while spinning — cheaper, no smear */
+.reel.spin .sym img{filter:none}
 .reel.antic{box-shadow:inset 0 0 0 2px rgba(56,189,248,.7),0 0 22px -4px rgba(56,189,248,.6)}
 .reel.antic::before{content:"";position:absolute;inset:0;border-radius:12px;z-index:3;background:radial-gradient(ellipse at 50% 50%,rgba(56,189,248,.18),transparent 70%);animation:anticpulse .55s ease-in-out infinite;pointer-events:none}
 @keyframes anticpulse{0%,100%{opacity:.35}50%{opacity:1}}
+.reel.antic.core::before{background:radial-gradient(ellipse at 50% 50%,rgba(251,191,36,.2),transparent 70%)}
 .reel.flash::before{content:"";position:absolute;inset:0;background:rgba(200,225,255,.22);animation:reelflash .18s ease-out both;pointer-events:none;z-index:3}
 @keyframes reelflash{from{opacity:1}to{opacity:0}}
 .sym{position:relative;height:var(--cell);display:grid;place-items:center;user-select:none}
 .sym img{width:74%;height:74%;object-fit:contain;filter:drop-shadow(0 3px 6px rgba(0,0,0,.65));pointer-events:none}
 .sym img.wildart{filter:drop-shadow(0 0 9px rgba(56,189,248,.6)) drop-shadow(0 3px 6px rgba(0,0,0,.6))}
-.sym .em{font-size:calc(var(--cell) * .52);line-height:1;filter:drop-shadow(0 3px 5px rgba(0,0,0,.6))}
 /* warp-gate scatter — the EMIT ring, slowly rotating, with a pulsing core */
 .sym .warpwrap{position:relative;width:74%;aspect-ratio:1;display:grid;place-items:center}
 .sym .warpimg{width:100%;height:100%;object-fit:contain;filter:drop-shadow(0 0 10px rgba(129,140,248,.8));animation:warpspin 6s linear infinite}
 .sym .warpcore{position:absolute;width:26%;aspect-ratio:1;border-radius:50%;background:radial-gradient(circle,#e0f2fe,#38bdf8 60%,transparent 75%);box-shadow:0 0 12px rgba(56,189,248,.9);animation:warppulse 1.4s ease-in-out infinite}
 @keyframes warpspin{to{transform:rotate(360deg)}}
 @keyframes warppulse{0%,100%{transform:scale(.85);opacity:.8}50%{transform:scale(1.15);opacity:1}}
-/* launch-pad bonus — gantry + the crash rocket on the pad, reels 1/3/5 only */
-.sym .padsym{position:relative;width:62%;height:78%}
-.sym .padsym .gantry{position:absolute;left:6%;top:4%;width:11%;height:78%;background:linear-gradient(180deg,#a5b4fc,#4c5299);border-radius:2px}
-.sym .padsym .padrocket{position:absolute;left:22%;top:2%;width:56%;height:74%;object-fit:contain;filter:drop-shadow(0 0 7px rgba(251,146,60,.55)) drop-shadow(0 2px 4px rgba(0,0,0,.6))}
-.sym .padsym .padbase{position:absolute;left:0;bottom:0;width:100%;height:15%;background:linear-gradient(180deg,#fb923c,#7c2d12);clip-path:polygon(12% 0,88% 0,100% 100%,0 100%);border-radius:2px;box-shadow:0 0 10px rgba(251,146,60,.6)}
-.sym .padsym .padlight{position:absolute;right:0;top:0;width:13%;aspect-ratio:1;border-radius:50%;background:#fb923c;box-shadow:0 0 8px rgba(251,146,60,.95);animation:padblink 1s steps(2) infinite}
-@keyframes padblink{50%{opacity:.25}}
+/* Energy Core — Pulse orb money symbol with a stamped MORBIUS value */
+.sym .coreorb{position:relative;width:82%;aspect-ratio:1;display:grid;place-items:center}
+.sym .coreorb .coreimg{width:100%;height:100%;object-fit:contain;filter:drop-shadow(0 0 10px rgba(251,191,36,.55)) drop-shadow(0 2px 5px rgba(0,0,0,.6))}
+.sym .coreorb .corestamp{position:absolute;left:50%;bottom:8%;transform:translateX(-50%);font-family:var(--font-mono);font-weight:700;font-size:calc(var(--cell) * .21);line-height:1;color:#1c1302;background:linear-gradient(180deg,#fde68a,#fbbf24);border-radius:6px;padding:2px 5px;white-space:nowrap;box-shadow:0 0 10px rgba(251,191,36,.7),inset 0 1px 0 rgba(255,255,255,.5)}
+.sym .coreorb .corestamp.jp{display:flex;align-items:center;gap:3px;background:linear-gradient(180deg,#e2e8f0,#94a3b8);color:#0a0d24;font-size:calc(var(--cell) * .16)}
+.sym .coreorb .corestamp.jp img{width:calc(var(--cell) * .22);height:calc(var(--cell) * .22);filter:none}
+.sym .coreorb .corestamp.jp.major{background:linear-gradient(180deg,#fde68a,#f59e0b)}
+.sym.core .frame{box-shadow:inset 0 0 0 2px rgba(251,191,36,.7),0 0 14px -2px rgba(251,191,36,.55);border-radius:10px}
 .sym img.lowart{width:64%;height:64%;filter:drop-shadow(0 0 6px rgba(56,189,248,.35)) drop-shadow(0 3px 6px rgba(0,0,0,.65))}
 .sym .frame{position:absolute;inset:4px;border-radius:10px;pointer-events:none}
 .sym.wild .frame{box-shadow:inset 0 0 0 2px rgba(56,189,248,.75),0 0 14px -2px rgba(56,189,248,.55)}
 .sym.scat .frame{box-shadow:inset 0 0 0 2px rgba(129,140,248,.75),0 0 14px -2px rgba(129,140,248,.55)}
-.sym.bon .frame{box-shadow:inset 0 0 0 2px rgba(251,146,60,.85),0 0 16px -2px rgba(251,146,60,.7)}
 .sym.mult .frame{box-shadow:inset 0 0 0 2px rgba(251,146,60,.9),0 0 18px -2px rgba(251,146,60,.75);animation:multpulse 1.1s ease-in-out infinite}
 @keyframes multpulse{0%,100%{box-shadow:inset 0 0 0 2px rgba(251,146,60,.85),0 0 14px -2px rgba(251,146,60,.55)}50%{box-shadow:inset 0 0 0 2px rgba(251,146,60,1),0 0 24px -2px rgba(251,146,60,.9)}}
 .sym .mbadge{position:absolute;top:5px;right:5px;z-index:3;font-family:var(--font-mono);font-weight:700;font-size:calc(var(--cell) * .2);line-height:1;color:#1c0e02;background:linear-gradient(180deg,#ffd8a8,#fb923c);border-radius:6px;padding:2px 4px;box-shadow:0 0 12px rgba(251,146,60,.8),inset 0 1px 0 rgba(255,255,255,.5);animation:badgein .3s cubic-bezier(.34,1.56,.64,1) both}
 @keyframes badgein{from{transform:scale(.3);opacity:0}to{transform:scale(1);opacity:1}}
 .sym.hit{background:radial-gradient(circle at 50% 50%,rgba(56,189,248,.3),rgba(56,189,248,.05) 72%);box-shadow:inset 0 0 0 2px rgba(56,189,248,.8),0 0 18px -2px rgba(56,189,248,.65);border-radius:10px;animation:symhit .42s ease}
 @keyframes symhit{0%{transform:scale(1)}40%{transform:scale(1.14)}100%{transform:scale(1)}}
-.sym.jphit{animation:jpsym 1s cubic-bezier(.34,1.56,.64,1) 2}
-@keyframes jpsym{0%,100%{transform:scale(1)}35%{transform:scale(1.3)}60%{transform:scale(1.05)}}
+.sym.corehit{background:radial-gradient(circle at 50% 50%,rgba(251,191,36,.32),rgba(251,191,36,.05) 72%);box-shadow:inset 0 0 0 2px rgba(251,191,36,.85),0 0 18px -2px rgba(251,191,36,.7);border-radius:10px;animation:symhit .5s cubic-bezier(.34,1.56,.64,1)}
 .sym.scathit{animation:jpsym .8s cubic-bezier(.34,1.56,.64,1) 1}
+@keyframes jpsym{0%,100%{transform:scale(1)}35%{transform:scale(1.3)}60%{transform:scale(1.05)}}
 .reel.land{animation:reelland .22s cubic-bezier(.34,1.56,.64,1)}
 @keyframes reelland{0%{transform:translateY(-6px)}55%{transform:translateY(3px)}100%{transform:translateY(0)}}
-/* Zero Gravity drift layer — rockets adrift with thruster flames */
-.drift-layer{position:absolute;inset:0;z-index:6;pointer-events:none;display:grid;grid-template-columns:repeat(5,1fr);grid-template-rows:repeat(4,var(--cell));gap:0 7px}
-.driftcell{position:relative;display:grid;place-items:center;border-radius:10px;background:radial-gradient(circle at 50% 45%,#141742,#04040f 80%);box-shadow:inset 0 0 0 2px rgba(56,189,248,.65),0 0 16px -3px rgba(56,189,248,.55)}
-.driftcell img{width:70%;height:70%;object-fit:contain;filter:drop-shadow(0 0 9px rgba(56,189,248,.6));animation:driftbob 2.2s ease-in-out infinite}
-@keyframes driftbob{0%,100%{transform:translateY(-2px) rotate(-3deg)}50%{transform:translateY(2px) rotate(3deg)}}
-.driftcell .flame{position:absolute;left:50%;bottom:4px;transform:translateX(-50%);width:9px;height:16px;border-radius:50% 50% 50% 50%/30% 30% 70% 70%;background:linear-gradient(180deg,#fff7cc,#fb923c 55%,transparent);filter:blur(.5px);animation:flick .14s linear infinite alternate}
-@keyframes flick{from{transform:translateX(-50%) scaleY(.8);opacity:.8}to{transform:translateX(-50%) scaleY(1.15);opacity:1}}
-.driftcell .wildpin{position:absolute;left:4px;top:4px;font-family:var(--font-mono);font-weight:700;font-size:8px;letter-spacing:.08em;color:#031018;background:linear-gradient(180deg,#bae6fd,#38bdf8);border-radius:4px;padding:1px 3px}
-.driftcell .mbadge{position:absolute;top:4px;right:4px;font-family:var(--font-mono);font-weight:700;font-size:11px;color:#1c0e02;background:linear-gradient(180deg,#ffd8a8,#fb923c);border-radius:5px;padding:1px 4px;box-shadow:0 0 10px rgba(251,146,60,.8)}
-.driftcell.fall{animation:driftfall .55s cubic-bezier(.34,1.2,.64,1) both}
-@keyframes driftfall{from{transform:translateY(calc(-1 * var(--cell)));opacity:.7}to{transform:translateY(0);opacity:1}}
-.driftcell.hit{box-shadow:inset 0 0 0 2px rgba(251,146,60,.9),0 0 18px -2px rgba(251,146,60,.7)}
+/* Zero Gravity — sticky (locked-in-place) rocket wilds */
+.lock-layer{position:absolute;inset:0;z-index:6;pointer-events:none;display:grid;grid-template-columns:repeat(5,1fr);grid-template-rows:repeat(4,var(--cell));gap:0 7px}
+.lockcell{position:relative;display:grid;place-items:center;border-radius:10px;background:radial-gradient(circle at 50% 45%,#141742,#04040f 80%);box-shadow:inset 0 0 0 2px rgba(56,189,248,.65),0 0 16px -3px rgba(56,189,248,.55)}
+.lockcell img{width:70%;height:70%;object-fit:contain;filter:drop-shadow(0 0 9px rgba(56,189,248,.6))}
+.lockcell .frame{position:absolute;inset:3px;border-radius:9px;box-shadow:inset 0 0 0 2px rgba(56,189,248,.7)}
+.lockcell .lockpin{position:absolute;left:4px;top:4px;font-family:var(--font-mono);font-weight:700;font-size:8px;letter-spacing:.08em;color:#031018;background:linear-gradient(180deg,#bae6fd,#38bdf8);border-radius:4px;padding:1px 3px}
+.lockcell .mbadge{position:absolute;top:4px;right:4px;font-family:var(--font-mono);font-weight:700;font-size:11px;color:#1c0e02;background:linear-gradient(180deg,#ffd8a8,#fb923c);border-radius:5px;padding:1px 4px;box-shadow:0 0 10px rgba(251,146,60,.8)}
+.lockcell.lockin{animation:lockin .5s cubic-bezier(.34,1.56,.64,1) both}
+@keyframes lockin{0%{transform:scale(1.35);opacity:0}55%{transform:scale(.92);opacity:1}100%{transform:scale(1)}}
+.lockcell.hit{box-shadow:inset 0 0 0 2px rgba(251,146,60,.9),0 0 18px -2px rgba(251,146,60,.7)}
 .lines-svg{position:absolute;inset:0;pointer-events:none;z-index:5}
 .lines-svg polyline{fill:none;stroke-linecap:round;stroke-linejoin:round}
 .lines-svg .pl-faint{stroke:rgba(129,140,248,.3);stroke-width:2.5}
@@ -219,6 +221,7 @@ h1 .glyph{color:var(--ice);-webkit-text-fill-color:var(--ice);filter:drop-shadow
 .felt-status{font-size:13px;color:var(--slate-400);text-align:center;min-height:18px}
 .felt-status .gain{color:var(--win);font-family:var(--font-mono);font-weight:600}
 .felt-status .hot{color:var(--win);font-weight:700}
+.felt-status .core{color:var(--gold);font-weight:700}
 .felt-status.lose{color:var(--loss)}
 .felt-status.fsmode{color:#7dd3fc;font-weight:600;letter-spacing:.06em;text-transform:uppercase}
 .banner-host{position:absolute;inset:0;display:grid;place-items:center;z-index:8;pointer-events:none}
@@ -243,52 +246,39 @@ h1 .glyph{color:var(--ice);-webkit-text-fill-color:var(--ice);filter:drop-shadow
 .btn-go{background:linear-gradient(180deg,#dbe4ff,#818cf8 60%,#4f5ac2);box-shadow:0 0 24px -6px rgba(129,140,248,.7),inset 0 1px 0 rgba(255,255,255,.5)}
 .btn:disabled{opacity:.45;cursor:not-allowed;filter:saturate(.4)}
 .cash-sub{display:block;font-family:var(--font-mono);font-size:11px;font-weight:600;letter-spacing:0;margin-top:2px;opacity:.85}
-/* ── STAGE BURN overlay ── */
-.burn-stage{position:absolute;inset:0;z-index:20;display:none;flex-direction:column;align-items:center;justify-content:center;gap:11px;background:radial-gradient(ellipse at 50% 40%,rgba(9,11,38,.9),rgba(2,2,9,.97));backdrop-filter:blur(2px);padding:14px}
-.burn-stage.open{display:flex}
-.burn-title{font-size:clamp(15px,3.6vw,22px);font-weight:700;letter-spacing:.24em;text-transform:uppercase;color:var(--eng);text-shadow:0 0 16px rgba(251,146,60,.7)}
-.burn-scene{position:relative;width:min(74vw,320px);height:clamp(120px,26vw,180px);border-radius:14px;overflow:hidden;background:linear-gradient(180deg,#05061c,#0b0d33);box-shadow:inset 0 0 0 1px rgba(129,140,248,.25),0 12px 30px -18px rgba(0,0,0,.9)}
-.burn-scene .burn-planet{position:absolute;left:50%;top:26%;transform:translateX(-50%);width:210%;filter:brightness(1.12);pointer-events:none;transition:top 1s ease}
-.burn-scene.climb .burn-planet{top:58%}
-.burn-scene .streaks{position:absolute;inset:0;background:repeating-linear-gradient(180deg,rgba(148,163,255,.35) 0 2px,transparent 2px 44px);background-size:100% 44px;opacity:.14}
-.burn-scene.climb .streaks{opacity:.4;animation:streakfall .38s linear infinite}
-@keyframes streakfall{from{background-position-y:0}to{background-position-y:44px}}
-.burn-rocket{position:absolute;left:50%;bottom:14px;transform:translateX(-50%);width:clamp(38px,9vw,54px);transition:bottom .8s ease}
-.burn-rocket img{width:100%;filter:drop-shadow(0 0 10px rgba(56,189,248,.5))}
-.burn-rocket .rflame{position:absolute;left:50%;top:96%;transform:translateX(-50%);width:14px;height:6px;border-radius:50% 50% 50% 50%/30% 30% 70% 70%;background:linear-gradient(180deg,#fff7cc,#fb923c 55%,transparent);filter:blur(1px);transition:height .3s;opacity:.55}
-.burn-scene.climb .burn-rocket{animation:rockshake .16s linear infinite}
-.burn-scene.climb .burn-rocket .rflame{height:34px;opacity:1;animation:flick .12s linear infinite alternate}
-@keyframes rockshake{0%,100%{transform:translateX(-50%)}25%{transform:translateX(calc(-50% - 1.5px))}75%{transform:translateX(calc(-50% + 1.5px))}}
-.burn-scene.boom .burn-rocket{display:none}
-.explosion{display:none;position:absolute;left:50%;bottom:64px;width:10px;height:10px}
-.burn-scene.boom .explosion{display:block}
-.explosion::before{content:"";position:absolute;inset:-34px;border-radius:50%;background:radial-gradient(circle,#fff7cc,#fb923c 40%,transparent 70%);animation:boomflash .8s ease-out both}
-@keyframes boomflash{0%{transform:scale(.2);opacity:1}70%{opacity:.8}100%{transform:scale(1.7);opacity:0}}
-.explosion i{position:absolute;left:3px;top:0;width:4px;height:15px;border-radius:2px;background:linear-gradient(#ffdba8,#fb923c);animation:spark .8s ease-out both}
-@keyframes spark{0%{transform:rotate(var(--r)) translateY(-4px);opacity:1}100%{transform:rotate(var(--r)) translateY(-52px);opacity:0}}
-.pod{display:none;position:absolute;left:50%;bottom:70px;width:16px;height:16px;border-radius:50% 50% 45% 45%;background:linear-gradient(180deg,#dbe4ff,#818cf8);box-shadow:0 0 10px rgba(129,140,248,.8)}
-.burn-scene.boom .pod{display:block;animation:podfall 1.1s ease-in both .25s}
-@keyframes podfall{from{transform:translate(-50%,0)}to{transform:translate(-160%,52px)}}
-.burn-ladder{display:flex;gap:6px;flex-wrap:wrap;justify-content:center}
-.rung{border:1px solid rgba(129,140,248,.3);border-radius:9px;padding:6px 9px 5px;text-align:center;min-width:52px;background:rgba(7,8,26,.6);transition:.2s}
-.rung .rk{font-size:8.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--slate-500)}
-.rung .rv{font-family:var(--font-mono);font-weight:700;font-size:14px;color:var(--slate-300);margin-top:1px}
-.rung .ro{font-family:var(--font-mono);font-size:9px;color:var(--slate-500);margin-top:1px}
-.rung.held{border-color:var(--eng);box-shadow:0 0 14px -4px rgba(251,146,60,.7)}
-.rung.held .rv{color:var(--eng)}
-.rung.next{border-color:rgba(56,189,248,.6)}
-.rung.next .rv{color:var(--ice)}
-.rung.dead{opacity:.35}
-.burn-status{min-height:20px;font-size:12.5px;color:var(--slate-300);text-align:center;max-width:420px;line-height:1.5}
-.burn-status .up{color:var(--eng);font-family:var(--font-mono);font-weight:700}
-.burn-actions{display:flex;gap:10px}
-.btn-ignite{border:0;border-radius:13px;padding:13px 26px;font-family:var(--font-disp);font-weight:700;font-size:14px;letter-spacing:.1em;text-transform:uppercase;cursor:pointer;color:#1c0e02;background:linear-gradient(180deg,#ffd8a8,#fb923c 60%,#c2600e);box-shadow:0 0 24px -4px rgba(251,146,60,.8)}
-.btn-eject{border:1px solid rgba(56,189,248,.55);border-radius:13px;padding:13px 22px;font-family:var(--font-disp);font-weight:700;font-size:14px;letter-spacing:.1em;text-transform:uppercase;cursor:pointer;color:var(--ice);background:rgba(7,10,30,.8)}
-.btn-eject:hover{background:rgba(56,189,248,.12)}
-.btn-ignite:disabled,.btn-eject:disabled{opacity:.45;cursor:default}
-.burn-result{min-height:26px;font-family:var(--font-mono);font-weight:700;font-size:clamp(16px,4.4vw,24px);color:#fff}
-.burn-result .up{color:var(--eng);text-shadow:0 0 14px rgba(251,146,60,.8)}
-.burn-result .pod-t{color:var(--ice)}
+/* ── HOLD & SPIN overlay ── */
+.hs-stage{position:absolute;inset:0;z-index:20;display:none;flex-direction:column;align-items:center;justify-content:center;gap:10px;background:radial-gradient(ellipse at 50% 35%,rgba(9,11,38,.94),rgba(2,2,9,.98));backdrop-filter:blur(2px);padding:14px 12px}
+.hs-stage.open{display:flex}
+.hs-title{font-size:clamp(15px,3.8vw,23px);font-weight:700;letter-spacing:.22em;text-transform:uppercase;color:var(--gold);text-shadow:0 0 16px rgba(251,191,36,.7)}
+.hs-sub{font-size:12px;color:var(--slate-400);text-align:center;min-height:16px;max-width:420px;line-height:1.4}
+.hs-sub .up{color:var(--gold);font-family:var(--font-mono);font-weight:700}
+.hs-meters{display:flex;gap:10px;align-items:stretch;justify-content:center;width:100%;max-width:400px}
+.hs-meter{flex:1;text-align:center;border:1px solid rgba(129,140,248,.3);border-radius:12px;padding:7px 6px;background:rgba(7,8,26,.6)}
+.hs-meter .mk{font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--slate-500)}
+.hs-meter .mv{font-family:var(--font-mono);font-weight:700;font-size:clamp(20px,6vw,30px);line-height:1.05;color:#fff;margin-top:2px}
+.hs-meter.respins .mv{color:var(--ice);text-shadow:0 0 14px rgba(56,189,248,.7)}
+.hs-meter.respins.reset{animation:respinreset .6s ease}
+@keyframes respinreset{0%{transform:scale(1)}30%{transform:scale(1.3);color:#fff}100%{transform:scale(1)}}
+.hs-meter.tally .mv{color:var(--gold)}
+.hs-meter .mc{font-size:8.5px;letter-spacing:.1em;color:var(--slate-500);text-transform:uppercase}
+.hs-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;width:min(84vw,360px);transition:filter .3s}
+.hs-grid.tense{filter:drop-shadow(0 0 16px rgba(251,191,36,.5))}
+.hs-socket{position:relative;aspect-ratio:1;border-radius:10px;background:radial-gradient(circle at 50% 40%,#0c0e2a,#050514 85%);box-shadow:inset 0 0 0 1px rgba(129,140,248,.16);display:grid;place-items:center;overflow:hidden;transition:box-shadow .3s,opacity .3s}
+.hs-socket.dim{opacity:.5}
+.hs-socket.spinning::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(129,140,248,.05),rgba(56,189,248,.18),rgba(129,140,248,.05));animation:socketspin .28s linear infinite}
+@keyframes socketspin{from{transform:translateY(-100%)}to{transform:translateY(100%)}}
+.hs-socket.locked{background:radial-gradient(circle at 50% 40%,#241c05,#0b0a02 85%);box-shadow:inset 0 0 0 2px rgba(251,191,36,.7),0 0 14px -3px rgba(251,191,36,.6)}
+.hs-socket.locked.jpcore{box-shadow:inset 0 0 0 2px rgba(56,189,248,.75),0 0 16px -3px rgba(56,189,248,.7)}
+.hs-socket.newlock{animation:newlock .5s cubic-bezier(.34,1.56,.64,1) both}
+@keyframes newlock{0%{transform:scale(1.4);opacity:0}55%{transform:scale(.9);opacity:1}100%{transform:scale(1)}}
+.hs-socket .co{position:relative;width:88%;aspect-ratio:1;display:grid;place-items:center}
+.hs-socket .co img{width:100%;height:100%;object-fit:contain;filter:drop-shadow(0 0 8px rgba(251,191,36,.5))}
+.hs-socket .cov{position:absolute;left:50%;bottom:6%;transform:translateX(-50%);font-family:var(--font-mono);font-weight:700;font-size:clamp(9px,2.4vw,13px);line-height:1;color:#1c1302;background:linear-gradient(180deg,#fde68a,#fbbf24);border-radius:5px;padding:2px 4px;white-space:nowrap;box-shadow:0 0 8px rgba(251,191,36,.6)}
+.hs-socket .cov.jp{display:flex;align-items:center;gap:2px;font-size:clamp(7px,2vw,10px);background:linear-gradient(180deg,#e2e8f0,#94a3b8);color:#0a0d24}
+.hs-socket .cov.jp img{width:12px;height:12px;filter:none}
+.hs-socket .cov.jp.major{background:linear-gradient(180deg,#fde68a,#f59e0b)}
+.hs-socket.tallyhit{box-shadow:inset 0 0 0 2px #fff,0 0 20px -2px rgba(251,191,36,.95)}
+.hs-socket.tallyhit .cov{background:linear-gradient(180deg,#fff,#fde68a)}
 .info{margin-top:16px}
 .tabs-list{display:grid;grid-template-columns:1fr 1fr;gap:4px;background:rgba(10,11,32,.75);border:1px solid rgba(129,140,248,.12);border-radius:10px;padding:4px}
 .tab-btn{font-family:var(--font-disp);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.14em;color:var(--slate-500);background:none;border:0;border-radius:7px;padding:9px 6px;cursor:pointer;transition:.15s}
@@ -306,7 +296,7 @@ h1 .glyph{color:var(--ice);-webkit-text-fill-color:var(--ice);filter:drop-shadow
 .hist-row .t{font-family:var(--font-mono);width:46px;flex:none;color:var(--slate-500)}
 .hist-row .badge{flex:none;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;padding:2px 7px;border-radius:5px;color:var(--ind);background:rgba(129,140,248,.1);box-shadow:inset 0 0 0 1px rgba(129,140,248,.3)}
 .hist-row .badge.fsb{color:#7dd3fc;background:rgba(56,189,248,.12);box-shadow:inset 0 0 0 1px rgba(56,189,248,.4)}
-.hist-row .badge.brn{color:#ffd8a8;background:rgba(251,146,60,.12);box-shadow:inset 0 0 0 1px rgba(251,146,60,.4)}
+.hist-row .badge.hsb{color:var(--gold);background:rgba(251,191,36,.12);box-shadow:inset 0 0 0 1px rgba(251,191,36,.45)}
 .hist-row .badge.jpb{color:#fff;background:rgba(56,189,248,.3);box-shadow:inset 0 0 0 1px rgba(56,189,248,.8)}
 .hist-row .m{font-family:var(--font-mono);color:var(--slate-400);flex:none}
 .hist-row .x{font-family:var(--font-mono);flex:none}
@@ -363,8 +353,8 @@ h1 .glyph{color:var(--ice);-webkit-text-fill-color:var(--ice);filter:drop-shadow
 .m-sr .rd{display:flex;gap:3px;flex-wrap:wrap}
 .m-sr .md{min-width:22px;height:16px;border-radius:3px;background:var(--field);box-shadow:inset 0 0 0 1px rgba(129,140,248,.18);font-family:var(--font-mono);font-size:10px;display:grid;place-items:center;color:var(--slate-400);padding:0 2px}
 .m-sr .md.hot{color:var(--win);box-shadow:inset 0 0 0 1px rgba(251,146,60,.5)}
-.m-sr .md.brn{color:var(--eng);box-shadow:inset 0 0 0 1px rgba(251,146,60,.6)}
-.m-sr .md.fsw{color:#7dd3fc;box-shadow:inset 0 0 0 1px rgba(56,189,248,.6)}
+.m-sr .md.core{color:var(--gold);box-shadow:inset 0 0 0 1px rgba(251,191,36,.55)}
+.m-sr .md.lock{color:#7dd3fc;box-shadow:inset 0 0 0 1px rgba(56,189,248,.6)}
 .m-sr .md.jpk{color:#fff;box-shadow:inset 0 0 0 1px rgba(56,189,248,.8)}
 .m-sr .rp{font-family:var(--font-mono);margin-left:auto;flex:none}
 .m-sr .rp.up{color:var(--ice)}.m-sr .rp.no{color:var(--slate-500)}
@@ -376,17 +366,16 @@ h1 .glyph{color:var(--ice);-webkit-text-fill-color:var(--ice);filter:drop-shadow
 .pt-tbl td img{width:24px;height:24px;object-fit:contain;margin-right:8px;vertical-align:middle;filter:drop-shadow(0 2px 4px rgba(0,0,0,.6))}
 .pt-tbl td .tg{display:inline-block;width:24px;margin-right:8px;text-align:center;font-size:17px;vertical-align:middle}
 .pt-note{font-size:11.5px;color:var(--slate-500);line-height:1.6;margin:12px 0 0}
-.pt-note .hl{color:var(--ind)}.pt-note .am{color:var(--win)}.pt-note .vi{color:#7dd3fc}
+.pt-note .hl{color:var(--ind)}.pt-note .am{color:var(--win)}.pt-note .vi{color:#7dd3fc}.pt-note .go{color:var(--gold)}
 .lab-note{margin-top:22px;text-align:center;font-size:11px;color:var(--slate-500);font-family:var(--font-mono);line-height:1.6}
 .lab-note b{color:var(--slate-400);font-weight:600}
 @media (prefers-reduced-motion: reduce){
   .reel.spin .strip{filter:none}
   .board-shell.shake{animation:none}
-  .orbitline::before,.sym .warpimg,.sym .warpcore,.sym .padsym .padlight{animation:none}
+  .orbitline::before,.sym .warpimg,.sym .warpcore{animation:none}
   .reel.antic::before,.sym.mult .frame,.banner.mega .b-k{animation:none}
-  .reel.land,.reel.flash::before,.sym.hit,.sym.jphit,.sym.scathit,.sym .mbadge,.arc-banner-in,.felt-flash.go,.jp.hitflash{animation:none}
-  .driftcell img,.driftcell .flame,.driftcell.fall{animation:none}
-  .burn-scene.climb .streaks,.burn-scene.climb .burn-rocket,.burn-scene.climb .burn-rocket .rflame{animation:none}
+  .reel.land,.reel.flash::before,.sym.hit,.sym.corehit,.sym.scathit,.sym .mbadge,.arc-banner-in,.felt-flash.go,.jp.hitflash{animation:none}
+  .lockcell.lockin,.hs-socket.spinning::after,.hs-socket.newlock,.hs-meter.respins.reset{animation:none}
 }
 </style>
 </head>
@@ -395,7 +384,7 @@ h1 .glyph{color:var(--ice);-webkit-text-fill-color:var(--ice);filter:drop-shadow
 <div class="wrap">
   <header>
     <h1 class="title">Deep Orbit<span class="glyph"> ✦</span></h1>
-    <p class="tagline">5×4 reels · 40 lines · Stage Burn launch bonus · Zero Gravity drifting wilds · progressive jackpots at 5/7/9 rockets · provably fair · played in MORBIUS</p>
+    <p class="tagline">5×4 reels · 40 lines · Hold &amp; Spin energy cores · Zero Gravity sticky wilds · MINI / MAJOR / GRAND jackpots · provably fair · played in MORBIUS</p>
   </header>
 
   <div class="topbar">
@@ -433,9 +422,9 @@ h1 .glyph{color:var(--ice);-webkit-text-fill-color:var(--ice);filter:drop-shadow
       <div class="panel">
         <p class="panel-label">Top pays · per line bet</p>
         <div class="score-tbl">
-          <div class="sr"><img src="crash/rocket.webp" alt="Rocket wild" /><span>Rocket wild ×5</span><span class="sv">950</span></div>
-          <div class="sr"><img src="crash/planet.webp" alt="Terra Prime" /><span>Terra Prime ×5</span><span class="sv">380</span></div>
-          <div class="sr"><img src="crash/jupiter.webp" alt="Gas Giant" /><span>Gas Giant ×5</span><span class="sv">245</span></div>
+          <div class="sr"><img src="crash/rocket.webp" alt="Rocket wild" /><span>Rocket wild ×5</span><span class="sv">1,000</span></div>
+          <div class="sr"><img src="crash/planet.webp" alt="Terra Prime" /><span>Terra Prime ×5</span><span class="sv">420</span></div>
+          <div class="sr"><img src="Pulse Branding/Logo/ball.png" alt="Energy Core" /><span>Energy Core 6+</span><span class="sv hl">Hold &amp; Spin</span></div>
           <div class="sr"><img src="Logos/EMIT.png" alt="Warp gate" /><span>Warp gate 3+</span><span class="sv hl">Zero Gravity spins</span></div>
         </div>
         <button class="pt-open" id="ptBtn">Full paytable &amp; features</button>
@@ -444,9 +433,9 @@ h1 .glyph{color:var(--ice);-webkit-text-fill-color:var(--ice);filter:drop-shadow
 
     <section class="board">
       <div class="jackbar">
-        <div class="jp" id="jpLunar"><div class="k">Lunar · 5 rockets</div><div class="v" id="jpLunarV">—</div><div class="req">on screen</div></div>
-        <div class="jp" id="jpSolar"><div class="k">Solar · 7 rockets</div><div class="v" id="jpSolarV">—</div><div class="req">on screen</div></div>
-        <div class="jp grand" id="jpGalactic"><div class="k">Galactic · 9 rockets</div><div class="v" id="jpGalacticV">—</div><div class="req">on screen</div></div>
+        <div class="jp mini" id="jpMini"><div class="k">Mini · core</div><div class="v" id="jpMiniV">—</div><div class="req">hold &amp; spin</div></div>
+        <div class="jp major" id="jpMajor"><div class="k">Major · core</div><div class="v" id="jpMajorV">—</div><div class="req">hold &amp; spin</div></div>
+        <div class="jp grand" id="jpGrand"><div class="k">Grand · full grid</div><div class="v" id="jpGrandV">—</div><div class="req">20 sockets</div></div>
       </div>
       <div class="board-shell" id="boardShell">
         <div class="orbitline"></div>
@@ -464,28 +453,20 @@ h1 .glyph{color:var(--ice);-webkit-text-fill-color:var(--ice);filter:drop-shadow
             <div class="reel"><div class="strip"></div></div>
             <div class="reel"><div class="strip"></div></div>
             <svg class="lines-svg" id="linesSvg"></svg>
-            <div class="drift-layer" id="driftLayer"></div>
+            <div class="lock-layer" id="lockLayer"></div>
           </div>
           <div class="felt-status" id="status">Set your bet and open the launch window</div>
           <div class="banner-host"><div class="banner" id="banner"><div class="b-k" id="bannerK"></div><div class="b-v" id="bannerV"></div></div></div>
           <div class="felt-flash" id="feltFlash"></div>
         </div>
-        <div class="burn-stage" id="burnStage">
-          <div class="burn-title">Stage Burn</div>
-          <div class="burn-scene" id="burnScene">
-            <div class="streaks"></div>
-            <img class="burn-planet" src="crash/red-planet.webp" alt="" draggable="false" />
-            <div class="burn-rocket" id="burnRocket"><img src="crash/rocket.webp" alt="" /><span class="rflame"></span></div>
-            <div class="explosion" id="burnBoom"><i style="--r:0deg"></i><i style="--r:45deg"></i><i style="--r:90deg"></i><i style="--r:135deg"></i><i style="--r:180deg"></i><i style="--r:225deg"></i><i style="--r:270deg"></i><i style="--r:315deg"></i></div>
-            <div class="pod" id="burnPod"></div>
+        <div class="hs-stage" id="hsStage">
+          <div class="hs-title">Hold &amp; Spin</div>
+          <div class="hs-sub" id="hsSub"></div>
+          <div class="hs-meters">
+            <div class="hs-meter respins" id="hsRespinsBox"><div class="mk">Respins</div><div class="mv" id="hsCounter">3</div></div>
+            <div class="hs-meter tally"><div class="mk">Collected</div><div class="mv" id="hsTally">0</div><div class="mc">MORBIUS</div></div>
           </div>
-          <div class="burn-ladder" id="burnLadder"></div>
-          <div class="burn-status" id="burnStatus"></div>
-          <div class="burn-result" id="burnResult"></div>
-          <div class="burn-actions">
-            <button class="btn-ignite" id="igniteBtn">Ignite</button>
-            <button class="btn-eject" id="ejectBtn">Eject &amp; bank</button>
-          </div>
+          <div class="hs-grid" id="hsGrid"></div>
         </div>
         <canvas class="fx-canvas" id="fxCanvas"></canvas>
       </div>
@@ -506,10 +487,10 @@ h1 .glyph{color:var(--ice);-webkit-text-fill-color:var(--ice);filter:drop-shadow
   </section>
 
   <p class="lab-note">
-    <b>Prototype</b> — Deep-Space Expedition on the slot-series pattern. Reel stops, hot wilds and every Stage Burn
-    outcome come from an in-page seeded RNG for feel; the real build draws them from the server <b>provably-fair HMAC</b> stream.
-    Ruleset Monte-Carlo tuned to <b>≈ 96.6% RTP</b> including the 1.5% progressive contribution
-    (game 95.04% at 1M spins, 95.13% at 2M confirm). Currency: <b>MORBIUS</b>.
+    <b>Prototype</b> — Deep-Space Expedition on the slot-series pattern. Reel stops, hot wilds, energy-core values and every Hold &amp; Spin respin
+    come from an in-page seeded RNG for feel; the real build draws them from the server <b>provably-fair HMAC</b> stream.
+    Ruleset Monte-Carlo tuned to <b>≈ 96.5–96.8% RTP</b> including the 1.5% progressive contribution
+    (game 95.33% at 1M spins, 95.02% at 2M confirm). Currency: <b>MORBIUS</b>.
   </p>
 </div>
 
@@ -526,7 +507,7 @@ h1 .glyph{color:var(--ice);-webkit-text-fill-color:var(--ice);filter:drop-shadow
     </div>
     <div class="m-sec">
       <h3>Verify a round</h3>
-      <p class="note">Every spin draws 5 reel stops, one multiplier per rocket wild (reel-major), then the 4 Stage Burn survive outcomes when the launch pads line up — all from one stream derived from a server seed committed (hashed) before your bet. Zero Gravity drift is derived state, replayed spin-for-spin. Jackpot hits are re-checked from the wild count; pool sizes are account state.</p>
+      <p class="note">Every spin draws 5 reel stops, one multiplier per rocket wild (reel-major), then one value per Energy Core (reel-major) — all from one stream derived from a server seed committed (hashed) before your bet. When 6+ cores land, the Hold &amp; Spin respins draw per empty socket in row-major order (land, then value). Zero Gravity sticky wilds are derived state, replayed spin-for-spin. Jackpot cores (Mini / Major / full-grid Grand) are re-checked; pool sizes are account state.</p>
       <div class="m-input-row">
         <input class="m-input" id="verifyIdInput" placeholder="Round ID" />
         <button class="m-btn solid" id="verifyBtn">Verify</button>
@@ -552,45 +533,45 @@ h1 .glyph{color:var(--ice);-webkit-text-fill-color:var(--ice);filter:drop-shadow
     turbo:{first:420,gap:170,anticGap:650,settle:550,cruise:26,label:'Turbo'}
   };
   var FS_AWARD=6, FS_RETRIG=2;
-  // hot-wild odds — one draw per rocket wild, reel-major
+  // hot-wild odds — one draw per rocket wild, reel-major (base & free spins)
   var MULT_TABLE=[[0.92,1],[0.045,2],[0.023,3],[0.012,5]];
-  // STAGE BURN — ladder in bet multiples; index 0 = pad hold (banked at trigger).
-  // Survive odds per stage are EV-neutral vs ejecting, given the 25% escape pod:
-  // p = 0.75·held / (next − 0.25·held) → 60% / 31% / 33% / 33%.
-  var LADDER=[2,3,8,20,50];
-  var STAGE_P=[0.60,0.31,0.33,0.33];
-  var ESCAPE=0.25;
-  var STAGE_ODDS_TXT=['60%','31%','33%','33%'];
-  // progressive jackpots — pools fed per bet, hit by rocket wilds on screen
+  // Energy Core value table — TOTAL-BET multiples; 'MINI'/'MAJOR' are pool tags.
+  // One draw per core (reel-major), and again per socket that lands in Hold & Spin.
+  var CORE_VALS=[[0.46,1],[0.30,2],[0.11,3],[0.07,5],[0.035,10],[0.014,25],[0.0075,'MINI'],[0.0035,'MAJOR']];
+  // HOLD & SPIN — 6+ cores lock & open a 3-respin lock-the-grid bonus (Monte-Carlo tuned)
+  var HS_NEED=6, HS_RESPINS=3, HS_FILL=0.0475, HS_SOCKETS=20;
+  // progressive jackpots — pools fed per bet; Mini/Major collected by a core, Grand = full 20-socket fill
   var JP={
-    lunar:{seed:25000,rate:0.009,need:5,label:'LUNAR'},
-    solar:{seed:500000,rate:0.005,need:7,label:'SOLAR'},
-    galactic:{seed:10000000,rate:0.001,need:9,label:'GALACTIC'}
+    mini:{seed:25000,rate:0.009,label:'MINI'},
+    major:{seed:500000,rate:0.005,label:'MAJOR'},
+    grand:{seed:10000000,rate:0.001,label:'GRAND'}
   };
 
+  var CORE_ART='Pulse Branding/Logo/ball.png';
+  var MINI_ART='vip-badges/silver.png', MAJOR_ART='vip-badges/gold.png';
   var SYMS={
     W:{name:'Rocket Wild',art:'crash/rocket.webp',cls:'wildart',frame:'wild',kind:'img'},
     S:{name:'Warp Gate',frame:'scat',kind:'warp'},
-    B:{name:'Launch Pad',frame:'bon',kind:'pad'},
+    C:{name:'Energy Core',art:CORE_ART,frame:'core',kind:'core'},
     H1:{name:'Terra Prime',art:'crash/planet.webp',kind:'img'},
     H2:{name:'Gas Giant',art:'crash/jupiter.webp',kind:'img'},
     H3:{name:'Red Planet',art:'crash/red-planet.webp',kind:'img'},
-    L1:{name:'Pulse Beacon',art:'Pulse Branding/Logo/ball.png',cls:'lowart',kind:'img'},
-    L2:{name:'Ion Beacon',art:'Pulse Branding/Logo/ball1.png',cls:'lowart',kind:'img'},
+    L1:{name:'Pulse Beacon',art:'Pulse Branding/Logo/ball1.png',cls:'lowart',kind:'img'},
+    L2:{name:'Ion Beacon',art:'Pulse Branding/Logo/gradient.png',cls:'lowart',kind:'img'},
     L3:{name:'Hex Probe',art:'Pulse Branding/Logo/favicon128.png',cls:'lowart',kind:'img'},
     L4:{name:'Relay Probe',art:'Logos/INC.png',cls:'lowart',kind:'img'}
   };
   var WARP_ART='Logos/EMIT.png';
   // pays per LINE BET (bet ÷ 40) — Monte-Carlo tuned with all features (see head comment)
   var PAYS={
-    W:[0,0,4,38,190,950],
-    H1:[0,0,3,24,95,380],
-    H2:[0,0,0,19,76,245],
-    H3:[0,0,0,14,53,172],
-    L1:[0,0,0,8,23,64],
-    L2:[0,0,0,6,19,49],
-    L3:[0,0,0,5,15,38],
-    L4:[0,0,0,4,12,30]
+    W:[0,0,4,40,210,1000],
+    H1:[0,0,3,26,105,420],
+    H2:[0,0,0,21,84,270],
+    H3:[0,0,0,16,58,190],
+    L1:[0,0,0,9,25,70],
+    L2:[0,0,0,7,21,54],
+    L3:[0,0,0,6,17,42],
+    L4:[0,0,0,5,13,33]
   };
   // 40 fixed lines — row index (0 top … 3 bottom) per reel (shared with MORB Fortune)
   var LINES=[
@@ -605,20 +586,21 @@ h1 .glyph{color:var(--ice);-webkit-text-fill-color:var(--ice);filter:drop-shadow
     [1,1,2,2,3],[2,2,1,1,0],[0,1,1,2,2],[3,2,2,1,1],
     [2,2,2,1,0],[1,1,1,2,3],[0,2,2,2,0],[3,1,1,1,3]
   ];
-  // reel strips — launch pads live on reels 1/3/5 only
+  // reel strips — Energy Cores on EVERY reel; counts mirror the tuned simulation
+  //   wilds [2,3,2,3,2] · scatters [2,1,2,1,2] · cores [6,6,5,6,6]
   var STRIP_COUNTS=[
-    [['W',3],['S',2],['B',3],['H1',5],['H2',5],['H3',6],['L1',8],['L2',8],['L3',9],['L4',9]],
-    [['W',3],['S',2],['B',0],['H1',5],['H2',5],['H3',6],['L1',8],['L2',8],['L3',9],['L4',9]],
-    [['W',3],['S',1],['B',3],['H1',5],['H2',5],['H3',6],['L1',8],['L2',8],['L3',9],['L4',9]],
-    [['W',3],['S',2],['B',0],['H1',5],['H2',5],['H3',6],['L1',8],['L2',8],['L3',9],['L4',9]],
-    [['W',3],['S',2],['B',3],['H1',5],['H2',5],['H3',6],['L1',8],['L2',8],['L3',9],['L4',9]]
+    [['W',2],['S',2],['C',6],['H1',5],['H2',5],['H3',6],['L1',8],['L2',8],['L3',9],['L4',9]],
+    [['W',3],['S',1],['C',6],['H1',5],['H2',5],['H3',6],['L1',8],['L2',8],['L3',9],['L4',9]],
+    [['W',2],['S',2],['C',5],['H1',5],['H2',5],['H3',6],['L1',8],['L2',8],['L3',9],['L4',9]],
+    [['W',3],['S',1],['C',6],['H1',5],['H2',5],['H3',6],['L1',8],['L2',8],['L3',9],['L4',9]],
+    [['W',2],['S',2],['C',6],['H1',5],['H2',5],['H3',6],['L1',8],['L2',8],['L3',9],['L4',9]]
   ];
 
   var S={ balance:10000, speed:'normal', bet:200, phase:'idle', busy:false, sound:true,
-    rng:null, roundWin:0, fsLeft:0, fsTotal:0, fsPlayed:0, inFs:false, drift:null, spinLog:[],
+    rng:null, roundWin:0, fsLeft:0, fsTotal:0, fsPlayed:0, inFs:false, sticky:null, spinLog:[],
     serverSeed:'', clientSeed:'', clientSeedPref:'', nonce:0, serverHash:'', roundId:'',
     lastEv:null, cycleIv:null, rollupRaf:null, anticIv:null, tickIv:null, spinRaf:null,
-    pools:null, history:[] };
+    pools:null, history:[], artReady:false };
 
   var REDUCED=window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -627,10 +609,9 @@ h1 .glyph{color:var(--ice);-webkit-text-fill-color:var(--ice);filter:drop-shadow
       boardShell=$('boardShell'),hudBet=$('hudBet'),hudWin=$('hudWin'),hudFs=$('hudFs'),
       hudC1k=$('hudC1k'),hudC1v=$('hudC1v'),
       banner=$('banner'),bannerK=$('bannerK'),bannerV=$('bannerV'),linesSvg=$('linesSvg'),
-      driftLayer=$('driftLayer'),feltFlash=$('feltFlash'),
-      burnStage=$('burnStage'),burnScene=$('burnScene'),burnRocket=$('burnRocket'),
-      burnLadderEl=$('burnLadder'),burnStatus=$('burnStatus'),burnResult=$('burnResult'),
-      igniteBtn=$('igniteBtn'),ejectBtn=$('ejectBtn'),
+      lockLayer=$('lockLayer'),feltFlash=$('feltFlash'),
+      hsStage=$('hsStage'),hsGrid=$('hsGrid'),hsCounter=$('hsCounter'),hsTally=$('hsTally'),
+      hsSub=$('hsSub'),hsRespinsBox=$('hsRespinsBox'),
       soundBtn=$('soundBtn'),overlay=$('overlay'),ptOverlay=$('ptOverlay'),
       histBody=$('histBody'),histCount=$('histCount'),faqBody=$('faqBody'),actions=$('actions'),
       fxCanvas=$('fxCanvas');
@@ -646,9 +627,20 @@ h1 .glyph{color:var(--ice);-webkit-text-fill-color:var(--ice);filter:drop-shadow
   function makeRng(seedStr){return mulberry32(xmur3(seedStr)());}
   async function sha256Hex(msg){try{var b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(msg));return Array.from(new Uint8Array(b)).map(function(x){return x.toString(16).padStart(2,'0');}).join('');}catch(e){return 'sha256-unavailable';}}
 
+  // preload + decode all art before enabling spin (no first-spin decode hitch)
   var ART={};
-  Object.keys(SYMS).forEach(function(id){if(SYMS[id].art){var im=new Image();im.src=SYMS[id].art;ART[id]=im;}});
-  ART.S=new Image();ART.S.src=WARP_ART;
+  (function preloadArt(){
+    var srcs=[];
+    Object.keys(SYMS).forEach(function(id){if(SYMS[id].art)srcs.push([id,SYMS[id].art]);});
+    srcs.push(['S',WARP_ART]);srcs.push(['MINI',MINI_ART]);srcs.push(['MAJOR',MAJOR_ART]);
+    var proms=srcs.map(function(pair){
+      var im=new Image();im.src=pair[1];ART[pair[0]]=im;
+      return im.decode?im.decode().catch(function(){}):Promise.resolve();
+    });
+    var done=false,finish=function(){if(done)return;done=true;S.artReady=true;renderActions();};
+    Promise.all(proms).then(finish);
+    setTimeout(finish,2500); // fallback so spin never stays locked
+  })();
 
   function buildStrip(counts){
     var s=[];counts.forEach(function(p){for(var i=0;i<p[1];i++)s.push(p[0]);});
@@ -660,73 +652,52 @@ h1 .glyph{color:var(--ice);-webkit-text-fill-color:var(--ice);filter:drop-shadow
 
   /* ── provably-fair draws (identical order in play & verify & Monte Carlo) ──
      Per spin, in this fixed order: 5 reel stops → one hot-wild multiplier per
-     rocket on the RAW window (reel-major) → 4 Stage Burn survive draws iff the
-     pads line up. ZERO GRAVITY drift is DERIVED state — zero stream draws. */
+     rocket on the RAW window (reel-major) → one value per Energy Core on the RAW
+     window (reel-major) → iff 6+ cores land on the effective grid, the Hold & Spin
+     respins: each respin, every empty socket in ROW-MAJOR order draws a land test
+     then (if it lands) a value. ZERO GRAVITY sticky wilds are DERIVED state — no
+     stream draws. */
   function drawStops(rng){var st=[];for(var r=0;r<5;r++)st.push(Math.floor(rng()*STRIPS[r].length));return st;}
   function windowAt(stops){
     var g=[];for(var r=0;r<5;r++){var st=STRIPS[r],col=[];for(var row=0;row<ROWS;row++)col.push(st[(stops[r]+row)%st.length]);g.push(col);}
     return g;
   }
-  function drawMultFrom(rng){
+  function pick(rng,table){
     var r=rng(),acc=0;
-    for(var i=0;i<MULT_TABLE.length;i++){acc+=MULT_TABLE[i][0];if(r<acc)return MULT_TABLE[i][1];}
-    return 1;
+    for(var i=0;i<table.length;i++){acc+=table[i][0];if(r<acc)return table[i][1];}
+    return table[table.length-1][1];
   }
   function drawMults(rng,g){
     var m={};
-    for(var r=0;r<5;r++)for(var row=0;row<ROWS;row++)if(g[r][row]==='W')m[r+','+row]=drawMultFrom(rng);
+    for(var r=0;r<5;r++)for(var row=0;row<ROWS;row++)if(g[r][row]==='W')m[r+','+row]=pick(rng,MULT_TABLE);
     return m;
   }
-  // STAGE BURN — all four survive/explode outcomes pre-committed up-front
-  function drawStages(rng){
-    var s=[];for(var i=0;i<4;i++)s.push(rng()<STAGE_P[i]);
-    return s;
+  function drawCores(rng,g){
+    var c={};
+    for(var r=0;r<5;r++)for(var row=0;row<ROWS;row++)if(g[r][row]==='C')c[r+','+row]=pick(rng,CORE_VALS);
+    return c;
   }
-  // resolve a Stage Burn given pre-committed outcomes + the player's ignite count
-  function burnPay(bet,survive,ignites){
-    var pos=0;
-    for(var k=1;k<=ignites;k++){
-      if(survive[k-1]){pos=k;}
-      else return {pay:Math.round(ESCAPE*LADDER[pos]*bet),exploded:true,reached:pos};
-    }
-    return {pay:Math.round(LADDER[pos]*bet),exploded:false,reached:pos};
-  }
-  // ZERO GRAVITY drift — every rocket falls one row at the start of each later
-  // free spin; off the bottom = gone. Derived state, no draws.
-  function driftStep(drift){
-    var nd={};
-    for(var k in drift){
-      var p=k.split(','),r=+p[0],row=+p[1]+1;
-      if(row<ROWS)nd[r+','+row]=drift[k];
-    }
-    return nd;
-  }
-  // overlay drifting rockets on the raw window; a drifting rocket meeting a
-  // fresh wild merges into ×2 (or keeps the higher badge)
-  function overlayDrift(raw,rawMults,drift){
-    if(!drift)return {g:raw,mults:rawMults};
+  // overlay sticky (locked-in-place) wilds onto the raw window
+  function overlaySticky(raw,rawMults,sticky){
+    if(!sticky)return {g:raw,mults:rawMults};
+    var keys=Object.keys(sticky);
+    if(!keys.length)return {g:raw,mults:rawMults};
     var g=raw.map(function(col){return col.slice();});
-    var mults={};
-    for(var k0 in rawMults)mults[k0]=rawMults[k0];
-    for(var k in drift){
-      var p=k.split(','),r=+p[0],row=+p[1];
-      if(g[r][row]==='W'){var m=Math.max(2,drift[k],mults[k]||1);drift[k]=m;mults[k]=m;}
-      else {g[r][row]='W';mults[k]=drift[k];}
-    }
+    var mults={};for(var k in rawMults)mults[k]=rawMults[k];
+    // a fresh hot wild landing on a locked cell upgrades the badge THIS spin (matches the tuned sim)
+    keys.forEach(function(key){var p=key.split(','),r=+p[0],row=+p[1];g[r][row]='W';mults[key]=Math.max(sticky[key],rawMults[key]||1);});
     return {g:g,mults:mults};
   }
-  // wilds that landed this free spin join the drift with their badge
-  function registerNewWilds(raw,rawMults,drift){
+  // lock EVERY new wild from the raw window; a higher badge upgrades a locked cell
+  function lockNewWilds(raw,rawMults,sticky){
+    var added=[];
     for(var r=0;r<5;r++)for(var row=0;row<ROWS;row++){
-      var k=r+','+row;
-      if(raw[r][row]==='W'&&!(k in drift))drift[k]=rawMults[k]||1;
+      if(raw[r][row]==='W'){
+        var key=r+','+row,m=rawMults[key]||1;
+        if(!(key in sticky)||m>sticky[key]){sticky[key]=m;added.push({r:r,row:row,m:m});}
+      }
     }
-  }
-  function driftToLog(drift){
-    var out=[];
-    for(var k in drift){var p=k.split(',');out.push([+p[0],+p[1],drift[k]]);}
-    out.sort(function(a,b){return a[0]-b[0]||a[1]-b[1];});
-    return out;
+    return added;
   }
   function lineWin(g,line,mults){
     var syms=line.map(function(row,r){return g[r][row];});
@@ -737,7 +708,7 @@ h1 .glyph{color:var(--ice);-webkit-text-fill-color:var(--ice);filter:drop-shadow
       if(PAYS.W[wrun]*wm>best){best=PAYS.W[wrun]*wm;bestSym='W';bestRun=wrun;bestMult=wm;}
     }
     var nat=null;
-    for(var j=0;j<5;j++){var sj=syms[j];if(sj==='S'||sj==='B')break;if(sj!=='W'){nat=sj;break;}}
+    for(var j=0;j<5;j++){var sj=syms[j];if(sj==='S'||sj==='C')break;if(sj!=='W'){nat=sj;break;}}
     if(nat&&PAYS[nat]){
       var run=0;for(var k=0;k<5;k++){if(syms[k]===nat||syms[k]==='W')run++;else break;}
       if(PAYS[nat][run]>0){
@@ -747,19 +718,19 @@ h1 .glyph{color:var(--ice);-webkit-text-fill-color:var(--ice);filter:drop-shadow
     }
     return {pay:best,sym:bestSym,run:bestRun,mult:bestMult};
   }
-  function evalSpin(g,mults){
-    var wins=[],lineUnits=0,scCells=[],wildCells=[],bReels={};
+  function evalSpin(g,mults,coreVals){
+    var wins=[],lineUnits=0,scCells=[],wildCells=[],coreCells=[];
     for(var r=0;r<5;r++)for(var w=0;w<ROWS;w++){
       if(g[r][w]==='S')scCells.push({r:r,row:w});
       if(g[r][w]==='W')wildCells.push({r:r,row:w});
-      if(g[r][w]==='B')bReels[r]=true;
+      if(g[r][w]==='C')coreCells.push({r:r,row:w,v:(coreVals&&coreVals[r+','+w])});
     }
     for(var i=0;i<LINES_N;i++){
       var lw=lineWin(g,LINES[i],mults);
       if(lw.pay>0){wins.push({line:i,sym:lw.sym,run:lw.run,units:lw.pay,mult:lw.mult});lineUnits+=lw.pay;}
     }
     return {wins:wins,lineUnits:lineUnits,sc:scCells.length,scCells:scCells,
-      wilds:wildCells.length,wildCells:wildCells,bonusHit:!!(bReels[0]&&bReels[2]&&bReels[4])};
+      wilds:wildCells.length,wildCells:wildCells,cores:coreCells,coreHit:coreCells.length>=HS_NEED};
   }
   function linePayout(bet,lineUnits){return Math.floor(lineUnits*bet/LINES_N);}
   function multsToLog(g,mults){
@@ -767,37 +738,72 @@ h1 .glyph{color:var(--ice);-webkit-text-fill-color:var(--ice);filter:drop-shadow
     for(var r=0;r<5;r++)for(var row=0;row<ROWS;row++)if(g[r][row]==='W')out.push({r:r,row:row,m:mults[r+','+row]||1});
     return out;
   }
+  function coresToLog(g,coreVals){
+    var out=[];
+    for(var r=0;r<5;r++)for(var row=0;row<ROWS;row++)if(g[r][row]==='C')out.push({r:r,row:row,v:coreVals[r+','+row]});
+    return out;
+  }
+  // HOLD & SPIN — fully pre-resolved from the stream. coreMap: 20-array, socket
+  // index = row*5+reel, null = empty. Returns the locked grid + a per-respin log.
+  function resolveHS(coreMap,rng){
+    var locked=coreMap.slice();
+    var count=0;for(var i=0;i<HS_SOCKETS;i++)if(locked[i]!=null)count++;
+    var respins=HS_RESPINS,log=[];
+    while(respins>0&&count<HS_SOCKETS){
+      var landed=[];
+      for(var s=0;s<HS_SOCKETS;s++){
+        if(locked[s]!=null)continue;
+        if(rng()<HS_FILL){var v=pick(rng,CORE_VALS);locked[s]=v;landed.push({idx:s,v:v});count++;}
+      }
+      respins=landed.length>0?HS_RESPINS:respins-1;
+      log.push({landed:landed,counterAfter:respins});
+    }
+    return {locked:locked,count:count,full:count===HS_SOCKETS,respins:log};
+  }
+  // numeric core cash (bet multiples) — MINI/MAJOR/GRAND are pool tags, not cash
+  function hsCash(locked,bet){
+    var cash=0;
+    for(var i=0;i<locked.length;i++){var v=locked[i];if(typeof v==='number')cash+=v*bet;}
+    return cash;
+  }
+  function hsJackpots(locked,full){
+    var mini=0,major=0;
+    for(var i=0;i<locked.length;i++){if(locked[i]==='MINI')mini++;else if(locked[i]==='MAJOR')major++;}
+    return {mini:mini,major:major,grand:full?1:0};
+  }
 
   /* ── jackpot pools (demo: localStorage) ── */
   function loadPools(){
     try{
       var p=JSON.parse(localStorage.getItem('deeporbit-jp')||'null');
-      if(p&&typeof p.lunar==='number')return p;
+      if(p&&typeof p.mini==='number'&&typeof p.grand==='number')return p;
     }catch(e){}
-    return {lunar:JP.lunar.seed,solar:JP.solar.seed,galactic:JP.galactic.seed};
+    return {mini:JP.mini.seed,major:JP.major.seed,grand:JP.grand.seed};
   }
   function savePools(){try{localStorage.setItem('deeporbit-jp',JSON.stringify(S.pools));}catch(e){}}
   function feedPools(bet){
-    S.pools.lunar+=bet*JP.lunar.rate;S.pools.solar+=bet*JP.solar.rate;S.pools.galactic+=bet*JP.galactic.rate;
+    S.pools.mini+=bet*JP.mini.rate;S.pools.major+=bet*JP.major.rate;S.pools.grand+=bet*JP.grand.rate;
     savePools();renderPools();
   }
   function renderPools(){
-    $('jpLunarV').textContent=fmt(S.pools.lunar);
-    $('jpSolarV').textContent=fmt(S.pools.solar);
-    $('jpGalacticV').textContent=fmt(S.pools.galactic);
+    $('jpMiniV').textContent=fmt(S.pools.mini);
+    $('jpMajorV').textContent=fmt(S.pools.major);
+    $('jpGrandV').textContent=fmt(S.pools.grand);
   }
-  function jackpotTier(wilds){
-    if(wilds>=JP.galactic.need)return 'galactic';
-    if(wilds>=JP.solar.need)return 'solar';
-    if(wilds>=JP.lunar.need)return 'lunar';
-    return null;
-  }
-  function payJackpot(tier){
-    var amt=Math.round(S.pools[tier]);
-    S.pools[tier]=JP[tier].seed;savePools();renderPools();
-    var el=$('jp'+tier.charAt(0).toUpperCase()+tier.slice(1));
-    el.classList.remove('hitflash');void el.offsetWidth;el.classList.add('hitflash');
-    return amt;
+  // award pools for a resolved Hold & Spin; returns {amount, hits:[{tier,amount,n}]}
+  function payJackpots(counts){
+    var total=0,hits=[];
+    ['mini','major','grand'].forEach(function(tier){
+      var n=counts[tier];if(!n)return;
+      var each=Math.round(S.pools[tier]);
+      total+=each*n;
+      hits.push({tier:tier,amount:each*n,n:n});
+      S.pools[tier]=JP[tier].seed;
+      var el=$('jp'+tier.charAt(0).toUpperCase()+tier.slice(1));
+      el.classList.remove('hitflash');void el.offsetWidth;el.classList.add('hitflash');
+    });
+    savePools();renderPools();
+    return {amount:total,hits:hits};
   }
 
   /* ── starfield backdrop — 3 parallax layers + comet streaks ── */
@@ -842,7 +848,7 @@ h1 .glyph{color:var(--ice);-webkit-text-fill-color:var(--ice);filter:drop-shadow
     }
     window.addEventListener('resize',resize);
     resize();
-    if(REDUCED){ // single static frame
+    if(REDUCED){
       for(var i=0;i<stars.length;i++){var st=stars[i];ctx.globalAlpha=st.a;ctx.fillStyle='#e0f2fe';ctx.beginPath();ctx.arc(st.x,st.y,st.r,0,6.2832);ctx.fill();}
       ctx.globalAlpha=1;
     }else{requestAnimationFrame(draw);}
@@ -883,21 +889,18 @@ h1 .glyph{color:var(--ice);-webkit-text-fill-color:var(--ice);filter:drop-shadow
     src.connect(f);f.connect(g);g.connect(master);src.start(t);src.stop(t+dur+0.02);
   }
   function sClick(){blip(900,0.05,'sine',0.03);}
-  // low engine drone — the launch window opens
   function sDrone(){blip(48,1.2,'sawtooth',0.06,0,38);blip(48.7,1.2,'sawtooth',0.05,0,38.5);noise(0.7,180,0.03,0,0.7);}
-  // sonar pluck with two decaying echoes
   function sPluck(f,gain,when){
     var g=gain||0.06,w=when||0;
     blip(f,0.16,'triangle',g,w);
     blip(f,0.14,'triangle',g*0.5,w+0.17);
     blip(f,0.12,'triangle',g*0.24,w+0.34);
   }
-  // deep boom — big wins
   function sBoom(){noise(1.5,100,0.16,0,0.8);noise(0.9,55,0.12,0.15,0.6);blip(44,1.3,'sine',0.1,0,26);}
   function sTick(){blip(600+Math.random()*200,0.03,'square',0.022);}
   function sStop(i){noise(0.06,600+i*120,0.07,0,2);blip(150+i*34,0.09,'square',0.05,0,110+i*30);}
   function sScatLand(n){sPluck(440+n*110,0.06);blip(220,0.3,'sawtooth',0.03,0,140);}
-  function sBonusLand(n){blip(392+n*120,0.16,'square',0.05);blip(784+n*120,0.14,'triangle',0.06,0.05);}
+  function sCoreLand(n){blip(392+n*70,0.14,'triangle',0.05);blip(660+n*80,0.16,'sine',0.05,0.04);noise(0.1,1200,0.02,0,2);}
   function sMultZap(){blip(300,0.16,'sawtooth',0.06,0,1400);blip(1600,0.1,'sine',0.04,0.1);}
   function sAnticBeat(){blip(58,0.14,'sawtooth',0.08);blip(58,0.12,'sawtooth',0.05,0.22);}
   function sCoin(){blip(1250+Math.random()*500,0.06,'triangle',0.035);}
@@ -906,18 +909,14 @@ h1 .glyph{color:var(--ice);-webkit-text-fill-color:var(--ice);filter:drop-shadow
   function sWinBig(){sBoom();[523,659,784,1047,1319,1568].forEach(function(f,i){sPluck(f,0.055,0.15+i*0.08);});}
   function sWinMega(){sBoom();[392,523,659,784,1047,1319,1568,2093].forEach(function(f,i){sPluck(f,0.06,0.2+i*0.09);blip(f*0.5,0.2,'sine',0.03,0.2+i*0.09);});noise(1.1,2800,0.025,0.5,0.5);}
   function sFanfare(){[440,554,659,880].forEach(function(f,i){blip(f,0.16,'square',0.04,i*0.1);sPluck(f,0.05,i*0.1);});}
-  // warp-gate shimmer — free spins
   function sWarp(){blip(392,0.5,'sine',0.05,0,784);blip(587,0.5,'sine',0.04,0.1,1175);noise(0.8,2400,0.02,0,0.6);}
-  function sDriftFall(){noise(0.12,900,0.04,0,1.4);blip(500,0.2,'sine',0.04,0,240);}
-  // Stage Burn — main-engine rumble, rising through the climb
-  function sIgnite(){noise(1.0,120,0.14,0,0.8);blip(60,0.9,'sawtooth',0.08,0,180);blip(90,0.9,'sawtooth',0.05,0.05,260);}
-  function sStageOk(){sPluck(784,0.06);blip(1046,0.14,'triangle',0.05,0.1);}
-  // explosion + the escape pod's descending beacon
-  function sExplode(){noise(1.2,180,0.2,0,0.7);noise(0.7,70,0.14,0.1,0.6);blip(50,1.1,'sine',0.11,0,24);}
-  function sPod(){blip(880,0.35,'sine',0.05,0.5,440);blip(660,0.35,'sine',0.04,0.95,330);}
-  // triumphant bank chord
-  function sBank(){[392,494,587,784].forEach(function(f,i){blip(f,0.5,'triangle',0.06,i*0.05);blip(f,0.6,'sine',0.04,i*0.05);});sPluck(1175,0.05,0.3);}
-  function sJackpot(){
+  function sLock(){blip(300,0.08,'square',0.05);blip(180,0.14,'sawtooth',0.05,0.02,90);noise(0.09,700,0.03,0,2);}
+  // HOLD & SPIN sounds
+  function sHoldStart(){noise(1.0,140,0.12,0,0.8);blip(70,0.9,'sawtooth',0.07,0,200);[392,523,659].forEach(function(f,i){blip(f,0.2,'triangle',0.05,0.1+i*0.09);});}
+  function sSocketLock(v){var f=typeof v==='number'?520+Math.min(v,25)*22:900;blip(f,0.1,'triangle',0.06);blip(f*1.5,0.12,'sine',0.05,0.05);noise(0.07,1100,0.02,0,2);}
+  function sRespinReset(){sPluck(880,0.06);blip(1174,0.16,'triangle',0.06,0.08);blip(1568,0.14,'sine',0.05,0.16);}
+  function sTallyTick(){blip(880+Math.random()*400,0.05,'triangle',0.04);}
+  function sGrand(){
     sBoom();
     [523,659,784,1047,784,1047,1319,1568,2093].forEach(function(f,i){blip(f,0.22,'triangle',0.07,0.2+i*0.12);blip(f/2,0.26,'sine',0.04,0.2+i*0.12);});
     noise(1.6,3000,0.03,0.5,0.5);
@@ -934,8 +933,8 @@ h1 .glyph{color:var(--ice);-webkit-text-fill-color:var(--ice);filter:drop-shadow
     if(REDUCED||!fxCanvas.getContext)return;
     fxResize();
     fx.ctx=fxCanvas.getContext('2d');
-    var n=kind==='jackpot'?90:(kind==='mega'?70:(kind==='big'?46:26));
-    var imgs=[ART.W,ART.H1,ART.H2];
+    var n=kind==='grand'?90:(kind==='mega'?70:(kind==='big'?46:26));
+    var imgs=[ART.W,ART.C,ART.H1];
     var W=fxCanvas.width,H=fxCanvas.height;
     for(var i=0;i<n;i++){
       fx.parts.push({
@@ -973,53 +972,107 @@ h1 .glyph{color:var(--ice);-webkit-text-fill-color:var(--ice);filter:drop-shadow
   }
 
   /* ── rendering ── */
-  function symInner(id){
+  function coreStampHtml(v){
+    if(v==null)return '';
+    if(v==='MINI')return '<span class="corestamp jp"><img src="'+MINI_ART+'" alt=""/>MINI</span>';
+    if(v==='MAJOR')return '<span class="corestamp jp major"><img src="'+MAJOR_ART+'" alt=""/>MAJOR</span>';
+    return '<span class="corestamp">'+fmt(v*S.bet)+'</span>';
+  }
+  function symInner(id,coreVal){
     var s=SYMS[id];
     if(s.kind==='img')return '<img class="'+(s.cls||'')+'" src="'+s.art+'" alt="'+s.name+'" draggable="false"/>';
     if(s.kind==='warp')return '<span class="warpwrap"><img class="warpimg" src="'+WARP_ART+'" alt="'+s.name+'" draggable="false"/><span class="warpcore"></span></span>';
-    if(s.kind==='pad')return '<span class="padsym"><span class="gantry"></span><img class="padrocket" src="crash/rocket.webp" alt="'+s.name+'" draggable="false"/><span class="padbase"></span><span class="padlight"></span></span>';
-    return '<span class="em">'+s.em+'</span>';
+    if(s.kind==='core')return '<span class="coreorb"><img class="coreimg" src="'+CORE_ART+'" alt="'+s.name+'" draggable="false"/>'+coreStampHtml(coreVal)+'</span>';
+    return '';
   }
-  function symHtml(id,mult){
+  function symHtml(id,mult,coreVal){
     var s=SYMS[id];
     var frame=s.frame||'';
     var cls='sym'+(frame?' '+frame:'');
     if(id==='W'&&mult>1)cls='sym wild mult';
-    return '<div class="'+cls+'" data-s="'+id+'">'+symInner(id)
+    return '<div class="'+cls+'" data-s="'+id+'">'+symInner(id,coreVal)
       +(frame||mult>1?'<span class="frame"></span>':'')
       +(mult>1?'<span class="mbadge">×'+mult+'</span>':'')
       +'</div>';
   }
-  function colHtml(g,r,mults){
+  function colHtml(g,r,mults,coreVals){
     var html='';
     for(var row=0;row<ROWS;row++){
-      var m=(mults&&g[r][row]==='W')?(mults[r+','+row]||1):1;
-      html+=symHtml(g[r][row],m);
+      var id=g[r][row];
+      var m=(mults&&id==='W')?(mults[r+','+row]||1):1;
+      var cv=(coreVals&&id==='C')?coreVals[r+','+row]:null;
+      html+=symHtml(id,m,cv);
     }
     return html;
   }
-  function renderIdleGrid(g){
+  function renderIdleGrid(g,coreVals){
     for(var r=0;r<5;r++){
-      stripEls[r].style.transform='translateY(0)';
-      stripEls[r].innerHTML=colHtml(g,r,null);
+      stripEls[r].style.transform='translate3d(0,0,0)';
+      stripEls[r].innerHTML=colHtml(g,r,null,coreVals);
+      hideLockedUnder(r);
     }
   }
-  /* ZERO GRAVITY drift layer — rockets adrift, pinned above the reels */
-  function renderDrift(fall){
-    if(!S.drift||!S.overlayCells||!S.overlayCells.length){driftLayer.innerHTML='';return;}
-    driftLayer.innerHTML=S.overlayCells.map(function(k){
-      var p=k.split(','),r=+p[0],row=+p[1],m=S.drift[k]||1;
-      return '<div class="driftcell'+((fall&&!REDUCED)?' fall':'')+'" data-key="'+k+'" style="grid-column:'+(r+1)+';grid-row:'+(row+1)+'">'
-        +'<img src="crash/rocket.webp" alt="Drifting rocket wild" draggable="false"/><span class="flame"></span><span class="wildpin">WILD</span>'
-        +(m>1?'<span class="mbadge">×'+m+'</span>':'')+'</div>';
-    }).join('');
+  // a locked cell is drawn ONLY by the sticky lock layer — the strip cell
+  // beneath it goes invisible so two wild images never stack
+  function hideLockedUnder(r){
+    for(var row=0;row<ROWS;row++){
+      var cell=stripEls[r].children[row];
+      if(!cell)continue;
+      cell.style.visibility=(S.sticky&&S.sticky[r+','+row])?'hidden':'';
+    }
   }
-  function clearDrift(){driftLayer.innerHTML='';S.overlayCells=null;}
+  // settle a reel by REUSING the strip's existing landing-window cells — same
+  // <img> nodes, nothing re-decodes, so no settle flash. Stamp core values and
+  // hot-wild badges directly onto the reused cells.
+  function settleStrip(R,g,mults,coreVals){
+    var strip=stripEls[R.r],cells=[];
+    for(var row=0;row<ROWS;row++)cells.push(strip.children[R.stop+row]);
+    strip.replaceChildren.apply(strip,cells);
+    strip.style.transform='translate3d(0,0,0)';
+    for(var row=0;row<ROWS;row++){
+      var cell=cells[row];if(!cell)continue;
+      var id=g[R.r][row];
+      if(id==='W'){
+        var m=(mults&&mults[R.r+','+row])||1;
+        if(m>1){
+          cell.className='sym wild mult';
+          if(!cell.querySelector('.frame')){var f=document.createElement('span');f.className='frame';cell.appendChild(f);}
+          var b=cell.querySelector('.mbadge');
+          if(!b){b=document.createElement('span');b.className='mbadge';cell.appendChild(b);}
+          b.textContent='×'+m;
+        }
+      }else if(id==='C'){
+        // ensure the reused core cell shows its drawn value stamp
+        var cv=coreVals&&coreVals[R.r+','+row];
+        var orb=cell.querySelector('.coreorb');
+        if(orb){
+          var old=orb.querySelector('.corestamp');if(old)old.remove();
+          if(cv!=null)orb.insertAdjacentHTML('beforeend',coreStampHtml(cv));
+        }
+      }
+    }
+    hideLockedUnder(R.r);
+  }
+  /* ZERO GRAVITY sticky wilds — locked in place above the reels */
+  function renderSticky(newLocks){
+    var keys=S.sticky?Object.keys(S.sticky):[];
+    lockLayer.innerHTML=keys.map(function(key){
+      var p=key.split(','),r=+p[0],row=+p[1],m=S.sticky[key];
+      var isNew=newLocks&&newLocks.some(function(l){return l.r===r&&l.row===row;});
+      return '<div class="lockcell'+((isNew&&!REDUCED)?' lockin':'')+'" data-key="'+key+'" style="grid-column:'+(r+1)+';grid-row:'+(row+1)+'">'
+        +'<img src="'+SYMS.W.art+'" alt="Locked rocket wild" draggable="false"/><span class="frame"></span>'
+        +'<span class="lockpin">WILD</span>'+(m>1?'<span class="mbadge">×'+m+'</span>':'')
+        +'</div>';
+    }).join('');
+    hideAllLocked(); // every locked cell's strip symbol stays hidden — single layer
+  }
+  function hideAllLocked(){for(var r=0;r<5;r++)hideLockedUnder(r);}
+  function clearSticky(){lockLayer.innerHTML='';hideAllLocked();}
   function clearHighlights(){
     if(S.cycleIv){clearInterval(S.cycleIv);S.cycleIv=null;}
     linesSvg.innerHTML='';
-    reelsEl.querySelectorAll('.sym.hit').forEach(function(el){el.classList.remove('hit');});
-    driftLayer.querySelectorAll('.driftcell.hit').forEach(function(el){el.classList.remove('hit');});
+    reelsEl.querySelectorAll('.sym.hit,.sym.corehit').forEach(function(el){el.classList.remove('hit');el.classList.remove('corehit');});
+    lockLayer.querySelectorAll('.lockcell.hit').forEach(function(el){el.classList.remove('hit');});
   }
   function cellCenter(r,row){
     var reel=reelEls[r],box=reelsEl.getBoundingClientRect(),rb=reel.getBoundingClientRect();
@@ -1038,22 +1091,23 @@ h1 .glyph{color:var(--ice);-webkit-text-fill-color:var(--ice);filter:drop-shadow
     linesSvg.innerHTML=html;
   }
   function highlightEntry(entry){
-    reelsEl.querySelectorAll('.sym.hit').forEach(function(el){el.classList.remove('hit');});
-    driftLayer.querySelectorAll('.driftcell.hit').forEach(function(el){el.classList.remove('hit');});
+    reelsEl.querySelectorAll('.sym.hit,.sym.corehit').forEach(function(el){el.classList.remove('hit');el.classList.remove('corehit');});
+    lockLayer.querySelectorAll('.lockcell.hit').forEach(function(el){el.classList.remove('hit');});
     var cells=entry.line!=null
       ? LINES[entry.line].map(function(row,r){return {r:r,row:row};}).slice(0,entry.run)
       : entry.cells;
     cells.forEach(function(c){
       var el=stripEls[c.r].children[c.row];
-      if(el)el.classList.add('hit');
-      var dc=driftLayer.querySelector('.driftcell[data-key="'+c.r+','+c.row+'"]');
-      if(dc)dc.classList.add('hit');
+      if(el)el.classList.add(entry.sym==='C'?'corehit':'hit');
+      var lk=lockLayer.querySelector('.lockcell[data-key="'+c.r+','+c.row+'"]');
+      if(lk)lk.classList.add('hit');
     });
   }
   function presentWins(ev){
     clearHighlights();
     var entries=ev.wins.map(function(w){return {line:w.line,run:w.run,sym:w.sym,units:w.units};});
     if(ev.sc>=3)entries.push({line:null,cells:ev.scCells,sym:'S'});
+    if(ev.cores.length)entries.push({line:null,cells:ev.cores,sym:'C'});
     if(!entries.length)return;
     var idx=0;
     var show=function(){
@@ -1082,13 +1136,13 @@ h1 .glyph{color:var(--ice);-webkit-text-fill-color:var(--ice);filter:drop-shadow
     S.rollupRaf=requestAnimationFrame(step);
   }
 
-  function driftCount(){return S.drift?Object.keys(S.drift).length:0;}
+  function lockCount(){return S.sticky?Object.keys(S.sticky).length:0;}
   function syncHud(){
     hudBet.textContent=fmt(S.bet);
     if(S.inFs){
-      hudC1k.textContent='Adrift';
+      hudC1k.textContent='Locked';
       hudC1v.className='v lines-v zg-v';
-      hudC1v.textContent=String(driftCount());
+      hudC1v.textContent=String(lockCount());
     }else{
       hudC1k.textContent='Lines';
       hudC1v.className='v lines-v';
@@ -1101,11 +1155,12 @@ h1 .glyph{color:var(--ice);-webkit-text-fill-color:var(--ice);filter:drop-shadow
   }
   function renderActions(){
     var label,sub='';
-    if(S.phase==='idle'){label='Place bet &amp; spin';}
+    if(!S.artReady){label='Loading…';}
+    else if(S.phase==='idle'){label='Place bet &amp; spin';}
     else if(S.phase==='settled'){label='Spin again';}
-    else if(S.inFs){label='Zero gravity running';sub=(S.fsTotal-S.fsPlayed)+' left · '+driftCount()+' adrift';}
+    else if(S.inFs){label='Zero gravity running';sub=(S.fsTotal-S.fsPlayed)+' left · '+lockCount()+' locked';}
     else{label='Spinning…';}
-    actions.innerHTML='<button class="btn btn-go" id="spinBtn"'+((S.busy||S.phase==='active')?' disabled':'')+'>'+label
+    actions.innerHTML='<button class="btn btn-go" id="spinBtn"'+((!S.artReady||S.busy||S.phase==='active')?' disabled':'')+'>'+label
       +(sub?'<span class="cash-sub">'+sub+'</span>':'')+'</button>';
     var b=$('spinBtn');if(b&&!b.disabled)b.addEventListener('click',startRound);
   }
@@ -1115,102 +1170,135 @@ h1 .glyph{color:var(--ice);-webkit-text-fill-color:var(--ice);filter:drop-shadow
     document.querySelectorAll('.chip,.mini-btn').forEach(function(b){b.style.pointerEvents=on?'auto':'none';b.style.opacity=on?'1':'.5';});
   }
 
-  /* ── STAGE BURN — outcomes pre-committed, IGNITE/EJECT is yours ── */
-  function renderLadder(pos,over,explodedAt){
-    var names=['PAD HOLD','STAGE 1','STAGE 2','STAGE 3','STAGE 4'];
-    var html='';
-    for(var k=0;k<LADDER.length;k++){
-      var cls='rung';
-      if(k===pos&&explodedAt<0)cls+=' held';
-      else if(!over&&k===pos+1)cls+=' next';
-      if(explodedAt>=0&&k>=explodedAt)cls+=' dead';
-      html+='<div class="'+cls+'"><div class="rk">'+names[k]+'</div><div class="rv">'+LADDER[k]+'×</div>'
-        +'<div class="ro">'+(k===0?'held':STAGE_ODDS_TXT[k-1]+' survive')+'</div></div>';
-    }
-    burnLadderEl.innerHTML=html;
+  /* ── HOLD & SPIN — respins pre-committed, played back socket by socket ── */
+  function socketCoreHtml(v){
+    if(v==null)return '';
+    var img='<img src="'+CORE_ART+'" alt="Energy Core" draggable="false"/>';
+    var val;
+    if(v==='MINI')val='<span class="cov jp"><img src="'+MINI_ART+'" alt=""/>MINI</span>';
+    else if(v==='MAJOR')val='<span class="cov jp major"><img src="'+MAJOR_ART+'" alt=""/>MAJOR</span>';
+    else val='<span class="cov">'+fmt(v*S.bet)+'</span>';
+    return '<span class="co">'+img+'</span>'+val;
   }
-  // survive: the 4 pre-committed booleans. cont(win, blog)
-  function playBurn(survive,bet,cont){
-    burnStage.classList.add('open');
-    burnScene.classList.remove('climb');burnScene.classList.remove('boom');
-    var pos=0,ignites=0,over=false,busyStage=false;
-    function rocketTo(p){burnRocket.style.bottom=(10+p*16)+'%';}
-    function sync(){
-      renderLadder(pos,over,-1);
-      igniteBtn.disabled=over||busyStage||ignites>=4;
-      ejectBtn.disabled=over||busyStage;
-      ejectBtn.innerHTML='Eject &amp; bank +'+fmt(Math.round(LADDER[pos]*bet));
-      burnStatus.innerHTML=over?'':(ignites>=4
-        ?'Max altitude — bank it'
-        :'Holding <span class="up">'+fmt(Math.round(LADDER[pos]*bet))+'</span> MORBIUS · next ignite: '
-          +STAGE_ODDS_TXT[ignites]+' survive → '+LADDER[ignites+1]+'× · explode pays the 25% escape pod');
+  function isJp(v){return v==='MINI'||v==='MAJOR';}
+  function renderHsGrid(locked,newIdx){
+    var html='';
+    for(var i=0;i<HS_SOCKETS;i++){
+      var v=locked[i];
+      var cls='hs-socket';
+      if(v!=null)cls+=' locked'+(isJp(v)?' jpcore':'');
+      if(newIdx&&newIdx.indexOf(i)>=0)cls+=' newlock';
+      html+='<div class="'+cls+'" data-idx="'+i+'">'+(v!=null?socketCoreHtml(v):'')+'</div>';
     }
-    function finish(exploded){
-      over=true;
-      igniteBtn.disabled=true;ejectBtn.disabled=true;
-      var res=burnPay(bet,survive,ignites);
-      var blog={survive:survive.map(Number),ignites:ignites,exploded:res.exploded,reached:res.reached,win:res.pay};
-      setTimeout(function(){
-        burnStage.classList.remove('open');
-        cont(res.pay,blog);
-      },exploded?2300:1500);
+    hsGrid.innerHTML=html;
+  }
+  function hsSocketEl(i){return hsGrid.children[i];}
+  // hs: the pre-resolved {locked, full, respins:[{landed,counterAfter}]}. cont(cash, jResult, log)
+  function playHoldSpin(coreMap,hs,bet,cont){
+    hsStage.classList.add('open');
+    var work=coreMap.slice(); // current locked state as we animate
+    renderHsGrid(work,null);
+    hsCounter.textContent=HS_RESPINS;
+    var lockedNow=0;for(var i=0;i<HS_SOCKETS;i++)if(work[i]!=null)lockedNow++;
+    hsTally.textContent='0';
+    hsSub.innerHTML='<span class="up">'+lockedNow+'</span> cores locked — respins reset on every new core';
+    var fast=REDUCED||S.speed==='turbo';
+    var stepDelay=fast?260:820;
+    var revealDelay=fast?150:460;
+
+    function updateTally(){
+      var cash=hsCash(work,bet);
+      hsTally.textContent=fmt(cash);
     }
-    igniteBtn.onclick=function(){
-      if(over||busyStage||ignites>=4)return;
-      ignites++;busyStage=true;
-      igniteBtn.disabled=true;ejectBtn.disabled=true;
-      burnStatus.innerHTML='<span class="up">IGNITION</span> — stage '+ignites+' burning…';
-      burnScene.classList.add('climb');
-      sIgnite();
+    function tense(){
+      var n=0;for(var i=0;i<HS_SOCKETS;i++)if(work[i]!=null)n++;
+      hsGrid.classList.toggle('tense',n>=16&&n<20);
+      hsSub.innerHTML='<span class="up">'+n+'</span> / 20 sockets locked'+(n>=16?' — grid nearly full!':'');
+    }
+
+    var ri=0;
+    function runRespin(){
+      if(ri>=hs.respins.length){finish();return;}
+      var rp=hs.respins[ri];
+      // spin the empty sockets
+      var empties=[];
+      for(var i=0;i<HS_SOCKETS;i++)if(work[i]==null){empties.push(i);var el=hsSocketEl(i);if(el)el.classList.add('spinning');}
+      startTicks();
       setTimeout(function(){
-        burnScene.classList.remove('climb');
-        busyStage=false;
-        if(survive[ignites-1]){
-          pos=ignites;rocketTo(pos);
-          sStageOk();
-          burnResult.innerHTML='<span class="up">STAGE '+pos+' · holding '+fmt(Math.round(LADDER[pos]*bet))+' MORBIUS</span>';
-          if(pos>=4){
-            burnResult.innerHTML='<span class="up">ORBIT — 50× auto-banked · +'+fmt(Math.round(LADDER[4]*bet))+' MORBIUS</span>';
-            sBank();sWinBig();burst('big');
-            finish(false);
-          }else sync();
+        stopTicks();
+        empties.forEach(function(i){var el=hsSocketEl(i);if(el)el.classList.remove('spinning');});
+        // reveal newly landed cores
+        var newIdx=rp.landed.map(function(l){return l.idx;});
+        rp.landed.forEach(function(l){work[l.idx]=l.v;});
+        // re-render only changed sockets
+        rp.landed.forEach(function(l){
+          var el=hsSocketEl(l.idx);
+          if(el){el.className='hs-socket locked'+(isJp(l.v)?' jpcore':'')+(REDUCED?'':' newlock');el.innerHTML=socketCoreHtml(l.v);}
+          sSocketLock(l.v);
+        });
+        updateTally();
+        // counter update
+        if(rp.landed.length>0){
+          hsCounter.textContent=HS_RESPINS;
+          hsRespinsBox.classList.remove('reset');void hsRespinsBox.offsetWidth;hsRespinsBox.classList.add('reset');
+          sRespinReset();
         }else{
-          renderLadder(pos,true,ignites);
-          burnScene.classList.add('boom');
-          burnResult.innerHTML='<span class="pod-t">STAGE '+ignites+' EXPLODED — escape pod pays +'
-            +fmt(Math.round(ESCAPE*LADDER[pos]*bet))+' MORBIUS</span>';
-          sExplode();sPod();shake();
-          finish(true);
+          hsCounter.textContent=rp.counterAfter;
         }
-      },REDUCED?250:1000);
-    };
-    ejectBtn.onclick=function(){
-      if(over||busyStage)return;
-      burnResult.innerHTML='<span class="up">EJECTED · banked +'+fmt(Math.round(LADDER[pos]*bet))+' MORBIUS</span>';
-      sBank();
-      if(LADDER[pos]>=8){sWinBig();burst('big');}
-      finish(false);
-    };
-    burnResult.textContent='';
-    rocketTo(0);
-    sync();
-    sBonusLand(2);
+        tense();
+        ri++;
+        setTimeout(runRespin,revealDelay);
+      },stepDelay);
+    }
+
+    function finish(){
+      hsGrid.classList.remove('tense');
+      // final core-by-core tally sweep
+      var order=[];for(var i=0;i<HS_SOCKETS;i++)if(work[i]!=null&&typeof work[i]==='number')order.push(i);
+      var acc=0,oi=0;
+      var jResult=hsJackpots(hs.locked,hs.full);
+      function sweep(){
+        if(oi>=order.length){done();return;}
+        var idx=order[oi];var el=hsSocketEl(idx);
+        if(el){el.classList.add('tallyhit');(function(el){setTimeout(function(){el.classList.remove('tallyhit');},fast?160:340);})(el);}
+        acc+=work[idx]*bet;hsTally.textContent=fmt(acc);sTallyTick();
+        oi++;setTimeout(sweep,fast?55:130);
+      }
+      function done(){
+        var cash=hsCash(hs.locked,bet);
+        hsTally.textContent=fmt(cash);
+        if(hs.full){
+          hsSub.innerHTML='<span class="up">GALACTIC GRAND</span> — all 20 sockets filled!';
+          sGrand();shake();
+        }else{
+          hsSub.innerHTML='Hold &amp; Spin complete — <span class="up">'+fmt(cash)+'</span> MORBIUS in cores';
+        }
+        setTimeout(function(){
+          hsStage.classList.remove('open');
+          cont(cash,jResult,{locked:hs.locked.slice(),full:hs.full,respins:hs.respins.length});
+        },fast?700:1500);
+      }
+      setTimeout(sweep,fast?250:600);
+    }
+
+    sHoldStart();
+    setTimeout(runRespin,fast?400:900);
   }
 
   async function startRound(){
-    if(S.busy||S.phase==='active')return;
+    if(!S.artReady||S.busy||S.phase==='active')return;
     var bet=clampBet(parseInt(betInput.value,10)||0);
     if(bet>S.balance){flashInput();return;}
     betInput.value=bet;
     S.bet=bet;S.balance-=bet;S.phase='active';S.busy=true;
-    S.roundWin=0;S.fsLeft=0;S.fsTotal=0;S.fsPlayed=0;S.inFs=false;S.drift=null;S.spinLog=[];
+    S.roundWin=0;S.fsLeft=0;S.fsTotal=0;S.fsPlayed=0;S.inFs=false;S.sticky=null;S.spinLog=[];
     S.serverSeed=window.__forceServerSeed||rndHex(64); // __forceServerSeed: test hook only
     S.clientSeed=(S.clientSeedPref||'').trim()||rndHex(20);
     S.nonce+=1;S.roundId=shortId();
     S.serverHash=await sha256Hex(S.serverSeed);
     S.rng=makeRng(S.serverSeed+':'+S.clientSeed+':'+S.nonce);
     feedPools(bet);
-    stopRollup();hideBanner();clearHighlights();clearDrift();setControls(false);syncHud();renderActions();
+    stopRollup();hideBanner();clearHighlights();clearSticky();setControls(false);syncHud();renderActions();
     statusEl.className='felt-status';statusEl.textContent='Launch window open — reels spinning…';
     sDrone();
     doSpin(false);
@@ -1227,45 +1315,47 @@ h1 .glyph{color:var(--ice);-webkit-text-fill-color:var(--ice);filter:drop-shadow
   }
   function stripHtml(r){
     var L=STRIPS[r].length,html='';
-    for(var i=0;i<L+ROWS;i++)html+=symHtml(STRIPS[r][i%L],1);
+    for(var i=0;i<L+ROWS;i++)html+=symHtml(STRIPS[r][i%L],1,null);
     return html;
   }
 
   function doSpin(isFree){
     // ALL seeded draws happen here, before any animation — the visuals just deliver them.
-    // Fixed order: stops → wild mults (reel-major, on the RAW window) → the 4 Stage Burn
-    // survive draws iff the pads line up. ZERO GRAVITY drift is derived state (no draws).
-    var preDriftLog=null;
+    // Fixed order: stops → wild mults (reel-major, RAW window) → core values (reel-major,
+    // RAW window) → iff 6+ cores land, the Hold & Spin respins (row-major per socket).
+    // ZERO GRAVITY sticky wilds are derived state (no draws).
     if(isFree){
-      S.drift=driftStep(S.drift||{});
-      S.overlayCells=Object.keys(S.drift).sort(function(a,b){
-        var pa=a.split(','),pb=b.split(',');return (+pa[0])-(+pb[0])||(+pa[1])-(+pb[1]);});
-      preDriftLog=driftToLog(S.drift);
-      renderDrift(true);
-      if(S.overlayCells.length)sDriftFall();
-    }else{S.drift=null;clearDrift();}
+      S.overlayCells=S.sticky?Object.keys(S.sticky):[];
+    }else{S.sticky=null;S.overlayCells=[];clearSticky();}
     var stops=drawStops(S.rng);
     var raw=windowAt(stops);
     var rawMults=drawMults(S.rng,raw);
-    var ov=overlayDrift(raw,rawMults,S.drift); // merges upgrade badges inside S.drift
-    if(isFree)registerNewWilds(raw,rawMults,S.drift);
-    var ev=evalSpin(ov.g,ov.mults);
-    var stages=ev.bonusHit?drawStages(S.rng):null;
-    var g2=ov.g; // effective grid (drift overlays included) drives anticipation & sounds
+    var coreVals=drawCores(S.rng,raw);
+    var ov=overlaySticky(raw,rawMults,isFree?S.sticky:null);
+    var newLocks=(isFree&&S.sticky)?lockNewWilds(raw,rawMults,S.sticky):[];
+    var ev=evalSpin(ov.g,ov.mults,coreVals);
+    // Hold & Spin pre-resolution — the LAST draws of this spin, from the same stream
+    var hs=null,coreMap=null;
+    if(ev.coreHit){
+      coreMap=new Array(HS_SOCKETS).fill(null);
+      ev.cores.forEach(function(c){coreMap[c.row*5+c.r]=c.v;});
+      hs=resolveHS(coreMap,S.rng);
+    }
+    var g2=ov.g;
     var sp=spd();
     S.lastEv=null;
     clearHighlights();
     startTicks();
 
-    // stop schedule — anticipation for the 3rd warp gate OR the 3rd launch pad (reels 1/3/5)
-    var stopAt=[],anticFrom=-1,scSoFar=0,bonSoFar=0,celebrateReel=-1;
+    // stop schedule — anticipation for the 3rd warp gate OR the 5th Energy Core
+    var stopAt=[],anticFrom=-1,anticCore=false,scSoFar=0,coreSoFar=0,celebrateReel=-1;
     var t=REDUCED?260:sp.first;
     for(var r=0;r<5;r++){
       stopAt[r]=t;
       scSoFar+=g2[r].filter(function(s){return s==='S';}).length;
-      if(g2[r].indexOf('B')>=0)bonSoFar++;
-      if(anticFrom<0&&r<4&&(scSoFar===2||(bonSoFar===2&&r>=2)))anticFrom=r;
-      if(celebrateReel<0&&(scSoFar>=3||bonSoFar>=3))celebrateReel=r;
+      coreSoFar+=g2[r].filter(function(s){return s==='C';}).length;
+      if(anticFrom<0&&r<4&&(scSoFar===2||coreSoFar>=5)){anticFrom=r;anticCore=(scSoFar!==2);}
+      if(celebrateReel<0&&(scSoFar>=3||coreSoFar>=HS_NEED))celebrateReel=r;
       var gap=(anticFrom>=0&&r>=anticFrom)?sp.anticGap:sp.gap;
       t+=REDUCED?120:gap;
     }
@@ -1280,13 +1370,13 @@ h1 .glyph{color:var(--ice);-webkit-text-fill-color:var(--ice);filter:drop-shadow
       var D=base+Math.max(1,Math.round((ideal-base)/L))*L;
       stripEls[r].innerHTML=stripHtml(r);
       reelEls[r].classList.add('spin');
-      return {r:r,L:L,start:start,D:D,T:T,done:false};
+      return {r:r,L:L,start:start,D:D,T:T,stop:stop,done:false};
     });
 
     if(anticFrom>=0){
       setTimeout(function(){
         startAnticLoop();
-        for(var r2=anticFrom+1;r2<5;r2++)if(!reels[r2].done)reelEls[r2].classList.add('antic');
+        for(var r2=anticFrom+1;r2<5;r2++)if(!reels[r2].done){reelEls[r2].classList.add('antic');if(anticCore)reelEls[r2].classList.add('core');}
       },stopAt[anticFrom]);
     }
 
@@ -1299,10 +1389,9 @@ h1 .glyph{color:var(--ice);-webkit-text-fill-color:var(--ice);filter:drop-shadow
         var u=el/R.T;
         if(u>=1){
           R.done=true;
-          var reel=reelEls[R.r],strip=stripEls[R.r];
-          reel.classList.remove('spin');reel.classList.remove('antic');
-          strip.style.transform='translateY(0)';
-          strip.innerHTML=colHtml(raw,R.r,rawMults);
+          var reel=reelEls[R.r];
+          reel.classList.remove('spin');reel.classList.remove('antic');reel.classList.remove('core');
+          settleStrip(R,ov.g,ov.mults,coreVals);
           reel.classList.add('land');reel.classList.add('flash');
           (function(reel){setTimeout(function(){reel.classList.remove('land');reel.classList.remove('flash');},260);})(reel);
           sStop(R.r);
@@ -1311,26 +1400,26 @@ h1 .glyph{color:var(--ice);-webkit-text-fill-color:var(--ice);filter:drop-shadow
             var upTo=0;for(var q=0;q<=R.r;q++)upTo+=g2[q].filter(function(s){return s==='S';}).length;
             sScatLand(upTo);
           }
-          if(g2[R.r].indexOf('B')>=0){
-            var bUp=0;for(var q2=0;q2<=R.r;q2++)if(g2[q2].indexOf('B')>=0)bUp++;
-            sBonusLand(bUp);
+          var landedCore=g2[R.r].filter(function(s){return s==='C';}).length;
+          if(landedCore>0){
+            var cUp=0;for(var q3=0;q3<=R.r;q3++)cUp+=g2[q3].filter(function(s){return s==='C';}).length;
+            sCoreLand(cUp);
           }
           for(var row=0;row<ROWS;row++){
             if(raw[R.r][row]==='W'&&(rawMults[R.r+','+row]||1)>1){sMultZap();break;}
           }
+          // new sticky locks on this reel snap in as it lands
+          if(isFree&&newLocks.length){
+            var reelLocks=newLocks.filter(function(l){return l.r===R.r;});
+            if(reelLocks.length){renderSticky(reelLocks);sLock();}
+          }
           if(R.r===celebrateReel){
             stopAnticLoop();
-            g2.forEach(function(col,cr){col.forEach(function(s2,crow){
-              if(s2==='S'&&cr<=R.r){
-                var cell=stripEls[cr].children[crow];
-                if(cell){cell.classList.remove('scathit');void cell.offsetWidth;cell.classList.add('scathit');}
-              }
-            });});
             feltFlashGo();shake();burst('big');sFanfare();
           }
         }else{
           var off=(R.start+R.D*easeProfile(u))%R.L;
-          stripEls[R.r].style.transform='translateY('+(-off*cellH)+'px)';
+          stripEls[R.r].style.transform='translate3d(0,'+(-off*cellH)+'px,0)';
           if(R.T-el<240)reelEls[R.r].classList.remove('spin');
           allDone=false;
         }
@@ -1338,8 +1427,8 @@ h1 .glyph{color:var(--ice);-webkit-text-fill-color:var(--ice);filter:drop-shadow
       if(allDone){
         S.spinRaf=null;
         stopTicks();stopAnticLoop();
-        if(isFree)renderDrift(false); // re-render with any merged ×2+ badges
-        setTimeout(function(){resolveSpin(stops,raw,rawMults,preDriftLog,ev,stages,isFree);},140);
+        if(isFree)hideAllLocked(); // guarantee the single-layer invariant on the settled frame
+        setTimeout(function(){resolveSpin(stops,raw,rawMults,coreVals,ov,ev,hs,coreMap,newLocks,isFree);},140);
       }else{
         S.spinRaf=requestAnimationFrame(frame);
       }
@@ -1347,68 +1436,17 @@ h1 .glyph{color:var(--ice);-webkit-text-fill-color:var(--ice);filter:drop-shadow
     S.spinRaf=requestAnimationFrame(frame);
   }
 
-  function resolveSpin(stops,raw,rawMults,preDriftLog,ev,stages,isFree){
+  function resolveSpin(stops,raw,rawMults,coreVals,ov,ev,hs,coreMap,newLocks,isFree){
     var lineWinAmt=linePayout(S.bet,ev.lineUnits);
-    var jpTier=jackpotTier(ev.wilds);
-    var jpAmt=jpTier?payJackpot(jpTier):0;
-    var entry={stops:stops.slice(),mults:multsToLog(raw,rawMults),free:isFree,
-      drift:isFree?preDriftLog:null,
+    var entry={stops:stops.slice(),mults:multsToLog(raw,rawMults),cores:coresToLog(raw,coreVals),free:isFree,
+      locked:isFree?(S.overlayCells?S.overlayCells.length:0):0,
       win:lineWinAmt,lineWin:lineWinAmt,lines:ev.wins.length,sc:ev.sc,wilds:ev.wilds,
-      burn:null,jackpot:jpTier?{tier:jpTier,amount:jpAmt}:null};
+      hs:null,jackpot:null};
     S.spinLog.push(entry);
-    S.roundWin+=lineWinAmt+jpAmt;
+    S.roundWin+=lineWinAmt;
     if(isFree)S.fsPlayed++;
 
     var chain=[];
-    // jackpot celebration — it outranks everything else
-    if(jpTier){
-      chain.push(function(next){
-        ev.wildCells.forEach(function(c){
-          var el=stripEls[c.r].children[c.row];
-          if(el){el.classList.remove('jphit');void el.offsetWidth;el.classList.add('jphit');}
-          var dc=driftLayer.querySelector('.driftcell[data-key="'+c.r+','+c.row+'"]');
-          if(dc){dc.classList.remove('hit');void dc.offsetWidth;dc.classList.add('hit');}
-        });
-        showBanner('win mega',JP[jpTier].label+' JACKPOT!','+'+fmt(jpAmt)+' MORBIUS');
-        sJackpot();shake();feltFlashGo();burst('jackpot');
-        rollup(hudWin,S.roundWin,true);hudWin.classList.remove('idle');
-        setTimeout(function(){hideBanner();next();},3200);
-      });
-    }
-    // STAGE BURN — outcomes already committed; you just choose when to stop
-    if(stages){
-      chain.push(function(next){
-        statusEl.className='felt-status';
-        statusEl.innerHTML='Launch pads aligned — <span class="hot">STAGE BURN</span>';
-        playBurn(stages,S.bet,function(cash,blog){
-          entry.burn=blog;
-          entry.win+=cash;
-          S.roundWin+=cash;
-          rollup(hudWin,S.roundWin,cash>=S.bet*3);hudWin.classList.remove('idle');
-          statusEl.className='felt-status';
-          statusEl.innerHTML=(blog.exploded?'Stage exploded — escape pod recovered ':'Burn banked ')
-            +'<span class="gain">+'+fmt(cash)+' MORBIUS</span>';
-          syncHud();next();
-        });
-      });
-    }
-    // free spins trigger / retrigger
-    if(ev.sc>=3&&!isFree){
-      chain.push(function(next){
-        sFanfare();sWarp();
-        showBanner('win','ZERO GRAVITY!','+'+FS_AWARD+' FREE SPINS');
-        S.fsLeft+=FS_AWARD;S.fsTotal+=FS_AWARD;S.inFs=true;S.drift={};
-        boardShell.classList.add('fs');
-        setTimeout(function(){hideBanner();syncHud();next();},1400);
-      });
-    }else if(ev.sc>=3&&isFree){
-      S.fsLeft+=FS_RETRIG;S.fsTotal+=FS_RETRIG;
-      chain.push(function(next){
-        sFanfare();
-        showBanner('win','Retrigger!','+'+FS_RETRIG+' FREE SPINS');
-        setTimeout(function(){hideBanner();next();},1100);
-      });
-    }
     // line wins presentation
     if(lineWinAmt>0){
       chain.push(function(next){
@@ -1428,7 +1466,59 @@ h1 .glyph{color:var(--ice);-webkit-text-fill-color:var(--ice);filter:drop-shadow
         else sWinSmall();
         next();
       });
-    }else if(!jpTier&&!stages&&!(ev.sc>=3)){
+    }
+    // HOLD & SPIN — respins already committed; play them back
+    if(hs){
+      chain.push(function(next){
+        statusEl.className='felt-status';
+        statusEl.innerHTML=ev.cores.length+' cores charged — <span class="core">HOLD &amp; SPIN</span>';
+        playHoldSpin(coreMap,hs,S.bet,function(cash,jResult,hslog){
+          entry.hs={locked:hslog.locked,full:hslog.full,respins:hslog.respins,cash:cash};
+          entry.win+=cash;
+          S.roundWin+=cash;
+          // jackpot pools (Mini / Major / full-grid Grand) are account state
+          var jk=payJackpots(jResult);
+          if(jk.amount>0){
+            entry.jackpot={mini:jResult.mini,major:jResult.major,grand:jResult.grand,amount:jk.amount};
+            S.roundWin+=jk.amount;
+          }
+          rollup(hudWin,S.roundWin,true);hudWin.classList.remove('idle');
+          if(jResult.grand){
+            showBanner('win mega','GALACTIC GRAND!','+'+fmt(jk.amount+cash)+' MORBIUS');
+            burst('grand');feltFlashGo();
+            setTimeout(function(){hideBanner();afterHs();},3000);
+          }else if(jk.amount>0){
+            var jlabel=jResult.major?'MAJOR JACKPOT':'MINI JACKPOT';
+            showBanner('win big',jlabel,'+'+fmt(jk.amount)+' MORBIUS');
+            sGrand();burst('big');
+            setTimeout(function(){hideBanner();afterHs();},2200);
+          }else afterHs();
+          function afterHs(){
+            statusEl.className='felt-status';
+            statusEl.innerHTML='Hold &amp; Spin banked <span class="gain">+'+fmt(cash+jk.amount)+' MORBIUS</span>';
+            syncHud();next();
+          }
+        });
+      });
+    }
+    // free spins trigger / retrigger
+    if(ev.sc>=3&&!isFree){
+      chain.push(function(next){
+        sFanfare();sWarp();
+        showBanner('win','ZERO GRAVITY!','+'+FS_AWARD+' FREE SPINS');
+        S.fsLeft+=FS_AWARD;S.fsTotal+=FS_AWARD;S.inFs=true;S.sticky={};
+        boardShell.classList.add('fs');
+        setTimeout(function(){hideBanner();syncHud();next();},1400);
+      });
+    }else if(ev.sc>=3&&isFree){
+      S.fsLeft+=FS_RETRIG;S.fsTotal+=FS_RETRIG;
+      chain.push(function(next){
+        sFanfare();
+        showBanner('win','Retrigger!','+'+FS_RETRIG+' FREE SPINS');
+        setTimeout(function(){hideBanner();next();},1100);
+      });
+    }
+    if(lineWinAmt<=0&&!hs&&!(ev.sc>=3)){
       chain.push(function(next){
         statusEl.className='felt-status'+(isFree?' fsmode':'');
         statusEl.textContent=isFree?'Zero-gravity spin — no win':'No win this spin';
@@ -1444,7 +1534,7 @@ h1 .glyph{color:var(--ice);-webkit-text-fill-color:var(--ice);filter:drop-shadow
         setTimeout(function(){
           statusEl.className='felt-status fsmode';
           statusEl.textContent='Zero gravity '+(S.fsPlayed+1)+' of '+S.fsTotal
-            +(driftCount()>0?' · '+driftCount()+' rocket'+(driftCount()===1?'':'s')+' adrift':'');
+            +(lockCount()>0?' · '+lockCount()+' rocket'+(lockCount()===1?'':'s')+' locked':'');
           doSpin(true);
         },spd().settle);
       }else{
@@ -1470,15 +1560,15 @@ h1 .glyph{color:var(--ice);-webkit-text-fill-color:var(--ice);filter:drop-shadow
     }
     S.history.unshift({ id:S.roundId, at:new Date().toISOString(), bet:S.bet, win:win,
       spins:S.spinLog.length, fs:S.fsTotal,
-      driftPeak:S.spinLog.reduce(function(a,s){return Math.max(a,s.drift?s.drift.length:0);},0),
+      lockPeak:S.spinLog.reduce(function(a,s){return Math.max(a,s.locked||0);},0),
       lines:S.spinLog.reduce(function(a,s){return a+s.lines;},0),
-      burns:S.spinLog.filter(function(s){return s.burn;}).length,
+      holds:S.spinLog.filter(function(s){return s.hs;}).length,
       jackpots:S.spinLog.filter(function(s){return s.jackpot;}).map(function(s){return s.jackpot;}),
       spinLog:S.spinLog.map(function(s){return JSON.parse(JSON.stringify(s));}),
       serverSeed:S.serverSeed, serverHash:S.serverHash, clientSeed:S.clientSeed, nonce:S.nonce });
     if(S.history.length>15)S.history.pop();
-    S.drift=null;
-    if(hadFs)setTimeout(clearDrift,1600);
+    S.sticky=null;
+    if(hadFs)setTimeout(clearSticky,1600);
     setControls(true);syncHud();renderActions();renderHistory();
   }
 
@@ -1493,12 +1583,12 @@ h1 .glyph{color:var(--ice);-webkit-text-fill-color:var(--ice);filter:drop-shadow
     if(!S.history.length){histBody.innerHTML='<p class="hist-empty">No spins yet — the launch window is open.</p>';return;}
     histBody.innerHTML='<ul class="hist-list">'+S.history.map(function(r){
       var profit=r.win-r.bet,multX100=Math.round(r.win/r.bet*100);
-      var badge=r.fs>0?'<span class="badge fsb">'+r.fs+' FS · '+r.driftPeak+' adrift</span>':'<span class="badge">base</span>';
-      var brs=r.burns>0?'<span class="badge brn">BURN×'+r.burns+'</span>':'';
-      var jps=r.jackpots.map(function(j){return '<span class="badge jpb">'+JP[j.tier].label+'</span>';}).join('');
+      var badge=r.fs>0?'<span class="badge fsb">'+r.fs+' FS · '+r.lockPeak+' locked</span>':'<span class="badge">base</span>';
+      var hbs=r.holds>0?'<span class="badge hsb">HOLD&amp;SPIN×'+r.holds+'</span>':'';
+      var jps=r.jackpots.map(function(j){var lab=j.grand?'GRAND':(j.major?'MAJOR':'MINI');return '<span class="badge jpb">'+lab+'</span>';}).join('');
       var xcell=r.win>0?'<span class="x win">'+(multX100/100).toFixed(2)+'×</span>':'<span class="x bust">0.00×</span>';
       var pcell='<span class="p '+(profit>0?'up':(profit<0?'down':'flat'))+'">'+(profit>0?'+':'')+fmt(profit)+'</span>';
-      return '<li class="hist-row"><span class="t">'+timeLabel(r.at)+'</span>'+badge+brs+jps
+      return '<li class="hist-row"><span class="t">'+timeLabel(r.at)+'</span>'+badge+hbs+jps
         +'<span class="m">bet '+fmt(r.bet)+'</span>'
         +'<span class="m">'+r.lines+' line'+(r.lines===1?'':'s')+'</span>'
         +xcell+pcell
@@ -1508,24 +1598,25 @@ h1 .glyph{color:var(--ice);-webkit-text-fill-color:var(--ice);filter:drop-shadow
   }
 
   /* fairness modal */
-  function recipeStr(){return 'demo: mulberry32(xmur3(`${serverSeed}:${clientSeed}:${nonce}`)) → per spin, fixed order: 5 reel stops, 1 multiplier draw per rocket wild in the RAW window (reel-major; 92% ×1 / 4.5% ×2 / 2.3% ×3 / 1.2% ×5), then the 4 Stage Burn survive uniforms (vs 60/31/33/33%) iff launch pads landed on reels 1·3·5 of the drift-overlaid grid — consumed in spin order. ZERO GRAVITY drift is derived state: every drifting rocket moves down one row at the start of each later free spin; a drifting rocket meeting a fresh wild merges to ×2 or the higher badge; drift wilds count for lines, scatters/pads they cover, and the wild-count jackpots. IGNITE/EJECT is player input, re-scored against the committed survive draws. Jackpot hits are re-checked from the on-screen wild count; pool amounts are account state. Production draws the same sequence from the server HMAC_SHA256 stream.';}
+  function recipeStr(){return 'demo: mulberry32(xmur3(`${serverSeed}:${clientSeed}:${nonce}`)) → per spin, fixed order: 5 reel stops, 1 multiplier draw per rocket wild in the RAW window (reel-major; 92% ×1 / 4.5% ×2 / 2.3% ×3 / 1.2% ×5), then 1 value draw per Energy Core in the RAW window (reel-major, total-bet multiples 1/2/3/5/10/25 or a MINI/MAJOR pool tag). When 6+ cores land on the drift-free grid, the Hold & Spin locks them and runs up to 3 respins: each respin, every empty socket in ROW-MAJOR order (socket = row×5+reel) draws a uniform land test (<4.75%) and, on a land, a fresh value — any land relocks the counter to 3; the round pays the sum of every locked core value, and a full 20-socket fill awards the GALACTIC GRAND. ZERO GRAVITY sticky wilds are derived state: every rocket wild locks in place for the rest of the free spins (no drift/merge); a higher hot-wild badge upgrades a locked cell. Jackpot cores (Mini/Major) and the full-grid Grand are re-checked from the replayed Hold & Spin; pool amounts are account state. Production draws the same sequence from the server HMAC_SHA256 stream.';}
   function ckHtml(ok,label){return '<div class="m-check"><span class="ck '+(ok?'ok':'no')+'">'+(ok?'✓':'✗')+'</span><span>'+label+'</span></div>';}
   function fieldHtml(l,v){return '<div class="m-field"><div class="fl">'+l+'</div><div class="fv">'+v+'</div></div>';}
+  function coreValLabel(v){return v==='MINI'?'MINI':(v==='MAJOR'?'MAJOR':('×'+v));}
   function spinsHtml(log){
     if(!log.length)return '<p class="note">No spins recorded.</p>';
     return '<div class="m-spins">'+log.map(function(s,i){
       var stops=s.stops.map(function(v){return '<span class="md">'+v+'</span>';}).join('');
       var hot=s.mults.filter(function(m){return m.m>1;}).map(function(m){return '<span class="md hot">R'+(m.r+1)+'×'+m.m+'</span>';}).join('');
-      var dr=(s.drift&&s.drift.length)?s.drift.map(function(d){return '<span class="md fsw">D'+(d[0]+1)+','+(d[1]+1)+(d[2]>1?'×'+d[2]:'')+'</span>';}).join(''):'';
-      var br='';
-      if(s.burn){
-        br=s.burn.survive.slice(0,s.burn.ignites).map(function(ok,k){
-          return '<span class="md brn">S'+(k+1)+(ok?'✓':'✗')+'</span>';
-        }).join('')+(s.burn.exploded?'<span class="md brn">pod</span>':'<span class="md brn">bank '+LADDER[s.burn.reached]+'×</span>');
+      var cr=(s.cores&&s.cores.length)?s.cores.map(function(c){return '<span class="md core">C'+(c.r+1)+':'+coreValLabel(c.v)+'</span>';}).join(''):'';
+      var lk=s.locked>0?'<span class="md lock">lock '+s.locked+'</span>':'';
+      var hb='';
+      if(s.hs){
+        var nlocked=s.hs.locked.filter(function(v){return v!=null;}).length;
+        hb='<span class="md core">HS '+nlocked+'/20·'+s.hs.respins+'rs</span>'+(s.hs.full?'<span class="md jpk">FULL</span>':'');
       }
-      var jp=s.jackpot?'<span class="md jpk">'+JP[s.jackpot.tier].label+'</span>':'';
+      var jp=s.jackpot?'<span class="md jpk">'+(s.jackpot.grand?'GRAND':(s.jackpot.major?'MAJOR':'MINI'))+'</span>':'';
       var pc=s.win>0?'<span class="rp up">+'+fmt(s.win)+'</span>':'<span class="rp no">0</span>';
-      return '<div class="m-sr"><span class="rn'+(s.free?' fs':'')+'">'+(s.free?'zero-g':'spin')+' '+(i+1)+'</span><span class="rd">'+stops+hot+dr+br+jp+'</span>'+pc+'</div>';
+      return '<div class="m-sr"><span class="rn'+(s.free?' fs':'')+'">'+(s.free?'zero-g':'spin')+' '+(i+1)+'</span><span class="rd">'+stops+hot+cr+lk+hb+jp+'</span>'+pc+'</div>';
     }).join('')+'</div>';
   }
   function findRound(id){id=String(id||'').trim();return S.history.filter(function(x){return x.id===id;})[0]||null;}
@@ -1545,38 +1636,42 @@ h1 .glyph{color:var(--ice);-webkit-text-fill-color:var(--ice);filter:drop-shadow
     var hashAvail=reHash!=='sha256-unavailable'&&r.serverHash!=='sha256-unavailable';
     var hashOk=hashAvail&&reHash===r.serverHash;
     var rng=makeRng(r.serverSeed+':'+r.clientSeed+':'+r.nonce);
-    var stopsOk=true,multsOk=true,driftOk=true,burnOk=true,winsOk=true,jpOk=true,reTotal=0;
-    var drift=null;
+    var stopsOk=true,multsOk=true,coresOk=true,lockOk=true,hsOk=true,jpOk=true,winsOk=true,reTotal=0;
+    var sticky=null;
     for(var i=0;i<r.spinLog.length;i++){
       var lg=r.spinLog[i];
-      if(lg.free){drift=driftStep(drift||{});}else drift=null;
-      var preLog=lg.free?driftToLog(drift):null;
-      if(JSON.stringify(preLog)!==JSON.stringify(lg.drift))driftOk=false; // drift replays spin-for-spin
+      if(lg.free){if(!sticky)sticky={};}else sticky=null;
+      var lockedBefore=sticky?Object.keys(sticky).length:0;
+      if(lockedBefore!==(lg.locked||0))lockOk=false; // sticky count replays spin-for-spin
       var st=drawStops(rng);
       if(st.join(',')!==lg.stops.join(','))stopsOk=false;
       var raw=windowAt(st);
       var m=drawMults(rng,raw);
       if(JSON.stringify(multsToLog(raw,m))!==JSON.stringify(lg.mults))multsOk=false;
-      var ov=overlayDrift(raw,m,drift);
-      if(lg.free)registerNewWilds(raw,m,drift);
-      var ev=evalSpin(ov.g,ov.mults);
-      var stages=ev.bonusHit?drawStages(rng):null;
-      var burnCash=0;
-      if(!!stages!==!!lg.burn)burnOk=false;
-      if(stages&&lg.burn){
-        if(JSON.stringify(stages.map(Number))!==JSON.stringify(lg.burn.survive))burnOk=false; // survive draws re-derive
-        var ign=lg.burn.ignites;
-        if(!(ign>=0&&ign<=4))burnOk=false;
-        var sc2=burnPay(r.bet,stages,ign);
-        if(sc2.exploded!==lg.burn.exploded)burnOk=false;   // recorded run explodes exactly where the draws say
-        if(sc2.reached!==lg.burn.reached)burnOk=false;     // ladder position reconciles
-        if(sc2.pay!==lg.burn.win)burnOk=false;             // payout (ladder or 25% escape pod) reconciles
-        burnCash=sc2.pay;
+      var cv=drawCores(rng,raw);
+      if(JSON.stringify(coresToLog(raw,cv))!==JSON.stringify(lg.cores))coresOk=false;
+      var ov=overlaySticky(raw,m,sticky);
+      if(lg.free&&sticky)lockNewWilds(raw,m,sticky);
+      var ev=evalSpin(ov.g,ov.mults,cv);
+      // Hold & Spin re-resolution
+      var hsCashAmt=0,jRe={mini:0,major:0,grand:0};
+      var hadHs=ev.coreHit;
+      if(hadHs!==!!lg.hs)hsOk=false;
+      if(ev.coreHit&&lg.hs){
+        var coreMap=new Array(HS_SOCKETS).fill(null);
+        ev.cores.forEach(function(c){coreMap[c.row*5+c.r]=c.v;});
+        var hs=resolveHS(coreMap,rng);
+        if(JSON.stringify(hs.locked)!==JSON.stringify(lg.hs.locked))hsOk=false; // every socket re-derives
+        if(hs.full!==lg.hs.full)hsOk=false;
+        hsCashAmt=hsCash(hs.locked,r.bet);
+        if(hsCashAmt!==lg.hs.cash)hsOk=false;
+        jRe=hsJackpots(hs.locked,hs.full);
       }
-      var w=linePayout(r.bet,ev.lineUnits)+burnCash;
+      // jackpot core counts match the replayed Hold & Spin
+      var lgJp=lg.jackpot||{mini:0,major:0,grand:0};
+      if(jRe.mini!==(lgJp.mini||0)||jRe.major!==(lgJp.major||0)||jRe.grand!==(lgJp.grand||0))jpOk=false;
+      var w=linePayout(r.bet,ev.lineUnits)+hsCashAmt;
       if(w!==lg.win)winsOk=false;
-      var tier=jackpotTier(ev.wilds);
-      if((tier||null)!==(lg.jackpot?lg.jackpot.tier:null))jpOk=false;
       reTotal+=w+(lg.jackpot?lg.jackpot.amount:0);
     }
     var payoutOk=reTotal===r.win;
@@ -1584,16 +1679,17 @@ h1 .glyph{color:var(--ice);-webkit-text-fill-color:var(--ice);filter:drop-shadow
       +ckHtml(hashOk,hashAvail?'Server seed matches its committed hash (checked locally)':'Hash check unavailable — SHA-256 needs a secure (https) context')
       +ckHtml(stopsOk,'Every reel stop re-derives from the seed stream')
       +ckHtml(multsOk,'Every rocket wild badge re-derives from the same stream')
-      +ckHtml(driftOk,'Zero Gravity drift replays spin-for-spin (derived state)')
-      +ckHtml(burnOk,'Stage Burn survive draws re-derive; your recorded flight pays exactly right')
-      +ckHtml(jpOk,'Jackpot hits match the on-screen rocket wild counts')
-      +ckHtml(winsOk,'Each spin’s win reconciles with the paytable & 40 lines')
-      +ckHtml(payoutOk,'Round payout equals spins + burns + recorded jackpots')
-      +'<div class="m-maplabel">Spin replay — stops · hot wilds · drift · burn stages · jackpots</div>'+spinsHtml(r.spinLog)
+      +ckHtml(coresOk,'Every Energy Core value re-derives from the same stream')
+      +ckHtml(lockOk,'Zero Gravity sticky wilds replay spin-for-spin (derived state)')
+      +ckHtml(hsOk,'Hold &amp; Spin respins re-derive — every locked socket &amp; value reconciles')
+      +ckHtml(jpOk,'Mini / Major / full-grid Grand cores match the replayed bonus')
+      +ckHtml(winsOk,'Each spin’s win reconciles with the paytable, 40 lines &amp; core cash')
+      +ckHtml(payoutOk,'Round payout equals spins + Hold &amp; Spin + recorded jackpots')
+      +'<div class="m-maplabel">Spin replay — stops · hot wilds · cores · locks · hold &amp; spin</div>'+spinsHtml(r.spinLog)
       +'<div class="m-meta"><span>Spins: <span class="mv">'+r.spins+'</span></span>'
         +'<span>Free spins: <span class="mv">'+r.fs+'</span></span>'
-        +'<span>Peak adrift: <span class="mv gold">'+r.driftPeak+'</span></span>'
-        +'<span>Stage Burns: <span class="mv gold">'+r.burns+'</span></span>'
+        +'<span>Peak locked: <span class="mv gold">'+r.lockPeak+'</span></span>'
+        +'<span>Hold &amp; Spins: <span class="mv gold">'+r.holds+'</span></span>'
         +'<span>Lines hit: <span class="mv gold">'+r.lines+'</span></span></div>'
       +'<div class="m-fields">'+fieldHtml('Server seed hash (committed)',r.serverHash)+fieldHtml('Server seed (revealed)',r.serverSeed)
         +fieldHtml('Client seed',r.clientSeed)+fieldHtml('Nonce',String(r.nonce))+fieldHtml('Recipe',recipeStr())+'</div>'
@@ -1607,8 +1703,8 @@ h1 .glyph{color:var(--ice);-webkit-text-fill-color:var(--ice);filter:drop-shadow
     var s=SYMS[id];
     if(s.kind==='img')return '<img src="'+s.art+'" alt="'+s.name+'"/>'+s.name;
     if(s.kind==='warp')return '<img src="'+WARP_ART+'" alt="'+s.name+'"/>'+s.name;
-    if(s.kind==='pad')return '<img src="crash/rocket.webp" alt="'+s.name+'"/>'+s.name;
-    return '<span class="tg">'+s.em+'</span>'+s.name;
+    if(s.kind==='core')return '<img src="'+CORE_ART+'" alt="'+s.name+'"/>'+s.name;
+    return s.name;
   }
   function renderPaytable(){
     var order=['W','H1','H2','H3','L1','L2','L3','L4'];
@@ -1619,28 +1715,25 @@ h1 .glyph{color:var(--ice);-webkit-text-fill-color:var(--ice);filter:drop-shadow
     $('ptBody').innerHTML=
       '<table class="pt-tbl"><thead><tr><th>Symbol</th><th>×2</th><th>×3</th><th>×4</th><th>×5</th></tr></thead>'
       +'<tbody>'+rows
+      +'<tr><td>'+ptSymCell('C')+'</td><td>—</td><td colspan="3">6+ anywhere → Hold &amp; Spin (each core holds its stamped value)</td></tr>'
       +'<tr><td>'+ptSymCell('S')+'</td><td>—</td><td colspan="3">3+ anywhere → Zero Gravity free spins</td></tr>'
-      +'<tr><td>'+ptSymCell('B')+'</td><td>—</td><td colspan="3">on reels 1·3·5 → Stage Burn</td></tr>'
       +'</tbody></table>'
-      +'<p class="pt-note"><span class="am">Stage Burn</span> — 3 launch pads on reels 1/3/5 hold <span class="am">2× bet</span> at the pad and open a 4-stage launch, '
-      +'every survive/explode outcome committed from the seed before the first ignition: climb <span class="am">3× → 8× → 20× → 50×</span> with survive odds '
-      +'<span class="am">60% / 31% / 33% / 33%</span>. <span class="hl">EJECT</span> banks the ladder any time; an explosion pays the <span class="am">25% escape pod</span>. '
-      +'<span class="vi">Zero Gravity</span> — 3+ warp gates award 6 free spins (+2 per retrigger). Every rocket wild drifts one row down at the start of each later free spin, '
-      +'staying wild until it slides off the bottom; a drifting rocket meeting a fresh wild merges into a <span class="vi">×2 hot wild</span> (or keeps the higher badge). '
+      +'<p class="pt-note"><span class="go">Hold &amp; Spin</span> — Energy Cores (money orbs) land on every reel and pay nothing on their own. Land <span class="go">6+ cores</span> at once (measured ~1-in-120 spins) and they LOCK; the rest of the 4×5 grid becomes empty sockets and you get <span class="go">3 respins</span>. '
+      +'Each respin, every empty socket independently redraws a core-or-empty — <span class="go">any new core locks and resets the respins to 3</span>. The bonus pays the sum of every locked core value (stamped in MORBIUS), and filling all <span class="go">20 sockets awards the GALACTIC GRAND</span> — the sole grand path. '
+      +'<span class="go">MINI / MAJOR</span> cores collect those jackpot pools when they lock. '
+      +'<span class="vi">Zero Gravity</span> — 3+ warp gates award 6 free spins (+2 per retrigger). Every rocket wild that lands <span class="vi">locks in place</span> for the rest of the free spins — no drift, no movement — and a higher hot-wild badge landing on a locked cell upgrades it. '
       +'<span class="am">Hot wilds</span> (×2/×3/×5 badges on ~1-in-12 rockets) multiply a winning line by the highest badge in the run. '
-      +'<span class="am">Progressive jackpots</span> — LUNAR at 5 rocket wilds on screen (~1-in-179 spins), SOLAR at 7 (~1-in-3,700), GALACTIC at 9+ (~1-in-250,000); '
-      +'drifting rockets count; pools grow with every bet (0.9/0.5/0.1%) and reset to their seed after a hit. '
-      +'Line pays are in <span class="hl">line bets</span> (total bet ÷ 40), leftmost-consecutive, best win per line. Ruleset tuned to ≈ 96.6% RTP including the jackpot contribution.</p>';
+      +'<span class="am">Progressive jackpots</span> — MINI, MAJOR and GRAND pools grow with every bet (0.9/0.5/0.1%); MINI &amp; MAJOR are collected by locking a MINI/MAJOR core, GRAND by the full-grid fill (~1-in-235,000 spins); pools reset to their seed after a hit. '
+      +'Line pays are in <span class="hl">line bets</span> (total bet ÷ 40), leftmost-consecutive, best win per line. Ruleset tuned to ≈ 96.5–96.8% RTP including the jackpot contribution.</p>';
   }
 
   var FAQS=[
-    {q:'How does the Stage Burn bonus work?',a:'<p>Land the <span class="hl">launch pad on reels 1, 3 and 5</span> at once (measured ~1-in-122 spins, free spins included — the felt rumbles when two pads are waiting on the third) and the round moves to the gantry: <span class="hl">2× your bet is held at the pad</span> and a 4-stage launch opens. Each <span class="hl">IGNITE</span> risks everything held on a pre-committed survive/explode draw to climb the ladder — <span class="hl">3× → 8× → 20× → 50×</span> with survive odds of <span class="hl">60% / 31% / 33% / 33%</span>. <span class="hl">EJECT</span> at any rung to bank what you hold; surviving stage 4 auto-banks the full 50×.</p><p>An explosion is not a total loss: the <span class="hl">escape pod</span> pays 25% of whatever the ladder held when the stage blew. All four survive outcomes are drawn from the seeded stream <b>before the first ignition</b> — your only input is nerve, and Verify re-scores your recorded flight against the committed draws.</p>'},
-    {q:'What burn strategy does the advertised RTP assume?',a:'<p>The survive draws are seeded; <b>when you eject is up to you</b>. The survive odds are tuned so that at every rung, igniting and ejecting have (almost exactly) the same expected value — p = 0.75·held ÷ (next − 0.25·held) — so no stopping rule beats another in the long run; deeper burns just trade consistency for ceiling. For the published numbers the Monte Carlo models a benchmark pilot who <span class="hl">ignites through stage 3, then ejects</span>: the bonus contributes ≈ 1.6 RTP points at ~1-in-122 triggers, and full 50× orbits are the long tail beyond it.</p>'},
-    {q:'How does Zero Gravity work?',a:'<p>Land <span class="hl">3+ warp gates</span> anywhere (measured ~1-in-61 spins) for <span class="hl">6 free spins</span>, +2 per retrigger — an average bonus runs ≈ 6.2 spins. In zero gravity, <b>rocket wilds come loose</b>: every rocket that lands starts <span class="hl">drifting one row down</span> at the start of each later free spin, staying wild at its cell until it slides off the bottom of the board.</p><p>A drifting rocket that meets a freshly landed wild <span class="hl">merges into a ×2 hot wild</span> (or keeps the higher badge of the two). Drifting rockets are full wilds: they complete lines, cover whatever they float over, and <b>count toward the wild-count jackpots</b>. The drift is derived state — zero extra random draws — so Verify replays every rocket\'s position spin-for-spin. The sim measured the feature at ≈ 21 RTP points.</p>'},
-    {q:'How do the progressive jackpots hit?',a:'<p>Three pools sit above the reels and grow with every bet: <span class="hl">LUNAR</span> (0.9% of bets), <span class="hl">SOLAR</span> (0.5%) and <span class="hl">GALACTIC</span> (0.1%). They pay when enough <span class="hl">rocket wilds are on screen at once</span> — drifting rockets included: 5 = LUNAR (measured ~1-in-179 spins), 7 = SOLAR (~1-in-3,700), 9+ = GALACTIC (~1-in-250,000 — the expedition\'s white whale). Only the biggest qualifying tier pays, then the pool resets to its seed value (25,000 / 500,000 / 10,000,000 MORBIUS).</p><p>The <b>hit</b> is provably fair — wild positions come from the seeded reel stops and the replayable drift. The <b>pool size</b> is account state (in this demo it lives in your browser under <span class="hl">deeporbit-jp</span> and grows as you play).</p>'},
-    {q:'What are hot (multiplier) wilds?',a:'<p>About <span class="hl">1 in 12 rocket wilds</span> lands hot with a <span class="hl">×2, ×3 or ×5 badge</span> (4.5% / 2.3% / 1.2%) and a pulsing engine-orange border. A winning line through hot wilds is multiplied by the <span class="hl">highest badge in the run</span> — badges don\'t compound with each other. In Zero Gravity a drifting rocket keeps its badge as it falls, and merging with a fresh wild upgrades it to ×2 or the higher badge of the pair.</p>'},
-    {q:'What is the RTP — where does the math come from?',a:'<p>The reel strips, 40 lines, hot-wild odds, Zero Gravity and Stage Burn were tuned with <span class="hl">multi-million-spin Monte Carlo simulations</span> of these exact rules (1M-spin tune, seed orbit-1: game 95.04%; 2M-spin confirm on a separate seed: 95.13%): the playable game returns <span class="hl">≈ 95.0–95.1%</span> (hit rate ≈ 66.5%, Zero Gravity ≈ 21 points at ~1-in-61 with ~6.2 spins per bonus, Stage Burn ≈ 1.6 points at ~1-in-122 under the benchmark ignite-through-stage-3 policy, max observed round ≈ 360×) and the progressive contribution adds 1.5% — <span class="hl">RTP ≈ 96.5–96.6%</span> total, a house edge of ≈ 3.4%.</p><p>Individual sessions swing far wider than the long-run edge; the jackpot pools especially reward whoever is in orbit when they burst.</p>'},
-    {q:'Is it really fair — and reproducible?',a:'<p>Yes. Before you bet, the server commits to a secret <span class="hl">server seed</span> (you see its SHA-256 hash). Every draw — reel stops, each rocket\'s badge, all four Stage Burn survive outcomes — comes from one stream derived from that seed, your client seed and a nonce, consumed in a fixed documented order. Zero Gravity drift adds <b>no draws at all</b>: it is pure derived state, replayed from the same stops. The whole round\'s randomness is fixed the instant you press spin; the reels, the drifting rockets and the gantry are just theatre delivering it. The only thing that isn\'t pre-committed is <b>your own IGNITE/EJECT nerve</b>, and Verify re-scores your recorded flight against the committed draws.</p><p>When the round settles the seed is revealed and <span class="hl">Verify</span> re-derives the entire sequence draw-for-draw, replays the drift, recomputes every win, and checks the commitment hash locally. This lab is a self-contained demo — the production build draws the same sequence from the server\'s HMAC-SHA256 stream.</p>'},
+    {q:'How does the Hold &amp; Spin bonus work?',a:'<p>Energy Cores are money orbs that land on every reel and pay nothing on their own — each just carries a stamped MORBIUS value. Land <span class="hl">6 or more cores at once</span> (measured ~1-in-120 spins, free spins included — the felt charges gold as they stack up) and they all LOCK; the rest of the board turns into a <span class="hl">4×5 grid of empty sockets</span> and you get <span class="hl">3 respins</span>.</p><p>On each respin every empty socket independently redraws a core-or-empty. <span class="hl">Any new core that lands locks in place and resets your respins back to 3</span> — so a hot streak can run far longer than three spins. The bonus ends when the counter reaches 0 or the grid is full, and pays the <span class="hl">sum of every locked core value</span>. All of it — which sockets land, and each value — is drawn from the seeded stream the instant you trigger, so Verify replays every respin socket for socket.</p>'},
+    {q:'What is the GRAND, and how do the jackpots work?',a:'<p>Three progressive pools sit above the reels and grow with every bet: <span class="hl">MINI</span> (0.9% of bets), <span class="hl">MAJOR</span> (0.5%) and <span class="hl">GRAND</span> (0.1%). They only pay inside a Hold &amp; Spin. A locked <span class="hl">MINI or MAJOR core</span> collects that pool (measured ~1-in-1,500 and ~1-in-3,400 spins), and <span class="hl">filling all 20 sockets awards the GALACTIC GRAND</span> — that full-grid fill is the <b>only</b> way to hit the grand (measured ~1-in-235,000 spins). Only the biggest qualifying tier(s) collected in a bonus pay, then those pools reset to their seed value (25,000 / 500,000 / 10,000,000 MORBIUS).</p><p>The <b>hit</b> is provably fair — the cores come from the seeded reel stops and respins. The <b>pool size</b> is account state (in this demo it lives in your browser under <span class="hl">deeporbit-jp</span> and grows as you play). The old on-screen 5/7/9-rocket jackpots are folded into this single Hold &amp; Spin ladder.</p>'},
+    {q:'How does Zero Gravity work?',a:'<p>Land <span class="hl">3+ warp gates</span> anywhere (measured ~1-in-104 spins) for <span class="hl">6 free spins</span>, +2 per retrigger — an average bonus runs ≈ 6.1 spins. In zero gravity, <b>rocket wilds lock in place</b>: every rocket that lands <span class="hl">stays wild at its cell for the rest of the free spins</span> — no drifting, no merging, no movement. Locked wilds keep completing lines and covering whatever is beneath them for the whole bonus.</p><p>If a fresh hot wild lands on an already-locked cell with a <span class="hl">higher badge</span>, it upgrades that lock. Sticky state is derived — zero extra random draws — so Verify replays every locked wild spin-for-spin from the same reel stops. The sim measured the feature at ≈ 20 RTP points.</p>'},
+    {q:'What are hot (multiplier) wilds?',a:'<p>About <span class="hl">1 in 12 rocket wilds</span> lands hot with a <span class="hl">×2, ×3 or ×5 badge</span> (4.5% / 2.3% / 1.2%) and a pulsing engine-orange border. A winning line through hot wilds is multiplied by the <span class="hl">highest badge in the run</span> — badges don\'t compound with each other. In Zero Gravity a locked wild keeps its badge, and a higher badge landing on it upgrades the lock.</p>'},
+    {q:'What is the RTP — where does the math come from?',a:'<p>The reel strips, 40 lines, hot-wild odds, Zero Gravity and Hold &amp; Spin were tuned with <span class="hl">multi-million-spin Monte Carlo simulations</span> of these exact rules (1M-spin tune, seed orbit2-tune-1: game 95.33%; 2M-spin confirm on a separate seed orbit2-confirm-9: 95.02%): the playable game returns <span class="hl">≈ 95.0–95.3%</span> (hit rate ≈ 61%, Zero Gravity ≈ 20 points at ~1-in-104 with ~6.1 spins per bonus, Hold &amp; Spin ≈ 22.6 points at ~1-in-120 spins with ~10.5 cores and ~8.7 respins per bonus, max observed round ≈ 740×) and the progressive contribution adds 1.5% — <span class="hl">RTP ≈ 96.5–96.8%</span> total, a house edge of ≈ 3.2–3.5%.</p><p>Individual sessions swing far wider than the long-run edge; the GRAND especially rewards whoever fills the grid.</p>'},
+    {q:'Is it really fair — and reproducible?',a:'<p>Yes. Before you bet, the server commits to a secret <span class="hl">server seed</span> (you see its SHA-256 hash). Every draw — reel stops, each rocket\'s badge, each core\'s value, and every Hold &amp; Spin respin — comes from one stream derived from that seed, your client seed and a nonce, consumed in a fixed documented order (stops → wild mults → core values → per-respin, per-socket land then value in row-major order). Zero Gravity sticky wilds add <b>no draws at all</b>: they are pure derived state, replayed from the same stops. The whole round\'s randomness — including the entire Hold &amp; Spin — is fixed the instant you press spin; the reels and the socket grid are just theatre delivering it.</p><p>When the round settles the seed is revealed and <span class="hl">Verify</span> re-derives the entire sequence draw-for-draw, replays every respin and the sticky locks, recomputes every win, and checks the commitment hash locally. This lab is a self-contained demo — the production build draws the same sequence from the server\'s HMAC-SHA256 stream.</p>'},
     {q:'How do I get MORBIUS?',a:'<p>MORBIUS is the project\'s token on <span class="hl">PulseChain</span> (chain ID 369). Buy it on <span class="hl">PulseX</span> by swapping PLS or WPLS for MORBIUS, then deposit it to your play balance.</p><p class="mono" style="font-size:11px">Contract: <a href="https://scan.pulsechain.com/token/0xB7d4eB5fDfE3d4d3B5C16a44A49948c6EC77c6F1" target="_blank" rel="noopener noreferrer">0xB7d4eB5fDfE3d4d3B5C16a44A49948c6EC77c6F1</a></p><p>Always confirm the contract address before swapping — never trust a ticker alone.</p>'}
   ];
   function renderFaq(){
@@ -1691,7 +1784,10 @@ h1 .glyph{color:var(--ice);-webkit-text-fill-color:var(--ice);filter:drop-shadow
   });
 
   S.pools=loadPools();renderPools();
-  renderIdleGrid([['H1','L1','B','L3'],['L2','W','L1','H2'],['H2','S','L2','H3'],['L3','W','L4','H1'],['H3','L2','B','L1']]);
+  renderIdleGrid(
+    [['H1','L1','C','L3'],['L2','W','L1','H2'],['C','S','L2','H3'],['L3','W','L4','C'],['H3','L2','C','L1']],
+    {'0,2':5,'2,0':'MINI','3,3':2,'4,2':10}
+  );
   renderPaytable();syncHud();renderActions();renderHistory();renderFaq();fxResize();
 
   // lab-only test hook (used by the headless harness; harmless in normal play)
