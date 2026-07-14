@@ -17,18 +17,20 @@
       counting). Pools persist in localStorage ('pulsestreet-jp', seeds
       25,000 / 500,000 / 10,000,000); hit condition is provably fair, pool
       size is account state.
-   3. PUMP & DUMP bonus — 3 PUMP coins on reels 1/3/5 (measured ~1-in-128)
-      open a live candle chart: the multiplier pumps tick by tick and ONE
-      pre-committed seeded rug point per round (uniform draw through a
-      geometric-style hazard, alpha 1.12/1.18/1.25, cap 100×) decides when
-      it all comes down. One button: SELL. Three rounds, escalating
-      volatility.
-   4. Free spins — BULL RUN: 3+ chart scatters (~1-in-92) award 6 free spins
+   3. THE VAULT RUN — Money-Cart hold & win. 3+ PUMP coins on reels 1/3/5
+      (measured ~1-in-174) open a dedicated 5-col grid with the top & bottom
+      rows behind blast doors. 3 respins: each respin every empty unlocked
+      cell independently draws land-or-empty; any landing symbol LOCKS and
+      resets the counter to 3. Symbols (seeded): value coins (small), and
+      the specials — Collector (WHALE, sweeps every visible value into
+      itself), Payer (RICH, adds its value to every other symbol) and
+      Sniper (pTIGER, doubles 2-4 random symbols). Fill a grid → open a row
+      (+1 respin); full 5×5 → GRAND. Payout = sum of values × total bet.
+   4. Free spins — BULL RUN: 3+ chart scatters (~1-in-92) award 5 free spins
       (+2 per retrigger). Each free spin a seeded draw (p=0.33) stampedes a
-      BULL WILD onto reel 5 at a seeded row; every bull walks one reel
-      left at the start of each later spin (derived state, replayed in
-      Verify), acts as a wild at its cell, and leaves after reel 1. Each
-      new bull = +1 extra spin. ~3.0 bulls & ~9.2 spins per bonus.
+      BULL WILD into a random free cell where it LOCKS in place (sticky) for
+      the rest of the run — it never walks. Each new bull = +1 extra spin.
+      ~2.5 bulls & ~7.6 spins per bonus.
    5. Trading-floor theme: green-on-black terminal chrome, LED ticker-tape
       marquee, candle-chart backdrop, token medallions from /Logos as the
       paying ladder, CSS price-tag lows, a glowing green candle as the WILD
@@ -37,14 +39,13 @@
    Hot wilds carry ×2/×3/×5 badges (4.5/2.3/1.2% of wilds) — highest badge
    in the run multiplies the line.
 
-   Payout tuning: Monte Carlo of this exact ruleset (pulse-street-sim.js;
-   tune run 1M spins seed 'pulse-1', confirm run 2M spins seed
-   'pulse-confirm-7', both: game RTP 95.20%): line game + Bull Run +
-   Pump & Dump (benchmark auto-sell 2.5×/3×/4×) ≈ 95.2% + 1.5% jackpot
-   contribution → RTP ≈ 96.7% (hit ≈ 50.6%, Bull Run ≈ 24.3 pts at
-   1-in-92, Pump & Dump ≈ 1.8-1.9 pts at ~1-in-128, max observed round
-   ≈ 388×). ≈3.3% house edge, stated in the FAQ. Self-contained
-   client-side demo (illustrative seeded RNG). Currency: MORBIUS. */
+   Payout tuning: Monte Carlo of this exact ruleset (pulse-street-sim2.js),
+   converged over 10M-spin runs on separate seeds (conf-A 95.39%, conf-B
+   95.07%): line game + Bull Run + Vault Run ≈ 95.2% game RTP (base ≈ 41.0,
+   Bull Run ≈ 23.6 pts at ~1-in-91, Vault Run ≈ 30.6 pts at ~1-in-174, hit ≈
+   50.8%, natural max ~600-1400× with rare runs to the guard) + 1.5% jackpot
+   contribution → RTP ≈ 96.7%. ≈3.3% house edge, stated in the FAQ. Self-
+   contained client-side demo (illustrative seeded RNG). Currency: MORBIUS. */
 :root{
   --abyss:#050904; --grn:#22c55e; --grn-soft:rgba(34,197,94,0.13); --grn-edge:rgba(34,197,94,0.42);
   --red:#ef4444; --red-soft:rgba(239,68,68,0.14);
@@ -181,6 +182,7 @@ h1 .glyph{color:var(--gold);-webkit-text-fill-color:var(--gold);filter:drop-shad
 @keyframes reelflash{from{opacity:1}to{opacity:0}}
 .sym{position:relative;height:var(--cell);display:grid;place-items:center;user-select:none}
 .sym img{width:72%;height:72%;object-fit:contain;border-radius:50%;filter:drop-shadow(0 3px 6px rgba(0,0,0,.65));pointer-events:none}
+.reel.spin .sym img{filter:none}
 .sym .em{font-size:calc(var(--cell) * .52);line-height:1;filter:drop-shadow(0 3px 5px rgba(0,0,0,.6))}
 /* WILD — glowing green candlestick, drawn in CSS */
 .sym .candle{position:relative;width:calc(var(--cell)*.34);height:calc(var(--cell)*.6);
@@ -262,27 +264,54 @@ h1 .glyph{color:var(--gold);-webkit-text-fill-color:var(--gold);filter:drop-shad
 .btn-go{background:linear-gradient(180deg,#7dffa4,#22c55e 60%,#159948);box-shadow:0 0 24px -6px rgba(34,197,94,.7),inset 0 1px 0 rgba(255,255,255,.5)}
 .btn:disabled{opacity:.45;cursor:not-allowed;filter:saturate(.4)}
 .cash-sub{display:block;font-family:var(--font-mono);font-size:11px;font-weight:600;letter-spacing:0;margin-top:2px;opacity:.85}
-/* ── PUMP & DUMP chart stage ── */
-.chart-stage{position:absolute;inset:0;z-index:20;display:none;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:14px;background:radial-gradient(ellipse at 50% 40%,rgba(6,18,9,.9),rgba(2,5,2,.97));backdrop-filter:blur(2px)}
-.chart-stage.open{display:flex}
-.chart-head{display:flex;align-items:baseline;gap:14px}
-.chart-title{font-size:clamp(15px,3.6vw,22px);font-weight:700;letter-spacing:.22em;text-transform:uppercase;color:var(--gold);text-shadow:0 0 16px rgba(251,191,36,.7)}
-.chart-round{font-family:var(--font-mono);font-size:12px;letter-spacing:.14em;color:var(--slate-400)}
-.chart-round .vol{color:var(--red)}
-.chart-box{position:relative;width:min(92%,560px);border:1px solid rgba(34,197,94,.35);border-radius:12px;background:rgba(2,6,3,.85);box-shadow:inset 0 0 30px rgba(0,0,0,.6),0 0 30px -10px rgba(34,197,94,.4);overflow:hidden}
-.chart-box canvas{display:block;width:100%;height:100%}
-.chart-box.rugged{border-color:rgba(239,68,68,.7);box-shadow:inset 0 0 40px rgba(127,29,29,.5),0 0 34px -8px rgba(239,68,68,.6);animation:rugshake .5s cubic-bezier(.36,.07,.19,.97)}
-@keyframes rugshake{0%,100%{transform:translate(0,0)}20%{transform:translate(-7px,3px)}40%{transform:translate(7px,-3px)}60%{transform:translate(-5px,-2px)}80%{transform:translate(4px,2px)}}
-.pd-mult{position:absolute;top:8px;left:12px;font-family:var(--font-mono);font-weight:700;font-size:clamp(22px,6vw,34px);color:var(--grn);text-shadow:0 0 14px rgba(34,197,94,.8)}
-.pd-mult.rug{color:var(--red);text-shadow:0 0 14px rgba(239,68,68,.9)}
-.pd-result{min-height:22px;font-family:var(--font-mono);font-weight:700;font-size:clamp(14px,4vw,20px);color:#fff}
-.pd-result .up{color:var(--gold);text-shadow:0 0 12px rgba(251,191,36,.8)}
-.pd-result .rug{color:var(--red);text-shadow:0 0 12px rgba(239,68,68,.8)}
-.btn-sell{border:0;border-radius:13px;padding:14px 46px;font-family:var(--font-disp);font-weight:700;font-size:17px;letter-spacing:.14em;text-transform:uppercase;cursor:pointer;color:#150202;
-  background:linear-gradient(180deg,#ffb4b4,#ef4444 60%,#b91c1c);box-shadow:0 0 26px -4px rgba(239,68,68,.8),inset 0 1px 0 rgba(255,255,255,.4)}
-.btn-sell:disabled{opacity:.4;cursor:default;filter:saturate(.4)}
-.btn-sell:active{transform:scale(.97)}
-.pd-total{font-family:var(--font-mono);font-size:12px;color:var(--slate-400)}
+/* ── THE VAULT RUN stage (Money-Cart hold & win) ── */
+.vault-stage{position:absolute;inset:0;z-index:20;display:none;flex-direction:column;align-items:center;justify-content:flex-start;gap:6px;padding:7px 10px;background:radial-gradient(ellipse at 50% 36%,rgba(14,10,2,.94),rgba(3,2,0,.98));backdrop-filter:blur(2px)}
+.vault-stage.open{display:flex}
+.vault-head{display:flex;align-items:center;gap:16px}
+.vault-title{font-size:clamp(15px,3.8vw,23px);font-weight:700;letter-spacing:.22em;text-transform:uppercase;color:var(--gold);text-shadow:0 0 18px rgba(251,191,36,.75)}
+.vault-counter-wrap{display:flex;align-items:baseline;gap:6px;font-family:var(--font-mono)}
+.vault-counter{font-size:clamp(20px,5.5vw,30px);font-weight:700;color:#fff;text-shadow:0 0 14px rgba(251,191,36,.7);min-width:28px;text-align:center}
+.vault-counter.reset{animation:vcReset .5s cubic-bezier(.34,1.56,.64,1)}
+@keyframes vcReset{0%{transform:scale(2);color:#ffe9a8}55%{transform:scale(.9)}100%{transform:scale(1)}}
+.vault-respin-lbl{font-size:10px;letter-spacing:.18em;color:var(--slate-500)}
+.vault-frame{position:relative;width:min(96%,560px);display:flex;flex-direction:column;gap:0;border-radius:14px;padding:0;background:linear-gradient(180deg,#12100a,#050403);box-shadow:inset 0 0 0 1px rgba(251,191,36,.25),inset 0 0 40px rgba(0,0,0,.7),0 0 40px -12px rgba(251,191,36,.4)}
+.vdoor{height:20px;display:grid;place-items:center;overflow:hidden;background:repeating-linear-gradient(45deg,#3a2f12,#3a2f12 9px,#241d0a 9px,#241d0a 18px);box-shadow:inset 0 0 0 1px rgba(251,191,36,.35),inset 0 3px 10px rgba(0,0,0,.6);transition:height .5s cubic-bezier(.5,0,.3,1),opacity .4s;border-radius:12px 12px 0 0}
+.vdoor.bot{border-radius:0 0 12px 12px}
+.vdoor-lbl{font-family:var(--font-mono);font-size:9px;letter-spacing:.3em;color:rgba(251,191,36,.7);text-transform:uppercase}
+.vdoor.open{height:0;opacity:0}
+.vault-grid{display:grid;grid-template-columns:repeat(5,clamp(34px,13.6vw,54px));grid-auto-rows:clamp(34px,13.6vw,54px);gap:4px;padding:5px;justify-content:center}
+.vault-grid.respin{animation:vgResp .32s ease}
+@keyframes vgResp{0%,100%{transform:translateY(0)}40%{transform:translateY(-3px)}}
+.vcell{position:relative;border-radius:9px;background:rgba(255,255,255,.02);box-shadow:inset 0 0 0 1px rgba(251,191,36,.1);display:grid;place-items:center;overflow:hidden}
+.vcell.shut{background:repeating-linear-gradient(45deg,#241d0a,#241d0a 6px,#1a1507 6px,#1a1507 12px);box-shadow:inset 0 0 0 1px rgba(251,191,36,.18)}
+.vcell.filled{background:radial-gradient(ellipse at 50% 42%,rgba(251,191,36,.16),rgba(6,4,1,.9) 78%);box-shadow:inset 0 0 0 1.5px rgba(251,191,36,.55),0 0 16px -5px rgba(251,191,36,.55)}
+.vcell.filled.spec{box-shadow:inset 0 0 0 1.5px rgba(120,220,255,.7),0 0 20px -4px rgba(120,220,255,.55)}
+.vcell.filled.col{box-shadow:inset 0 0 0 1.5px rgba(96,165,250,.85),0 0 22px -3px rgba(96,165,250,.7)}
+.vcell.filled.pay{box-shadow:inset 0 0 0 1.5px rgba(52,211,153,.85),0 0 22px -3px rgba(52,211,153,.7)}
+.vcell.filled.snp{box-shadow:inset 0 0 0 1.5px rgba(248,113,113,.85),0 0 22px -3px rgba(248,113,113,.7)}
+.vcell .vart{width:74%;height:74%;object-fit:contain;border-radius:50%;filter:drop-shadow(0 2px 5px rgba(0,0,0,.7));pointer-events:none}
+.vcell.spec .vart{border-radius:14%;object-fit:cover}
+.vcell .vval{position:absolute;bottom:3px;right:4px;font-family:var(--font-mono);font-weight:700;font-size:clamp(11px,2.6vw,16px);color:#fff;text-shadow:0 0 5px rgba(0,0,0,.9),0 0 8px rgba(251,191,36,.6)}
+.vcell .vval.tickup{animation:vTick .45s cubic-bezier(.34,1.56,.64,1)}
+@keyframes vTick{0%{transform:scale(1.9);color:#ffe9a8}55%{transform:scale(.88)}100%{transform:scale(1)}}
+.vcell .vtag{position:absolute;top:2px;left:0;right:0;text-align:center;font-family:var(--font-mono);font-size:8px;letter-spacing:.08em;color:rgba(255,255,255,.85);text-shadow:0 0 4px rgba(0,0,0,.9)}
+.vcell.lockin{animation:vLock .5s cubic-bezier(.34,1.56,.64,1)}
+@keyframes vLock{0%{transform:scale(1.7) translateY(-10px);opacity:0}60%{transform:scale(.94);opacity:1}100%{transform:scale(1)}}
+.vcell.firing{animation:vFire .5s ease;box-shadow:inset 0 0 0 2px #ffe9a8,0 0 30px 0 rgba(251,191,36,.9)!important;z-index:3}
+@keyframes vFire{0%,100%{transform:scale(1)}45%{transform:scale(1.14)}}
+.vcell.suck{animation:vSuck .5s ease}
+@keyframes vSuck{0%{transform:scale(1)}50%{transform:scale(.82);opacity:.6}100%{transform:scale(1)}}
+.vcell.sprayed{animation:vSpray .45s ease}
+@keyframes vSpray{0%{box-shadow:inset 0 0 0 2px rgba(52,211,153,1),0 0 22px 0 rgba(52,211,153,.9)}100%{}}
+.vcell.sniped{animation:vSnipe .5s ease}
+@keyframes vSnipe{0%,100%{transform:scale(1)}40%{transform:scale(1.18)}}
+.vcell.crosshair::after{content:"";position:absolute;inset:14%;border-radius:50%;box-shadow:0 0 0 2px rgba(248,113,113,.95),inset 0 0 0 1px rgba(248,113,113,.8);background:linear-gradient(rgba(248,113,113,.9),rgba(248,113,113,.9)) center/100% 2px no-repeat,linear-gradient(rgba(248,113,113,.9),rgba(248,113,113,.9)) center/2px 100% no-repeat;animation:vCross .4s ease}
+@keyframes vCross{0%{transform:scale(1.6);opacity:0}100%{transform:scale(1);opacity:1}}
+.vault-banner{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%) scale(.8);opacity:0;pointer-events:none;font-family:var(--font-disp);font-weight:700;font-size:clamp(14px,3.6vw,20px);letter-spacing:.1em;text-transform:uppercase;color:#050403;background:linear-gradient(180deg,#ffe9a8,#fbbf24 60%,#d97706);padding:10px 22px;border-radius:12px;box-shadow:0 0 40px -6px rgba(251,191,36,.9);text-align:center;transition:.3s}
+.vault-banner.show{opacity:1;transform:translate(-50%,-50%) scale(1)}
+.vault-banner.grand{background:linear-gradient(180deg,#fff,#ffe9a8 45%,#fbbf24);font-size:clamp(16px,4.4vw,24px)}
+.vault-total{min-height:22px;font-family:var(--font-mono);font-weight:700;font-size:clamp(14px,3.8vw,20px);color:var(--gold);text-shadow:0 0 12px rgba(251,191,36,.7)}
+.vault-total b{color:#fff}
 .pd-total b{color:var(--gold)}
 .info{margin-top:16px}
 .tabs-list{display:grid;grid-template-columns:1fr 1fr;gap:4px;background:rgba(7,16,9,.75);border:1px solid rgba(34,197,94,.12);border-radius:10px;padding:4px}
@@ -376,10 +405,11 @@ h1 .glyph{color:var(--gold);-webkit-text-fill-color:var(--gold);filter:drop-shad
 .lab-note b{color:var(--slate-400);font-weight:600}
 @media (prefers-reduced-motion: reduce){
   .reel.spin .strip{filter:none}
-  .board-shell.shake,.chart-box.rugged{animation:none}
+  .board-shell.shake{animation:none}
   .ledstrip,.tickertape .tt-track,.sym .candle{animation:none}
   .reel.antic::before,.sym.mult .frame,.banner.mega .b-k,.bullcell .frame{animation:none}
   .reel.land,.reel.flash::before,.sym.hit,.sym.jphit,.sym.scathit,.sym .mbadge,.arc-banner-in,.felt-flash.go,.jp.hitflash,.bullcell.stomp{animation:none}
+  .vcell.lockin,.vcell.firing,.vcell.suck,.vcell.sniped,.vcell.crosshair::after,.vault-grid.respin,.vault-counter.reset,.vcell .vval.tickup{animation:none}
 }
 </style>
 </head>
@@ -390,7 +420,7 @@ h1 .glyph{color:var(--gold);-webkit-text-fill-color:var(--gold);filter:drop-shad
 <div class="wrap">
   <header>
     <h1 class="title">Pulse Street<span class="glyph"> ▲</span></h1>
-    <p class="tagline">5×3 reels · 20 lines · Bull Run walking wilds · Pump &amp; Dump crash bonus · progressive jackpots at 5/7/9 wilds · provably fair · played in MORBIUS</p>
+    <p class="tagline">5×3 reels · 20 lines · Bull Run sticky wilds · The Vault Run hold &amp; win bonus · progressive jackpots at 5/7/9 wilds · provably fair · played in MORBIUS</p>
   </header>
 
   <div class="topbar">
@@ -428,11 +458,11 @@ h1 .glyph{color:var(--gold);-webkit-text-fill-color:var(--gold);filter:drop-shad
       <div class="panel">
         <p class="panel-label">Top pays · per line bet</p>
         <div class="score-tbl">
-          <div class="sr"><span class="tg"><span style="display:inline-block;width:10px;height:22px;border-radius:2px;background:linear-gradient(180deg,#b9ffcb,#22c55e 55%,#0e6b2f);box-shadow:0 0 8px rgba(34,197,94,.6)"></span></span><span>Green Candle wild ×5</span><span class="sv">850</span></div>
-          <div class="sr"><img src="Logos/WHALE.png" alt="WHALE" /><span>WHALE ×5</span><span class="sv">280</span></div>
-          <div class="sr"><img src="Logos/pTIGER.png" alt="pTIGER" /><span>pTIGER ×5</span><span class="sv">170</span></div>
+          <div class="sr"><span class="tg"><span style="display:inline-block;width:10px;height:22px;border-radius:2px;background:linear-gradient(180deg,#b9ffcb,#22c55e 55%,#0e6b2f);box-shadow:0 0 8px rgba(34,197,94,.6)"></span></span><span>Green Candle wild ×5</span><span class="sv">497</span></div>
+          <div class="sr"><img src="Logos/WHALE.png" alt="WHALE" /><span>WHALE ×5</span><span class="sv">164</span></div>
+          <div class="sr"><img src="Logos/pTIGER.png" alt="pTIGER" /><span>pTIGER ×5</span><span class="sv">99</span></div>
           <div class="sr"><img src="Logos/TMC.jpg" alt="TMC chart" style="border-radius:4px"/><span>TMC Chart ×3+</span><span class="sv hl">Bull Run spins</span></div>
-          <div class="sr"><span class="tg"><span class="coin"></span></span><span>PUMP on 1·3·5</span><span class="sv hl">Pump &amp; Dump</span></div>
+          <div class="sr"><span class="tg"><span class="coin"></span></span><span>PUMP on 1·3·5</span><span class="sv hl">The Vault Run</span></div>
         </div>
         <button class="pt-open" id="ptBtn">Full paytable &amp; features</button>
       </div>
@@ -466,18 +496,18 @@ h1 .glyph{color:var(--gold);-webkit-text-fill-color:var(--gold);filter:drop-shad
           <div class="banner-host"><div class="banner" id="banner"><div class="b-k" id="bannerK"></div><div class="b-v" id="bannerV"></div></div></div>
           <div class="felt-flash" id="feltFlash"></div>
         </div>
-        <div class="chart-stage" id="chartStage">
-          <div class="chart-head">
-            <div class="chart-title">Pump &amp; Dump</div>
-            <div class="chart-round" id="pdRound">ROUND 1 / 3</div>
+        <div class="vault-stage" id="vaultStage">
+          <div class="vault-head">
+            <div class="vault-title">The Vault Run</div>
+            <div class="vault-counter-wrap"><span class="vault-counter" id="vaultCounter">3</span><span class="vault-respin-lbl" id="vaultRespinLbl">RESPINS</span></div>
           </div>
-          <div class="chart-box" id="chartBox">
-            <canvas id="pdCanvas" width="560" height="300"></canvas>
-            <div class="pd-mult" id="pdMult">1.00×</div>
+          <div class="vault-frame">
+            <div class="vdoor top"><span class="vdoor-lbl">BLAST DOOR</span></div>
+            <div class="vault-grid" id="vaultGrid"></div>
+            <div class="vdoor bot"><span class="vdoor-lbl">BLAST DOOR</span></div>
+            <div class="vault-banner" id="vaultBanner"></div>
           </div>
-          <div class="pd-result" id="pdResult"></div>
-          <button class="btn-sell" id="sellBtn">Sell @ 1.00×</button>
-          <div class="pd-total" id="pdTotal"></div>
+          <div class="vault-total" id="vaultTotal"></div>
         </div>
         <canvas class="fx-canvas" id="fxCanvas"></canvas>
       </div>
@@ -498,10 +528,10 @@ h1 .glyph{color:var(--gold);-webkit-text-fill-color:var(--gold);filter:drop-shad
   </section>
 
   <p class="lab-note">
-    <b>Prototype</b> — Trading Floor on the slot-series pattern. Reel stops, hot wilds, bull stampedes and every
-    rug point come from an in-page seeded RNG for feel; the real build draws them from the server <b>provably-fair HMAC</b> stream.
+    <b>Prototype</b> — Trading Floor on the slot-series pattern. Reel stops, hot wilds, sticky bull stampedes and the whole
+    Vault Run come from an in-page seeded RNG for feel; the real build draws them from the server <b>provably-fair HMAC</b> stream.
     Ruleset Monte-Carlo tuned to <b>≈ 96.7% RTP</b> including the 1.5% progressive contribution
-    (Pump &amp; Dump modelled at a 2.5×/3×/4× benchmark sell). Currency: <b>MORBIUS</b>.
+    (10M-spin convergence). Currency: <b>MORBIUS</b>.
   </p>
 </div>
 
@@ -518,7 +548,7 @@ h1 .glyph{color:var(--gold);-webkit-text-fill-color:var(--gold);filter:drop-shad
     </div>
     <div class="m-sec">
       <h3>Verify a round</h3>
-      <p class="note">Every spin draws, in fixed order: 5 reel stops → one multiplier per wild (reel-major) → the Bull Run entry draws (enter? then row, free spins only) → the three Pump &amp; Dump rug points if the bonus hit — all from one stream derived from a server seed committed (hashed) before your bet. Bull walking is derived state and replays spin-for-spin; your SELL taps are recorded and checked against the rug. Jackpot hits are re-checked from the wild count; pool sizes are account state.</p>
+      <p class="note">Every spin draws, in fixed order: 5 reel stops → one multiplier per wild (reel-major) → the Bull Run entry draw (enter? then a free-cell pick, free spins only) → the whole Vault Run if 3 PUMP coins hit (per respin: a land/no-land uniform per empty cell, then each landed cell's type + value + special randoms) — all from one stream derived from a server seed committed (hashed) before your bet. Sticky bulls lock in place and replay exactly; the Vault Run is fully pre-resolved. Jackpot hits are re-checked from the wild count; pool sizes are account state.</p>
       <div class="m-input-row">
         <input class="m-input" id="verifyIdInput" placeholder="Round ID" />
         <button class="m-btn solid" id="verifyBtn">Verify</button>
@@ -543,17 +573,30 @@ h1 .glyph{color:var(--gold);-webkit-text-fill-color:var(--gold);filter:drop-shad
     normal:{first:1300,gap:1000,anticGap:2000,settle:1100,cruise:17,label:'Normal'},
     turbo:{first:420,gap:170,anticGap:650,settle:550,cruise:26,label:'Turbo'}
   };
-  var FS_AWARD=6, FS_RETRIG=2;
+  var FS_AWARD=5, FS_RETRIG=2;           // Bull Run free spins (sticky bulls)
   var BULL_P=0.33;                       // bull entry chance per free spin
   // hot-wild odds — one draw per natural wild, reel-major
   var MULT_TABLE=[[0.92,1],[0.045,2],[0.023,3],[0.012,5]];
-  // PUMP & DUMP — 3 rounds, escalating volatility; ONE uniform rug draw per
-  // round mapped through a geometric-style hazard: rug = min(cap, (1-u)^(-1/alpha))
-  var PD_ALPHA=[1.12,1.18,1.25];
-  var PD_GROWTH=[0.025,0.04,0.06];       // multiplier growth per tick (theatre pace)
-  var PD_CAP=100;
-  var PD_TICK_MS=110;
-  var PD_VOL=['LOW','HIGH','INSANE'];
+  // ── THE VAULT RUN (Money-Cart hold & win) — FINAL TUNE (mirrors pulse-street-sim2.js) ──
+  // Specials KEPT: Collector, Payer, Sniper. Persistent variants + Insider were
+  // dropped — their per-respin re-fire is a divergent compounding path the 95%
+  // budget can't afford. Payout = sum of locked values × total bet.
+  var VR_RESPINS=3;
+  var VR_LAND_P=0.085;                    // per empty unlocked cell, each respin
+  // c=value coin, col=Collector, pay=Payer, snp=Sniper
+  var VR_TYPES=[[0.902,'c'],[0.018,'col'],[0.040,'pay'],[0.040,'snp']];
+  var VR_COINVALS=[[0.555,2],[0.26,3],[0.097,5],[0.043,8],[0.0195,12],[0.0115,20],[0.0055,40],[0.0023,80]];
+  var VR_PAYVALS=[[0.55,2],[0.28,3],[0.17,5]];
+  var SNP_MIN=2, SNP_SPAN=3;             // sniper doubles 2..4 random visible symbols
+  var VR_CAP=20000;                      // max-win guard (natural max ~600-1400×)
+  // value-coin chip art keyed by value tier (PokerChips)
+  function coinArt(v){
+    if(v>=40)return 'PokerChips/cyanpokerchip020.png';
+    if(v>=12)return 'PokerChips/redpokerchip015.png';
+    if(v>=5)return 'PokerChips/bluepokerchip010.png';
+    return 'PokerChips/greenpokerchip005.png';
+  }
+  var VR_ART={col:'Logos/WHALE.png',pay:'Logos/RICH.png',snp:'Logos/pTIGER.png'};
   // progressive jackpots — pools fed per bet, hit by wilds on screen (bulls count)
   var JP={
     mini:{seed:25000,rate:0.009,need:5,label:'MINI'},
@@ -574,17 +617,17 @@ h1 .glyph{color:var(--gold);-webkit-text-fill-color:var(--gold);filter:drop-shad
     Q:{name:'Pump Tick',kind:'tagup',txt:'+12%'},
     J:{name:'Dump Tick',kind:'tagdown',txt:'−5%'}
   };
-  // pays per LINE BET (bet ÷ 20) — Monte-Carlo tuned with all features (see head comment)
+  // pays per LINE BET (bet ÷ 20) — Monte-Carlo tuned with all features (base × 0.591, rounded)
   var PAYS={
-    W:[0,0,2,36,180,850],
-    H1:[0,0,2,23,90,280],
-    H2:[0,0,0,18,55,170],
-    H3:[0,0,0,12,38,110],
-    H4:[0,0,0,10,30,88],
-    A:[0,0,0,6,19,50],
-    K:[0,0,0,5,15,36],
-    Q:[0,0,0,4,11,28],
-    J:[0,0,0,3,9,20]
+    W:[0,0,1,21,106,502],
+    H1:[0,0,1,14,53,165],
+    H2:[0,0,0,11,33,100],
+    H3:[0,0,0,7,22,65],
+    H4:[0,0,0,6,18,52],
+    A:[0,0,0,4,11,30],
+    K:[0,0,0,3,9,21],
+    Q:[0,0,0,2,7,17],
+    J:[0,0,0,2,5,12]
   };
   // 20 fixed lines — row index (0 top / 1 mid / 2 bottom) per reel
   var LINES=[
@@ -593,19 +636,19 @@ h1 .glyph{color:var(--gold);-webkit-text-fill-color:var(--gold);filter:drop-shad
     [1,2,1,2,1],[0,1,0,1,0],[2,1,2,1,2],[1,1,0,1,1],[1,1,2,1,1],
     [0,1,1,1,0],[2,1,1,1,2],[0,2,0,2,0],[2,0,2,0,2],[0,2,2,2,0]
   ];
-  // reel strips — PUMP coins live on reels 1/3/5 only (4/3/4)
+  // reel strips — PUMP coins live on reels 1/3/5 only (4/3/3)
   var STRIP_COUNTS=[
     [['W',4],['S',2],['B',4],['H1',4],['H2',4],['H3',5],['H4',5],['A',7],['K',7],['Q',7],['J',8]],
     [['W',4],['S',2],['B',0],['H1',4],['H2',4],['H3',5],['H4',5],['A',7],['K',7],['Q',7],['J',8]],
     [['W',4],['S',2],['B',3],['H1',4],['H2',4],['H3',5],['H4',5],['A',7],['K',7],['Q',7],['J',8]],
     [['W',4],['S',2],['B',0],['H1',4],['H2',4],['H3',5],['H4',5],['A',7],['K',7],['Q',7],['J',8]],
-    [['W',4],['S',2],['B',4],['H1',4],['H2',4],['H3',5],['H4',5],['A',7],['K',7],['Q',7],['J',8]]
+    [['W',4],['S',2],['B',3],['H1',4],['H2',4],['H3',5],['H4',5],['A',7],['K',7],['Q',7],['J',8]]
   ];
 
   var S={ balance:10000, speed:'normal', bet:200, phase:'idle', busy:false, sound:true,
     rng:null, roundWin:0, fsLeft:0, fsTotal:0, fsPlayed:0, inFs:false, bulls:null, spinLog:[],
     serverSeed:'', clientSeed:'', clientSeedPref:'', nonce:0, serverHash:'', roundId:'',
-    lastEv:null, cycleIv:null, rollupRaf:null, anticIv:null, tickIv:null, spinRaf:null, pdIv:null,
+    lastEv:null, cycleIv:null, rollupRaf:null, anticIv:null, tickIv:null, spinRaf:null, vaultTimers:null,
     pools:null, history:[] };
 
   var REDUCED=window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -616,8 +659,8 @@ h1 .glyph{color:var(--gold);-webkit-text-fill-color:var(--gold);filter:drop-shad
       hudC1k=$('hudC1k'),hudC1v=$('hudC1v'),
       banner=$('banner'),bannerK=$('bannerK'),bannerV=$('bannerV'),linesSvg=$('linesSvg'),
       bullLayer=$('bullLayer'),feltFlash=$('feltFlash'),
-      chartStage=$('chartStage'),chartBox=$('chartBox'),pdCanvas=$('pdCanvas'),pdMult=$('pdMult'),
-      pdRound=$('pdRound'),pdResult=$('pdResult'),sellBtn=$('sellBtn'),pdTotal=$('pdTotal'),
+      vaultStage=$('vaultStage'),vaultGrid=$('vaultGrid'),vaultCounter=$('vaultCounter'),
+      vaultRespinLbl=$('vaultRespinLbl'),vaultTotalEl=$('vaultTotal'),vaultBannerEl=$('vaultBanner'),
       soundBtn=$('soundBtn'),overlay=$('overlay'),ptOverlay=$('ptOverlay'),
       histBody=$('histBody'),histCount=$('histCount'),faqBody=$('faqBody'),actions=$('actions'),
       fxCanvas=$('fxCanvas');
@@ -634,7 +677,22 @@ h1 .glyph{color:var(--gold);-webkit-text-fill-color:var(--gold);filter:drop-shad
   async function sha256Hex(msg){try{var b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(msg));return Array.from(new Uint8Array(b)).map(function(x){return x.toString(16).padStart(2,'0');}).join('');}catch(e){return 'sha256-unavailable';}}
 
   var ART={};
-  ['H1','H2','H3','H4','A','K'].forEach(function(id){var im=new Image();im.src=SYMS[id].art;ART[id]=im;});
+  // decode()-preload every piece of art before enabling spin (kills first-spin decode jank)
+  var PRELOAD_SRCS=['Logos/TMC.jpg','Logos/PITTBULL.jpg','Logos/WHALE.png','Logos/RICH.png','Logos/pTIGER.png',
+    'PokerChips/greenpokerchip005.png','PokerChips/bluepokerchip010.png','PokerChips/redpokerchip015.png','PokerChips/cyanpokerchip020.png'];
+  ['H1','H2','H3','H4','A','K'].forEach(function(id){if(SYMS[id].art)PRELOAD_SRCS.push(SYMS[id].art);});
+  var ART_READY=false;
+  (function preloadArt(){
+    var pending=0,done=function(){if(--pending<=0){ART_READY=true;if(typeof syncSpinReady==='function')syncSpinReady();}};
+    PRELOAD_SRCS.forEach(function(src){
+      var im=new Image();im.src=src;
+      ['H1','H2','H3','H4','A','K'].forEach(function(id){if(SYMS[id].art===src)ART[id]=im;});
+      pending++;
+      if(im.decode)im.decode().then(done,done);
+      else{im.onload=done;im.onerror=done;}
+    });
+    if(!pending){ART_READY=true;}
+  })();
 
   function buildStrip(counts){
     var s=[];counts.forEach(function(p){for(var i=0;i<p[1];i++)s.push(p[0]);});
@@ -648,9 +706,13 @@ h1 .glyph{color:var(--gold);-webkit-text-fill-color:var(--gold);filter:drop-shad
      Per spin, consumed from ONE stream in this documented order:
        1. 5 reel stops
        2. one multiplier draw per natural wild in the window (reel-major)
-       3. free spins only: bull entry draw (1 uniform; +1 row uniform on entry)
-       4. if PUMP hit on reels 1/3/5: three rug-point uniforms (rounds 1→3)
-     Bull WALKING consumes nothing — it is derived state, replayed in Verify. */
+       3. free spins only: bull entry draw (1 uniform; +1 free-cell pick on entry)
+       4. if PUMP hit on reels 1/3/5: THE VAULT RUN is fully pre-resolved here —
+          per respin, row-major: a land/no-land uniform per empty unlocked cell,
+          then per landed cell a type draw + value draw, then special randoms
+          (sniper count + target picks). All respins resolved before animation.
+     Sticky bulls consume nothing after entry — they lock in place & replay. */
+  function pick(rng,table){var r=rng(),acc=0;for(var i=0;i<table.length;i++){acc+=table[i][0];if(r<acc)return table[i][1];}return table[table.length-1][1];}
   function drawStops(rng){var st=[];for(var r=0;r<5;r++)st.push(Math.floor(rng()*STRIPS[r].length));return st;}
   function windowAt(stops){
     var g=[];for(var r=0;r<5;r++){var st=STRIPS[r],col=[];for(var row=0;row<ROWS;row++)col.push(st[(stops[r]+row)%st.length]);g.push(col);}
@@ -666,14 +728,18 @@ h1 .glyph{color:var(--gold);-webkit-text-fill-color:var(--gold);filter:drop-shad
     for(var r=0;r<5;r++)for(var row=0;row<ROWS;row++)if(g[r][row]==='W')m[r+','+row]=drawMultFrom(rng);
     return m;
   }
-  // bull entry — free spins only: enter? (p=0.33), then row if it enters
-  function drawBull(rng){
+  // bull entry — free spins only: enter? (p=0.33), then lock into a random FREE
+  // cell (row-major free list). Sticky: bulls never move once locked.
+  function drawBull(rng,bulls){
     var enter=rng()<BULL_P;
-    return {enter:enter,row:enter?Math.floor(rng()*ROWS):null};
-  }
-  // walk every bull one reel left; bulls past reel 1 leave the board (derived, no draws)
-  function walkBulls(bulls){
-    for(var i=bulls.length-1;i>=0;i--){bulls[i].r--;if(bulls[i].r<0)bulls.splice(i,1);}
+    if(!enter)return {enter:false,cell:null};
+    var free=[];
+    for(var r=0;r<5;r++)for(var w=0;w<ROWS;w++){
+      var taken=false;for(var i=0;i<bulls.length;i++)if(bulls[i].r===r&&bulls[i].row===w){taken=true;break;}
+      if(!taken)free.push({r:r,row:w});
+    }
+    if(!free.length)return {enter:false,cell:null};
+    return {enter:true,cell:free[Math.floor(rng()*free.length)]};
   }
   // bulls trample whatever they cover (incl. charts and PUMP) and act as plain wilds
   function overlayBulls(raw,rawMults,bulls){
@@ -688,11 +754,84 @@ h1 .glyph{color:var(--gold);-webkit-text-fill-color:var(--gold);filter:drop-shad
     return {g:g,mults:mults};
   }
   function bullsToLog(bulls){return bulls.map(function(b){return [b.r,b.row];});}
-  // rug point: one uniform through the hazard curve — P(rug ≥ M) = M^(−alpha)
-  function rugFromU(u,alpha){return Math.min(PD_CAP,Math.max(1,Math.pow(1-u,-1/alpha)));}
-  function drawRugs(rng){
-    var out=[];for(var i=0;i<3;i++)out.push(rugFromU(rng(),PD_ALPHA[i]));
-    return out;
+
+  /* ═══ THE VAULT RUN — reference resolution (identical draw order to the sim) ═══
+     Grid rows 0..4 (0 top). Start unlocked rows [1,2,3]; unlock #1 opens row 0,
+     unlock #2 opens row 4 (+1 respin each). Full 5×5 => GRAND. Specials fire
+     row-major once when they land: Collector (WHALE) sweeps sum of all visible
+     values into itself; Payer (RICH) adds its value to every other symbol;
+     Sniper (pTIGER) doubles 2-4 random visible symbols. Payout = sum × bet. */
+  function vaultResolve(rng,seedCells){
+    var cells={};
+    var unlockStage=0, respins=VR_RESPINS, grand=false;
+    function unlockedRows(){return unlockStage===0?[1,2,3]:(unlockStage===1?[0,1,2,3]:[0,1,2,3,4]);}
+    function cellOrder(){var o=[],rows=unlockedRows();for(var i=0;i<rows.length;i++)for(var c=0;c<5;c++)o.push(rows[i]*5+c);return o;}
+    function placed(){return cellOrder().filter(function(k){return cells[k];});}
+    function allFilled(){var o=cellOrder();for(var i=0;i<o.length;i++)if(!cells[o[i]])return false;return true;}
+    function drawType(){return pick(rng,VR_TYPES);}
+    function drawVal(t){if(t==='c')return pick(rng,VR_COINVALS);if(t==='col')return 0;return pick(rng,VR_PAYVALS);}
+    function isSpec(t){return t!=='c';}
+    function fireOne(k,ev){
+      var s=cells[k];s.fired++;
+      var others=placed().filter(function(x){return x!==k;});
+      var t=s.t;
+      if(t==='col'){
+        var gain=0;others.forEach(function(x){gain+=cells[x].val;});
+        s.val+=gain;
+        if(ev)ev.push({k:'col',at:k,gain:gain,nv:s.val});
+      }else if(t==='pay'){
+        var amt=s.val;
+        others.forEach(function(x){cells[x].val+=amt;});
+        if(ev)ev.push({k:'pay',at:k,amt:amt,tg:others.map(function(x){return {at:x,nv:cells[x].val};})});
+      }else if(t==='snp'){
+        var n=SNP_MIN+Math.floor(rng()*SNP_SPAN);
+        var cand=others.slice(),tg=[];
+        for(var i=0;i<n&&cand.length;i++){var idx=Math.floor(rng()*cand.length);var x=cand.splice(idx,1)[0];cells[x].val*=2;tg.push({at:x,nv:cells[x].val});}
+        if(ev)ev.push({k:'snp',at:k,tg:tg});
+      }
+    }
+    var steps=[];
+    function handleFills(step){
+      while(allFilled()){
+        if(unlockStage===0){unlockStage=1;respins++;if(step)step.unlocks.push({row:0,respins:respins});}
+        else if(unlockStage===1){unlockStage=2;respins++;if(step)step.unlocks.push({row:4,respins:respins});}
+        else{grand=true;return;}
+      }
+    }
+    // initial placement — triggering PUMP coins convert, row-major
+    var init={lands:[],fx:[],reset:false,respinsAfter:respins,unlocks:[],init:true};
+    var seeds=seedCells.slice().sort(function(a,b){return (a.r*5+a.c)-(b.r*5+b.c);});
+    seeds.forEach(function(sc){
+      var k=sc.r*5+sc.c;if(cells[k])return;
+      var t=drawType();
+      cells[k]={t:t,val:drawVal(t),fired:0,isNew:true};
+      init.lands.push({at:k,t:t,val:cells[k].val});
+    });
+    cellOrder().forEach(function(k){var s=cells[k];if(s&&s.isNew&&isSpec(s.t))fireOne(k,init.fx);});
+    for(var kk in cells)cells[kk].isNew=false;
+    init.respinsAfter=respins;
+    steps.push(init);
+    handleFills(init);
+    var guard=0;
+    while(!grand&&respins>0&&guard<400){
+      guard++;respins--;
+      var step={lands:[],fx:[],reset:false,respinsAfter:0,unlocks:[]};
+      var empty=cellOrder().filter(function(k){return !cells[k];});
+      var landK=[];
+      empty.forEach(function(k){if(rng()<VR_LAND_P)landK.push(k);});
+      landK.forEach(function(k){var t=drawType();cells[k]={t:t,val:drawVal(t),fired:0,isNew:true};step.lands.push({at:k,t:t,val:cells[k].val});});
+      cellOrder().forEach(function(k){var s=cells[k];if(!s)return;if(s.isNew&&isSpec(s.t))fireOne(k,step.fx);});
+      for(var k2 in cells)cells[k2].isNew=false;
+      if(landK.length){respins=VR_RESPINS;step.reset=true;}
+      step.respinsAfter=respins;
+      steps.push(step);
+      handleFills(step);
+      var run=0;for(var k3 in cells)run+=cells[k3].val;
+      if(run>=VR_CAP){step.capped=true;break;}
+    }
+    var total=0,nSyms=0;for(var k4 in cells){total+=cells[k4].val;nSyms++;}
+    var capped=total>=VR_CAP;if(capped)total=VR_CAP;
+    return {steps:steps,total:total,grand:grand,capped:capped,nSyms:nSyms,rows:unlockedRows().length,cells:cells};
   }
   function lineWin(g,line,mults){
     var syms=line.map(function(row,r){return g[r][row];});
@@ -714,21 +853,21 @@ h1 .glyph{color:var(--gold);-webkit-text-fill-color:var(--gold);filter:drop-shad
     return {pay:best,sym:bestSym,run:bestRun,mult:bestMult};
   }
   function evalSpin(g,mults){
-    var wins=[],lineUnits=0,scCells=[],wildCells=[],bReels={};
+    var wins=[],lineUnits=0,scCells=[],wildCells=[],bReels={},bCells=[];
     for(var r=0;r<5;r++)for(var w=0;w<ROWS;w++){
       if(g[r][w]==='S')scCells.push({r:r,row:w});
       if(g[r][w]==='W')wildCells.push({r:r,row:w});
-      if(g[r][w]==='B')bReels[r]=true;
+      if(g[r][w]==='B'){bReels[r]=true;bCells.push({c:r,r:w+1});}   // maps PUMP → vault middle rows
     }
     for(var i=0;i<LINES_N;i++){
       var lw=lineWin(g,LINES[i],mults);
       if(lw.pay>0){wins.push({line:i,sym:lw.sym,run:lw.run,units:lw.pay,mult:lw.mult});lineUnits+=lw.pay;}
     }
     return {wins:wins,lineUnits:lineUnits,sc:scCells.length,scCells:scCells,
-      wilds:wildCells.length,wildCells:wildCells,bonusHit:!!(bReels[0]&&bReels[2]&&bReels[4])};
+      wilds:wildCells.length,wildCells:wildCells,bCells:bCells,
+      bonusHit:!!(bReels[0]&&bReels[2]&&bReels[4])};
   }
   function linePayout(bet,lineUnits){return Math.floor(lineUnits*bet/LINES_N);}
-  function pdRoundPay(bet,soldAt){return soldAt==null?0:Math.floor(soldAt*bet);}
   function multsToLog(g,mults){
     var out=[];
     for(var r=0;r<5;r++)for(var row=0;row<ROWS;row++)if(g[r][row]==='W')out.push({r:r,row:row,m:mults[r+','+row]||1});
@@ -912,20 +1051,50 @@ h1 .glyph{color:var(--gold);-webkit-text-fill-color:var(--gold);filter:drop-shad
   }
   function renderIdleGrid(g){
     for(var r=0;r<5;r++){
-      stripEls[r].style.transform='translateY(0)';
+      stripEls[r].style.transform='translate3d(0,0,0)';
       stripEls[r].innerHTML=colHtml(g,r,null);
+      hideLockedUnder(r);
     }
+  }
+  // a sticky bull is drawn ONLY by the bull layer — the strip cell beneath it
+  // goes invisible so two wild images never stack (single-layer lock)
+  function hideLockedUnder(r){
+    var bulls=S.bulls||[];
+    for(var row=0;row<ROWS;row++){
+      var cell=stripEls[r].children[row];if(!cell)continue;
+      var locked=false;for(var i=0;i<bulls.length;i++)if(bulls[i].r===r&&bulls[i].row===row){locked=true;break;}
+      cell.style.visibility=locked?'hidden':'';
+    }
+  }
+  // settle a reel by REUSING the strip's existing cells for the landing window —
+  // same <img> nodes, nothing re-decodes, so no settle flash (slots-series engine)
+  function settleStrip(R,g,mults){
+    var strip=stripEls[R.r],cells=[];
+    for(var row=0;row<ROWS;row++)cells.push(strip.children[R.stop+row]);
+    strip.replaceChildren(cells[0],cells[1],cells[2]);
+    strip.style.transform='translate3d(0,0,0)';
+    for(var row2=0;row2<ROWS;row2++){
+      var cell=cells[row2];if(!cell)continue;
+      var m=(mults&&g[R.r][row2]==='W')?(mults[R.r+','+row2]||1):1;
+      if(g[R.r][row2]==='W'&&m>1){
+        cell.className='sym wild mult';
+        if(!cell.querySelector('.frame')){var f=document.createElement('span');f.className='frame';cell.appendChild(f);}
+        if(!cell.querySelector('.mbadge')){var b=document.createElement('span');b.className='mbadge';b.textContent='×'+m;cell.appendChild(b);}
+      }
+    }
+    hideLockedUnder(R.r);
   }
   function renderBulls(stompAll,stompNew){
     var bulls=S.bulls||[];
     bullLayer.innerHTML=bulls.map(function(b,i){
       var isNew=stompNew&&i===bulls.length-1;
-      return '<div class="bullcell'+((stompAll||isNew)?' stomp':'')+'" data-key="'+b.r+','+b.row+'" style="grid-column:'+(b.r+1)+';grid-row:'+(b.row+1)+'">'
-        +'<img class="bull-img" src="Logos/PITTBULL.jpg" alt="Bull wild" draggable="false"/><span class="frame"></span><span class="wildpin">WILD</span>'
+      return '<div class="bullcell'+((stompAll||isNew)?' stomp':'')+' locked" data-key="'+b.r+','+b.row+'" style="grid-column:'+(b.r+1)+';grid-row:'+(b.row+1)+'">'
+        +'<img class="bull-img" src="Logos/PITTBULL.jpg" alt="Sticky bull wild" draggable="false"/><span class="frame"></span><span class="wildpin">WILD</span>'
         +'</div>';
     }).join('');
+    for(var r=0;r<5;r++)hideLockedUnder(r);
   }
-  function clearBulls(){bullLayer.innerHTML='';}
+  function clearBulls(){bullLayer.innerHTML='';for(var r=0;r<5;r++)hideLockedUnder(r);}
   function clearHighlights(){
     if(S.cycleIv){clearInterval(S.cycleIv);S.cycleIv=null;}
     linesSvg.innerHTML='';
@@ -1011,118 +1180,115 @@ h1 .glyph{color:var(--gold);-webkit-text-fill-color:var(--gold);filter:drop-shad
   }
   function renderActions(){
     var label,sub='';
-    if(S.phase==='idle'){label='Place bet &amp; spin';}
+    if(!ART_READY){label='Loading…';}
+    else if(S.phase==='idle'){label='Place bet &amp; spin';}
     else if(S.phase==='settled'){label='Spin again';}
     else if(S.inFs){label='Bull run running';sub=(S.fsTotal-S.fsPlayed)+' left · '+(S.bulls||[]).length+' bulls';}
     else{label='Spinning…';}
-    actions.innerHTML='<button class="btn btn-go" id="spinBtn"'+((S.busy||S.phase==='active')?' disabled':'')+'>'+label
+    actions.innerHTML='<button class="btn btn-go" id="spinBtn"'+((!ART_READY||S.busy||S.phase==='active')?' disabled':'')+'>'+label
       +(sub?'<span class="cash-sub">'+sub+'</span>':'')+'</button>';
     var b=$('spinBtn');if(b&&!b.disabled)b.addEventListener('click',startRound);
   }
+  function syncSpinReady(){if(S.phase==='idle'||S.phase==='settled')renderActions();}
   function setControls(on){
     document.querySelectorAll('#diffRow .diff').forEach(function(b){b.setAttribute('aria-disabled',on?'false':'true');});
     betInput.disabled=!on;
     document.querySelectorAll('.chip,.mini-btn').forEach(function(b){b.style.pointerEvents=on?'auto':'none';b.style.opacity=on?'1':'.5';});
   }
 
-  /* ── PUMP & DUMP chart stage — rug points predetermined, SELL is yours ── */
-  function drawChart(ctx,W,H,candles,rugged){
-    ctx.clearRect(0,0,W,H);
-    // grid
-    ctx.strokeStyle='rgba(34,197,94,0.10)';ctx.lineWidth=1;
-    for(var gy=1;gy<5;gy++){ctx.beginPath();ctx.moveTo(0,H*gy/5);ctx.lineTo(W,H*gy/5);ctx.stroke();}
-    if(!candles.length)return;
-    var lo=1,hi=1.6;
-    candles.forEach(function(c){hi=Math.max(hi,c.h);lo=Math.min(lo,c.l);});
-    hi*=1.06;lo=Math.min(lo,0.94);
-    var n=Math.max(candles.length,26);
-    var cw=W/n;
-    var yOf=function(v){return H-(v-lo)/(hi-lo)*(H-14)-7;};
-    candles.forEach(function(c,i){
-      var x=i*cw+cw/2;
-      var up=c.c>=c.o;
-      ctx.strokeStyle=up?'rgba(74,222,128,0.9)':'rgba(248,113,113,0.9)';
-      ctx.lineWidth=Math.max(1,cw*0.14);
-      ctx.beginPath();ctx.moveTo(x,yOf(c.h));ctx.lineTo(x,yOf(c.l));ctx.stroke();
-      ctx.fillStyle=up?'#22c55e':'#ef4444';
-      var bt=yOf(Math.max(c.o,c.c)),bb=yOf(Math.min(c.o,c.c));
-      ctx.fillRect(x-cw*0.32,bt,cw*0.64,Math.max(2,bb-bt));
-    });
-    if(rugged){
-      ctx.fillStyle='rgba(239,68,68,0.14)';
-      ctx.fillRect(0,0,W,H);
-    }
+  /* ── THE VAULT RUN stage — Money-Cart hold & win, fully pre-resolved playback ── */
+  function vaultCellHtml(t,val){
+    if(t==='c')return '<img class="vart" src="'+coinArt(val)+'" alt="value coin" draggable="false"/><span class="vval">'+val+'</span>';
+    if(t==='col')return '<img class="vart" src="'+VR_ART.col+'" alt="Collector" draggable="false"/><span class="vtag">COLLECT</span><span class="vval">'+val+'</span>';
+    if(t==='pay')return '<img class="vart" src="'+VR_ART.pay+'" alt="Payer" draggable="false"/><span class="vtag">PAYER</span><span class="vval">'+val+'</span>';
+    if(t==='snp')return '<img class="vart" src="'+VR_ART.snp+'" alt="Sniper" draggable="false"/><span class="vtag">SNIPER</span><span class="vval">'+val+'</span>';
+    return '';
   }
-  // rugs: the 3 pre-committed rug multipliers. cont(totalCash, pdLog)
-  function playPumpDump(rugs,bet,cont){
-    chartStage.classList.add('open');
-    var ctx=pdCanvas.getContext('2d');
-    var W=pdCanvas.width,H=pdCanvas.height;
-    var totalCash=0,pdLog=[];
-    pdTotal.textContent='';
-    function playRound(r){
-      if(r>=3){
-        setTimeout(function(){
-          chartStage.classList.remove('open');
-          cont(totalCash,pdLog);
-        },900);
-        return;
-      }
-      var rug=rugs[r],growth=PD_GROWTH[r];
-      var m=1.00,tick=0,sold=false,done=false;
-      var candles=[];
-      pdRound.innerHTML='ROUND '+(r+1)+' / 3 · volatility <span class="vol">'+PD_VOL[r]+'</span>';
-      pdResult.textContent='';
-      pdMult.className='pd-mult';pdMult.textContent='1.00×';
-      chartBox.classList.remove('rugged');
-      drawChart(ctx,W,H,candles,false);
-      sellBtn.disabled=false;
-      sellBtn.textContent='Sell @ 1.00×';
-      sChatter();
-      function finishRound(){
-        sellBtn.disabled=true;
-        setTimeout(function(){playRound(r+1);},1500);
-      }
-      S.pdIv=setInterval(function(){
-        if(done)return;
-        tick++;
-        var next=Math.pow(1+growth,tick);
-        if(next>=rug){
-          // THE RUG — pre-committed point reached before you sold
-          done=true;clearInterval(S.pdIv);S.pdIv=null;
-          candles.push({o:m,c:Math.max(0.3,m*0.28),h:m*1.01,l:Math.max(0.26,m*0.24)});
-          drawChart(ctx,W,H,candles,true);
-          pdMult.className='pd-mult rug';pdMult.textContent='RUG';
-          pdResult.innerHTML='<span class="rug">RUGGED @ '+rug.toFixed(2)+'× — round pays 0</span>';
-          chartBox.classList.remove('rugged');void chartBox.offsetWidth;chartBox.classList.add('rugged');
-          sKlaxon();
-          pdLog.push({rug:rug,soldAt:null,pay:0});
-          finishRound();
-          return;
-        }
-        var prev=m;m=next;
-        candles.push({o:prev,c:m,h:m*(1+Math.random()*0.012),l:prev*(1-Math.random()*0.012)});
-        if(candles.length>48)candles.shift();
-        drawChart(ctx,W,H,candles,false);
-        pdMult.textContent=m.toFixed(2)+'×';
-        sellBtn.textContent='Sell @ '+m.toFixed(2)+'×';
-        if(tick%3===0)sTick();
-      },REDUCED?40:PD_TICK_MS);
-      sellBtn.onclick=function(){
-        if(done||sold)return;
-        sold=true;done=true;
-        if(S.pdIv){clearInterval(S.pdIv);S.pdIv=null;}
-        var pay=pdRoundPay(bet,m);
-        totalCash+=pay;
-        pdLog.push({rug:rug,soldAt:m,pay:pay});
-        pdResult.innerHTML='<span class="up">SOLD @ '+m.toFixed(2)+'× · +'+fmt(pay)+' MORBIUS</span>';
-        pdTotal.innerHTML='banked this bonus: <b>'+fmt(totalCash)+' MORBIUS</b>';
-        sRegister();
-        if(pay>=bet*3){sWinBig();burst('big');}
-        finishRound();
-      };
+  function vaultTypeClass(t){return t==='c'?'coin':('spec '+t);}
+  // vault: {steps,total,grand,capped,rows}. cont(win)
+  function playVaultRun(vault,bet,cont){
+    var TR=REDUCED?0.26:1;
+    vaultStage.classList.add('open');
+    var live={};
+    vaultCounter.textContent=VR_RESPINS;
+    vaultRespinLbl.textContent='RESPINS';
+    vaultTotalEl.innerHTML='';
+    vaultBannerEl.className='vault-banner';vaultBannerEl.textContent='';
+    var doorTop=vaultStage.querySelector('.vdoor.top'),doorBot=vaultStage.querySelector('.vdoor.bot');
+    if(doorTop)doorTop.classList.remove('open');if(doorBot)doorBot.classList.remove('open');
+    var html='',cellEls={};
+    for(var k=0;k<25;k++){var r=Math.floor(k/5);html+='<div class="vcell'+((r===0||r===4)?' shut':'')+'" data-k="'+k+'"></div>';}
+    vaultGrid.innerHTML=html;
+    for(var k2=0;k2<25;k2++)cellEls[k2]=vaultGrid.querySelector('.vcell[data-k="'+k2+'"]');
+    function fillCell(k,t,val){
+      live[k]={t:t,val:val};
+      var el=cellEls[k];
+      el.className='vcell filled '+vaultTypeClass(t);
+      el.innerHTML=vaultCellHtml(t,val);
+      void el.offsetWidth;el.classList.add('lockin');
     }
-    playRound(0);
+    function setVal(k,val,cls){
+      if(!live[k])return;live[k].val=val;
+      var el=cellEls[k],vv=el.querySelector('.vval');
+      if(vv){vv.textContent=val;vv.classList.remove('tickup');void vv.offsetWidth;vv.classList.add('tickup');}
+      if(cls){el.classList.remove(cls);void el.offsetWidth;el.classList.add(cls);}
+    }
+    var Q=[],cursor=0;
+    function at(delay,fn){cursor+=delay*TR;Q.push(setTimeout(fn,cursor));}
+    S.vaultTimers=Q;
+    function applyFx(fx){
+      fx.forEach(function(ev){
+        if(ev.k==='col'){
+          at(200,function(){cellEls[ev.at].classList.add('firing');Object.keys(live).forEach(function(kk){if(+kk!==ev.at)cellEls[kk].classList.add('suck');});sMultZap();});
+          at(560,function(){setVal(ev.at,ev.nv,'firing');Object.keys(live).forEach(function(kk){cellEls[kk].classList.remove('suck');});sRegister();burst('small');});
+          at(120,function(){cellEls[ev.at].classList.remove('firing');});
+        }else if(ev.k==='pay'){
+          at(200,function(){cellEls[ev.at].classList.add('firing');sCoin();});
+          at(380,function(){ev.tg.forEach(function(g){setVal(g.at,g.nv,'sprayed');});sRegister();});
+          at(140,function(){cellEls[ev.at].classList.remove('firing');});
+        }else if(ev.k==='snp'){
+          at(200,function(){cellEls[ev.at].classList.add('firing');ev.tg.forEach(function(g){cellEls[g.at].classList.add('crosshair');});sMultZap();});
+          at(420,function(){ev.tg.forEach(function(g){setVal(g.at,g.nv,'sniped');cellEls[g.at].classList.remove('crosshair');});sRegister();});
+          at(120,function(){cellEls[ev.at].classList.remove('firing');});
+        }
+      });
+    }
+    vault.steps.forEach(function(step){
+      if(step.init){
+        step.lands.forEach(function(l){at(150,function(){fillCell(l.at,l.t,l.val);sCoin();});});
+        applyFx(step.fx);
+      }else{
+        at(520,function(){vaultGrid.classList.remove('respin');void vaultGrid.offsetWidth;vaultGrid.classList.add('respin');sTick();});
+        step.lands.forEach(function(l){at(170,function(){fillCell(l.at,l.t,l.val);sBonusLand(1);});});
+        at(80,function(){
+          vaultCounter.textContent=step.respinsAfter;
+          if(step.reset){vaultCounter.classList.remove('reset');void vaultCounter.offsetWidth;vaultCounter.classList.add('reset');}
+        });
+        applyFx(step.fx);
+      }
+      (step.unlocks||[]).forEach(function(u){
+        at(320,function(){
+          var door=u.row===0?doorTop:doorBot;if(door)door.classList.add('open');
+          for(var c=0;c<5;c++)cellEls[u.row*5+c].classList.remove('shut');
+          vaultCounter.textContent=u.respins;
+          vaultBannerEl.className='vault-banner show';
+          vaultBannerEl.textContent=(u.row===0?'TOP ROW':'BOTTOM ROW')+' UNLOCKED · +1 RESPIN';
+          shake();feltFlashGo();sFanfare();
+        });
+        at(950,function(){vaultBannerEl.className='vault-banner';});
+      });
+      if(step.capped){at(220,function(){vaultBannerEl.className='vault-banner show';vaultBannerEl.textContent='MAX WIN — VAULT CAPPED AT '+fmt(VR_CAP)+'×';});}
+    });
+    at(720,function(){
+      var win=vault.total*bet,x=win/bet;
+      if(vault.grand){vaultBannerEl.className='vault-banner show grand';vaultBannerEl.textContent='GRAND VAULT — FULL 5×5 CRACKED!';sJackpot();burst('jackpot');shake();}
+      vaultTotalEl.innerHTML='VAULT PAYS <b>'+vault.total+'×</b> · +'+fmt(win)+' MORBIUS';
+      if(x>=100){sWinMega();shake();burst('mega');}else if(x>=25){sWinBig();shake();burst('big');}else sWinMed();
+    });
+    at(1600,function(){
+      vaultStage.classList.remove('open');
+      cont(vault.total*bet);
+    });
   }
 
   async function startRound(){
@@ -1161,24 +1327,19 @@ h1 .glyph{color:var(--gold);-webkit-text-fill-color:var(--gold);filter:drop-shad
 
   function doSpin(isFree){
     // ALL seeded draws happen here, before any animation — the visuals just deliver them.
-    // Fixed order: stops → wild mults (reel-major) → bull entry (FS only) → rug points.
-    if(isFree&&S.bulls){
-      walkBulls(S.bulls);              // derived — consumes no stream draws
-      renderBulls(true,false);
-      if(S.bulls.length)sStomp();
-    }
+    // Fixed order: stops → wild mults (reel-major) → bull entry (FS only) → Vault Run (pre-resolved).
     var stops=drawStops(S.rng);
     var raw=windowAt(stops);
     var mults=drawMults(S.rng,raw);
-    var bull=isFree?drawBull(S.rng):null;
+    var bull=isFree?drawBull(S.rng,S.bulls):null;
     if(bull&&bull.enter){
-      S.bulls.push({r:4,row:bull.row});
+      S.bulls.push({r:bull.cell.r,row:bull.cell.row});   // STICKY — locks in place
       S.fsLeft++;S.fsTotal++;           // each new bull = +1 extra spin
     }
     var bullsSnap=isFree?bullsToLog(S.bulls):[];
     var ov=overlayBulls(raw,mults,isFree?S.bulls:null);
     var ev=evalSpin(ov.g,ov.mults);
-    var rugs=ev.bonusHit?drawRugs(S.rng):null;
+    var vault=ev.bonusHit?vaultResolve(S.rng,ev.bCells):null;
     var sp=spd();
     S.lastEv=null;
     clearHighlights();
@@ -1207,7 +1368,7 @@ h1 .glyph{color:var(--gold);-webkit-text-fill-color:var(--gold);filter:drop-shad
       var D=base+Math.max(1,Math.round((ideal-base)/L))*L;
       stripEls[r].innerHTML=stripHtml(r);
       reelEls[r].classList.add('spin');
-      return {r:r,L:L,start:start,D:D,T:T,done:false};
+      return {r:r,L:L,start:start,D:D,T:T,stop:stop,done:false};
     });
 
     if(anticFrom>=0){
@@ -1228,8 +1389,7 @@ h1 .glyph{color:var(--gold);-webkit-text-fill-color:var(--gold);filter:drop-shad
           R.done=true;
           var reel=reelEls[R.r],strip=stripEls[R.r];
           reel.classList.remove('spin');reel.classList.remove('antic');
-          strip.style.transform='translateY(0)';
-          strip.innerHTML=colHtml(ov.g,R.r,ov.mults);
+          settleStrip(R,ov.g,ov.mults);
           reel.classList.add('land');reel.classList.add('flash');
           (function(reel){setTimeout(function(){reel.classList.remove('land');reel.classList.remove('flash');},260);})(reel);
           sStop(R.r);
@@ -1245,8 +1405,8 @@ h1 .glyph{color:var(--gold);-webkit-text-fill-color:var(--gold);filter:drop-shad
           for(var row=0;row<ROWS;row++){
             if(ov.g[R.r][row]==='W'&&(ov.mults[R.r+','+row]||1)>1){sMultZap();break;}
           }
-          // new bull stampedes in as reel 5 lands
-          if(R.r===4&&bull&&bull.enter){
+          // new sticky bull stampedes into its locked cell as that reel lands
+          if(bull&&bull.enter&&bull.cell.r===R.r){
             renderBulls(false,true);
             sSnort();sStomp();
           }
@@ -1262,7 +1422,7 @@ h1 .glyph{color:var(--gold);-webkit-text-fill-color:var(--gold);filter:drop-shad
           }
         }else{
           var off=(R.start+R.D*easeProfile(u))%R.L;
-          stripEls[R.r].style.transform='translateY('+(-off*cellH)+'px)';
+          stripEls[R.r].style.transform='translate3d(0,'+(-off*cellH)+'px,0)';
           if(R.T-el<240)reelEls[R.r].classList.remove('spin');
           allDone=false;
         }
@@ -1270,7 +1430,7 @@ h1 .glyph{color:var(--gold);-webkit-text-fill-color:var(--gold);filter:drop-shad
       if(allDone){
         S.spinRaf=null;
         stopTicks();stopAnticLoop();
-        setTimeout(function(){resolveSpin(stops,raw,mults,bull,bullsSnap,ov,ev,rugs,isFree);},140);
+        setTimeout(function(){resolveSpin(stops,raw,mults,bull,bullsSnap,ov,ev,vault,isFree);},140);
       }else{
         S.spinRaf=requestAnimationFrame(frame);
       }
@@ -1278,14 +1438,15 @@ h1 .glyph{color:var(--gold);-webkit-text-fill-color:var(--gold);filter:drop-shad
     S.spinRaf=requestAnimationFrame(frame);
   }
 
-  function resolveSpin(stops,raw,mults,bull,bullsSnap,ov,ev,rugs,isFree){
+  function resolveSpin(stops,raw,mults,bull,bullsSnap,ov,ev,vault,isFree){
     var lineWinAmt=linePayout(S.bet,ev.lineUnits);
     var jpTier=jackpotTier(ev.wilds);
     var jpAmt=jpTier?payJackpot(jpTier):0;
     var entry={stops:stops.slice(),mults:multsToLog(raw,mults),free:isFree,
-      bull:bull?{enter:bull.enter,row:bull.row}:null,bulls:bullsSnap,
+      bull:bull&&bull.enter?{enter:bull.enter,cell:bull.cell}:null,bulls:bullsSnap,
       win:lineWinAmt,lineWin:lineWinAmt,lines:ev.wins.length,sc:ev.sc,wilds:ev.wilds,
-      pd:null,jackpot:jpTier?{tier:jpTier,amount:jpAmt}:null};
+      vault:vault?{total:vault.total,grand:vault.grand,rows:vault.rows,nSyms:vault.nSyms}:null,
+      jackpot:jpTier?{tier:jpTier,amount:jpAmt}:null};
     S.spinLog.push(entry);
     S.roundWin+=lineWinAmt+jpAmt;
     if(isFree)S.fsPlayed++;
@@ -1304,21 +1465,16 @@ h1 .glyph{color:var(--gold);-webkit-text-fill-color:var(--gold);filter:drop-shad
         setTimeout(function(){hideBanner();next();},3200);
       });
     }
-    // PUMP & DUMP — rug points already committed; you just pick the exits
-    if(rugs){
+    // THE VAULT RUN — hold & win respins, fully pre-resolved; the stage plays it back
+    if(vault){
       chain.push(function(next){
-        playPumpDump(rugs,S.bet,function(cash,pdLog){
-          entry.pd=pdLog;
+        playVaultRun(vault,S.bet,function(cash){
           entry.win+=cash;
           S.roundWin+=cash;
-          if(cash>0){
-            rollup(hudWin,S.roundWin,cash>=S.bet*3);hudWin.classList.remove('idle');
-            statusEl.className='felt-status';
-            statusEl.innerHTML='Pump &amp; Dump banked · <span class="gain">+'+fmt(cash)+' MORBIUS</span>';
-          }else{
-            statusEl.className='felt-status lose';
-            statusEl.textContent='Rugged all three rounds — the floor remembers';
-          }
+          rollup(hudWin,S.roundWin,cash>=S.bet*10);hudWin.classList.remove('idle');
+          statusEl.className='felt-status';
+          statusEl.innerHTML='Vault Run banked · <span class="gain">+'+fmt(cash)+' MORBIUS</span>'
+            +(vault.grand?' · <span class="hot">GRAND VAULT</span>':'');
           syncHud();next();
         });
       });
@@ -1367,7 +1523,7 @@ h1 .glyph{color:var(--gold);-webkit-text-fill-color:var(--gold);filter:drop-shad
         else sWinSmall();
         next();
       });
-    }else if(!jpTier&&!rugs&&!(ev.sc>=3)&&!(bull&&bull.enter)){
+    }else if(!jpTier&&!vault&&!(ev.sc>=3)&&!(bull&&bull.enter)){
       chain.push(function(next){
         statusEl.className='felt-status'+(isFree?' fsmode':'');
         statusEl.textContent=isFree?'Bull run spin — no win':'No win this spin';
@@ -1410,7 +1566,7 @@ h1 .glyph{color:var(--gold);-webkit-text-fill-color:var(--gold);filter:drop-shad
       spins:S.spinLog.length, fs:S.fsTotal,
       bulls:S.spinLog.reduce(function(a,s){return a+((s.bull&&s.bull.enter)?1:0);},0),
       lines:S.spinLog.reduce(function(a,s){return a+s.lines;},0),
-      pds:S.spinLog.filter(function(s){return s.pd;}).length,
+      pds:S.spinLog.filter(function(s){return s.vault;}).length,
       jackpots:S.spinLog.filter(function(s){return s.jackpot;}).map(function(s){return s.jackpot;}),
       spinLog:S.spinLog.map(function(s){return JSON.parse(JSON.stringify(s));}),
       serverSeed:S.serverSeed, serverHash:S.serverHash, clientSeed:S.clientSeed, nonce:S.nonce });
@@ -1432,7 +1588,7 @@ h1 .glyph{color:var(--gold);-webkit-text-fill-color:var(--gold);filter:drop-shad
     histBody.innerHTML='<ul class="hist-list">'+S.history.map(function(r){
       var profit=r.win-r.bet,multX100=Math.round(r.win/r.bet*100);
       var badge=r.fs>0?'<span class="badge fsb">'+r.fs+' FS <img class="mbull" src="Logos/PITTBULL.jpg" alt=""/>'+r.bulls+'</span>':'<span class="badge">base</span>';
-      var pds=r.pds>0?'<span class="badge pdb">▼'+r.pds+'</span>':'';
+      var pds=r.pds>0?'<span class="badge pdb">VAULT ×'+r.pds+'</span>':'';
       var jps=r.jackpots.map(function(j){return '<span class="badge jpb"><img class="mchipp" src="morbius/MorbiusChip.png" alt=""/>'+JP[j.tier].label+'</span>';}).join('');
       var xcell=r.win>0?'<span class="x win">'+(multX100/100).toFixed(2)+'×</span>':'<span class="x bust">0.00×</span>';
       var pcell='<span class="p '+(profit>0?'up':(profit<0?'down':'flat'))+'">'+(profit>0?'+':'')+fmt(profit)+'</span>';
@@ -1446,7 +1602,7 @@ h1 .glyph{color:var(--gold);-webkit-text-fill-color:var(--gold);filter:drop-shad
   }
 
   /* fairness modal */
-  function recipeStr(){return 'demo: mulberry32(xmur3(`${serverSeed}:${clientSeed}:${nonce}`)) → per spin: 5 reel stops, 1 multiplier draw per wild (reel-major), then on free spins the bull entry draw (1 uniform; +1 row uniform on entry), then 3 rug-point uniforms if PUMP landed on reels 1/3/5 (rug = min(100, (1-u)^(-1/alpha)), alpha 1.12/1.18/1.25) — consumed in spin order. Bull walking is derived (one reel left per spin, off after reel 1). SELL taps are player input, checked against the rug. Jackpot hits are re-checked from the wild count; pool amounts are account state. Production draws the same sequence from the server HMAC_SHA256 stream.';}
+  function recipeStr(){return 'demo: mulberry32(xmur3(`${serverSeed}:${clientSeed}:${nonce}`)) → per spin: 5 reel stops, 1 multiplier draw per wild (reel-major), then on free spins the bull entry draw (1 uniform; +1 free-cell pick on entry). If PUMP lands on reels 1/3/5 the whole Vault Run is pre-resolved from the same stream — per respin, row-major: a land/no-land uniform per empty unlocked cell, then per landed cell a type draw + value draw, then special randoms (sniper count + target picks). All respins resolved before the reels stop; the stage just replays them. Sticky bulls lock in place (no draws after entry). Jackpot hits are re-checked from the wild count; pool amounts are account state. Production draws the same sequence from the server HMAC_SHA256 stream.';}
   function ckHtml(ok,label){return '<div class="m-check"><span class="ck '+(ok?'ok':'no')+'">'+(ok?'✓':'✗')+'</span><span>'+label+'</span></div>';}
   function fieldHtml(l,v){return '<div class="m-field"><div class="fl">'+l+'</div><div class="fv">'+v+'</div></div>';}
   function spinsHtml(log){
@@ -1454,11 +1610,11 @@ h1 .glyph{color:var(--gold);-webkit-text-fill-color:var(--gold);filter:drop-shad
     return '<div class="m-spins">'+log.map(function(s,i){
       var stops=s.stops.map(function(v){return '<span class="md">'+v+'</span>';}).join('');
       var hot=s.mults.filter(function(m){return m.m>1;}).map(function(m){return '<span class="md hot">R'+(m.r+1)+'×'+m.m+'</span>';}).join('');
-      var bulls=(s.bulls&&s.bulls.length)?s.bulls.map(function(b){return '<span class="md bullmd"><img class="mbull" src="Logos/PITTBULL.jpg" alt=""/>R'+(b[0]+1)+'</span>';}).join(''):'';
-      var pd=s.pd?s.pd.map(function(p){return '<span class="md rugmd">'+(p.soldAt!=null?('✓'+p.soldAt.toFixed(2)+'×'):('rug '+p.rug.toFixed(2)+'×'))+'</span>';}).join(''):'';
+      var bulls=(s.bulls&&s.bulls.length)?s.bulls.map(function(b){return '<span class="md bullmd"><img class="mbull" src="Logos/PITTBULL.jpg" alt=""/>R'+(b[0]+1)+'·'+(b[1]+1)+'</span>';}).join(''):'';
+      var vlt=s.vault?'<span class="md rugmd">VAULT '+s.vault.total+'×'+(s.vault.grand?' GRAND':'')+'</span>':'';
       var jp=s.jackpot?'<span class="md jpmd"><img class="mchipp" src="morbius/MorbiusChip.png" alt=""/>'+JP[s.jackpot.tier].label+'</span>':'';
       var pc=s.win>0?'<span class="rp up">+'+fmt(s.win)+'</span>':'<span class="rp no">0</span>';
-      return '<div class="m-sr"><span class="rn'+(s.free?' fs':'')+'">'+(s.free?'bull':'spin')+' '+(i+1)+'</span><span class="rd">'+stops+hot+bulls+pd+jp+'</span>'+pc+'</div>';
+      return '<div class="m-sr"><span class="rn'+(s.free?' fs':'')+'">'+(s.free?'bull':'spin')+' '+(i+1)+'</span><span class="rd">'+stops+hot+bulls+vlt+jp+'</span>'+pc+'</div>';
     }).join('')+'</div>';
   }
   function findRound(id){id=String(id||'').trim();return S.history.filter(function(x){return x.id===id;})[0]||null;}
@@ -1478,38 +1634,30 @@ h1 .glyph{color:var(--gold);-webkit-text-fill-color:var(--gold);filter:drop-shad
     var hashAvail=reHash!=='sha256-unavailable'&&r.serverHash!=='sha256-unavailable';
     var hashOk=hashAvail&&reHash===r.serverHash;
     var rng=makeRng(r.serverSeed+':'+r.clientSeed+':'+r.nonce);
-    var stopsOk=true,multsOk=true,bullsOk=true,rugsOk=true,winsOk=true,jpOk=true,reTotal=0;
+    var stopsOk=true,multsOk=true,bullEntryOk=true,bullStickyOk=true,vaultOk=true,winsOk=true,jpOk=true,reTotal=0;
     var bulls=[];
     for(var i=0;i<r.spinLog.length;i++){
       var lg=r.spinLog[i];
-      if(!lg.free)bulls=[];               // bulls only exist inside the bonus
-      if(lg.free)walkBulls(bulls);        // derived walk — replayed, not drawn
+      if(!lg.free)bulls=[];               // bulls only exist inside the bonus (sticky, never move)
       var st=drawStops(rng);
       if(st.join(',')!==lg.stops.join(','))stopsOk=false;
       var raw=windowAt(st);
       var m=drawMults(rng,raw);
       if(JSON.stringify(multsToLog(raw,m))!==JSON.stringify(lg.mults))multsOk=false;
-      var bull=lg.free?drawBull(rng):null;
-      if(JSON.stringify(bull)!==JSON.stringify(lg.bull))bullsOk=false;
-      if(bull&&bull.enter)bulls.push({r:4,row:bull.row});
-      if(JSON.stringify(bullsToLog(bulls))!==JSON.stringify(lg.bulls))bullsOk=false;
+      var bull=lg.free?drawBull(rng,bulls):null;
+      if(JSON.stringify(bull&&bull.enter?{enter:bull.enter,cell:bull.cell}:null)!==JSON.stringify(lg.bull))bullEntryOk=false;
+      if(bull&&bull.enter)bulls.push({r:bull.cell.r,row:bull.cell.row});   // STICKY lock-in-place
+      if(JSON.stringify(bullsToLog(bulls))!==JSON.stringify(lg.bulls))bullStickyOk=false;
       var ov=overlayBulls(raw,m,lg.free?bulls:null);
       var ev=evalSpin(ov.g,ov.mults);
-      var rugs=ev.bonusHit?drawRugs(rng):null;
-      var pdCash=0;
-      if(!!rugs!==!!lg.pd)rugsOk=false;
-      if(rugs&&lg.pd){
-        for(var k2=0;k2<3;k2++){
-          var lp=lg.pd[k2]||{};
-          if(lp.rug!==rugs[k2])rugsOk=false;                      // rug re-derives from the stream
-          if(lp.soldAt!=null){
-            if(!(lp.soldAt<rugs[k2]))rugsOk=false;                // every sell beat the rug
-            if(lp.pay!==pdRoundPay(r.bet,lp.soldAt))rugsOk=false; // and paid exactly soldAt × bet
-            pdCash+=pdRoundPay(r.bet,lp.soldAt);
-          }else if(lp.pay!==0){rugsOk=false;}
-        }
+      var vault=ev.bonusHit?vaultResolve(rng,ev.bCells):null;    // fully re-derived from the stream
+      var vaultCash=0;
+      if(!!vault!==!!lg.vault)vaultOk=false;
+      if(vault&&lg.vault){
+        if(vault.total!==lg.vault.total||vault.grand!==lg.vault.grand||vault.rows!==lg.vault.rows)vaultOk=false;
+        vaultCash=vault.total*r.bet;
       }
-      var w=linePayout(r.bet,ev.lineUnits)+pdCash;
+      var w=linePayout(r.bet,ev.lineUnits)+vaultCash;
       if(w!==lg.win)winsOk=false;
       var tier=jackpotTier(ev.wilds);
       if((tier||null)!==(lg.jackpot?lg.jackpot.tier:null))jpOk=false;
@@ -1520,16 +1668,17 @@ h1 .glyph{color:var(--gold);-webkit-text-fill-color:var(--gold);filter:drop-shad
       +ckHtml(hashOk,hashAvail?'Server seed matches its committed hash (checked locally)':'Hash check unavailable — SHA-256 needs a secure (https) context')
       +ckHtml(stopsOk,'Every reel stop re-derives from the seed stream')
       +ckHtml(multsOk,'Every wild multiplier re-derives from the same stream')
-      +ckHtml(bullsOk,'Bull entries re-derive & the walk replays spin-for-spin')
-      +ckHtml(rugsOk,'Every rug point re-derives; recorded sells beat the rug')
+      +ckHtml(bullEntryOk,'Bull entries re-derive from the stream draw-for-draw')
+      +ckHtml(bullStickyOk,'Sticky bulls stay locked in place across the whole run')
+      +ckHtml(vaultOk,'The whole Vault Run re-derives — every land, special & payout')
       +ckHtml(jpOk,'Jackpot hits match the on-screen wild counts')
       +ckHtml(winsOk,'Each spin’s win reconciles with the paytable & 20 lines')
-      +ckHtml(payoutOk,'Round payout equals spins + bonus + recorded jackpots')
-      +'<div class="m-maplabel">Spin replay — stops · hot wilds · bulls · rug points · jackpots</div>'+spinsHtml(r.spinLog)
+      +ckHtml(payoutOk,'Round payout equals spins + Vault Run + recorded jackpots')
+      +'<div class="m-maplabel">Spin replay — stops · hot wilds · sticky bulls · Vault Run · jackpots</div>'+spinsHtml(r.spinLog)
       +'<div class="m-meta"><span>Spins: <span class="mv">'+r.spins+'</span></span>'
         +'<span>Free spins: <span class="mv">'+r.fs+'</span></span>'
         +'<span>Bulls: <span class="mv gold">'+r.bulls+'</span></span>'
-        +'<span>Pump&amp;Dumps: <span class="mv gold">'+r.pds+'</span></span>'
+        +'<span>Vault Runs: <span class="mv gold">'+r.pds+'</span></span>'
         +'<span>Lines hit: <span class="mv grn">'+r.lines+'</span></span></div>'
       +'<div class="m-fields">'+fieldHtml('Server seed hash (committed)',r.serverHash)+fieldHtml('Server seed (revealed)',r.serverSeed)
         +fieldHtml('Client seed',r.clientSeed)+fieldHtml('Nonce',String(r.nonce))+fieldHtml('Recipe',recipeStr())+'</div>'
@@ -1558,25 +1707,25 @@ h1 .glyph{color:var(--gold);-webkit-text-fill-color:var(--gold);filter:drop-shad
       '<table class="pt-tbl"><thead><tr><th>Symbol</th><th>×2</th><th>×3</th><th>×4</th><th>×5</th></tr></thead>'
       +'<tbody>'+rows
       +'<tr><td>'+ptSymCell('S')+'</td><td>—</td><td colspan="3">3+ anywhere → Bull Run free spins</td></tr>'
-      +'<tr><td>'+ptSymCell('B')+'</td><td>—</td><td colspan="3">on reels 1·3·5 → Pump &amp; Dump</td></tr>'
+      +'<tr><td>'+ptSymCell('B')+'</td><td>—</td><td colspan="3">3 on reels 1·3·5 → The Vault Run</td></tr>'
       +'</tbody></table>'
-      +'<p class="pt-note"><span class="rd">▼ Pump &amp; Dump</span> — three chart rounds of escalating volatility. Each round the price pumps from 1.00× and ONE '
-      +'pre-committed seeded rug point decides where it collapses; hit <span class="rd">SELL</span> before the rug and bank multiplier × bet, get caught and the round pays 0. '
-      +'<span class="hl">Bull Run</span> — 3+ TMC charts award 6 free spins (+2 per retrigger). Each free spin a p=0.33 seeded draw stampedes a bull wild onto reel 5; bulls walk one '
-      +'reel left every spin, act as wilds where they stand, leave after reel 1, and every new bull adds +1 spin. '
+      +'<p class="pt-note"><span class="am">The Vault Run</span> — 3 PUMP coins open a 5-column hold &amp; win grid (top &amp; bottom rows behind blast doors). '
+      +'3 respins; any symbol that lands <span class="hl">locks</span> and resets the counter to 3. Value coins pay their face; <span class="hl">Collector</span> (WHALE) sweeps every visible value into itself, '
+      +'<span class="hl">Payer</span> (RICH) adds its value to every other symbol, <span class="hl">Sniper</span> (pTIGER) doubles 2–4 symbols. Fill a grid to open a row (+1 respin); a full 5×5 pays the <span class="hl">GRAND</span>. Payout = sum of values × total bet (natural max ~600–1,400×). '
+      +'<span class="hl">Bull Run</span> — 3+ TMC charts award 5 free spins (+2 per retrigger). Each free spin a p=0.33 seeded draw stampedes a bull wild into a random free cell where it <span class="hl">locks in place (sticky)</span> for the rest of the run; every new bull adds +1 spin. '
       +'<span class="am">Hot wilds</span> (×2/×3/×5 badges on ~1-in-12 wilds) multiply a winning line by the highest badge in the run. '
-      +'<span class="am">Progressive jackpots</span> — MINI at 5 wilds on screen (~1-in-138 spins), MAJOR at 7 (~1-in-4,300), GRAND at 9+ (~1-in-1M); bulls count as wilds; pools grow with every bet (0.9/0.5/0.1%) and reset to their seed after a hit. '
+      +'<span class="am">Progressive jackpots</span> — MINI at 5 wilds on screen (~1-in-94 spins), MAJOR at 7 (~1-in-390), GRAND at 9+ (~1-in-1,450); bulls count as wilds; pools grow with every bet (0.9/0.5/0.1%) and reset to their seed after a hit. '
       +'Line pays are in <span class="hl">line bets</span> (total bet ÷ 20), leftmost-consecutive, best win per line. Ruleset tuned to ≈ 96.7% RTP including the jackpot contribution.</p>';
   }
 
   var FAQS=[
-    {q:'How does the Pump & Dump bonus work?',a:'<p>Land the <span class="hl">PUMP coin on reels 1, 3 and 5</span> at once (measured ~1-in-128 spins — the board burns gold when two are waiting on the third) and the trading floor clears for a live candle chart. You get <span class="hl">three rounds</span> of escalating volatility. Each round the token price pumps tick by tick from 1.00× and you have exactly one button: <span class="hl">SELL</span> — cash out the current multiplier × your bet. But every round has a <span class="hl">RUG POINT</span> committed from the seeded stream <b>before the chart even opens</b> (one uniform draw mapped through a geometric-style hazard, α = 1.12 / 1.18 / 1.25, capped at 100×). If the price reaches the rug before you sell, the chart collapses and the round pays 0.</p><p>Later rounds pump faster <i>and</i> rug sooner on average — that\'s the escalating volatility. Verify shows every rug point re-derived from the seed and checks your recorded sells actually beat it.</p>'},
-    {q:'What sell strategy does the advertised RTP assume?',a:'<p>The rug is seeded; <b>when you sell is up to you</b> — so the bonus\'s exact return depends on your behavior. For the published numbers, the Monte Carlo models a benchmark player who <span class="hl">auto-sells at 2.5× / 3× / 4×</span> in rounds 1 / 2 / 3. Under that policy the bonus contributes ≈ 1.8–1.9 RTP points. Selling earlier trades variance for consistency; greed pushes more rounds into the rug. The hazard curve means <b>no strategy changes the house edge much</b> — later exits pay more but survive less, by design of the α exponents.</p>'},
-    {q:'How does the Bull Run work?',a:'<p>Land <span class="hl">3+ TMC charts</span> anywhere (measured ~1-in-92 spins) for <span class="hl">6 free spins</span>, +2 per retrigger. During the run, every spin makes a seeded draw: with <span class="hl">p = 0.33</span> a <span class="hl">bull wild stampedes onto reel 5</span> at a seeded row — and every new bull that enters awards <span class="hl">+1 extra spin</span>.</p><p>At the start of each following spin, every bull on the floor <span class="hl">walks one reel to the left</span>, acting as a wild wherever it stands, and charges off the board after reel 1. The walk is pure derived state — no extra draws — so Verify replays the whole stampede spin-for-spin. A bull crossing the cheap right-side reels becomes brutal by the time it reaches reels 1–2, and the sim measured ≈ 3.0 bulls and ≈ 9.2 spins per bonus.</p>'},
-    {q:'How do the progressive jackpots hit?',a:'<p>Three pools sit above the reels and grow with every bet: <span class="hl">MINI</span> (0.9% of bets), <span class="hl">MAJOR</span> (0.5%) and <span class="hl">GRAND</span> (0.1%). They pay when enough <span class="hl">wilds are on screen at once</span> — green candles and bulls both count: 5 wilds = MINI (~1-in-138 spins), 7 = MAJOR (~1-in-4,300), 9+ = GRAND (~1-in-1,000,000). Only the biggest qualifying tier pays, the pool then resets to its seed value (25,000 / 500,000 / 10,000,000 MORBIUS).</p><p>The <b>hit</b> is provably fair — wild positions come from the seeded reel stops and the replayable bull walk. The <b>pool size</b> is account state (in this demo it lives in your browser under <span class="hl">pulsestreet-jp</span> and grows as you play).</p>'},
+    {q:'How does the Vault Run bonus work?',a:'<p>Land the <span class="hl">PUMP coin on reels 1, 3 and 5</span> at once (measured ~1-in-174 spins — the board burns gold when two are waiting on the third) and a dedicated vault opens: a <span class="hl">5-column grid</span> that starts 3 rows tall, with the top and bottom rows sealed behind <span class="hl">blast doors</span>. Your triggering coins convert to values on the grid, and you get <span class="hl">3 respins</span>. Each respin, every empty unlocked cell independently draws land-or-empty; anything that lands <span class="hl">locks in place and resets the counter to 3</span>. The run ends at 0 respins or a full grid.</p><p>Fill the whole visible grid and a <span class="hl">blast door opens</span> — the top row, then the bottom row — each adding a row and +1 respin. Fill the full <span class="hl">5×5</span> and the vault pays the <span class="hl">GRAND</span>. Payout = the sum of all locked values × your total bet. The sim measured ≈ 30.6 RTP points from the Vault Run at ~1-in-174, with a natural top around 600–1,400× (rare runs press toward the 20,000× guard).</p>'},
+    {q:'What are the Vault Run specials — Collector, Payer, Sniper?',a:'<p>Most symbols are <span class="hl">value coins</span> (PokerChips, small values 2–80). The rare specials do the heavy lifting when they land:</p><p><span class="hl">Collector</span> (WHALE) — adds the <b>sum of every visible value</b> on the grid into itself. Late collectors on a full board are the big-money moment.<br><span class="hl">Payer</span> (RICH) — adds <b>its own value to every other symbol</b> on the grid.<br><span class="hl">Sniper</span> (pTIGER) — <b>doubles 2–4 random visible symbols</b> (the count and targets are seeded).</p><p>Each fires once, row-major, the instant it locks. We keep exactly these three: the persistent (re-firing) variants and the Insider that some hold &amp; win games use were dropped, because their per-respin re-fire is a runaway compounding path the 95% budget can\'t afford — with them in, the modelled RTP exploded past 200%.</p>'},
+    {q:'How does the Bull Run work?',a:'<p>Land <span class="hl">3+ TMC charts</span> anywhere (measured ~1-in-92 spins) for <span class="hl">5 free spins</span>, +2 per retrigger. During the run, every spin makes a seeded draw: with <span class="hl">p = 0.33</span> a <span class="hl">bull wild stampedes into a random free cell</span> — and every new bull that enters awards <span class="hl">+1 extra spin</span>.</p><p>Unlike a walking-wild feature, these bulls are <span class="hl">sticky</span>: once a bull lands it <b>locks in that exact cell</b> and stays there — acting as a wild — for the entire rest of the run. It never moves. Sticky positions are pure derived state (no extra draws), so Verify replays the whole locked board spin-for-spin. The sim measured ≈ 2.5 bulls and ≈ 7.6 spins per bonus.</p>'},
+    {q:'How do the progressive jackpots hit?',a:'<p>Three pools sit above the reels and grow with every bet: <span class="hl">MINI</span> (0.9% of bets), <span class="hl">MAJOR</span> (0.5%) and <span class="hl">GRAND</span> (0.1%). They pay when enough <span class="hl">wilds are on screen at once</span> — green candles and bulls both count: 5 wilds = MINI (~1-in-94 spins), 7 = MAJOR (~1-in-390), 9+ = GRAND (~1-in-1,450). Only the biggest qualifying tier pays, the pool then resets to its seed value (25,000 / 500,000 / 10,000,000 MORBIUS). Because sticky bulls accumulate, wild-count jackpots hit more often inside the Bull Run.</p><p>The <b>hit</b> is provably fair — wild positions come from the seeded reel stops and the replayable sticky bulls. The <b>pool size</b> is account state (in this demo it lives in your browser under <span class="hl">pulsestreet-jp</span> and grows as you play); the steady-state contribution is modelled at ≈ 1.5 RTP points.</p>'},
     {q:'What are hot (multiplier) wilds?',a:'<p>About <span class="hl">1 in 12 green-candle wilds</span> lands hot with a <span class="hl">×2, ×3 or ×5 badge</span> (4.5% / 2.3% / 1.2%) and a pulsing gold border. A winning line through hot wilds is multiplied by the <span class="hl">highest badge in the run</span> — badges don\'t compound with each other. Bulls are plain wilds (no badge), but a hot candle under a line with a bull still applies its badge.</p>'},
-    {q:'What is the RTP — where does the math come from?',a:'<p>The reel strips, 20 lines, hot-wild odds, Bull Run and Pump &amp; Dump were tuned with <span class="hl">multi-million-spin Monte Carlo simulations</span> of these exact rules (1M-spin tune + 2M-spin confirm on separate seeds, both landing on the same number): the playable game returns <span class="hl">95.2%</span> (hit rate ≈ 50.6%, Bull Run ≈ 24.3 points at ~1-in-92, Pump &amp; Dump ≈ 1.8–1.9 points at ~1-in-128 under the benchmark 2.5×/3×/4× sell policy, max observed round ≈ 388×) and the progressive contribution adds 1.5% — <span class="hl">RTP ≈ 96.7%</span> total, a house edge of ≈ 3.3%.</p><p>Individual sessions swing far wider than the long-run edge; the jackpot pools especially reward whoever is on the floor when they burst.</p>'},
-    {q:'Is it really fair — and reproducible?',a:'<p>Yes. Before you bet, the server commits to a secret <span class="hl">server seed</span> (you see its SHA-256 hash). Every draw — reel stops, each wild\'s badge, every bull entry, every rug point — comes from one stream derived from that seed, your client seed and a nonce, consumed in a fixed documented order. The whole round\'s randomness is fixed the instant you press spin; the reels, the stampede and the chart are just theatre delivering it. The only thing that isn\'t pre-committed is <b>your own SELL timing</b>, and Verify checks each recorded sell landed below the committed rug and paid exactly multiplier × bet.</p><p>When the round settles the seed is revealed and <span class="hl">Verify</span> re-derives the entire sequence draw-for-draw, replays the bull walk, recomputes every win, and checks the commitment hash locally.</p>'},
+    {q:'What is the RTP — where does the math come from?',a:'<p>The reel strips, 20 lines, hot-wild odds, Bull Run and the Vault Run were tuned with <span class="hl">multi-million-spin Monte Carlo simulations</span> of these exact rules. Because the Vault Run carries a heavy tail, the number was converged over <span class="hl">10-million-spin runs on separate seeds</span> (95.39% and 95.07%): the playable game returns <span class="hl">≈ 95.2%</span> (hit rate ≈ 50.8%; base game ≈ 41.0 points, Bull Run ≈ 23.6 points at ~1-in-91, Vault Run ≈ 30.6 points at ~1-in-174, natural max ~600–1,400×). The progressive contribution adds 1.5% — <span class="hl">RTP ≈ 96.7%</span> total, a house edge of ≈ 3.3%.</p><p>Individual sessions swing far wider than the long-run edge; the Vault Run and the jackpot pools especially reward whoever is on the floor when they burst.</p>'},
+    {q:'Is it really fair — and reproducible?',a:'<p>Yes. Before you bet, the server commits to a secret <span class="hl">server seed</span> (you see its SHA-256 hash). Every draw — reel stops, each wild\'s badge, every bull entry, and every land / value / special inside the Vault Run — comes from one stream derived from that seed, your client seed and a nonce, consumed in a fixed documented order. The whole round\'s randomness is fixed the instant you press spin; the reels, the sticky stampede and the vault stage are just theatre delivering it — the Vault Run is fully pre-resolved before the reels even stop.</p><p>When the round settles the seed is revealed and <span class="hl">Verify</span> re-derives the entire sequence draw-for-draw, replays the locked sticky board, re-runs the whole Vault Run, recomputes every win, and checks the commitment hash locally.</p>'},
     {q:'How do I get MORBIUS?',a:'<p>MORBIUS is the project\'s token on <span class="hl">PulseChain</span> (chain ID 369). Buy it on <span class="hl">PulseX</span> by swapping PLS or WPLS for MORBIUS, then deposit it to your play balance.</p><p class="mono" style="font-size:11px">Contract: <a href="https://scan.pulsechain.com/token/0xB7d4eB5fDfE3d4d3B5C16a44A49948c6EC77c6F1" target="_blank" rel="noopener noreferrer">0xB7d4eB5fDfE3d4d3B5C16a44A49948c6EC77c6F1</a></p><p>Always confirm the contract address before swapping — never trust a ticker alone.</p>'}
   ];
   function renderFaq(){
