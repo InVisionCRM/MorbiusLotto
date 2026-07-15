@@ -1,0 +1,357 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Button Lab — Liquid Glass Play/Auto pairs</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+/* ── Button Lab — Deep-Sea Neon liquid-glass button gallery ────────────────
+   10 PLAY / AUTO button pairs in the arcade2 house style (abyss #050E16,
+   cyan #22D3EE, amber #F59E0B, Chakra Petch + JetBrains Mono). Every button
+   is real glass (translucent fill + backdrop blur/saturate, top specular
+   sheen, bottom refracted edge, 1px inner rim, inner depth shadow), sits
+   raised on a physical base edge and TRAVELS DOWN on :active, and has a slow
+   breathing internal text glow. Self-contained; only Google Fonts external. */
+:root{
+  --abyss:#050E16; --cyan:#22D3EE; --amber:#F59E0B; --violet:#8B5CF6;
+  --ink:#E2E8F0; --slate-300:#CBD5E1; --slate-400:#94A3B8; --slate-500:#64748B;
+  --font-disp:'Chakra Petch',system-ui,sans-serif;
+  --font-mono:'JetBrains Mono',ui-monospace,monospace;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  min-height:100svh;background-color:var(--abyss);color:var(--ink);
+  font-family:var(--font-disp);-webkit-font-smoothing:antialiased;overflow-x:hidden;
+}
+
+/* ── page background (toggleable), sits behind the whole page so the glass
+      has something textured + moving to refract ─────────────────────────── */
+.page-bg{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden}
+.page-bg::before{content:"";position:absolute;inset:-30%;background:
+  radial-gradient(38% 44% at 22% 28%,rgba(34,211,238,0.55),transparent 60%),
+  radial-gradient(40% 46% at 78% 34%,rgba(139,92,246,0.50),transparent 62%),
+  radial-gradient(46% 50% at 60% 80%,rgba(245,158,11,0.34),transparent 60%),
+  radial-gradient(40% 46% at 20% 82%,rgba(16,185,129,0.34),transparent 62%);
+  filter:blur(10px);animation:drift 26s ease-in-out infinite alternate;}
+.page-bg::after{content:"";position:absolute;inset:0;background:
+  linear-gradient(to bottom,rgba(5,14,22,0.72),rgba(3,9,14,0.86));}
+@keyframes drift{0%{transform:translate3d(-4%,-3%,0) scale(1.05) rotate(0deg)}
+  100%{transform:translate3d(4%,3%,0) scale(1.14) rotate(4deg)}}
+
+/* alt background: warm luxe mesh */
+body[data-bg="warm"] .page-bg::before{background:
+  radial-gradient(42% 48% at 26% 30%,rgba(245,158,11,0.60),transparent 60%),
+  radial-gradient(40% 46% at 80% 26%,rgba(244,63,94,0.42),transparent 62%),
+  radial-gradient(48% 52% at 62% 82%,rgba(139,92,246,0.40),transparent 60%);}
+body[data-bg="warm"] .page-bg::after{background:linear-gradient(to bottom,rgba(14,8,4,0.66),rgba(8,4,2,0.84));}
+
+/* alt background: fine cyan grid over near-black */
+body[data-bg="grid"] .page-bg::before{background:
+  linear-gradient(rgba(34,211,238,0.10) 1px,transparent 1px) 0 0/34px 34px,
+  linear-gradient(90deg,rgba(34,211,238,0.10) 1px,transparent 1px) 0 0/34px 34px,
+  radial-gradient(60% 60% at 50% 30%,rgba(34,211,238,0.16),transparent 70%);
+  filter:none;animation:gridpan 30s linear infinite;}
+@keyframes gridpan{to{background-position:34px 34px,34px 34px,0 0}}
+body[data-bg="grid"] .page-bg::after{background:linear-gradient(to bottom,rgba(3,8,13,0.55),rgba(2,5,9,0.80));}
+
+/* alt background: flat abyss (glass over near-dead) for comparison */
+body[data-bg="dark"] .page-bg::before{background:radial-gradient(60% 50% at 50% 20%,rgba(34,211,238,0.10),transparent 70%);filter:none;animation:none;}
+body[data-bg="dark"] .page-bg::after{background:rgba(3,8,13,0.9);}
+
+/* light mode */
+body[data-theme="light"]{background-color:#dfe7ee;color:#0b1620}
+body[data-theme="light"] .page-bg::after{background:linear-gradient(to bottom,rgba(225,234,242,0.42),rgba(200,214,226,0.55));}
+body[data-theme="light"] .tag,body[data-theme="light"] .tagline{color:#3a4b58}
+body[data-theme="light"] .card{background:rgba(255,255,255,0.30);border-color:rgba(255,255,255,0.5)}
+body[data-theme="light"] .cardname{color:#0b1620}
+body[data-theme="light"] .carddesc{color:#3a4b58}
+
+.wrap{position:relative;z-index:1;max-width:1180px;margin:0 auto;padding:26px 16px 80px}
+@media(min-width:760px){.wrap{padding:34px 24px 96px}}
+
+header{text-align:center;margin-bottom:8px}
+h1.title{margin:0;font-weight:700;text-transform:uppercase;letter-spacing:0.09em;color:#fff;font-size:clamp(26px,6vw,42px);line-height:1}
+body[data-theme="light"] h1.title{color:#08131c}
+h1.title .glyph{color:var(--cyan);filter:drop-shadow(0 0 12px rgba(34,211,238,0.7))}
+.tagline{margin:.5rem 0 0;font-size:clamp(11px,2.5vw,13.5px);color:var(--slate-400);letter-spacing:.01em}
+
+/* top controls */
+.controls{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;align-items:center;margin:18px 0 26px}
+.seg{display:inline-flex;gap:2px;padding:4px;border-radius:12px;background:rgba(8,20,31,0.6);border:1px solid rgba(148,163,184,0.22);backdrop-filter:blur(8px)}
+body[data-theme="light"] .seg{background:rgba(255,255,255,0.4);border-color:rgba(11,22,32,0.14)}
+.seg .lbl{align-self:center;font-family:var(--font-mono);font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--slate-400);padding:0 8px}
+.seg button{font-family:var(--font-mono);font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--slate-300);
+  background:transparent;border:none;border-radius:9px;padding:7px 12px;cursor:pointer;transition:background .15s,color .15s}
+.seg button:hover{color:#fff}
+.seg button[aria-pressed="true"]{background:linear-gradient(180deg,rgba(34,211,238,0.30),rgba(34,211,238,0.14));color:#eafcff;box-shadow:inset 0 1px 0 rgba(255,255,255,.35)}
+body[data-theme="light"] .seg button{color:#33454f}
+body[data-theme="light"] .seg button[aria-pressed="true"]{color:#062b33}
+
+/* grid of cards */
+.grid{display:grid;grid-template-columns:1fr;gap:18px}
+@media(min-width:900px){.grid{grid-template-columns:1fr 1fr;gap:22px}}
+
+.card{position:relative;border-radius:20px;padding:16px 16px 20px;
+  background:rgba(8,20,31,0.34);border:1px solid rgba(148,163,184,0.16);
+  box-shadow:0 20px 50px rgba(0,0,0,0.4),inset 0 1px 0 rgba(255,255,255,0.05);overflow:hidden}
+.cardhead{display:flex;align-items:baseline;gap:10px;margin:0 4px 14px;flex-wrap:wrap}
+.cardnum{font-family:var(--font-mono);font-weight:700;font-size:12px;color:var(--cyan);
+  border:1px solid rgba(34,211,238,0.4);border-radius:7px;padding:2px 7px;flex:none;
+  text-shadow:0 0 8px rgba(34,211,238,0.5)}
+.cardname{font-weight:700;font-size:15px;letter-spacing:.04em;color:#eef6fb;text-transform:uppercase}
+.carddesc{width:100%;margin:2px 0 0;font-family:var(--font-mono);font-size:11px;line-height:1.5;color:var(--slate-400);letter-spacing:.01em}
+
+/* the stage the buttons sit on — a bright textured band so backdrop blur reads */
+.stage{position:relative;border-radius:14px;padding:26px 20px;display:flex;justify-content:center;overflow:hidden;
+  background:
+    radial-gradient(46% 96% at 20% 6%,rgba(56,224,248,0.60),transparent 58%),
+    radial-gradient(50% 100% at 86% 104%,rgba(155,110,255,0.50),transparent 60%),
+    radial-gradient(44% 90% at 62% 20%,rgba(245,158,11,0.24),transparent 58%),
+    linear-gradient(120deg,rgba(16,185,129,0.20),transparent 52%),
+    linear-gradient(180deg,#0d2233,#050f18);}
+.stage::before{content:"";position:absolute;inset:0;pointer-events:none;opacity:.5;
+  background:repeating-linear-gradient(60deg,rgba(255,255,255,0.05) 0 2px,transparent 2px 10px);}
+body[data-bg="warm"] .stage{background:
+    radial-gradient(52% 96% at 22% 10%,rgba(245,158,11,0.42),transparent 60%),
+    radial-gradient(52% 96% at 84% 100%,rgba(244,63,94,0.30),transparent 62%),
+    linear-gradient(180deg,#170e06,#0a0603);}
+body[data-bg="grid"] .stage{background:
+    linear-gradient(rgba(34,211,238,0.14) 1px,transparent 1px) 0 0/26px 26px,
+    linear-gradient(90deg,rgba(34,211,238,0.14) 1px,transparent 1px) 0 0/26px 26px,
+    linear-gradient(180deg,#07141f,#03090f);}
+body[data-bg="dark"] .stage{background:linear-gradient(180deg,#060e16,#03080d)}
+body[data-theme="light"] .stage{filter:saturate(1.05) brightness(1.06)}
+
+/* ── the button PAIR: Play (wide) + Auto (1/3 width, same height, small gap) ─ */
+.pair{display:flex;align-items:stretch;gap:14px}
+.btn{--h:64px;position:relative;height:var(--h);border:none;cursor:pointer;
+  font-family:var(--font-disp);font-weight:700;text-transform:uppercase;color:#f2fbff;
+  display:inline-flex;align-items:center;justify-content:center;
+  background:var(--glass,linear-gradient(180deg,rgba(255,255,255,0.20),rgba(255,255,255,0.05)));
+  -webkit-backdrop-filter:blur(14px) saturate(1.7);backdrop-filter:blur(14px) saturate(1.7);
+  border-radius:var(--r,17px);isolation:isolate;
+  transform:translateY(0);will-change:transform;
+  transition:transform .13s cubic-bezier(.2,.75,.3,1),box-shadow .13s cubic-bezier(.2,.75,.3,1),filter .13s;
+  box-shadow:
+    inset 0 1.5px 0 var(--rim,rgba(255,255,255,0.6)),
+    inset 0 -14px 22px rgba(0,0,0,0.30),
+    inset 0 0 0 1px var(--innerrim,rgba(255,255,255,0.14)),
+    0 7px 0 var(--edge,rgba(2,10,18,0.75)),
+    0 15px 24px var(--drop,rgba(0,0,0,0.55)),
+    0 0 0 0 var(--halo,transparent);}
+.btn.play{width:360px;font-size:18px;letter-spacing:.20em}
+.btn.auto{width:120px;font-size:14px;letter-spacing:.14em} /* 120 = 1/3 of 360 */
+
+/* glass layers */
+.btn::before{content:"";position:absolute;inset:0;border-radius:inherit;z-index:-1;pointer-events:none;
+  background:
+    linear-gradient(180deg,rgba(255,255,255,0.55) 0%,rgba(255,255,255,0.12) 26%,transparent 46%),
+    radial-gradient(120% 60% at 50% 0%,rgba(255,255,255,0.35),transparent 60%);
+  mix-blend-mode:screen;opacity:.9}
+.btn::after{content:"";position:absolute;left:8%;right:8%;bottom:3px;height:36%;border-radius:0 0 calc(var(--r,17px) - 4px) calc(var(--r,17px) - 4px);z-index:-1;pointer-events:none;
+  background:linear-gradient(180deg,transparent,var(--refract,rgba(34,211,238,0.28)) 78%,rgba(255,255,255,0.30));
+  filter:blur(1px);opacity:.85}
+
+/* label breathing internal light */
+.btn .label{position:relative;z-index:1;display:inline-flex;align-items:center;gap:7px;
+  animation:breathe 3.6s ease-in-out infinite;color:inherit}
+.btn.auto .label{animation-duration:3.9s;animation-delay:.4s}
+.btn .glyph{font-size:.85em;opacity:.9}
+@keyframes breathe{
+  0%,100%{text-shadow:0 0 5px var(--lit,rgba(180,240,255,0.35)),0 1px 0 rgba(0,0,0,0.45);filter:brightness(0.9)}
+  50%{text-shadow:0 0 14px var(--lit,rgba(180,240,255,0.9)),0 0 28px var(--lit2,rgba(120,220,255,0.5)),0 1px 0 rgba(0,0,0,0.45);filter:brightness(1.14)}}
+
+.btn:hover{transform:translateY(-2px);
+  box-shadow:
+    inset 0 1.5px 0 var(--rim,rgba(255,255,255,0.6)),
+    inset 0 -14px 22px rgba(0,0,0,0.28),
+    inset 0 0 0 1px var(--innerrim,rgba(255,255,255,0.16)),
+    0 9px 0 var(--edge,rgba(2,10,18,0.75)),
+    0 20px 30px var(--drop,rgba(0,0,0,0.6)),
+    0 0 26px 2px var(--halo,transparent);filter:brightness(1.05)}
+.btn:active{transform:translateY(7px);
+  box-shadow:
+    inset 0 1px 0 var(--rim,rgba(255,255,255,0.5)),
+    inset 0 -8px 16px rgba(0,0,0,0.34),
+    inset 0 0 0 1px var(--innerrim,rgba(255,255,255,0.12)),
+    0 1px 0 var(--edge,rgba(2,10,18,0.75)),
+    0 4px 9px var(--drop,rgba(0,0,0,0.55)),
+    0 0 18px 1px var(--halo,transparent);filter:brightness(0.98)}
+.btn:focus-visible{outline:2px solid var(--cyan);outline-offset:3px}
+
+/* ── 10 variants ─────────────────────────────────────────────────────────── */
+/* 1 — Frosted Cyan */
+.v1 .btn{--glass:linear-gradient(180deg,rgba(120,225,245,0.30),rgba(34,150,180,0.14));
+  --rim:rgba(220,250,255,0.7);--innerrim:rgba(34,211,238,0.28);--edge:rgba(6,50,64,0.85);
+  --refract:rgba(34,211,238,0.42);--lit:rgba(180,244,255,0.55);--lit2:rgba(120,225,255,0.55);--drop:rgba(0,20,28,0.55)}
+
+/* 2 — Liquid Prism (clear glass, chromatic rim) */
+.v2 .btn{--glass:linear-gradient(180deg,rgba(255,255,255,0.24),rgba(255,255,255,0.05));
+  --rim:rgba(255,255,255,0.85);--innerrim:rgba(255,255,255,0.20);--edge:rgba(4,12,22,0.8);
+  --refract:rgba(255,255,255,0.4);--lit:rgba(255,255,255,0.75)}
+.v2 .btn::before{background:
+  linear-gradient(180deg,rgba(255,255,255,0.6) 0%,rgba(255,255,255,0.1) 30%,transparent 48%),
+  conic-gradient(from 210deg at 50% 120%,rgba(34,211,238,0.6),rgba(139,92,246,0.55),rgba(244,63,94,0.5),rgba(245,158,11,0.55),rgba(34,211,238,0.6));
+  mix-blend-mode:screen;opacity:.55}
+
+/* 3 — Obsidian Smoke (dark smoked glass) */
+.v3 .btn{--glass:linear-gradient(180deg,rgba(20,30,42,0.55),rgba(4,10,18,0.42));color:#dfeaf2;
+  --rim:rgba(200,220,235,0.28);--innerrim:rgba(255,255,255,0.06);--edge:rgba(0,0,0,0.9);
+  --refract:rgba(120,150,175,0.22);--lit:rgba(160,200,225,0.4);--drop:rgba(0,0,0,0.7)}
+
+/* 4 — Gold Luxe */
+.v4 .btn{--glass:linear-gradient(180deg,rgba(255,225,150,0.34),rgba(180,120,20,0.16));color:#fff6e2;
+  --rim:rgba(255,244,210,0.85);--innerrim:rgba(245,158,11,0.34);--edge:rgba(70,40,4,0.85);
+  --refract:rgba(245,190,90,0.5);--lit:rgba(255,225,150,0.7);--lit2:rgba(255,190,90,0.55);--drop:rgba(30,16,0,0.6)}
+.v4 .btn::before{background:
+  linear-gradient(180deg,rgba(255,250,225,0.65) 0%,rgba(255,235,180,0.14) 28%,transparent 48%),
+  radial-gradient(120% 60% at 50% 0%,rgba(255,240,200,0.4),transparent 60%);mix-blend-mode:screen}
+
+/* 5 — Neon Edge (glowing perimeter) */
+.v5 .btn{--glass:linear-gradient(180deg,rgba(34,211,238,0.16),rgba(10,40,52,0.16));
+  --rim:rgba(190,250,255,0.6);--innerrim:rgba(34,211,238,0.7);--edge:rgba(4,40,52,0.85);
+  --refract:rgba(34,211,238,0.55);--lit:rgba(190,250,255,0.8);--lit2:rgba(80,230,255,0.7);
+  --halo:rgba(34,211,238,0.55);--drop:rgba(0,20,28,0.5)}
+.v5 .btn{box-shadow:
+    inset 0 1.5px 0 var(--rim),inset 0 -14px 22px rgba(0,0,0,0.26),
+    inset 0 0 12px rgba(34,211,238,0.4),inset 0 0 0 1.4px var(--innerrim),
+    0 7px 0 var(--edge),0 15px 24px rgba(0,0,0,0.5),0 0 22px 1px var(--halo)}
+
+/* 6 — Arcade Deep (chunky big-button) */
+.v6 .btn{--h:66px;--r:20px;--glass:linear-gradient(180deg,rgba(90,210,240,0.34),rgba(20,90,120,0.2));
+  --rim:rgba(225,252,255,0.8);--innerrim:rgba(34,211,238,0.3);--edge:rgba(4,44,60,0.95);
+  --refract:rgba(34,211,238,0.5);--lit:rgba(190,248,255,0.65);--drop:rgba(0,18,26,0.6);
+  box-shadow:
+    inset 0 2px 0 var(--rim),inset 0 -18px 26px rgba(0,0,0,0.34),inset 0 0 0 1px var(--innerrim),
+    0 12px 0 var(--edge),0 20px 30px rgba(0,0,0,0.62)}
+.v6 .btn:hover{box-shadow:inset 0 2px 0 var(--rim),inset 0 -18px 26px rgba(0,0,0,0.32),inset 0 0 0 1px var(--innerrim),0 14px 0 var(--edge),0 26px 38px rgba(0,0,0,0.66)}
+.v6 .btn:active{transform:translateY(11px);box-shadow:inset 0 1px 0 var(--rim),inset 0 -10px 18px rgba(0,0,0,0.4),inset 0 0 0 1px var(--innerrim),0 2px 0 var(--edge),0 5px 11px rgba(0,0,0,0.6)}
+
+/* 7 — Clean Minimal (restrained, Apple-like) */
+.v7 .btn{--r:14px;--glass:linear-gradient(180deg,rgba(255,255,255,0.16),rgba(255,255,255,0.06));
+  --rim:rgba(255,255,255,0.55);--innerrim:rgba(255,255,255,0.10);--edge:rgba(8,16,26,0.55);
+  --refract:rgba(255,255,255,0.22);--lit:rgba(220,240,250,0.45);--drop:rgba(0,0,0,0.4);
+  font-weight:600;letter-spacing:.12em}
+.v7 .btn::after{opacity:.5}
+
+/* 8 — Violet Cyber */
+.v8 .btn{--glass:linear-gradient(180deg,rgba(160,120,255,0.30),rgba(70,30,140,0.18));color:#f2eaff;
+  --rim:rgba(235,220,255,0.75);--innerrim:rgba(139,92,246,0.4);--edge:rgba(30,10,70,0.85);
+  --refract:rgba(160,120,255,0.5);--lit:rgba(220,190,255,0.7);--lit2:rgba(160,120,255,0.6);
+  --halo:rgba(139,92,246,0.45);--drop:rgba(14,4,34,0.6)}
+
+/* 9 — Crystal Facet (beveled) */
+.v9 .btn{--glass:linear-gradient(180deg,rgba(190,235,250,0.30),rgba(60,120,150,0.14));
+  --rim:rgba(245,253,255,0.85);--innerrim:rgba(255,255,255,0.22);--edge:rgba(8,44,58,0.85);
+  --refract:rgba(190,235,250,0.45);--lit:rgba(210,245,255,0.7)}
+.v9 .btn::before{background:
+  linear-gradient(105deg,rgba(255,255,255,0.5) 0%,rgba(255,255,255,0.05) 26%,transparent 40%,transparent 60%,rgba(255,255,255,0.08) 74%,rgba(255,255,255,0.42) 100%),
+  linear-gradient(180deg,rgba(255,255,255,0.5),transparent 42%);mix-blend-mode:screen;opacity:.8}
+.v9 .btn{box-shadow:
+    inset 0 1.5px 0 var(--rim),inset 1.5px 0 0 rgba(255,255,255,0.28),inset -1.5px 0 0 rgba(0,0,0,0.24),
+    inset 0 -14px 22px rgba(0,0,0,0.3),inset 0 0 0 1px var(--innerrim),
+    0 7px 0 var(--edge),0 15px 24px rgba(0,10,16,0.5)}
+
+/* 10 — Pill Glow (pill shape) */
+.v10 .btn{--r:999px;--glass:linear-gradient(180deg,rgba(120,225,245,0.26),rgba(245,158,11,0.10));
+  --rim:rgba(225,250,255,0.7);--innerrim:rgba(34,211,238,0.3);--edge:rgba(6,44,58,0.82);
+  --refract:rgba(34,211,238,0.4);--lit:rgba(190,246,255,0.6);--lit2:rgba(255,200,120,0.4);
+  --halo:rgba(34,211,238,0.4)}
+.v10 .btn::after{border-radius:999px;left:12%;right:12%}
+
+/* reduced motion — freeze breathing + drift, keep press travel */
+@media (prefers-reduced-motion:reduce){
+  .btn .label{animation:none;text-shadow:0 0 12px var(--lit,rgba(180,240,255,0.7)),0 1px 0 rgba(0,0,0,0.45)}
+  .page-bg::before{animation:none}
+}
+.footnote{margin:30px 4px 0;text-align:center;font-family:var(--font-mono);font-size:11px;color:var(--slate-500);letter-spacing:.02em}
+</style>
+</head>
+<body data-bg="aurora" data-theme="dark">
+<div class="page-bg" aria-hidden="true"></div>
+<div class="wrap">
+  <header>
+    <h1 class="title">Button Lab <span class="glyph">◆</span></h1>
+    <p class="tagline">Liquid-glass PLAY / AUTO pairs — ten premium treatments for a site-wide makeover. Hover and click to feel the travel &amp; breathing.</p>
+  </header>
+
+  <div class="controls">
+    <div class="seg" role="group" aria-label="Background">
+      <span class="lbl">Backdrop</span>
+      <button data-bg="aurora" aria-pressed="true">Aurora</button>
+      <button data-bg="warm" aria-pressed="false">Warm</button>
+      <button data-bg="grid" aria-pressed="false">Grid</button>
+      <button data-bg="dark" aria-pressed="false">Abyss</button>
+    </div>
+    <div class="seg" role="group" aria-label="Theme">
+      <span class="lbl">Theme</span>
+      <button data-theme="dark" aria-pressed="true">Dark</button>
+      <button data-theme="light" aria-pressed="false">Light</button>
+    </div>
+  </div>
+
+  <div class="grid" id="grid"></div>
+
+  <p class="footnote">Deep-Sea Neon · Chakra Petch + JetBrains Mono · original CSS · AUTO is 1/3 the width of PLAY at equal height</p>
+</div>
+
+<script>
+(function(){
+  var styles = [
+    ["Frosted Cyan","Milky cyan frost — house signature, soft and legible.","v1"],
+    ["Liquid Prism","Near-clear glass with a chromatic refracted rim.","v2"],
+    ["Obsidian Smoke","Dark smoked glass, low-key with a quiet inner light.","v3"],
+    ["Gold Luxe","Warm amber crystal for high-roller / premium states.","v4"],
+    ["Neon Edge","Glowing perimeter halo — reads bright in a dim UI.","v5"],
+    ["Arcade Deep","Chunky physical key with deep travel and a tall base.","v6"],
+    ["Clean Minimal","Restrained, Apple-like — the understated option.","v7"],
+    ["Violet Cyber","Electric violet glass with a soft magnetic halo.","v8"],
+    ["Crystal Facet","Beveled side lighting for a cut-crystal solidity.","v9"],
+    ["Pill Glow","Fully-rounded pill variant against the rounded-rects.","v10"]
+  ];
+  var grid = document.getElementById("grid");
+  styles.forEach(function(s, i){
+    var card = document.createElement("div");
+    card.className = "card " + s[2];
+    card.setAttribute("data-example","");
+    card.innerHTML =
+      '<div class="cardhead">' +
+        '<span class="cardnum">'+ String(i+1).padStart(2,"0") +'</span>' +
+        '<span class="cardname">'+ s[0] +'</span>' +
+        '<p class="carddesc">'+ s[1] +'</p>' +
+      '</div>' +
+      '<div class="stage">' +
+        '<div class="pair">' +
+          '<button class="btn play" type="button"><span class="label"><span class="glyph">&#9654;</span>PLAY</span></button>' +
+          '<button class="btn auto" type="button"><span class="label">AUTO</span></button>' +
+        '</div>' +
+      '</div>';
+    grid.appendChild(card);
+  });
+
+  // press feedback: brief active-look on real click (also helps touch)
+  grid.addEventListener("click", function(e){
+    var b = e.target.closest(".btn");
+    if(!b) return;
+    b.classList.add("clicked");
+    setTimeout(function(){ b.classList.remove("clicked"); }, 160);
+  });
+
+  // background + theme toggles
+  document.querySelectorAll('.seg').forEach(function(seg){
+    seg.addEventListener("click", function(e){
+      var btn = e.target.closest("button"); if(!btn) return;
+      var isBg = btn.hasAttribute("data-bg");
+      var attr = isBg ? "data-bg" : "data-theme";
+      document.body.setAttribute(attr, btn.getAttribute(attr));
+      seg.querySelectorAll("button").forEach(function(x){ x.setAttribute("aria-pressed", x===btn ? "true":"false"); });
+    });
+  });
+})();
+</script>
+</body>
+</html>
