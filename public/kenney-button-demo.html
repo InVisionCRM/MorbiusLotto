@@ -1,0 +1,74 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kenney CC0 buttons on a slot</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@600;700&family=JetBrains+Mono:wght@600&display=swap" rel="stylesheet">
+<style>
+  :root{--abyss:#050E16;--cyan:#22D3EE;--amber:#F59E0B;}
+  *{box-sizing:border-box}
+  body{margin:0;background:
+      radial-gradient(1200px 700px at 50% -10%, #0c2233 0%, transparent 60%),
+      radial-gradient(900px 600px at 80% 110%, #10233a 0%, transparent 55%),
+      var(--abyss);
+    color:#dfeaf2;font-family:'Chakra Petch',system-ui,sans-serif;min-height:100vh;padding:34px 20px 70px}
+  h1{text-align:center;font-size:30px;letter-spacing:.06em;margin:0 0 4px}
+  .sub{text-align:center;color:#8aa2b3;font-family:'JetBrains Mono',monospace;font-size:12.5px;max-width:760px;margin:0 auto 28px;line-height:1.6}
+  .felt{max-width:1080px;margin:0 auto;display:grid;grid-template-columns:1fr 1fr;gap:22px}
+  .card{background:linear-gradient(180deg,rgba(255,255,255,.03),rgba(0,0,0,.25));
+    border:1px solid rgba(255,255,255,.08);border-radius:16px;padding:22px 22px 26px;
+    box-shadow:0 20px 50px -20px rgba(0,0,0,.7), inset 0 1px 0 rgba(255,255,255,.05)}
+  .cap{display:flex;align-items:center;gap:10px;margin-bottom:16px}
+  .num{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--abyss);background:var(--cyan);
+    border-radius:6px;padding:2px 7px;font-weight:700}
+  .name{font-weight:700;letter-spacing:.04em}
+  .tag{font-family:'JetBrains Mono',monospace;font-size:10.5px;color:#8aa2b3;border:1px solid rgba(138,162,179,.35);
+    border-radius:20px;padding:2px 9px;margin-left:auto}
+  /* button row: PLAY + AUTO (1/3 width, same height, small gap) */
+  .row{display:flex;gap:12px;align-items:stretch}
+  .kbtn{position:relative;height:66px;border:none;background:transparent;cursor:pointer;padding:0;
+    font-family:'Chakra Petch',sans-serif;font-weight:700;letter-spacing:.05em;color:#fff;
+    display:grid;place-items:center;transition:transform .06s ease, filter .12s ease;
+    /* the 3D depth is baked into the Kenney art; press pushes it down */
+    filter:drop-shadow(0 6px 10px rgba(0,0,0,.45));}
+  .play{flex:3;font-size:22px}
+  .auto{flex:1;font-size:16px}          /* 1/3 the width of Play */
+  .kbtn::before{content:"";position:absolute;inset:0;background-size:100% 100%;background-repeat:no-repeat;z-index:-1}
+  .kbtn:hover{filter:drop-shadow(0 9px 13px rgba(0,0,0,.5)) brightness(1.06)}
+  .kbtn:active{transform:translateY(5px);filter:drop-shadow(0 2px 5px rgba(0,0,0,.5))}
+  .kbtn .lbl{text-shadow:0 1px 0 rgba(0,0,0,.35), 0 0 10px rgba(255,255,255,.25);
+    animation:breathe 3.6s ease-in-out infinite}
+  .auto .lbl{animation-delay:.7s}
+  @keyframes breathe{0%,100%{filter:brightness(.94)}50%{filter:brightness(1.14)}}
+  @media(prefers-reduced-motion:reduce){.kbtn .lbl{animation:none}}
+  /* map each pair to its Kenney art */
+  .yellow.play::before{background-image:url('vendor/kenney-ui/yellow_rectangle_gloss.png')}
+  .yellow.auto::before{background-image:url('vendor/kenney-ui/yellow_rectangle_gloss.png')}
+  .blue.play::before{background-image:url('vendor/kenney-ui/blue_rectangle_gloss.png')}
+  .blue.auto::before{background-image:url('vendor/kenney-ui/blue_rectangle_gloss.png')}
+  .green.play::before{background-image:url('vendor/kenney-ui/green_rectangle_gloss.png')}
+  .green.auto::before{background-image:url('vendor/kenney-ui/green_rectangle_gloss.png')}
+  .red.play::before{background-image:url('vendor/kenney-ui/red_rectangle_gloss.png')}
+  .red.auto::before{background-image:url('vendor/kenney-ui/red_rectangle_gloss.png')}
+  .grey.play::before{background-image:url('vendor/kenney-ui/grey_rectangle_gloss.png')}
+  .grey.auto::before{background-image:url('vendor/kenney-ui/grey_rectangle_gloss.png')}
+  .roundpair .play::before{background-image:url('vendor/kenney-ui/yellow_round_gloss.png')}
+  .roundpair .auto::before{background-image:url('vendor/kenney-ui/blue_round_gloss.png')}
+  .foot{text-align:center;color:#6d8494;font-family:'JetBrains Mono',monospace;font-size:11px;margin-top:26px}
+</style>
+<h1>KENNEY CC0 BUTTONS · ON A SLOT</h1>
+<p class="sub">Real button artwork (Kenney UI Pack, CC0 public domain) wired as PLAY + AUTO pairs — Auto is 1/3 the Play width at equal height. The 3D bevel &amp; gloss are baked into the art; pressing pushes it down. This is "real image buttons" for you to judge vs the CSS glass.</p>
+<div class="felt">
+  <div class="card"><div class="cap"><span class="num">01</span><span class="name">GOLD</span><span class="tag">yellow · gloss</span></div>
+    <div class="row"><button class="kbtn play yellow"><span class="lbl">▶ PLAY</span></button><button class="kbtn auto yellow"><span class="lbl">AUTO</span></button></div></div>
+  <div class="card"><div class="cap"><span class="num">02</span><span class="name">CYAN</span><span class="tag">blue · gloss</span></div>
+    <div class="row"><button class="kbtn play blue"><span class="lbl">▶ PLAY</span></button><button class="kbtn auto blue"><span class="lbl">AUTO</span></button></div></div>
+  <div class="card"><div class="cap"><span class="num">03</span><span class="name">EMERALD</span><span class="tag">green · gloss</span></div>
+    <div class="row"><button class="kbtn play green"><span class="lbl">▶ PLAY</span></button><button class="kbtn auto green"><span class="lbl">AUTO</span></button></div></div>
+  <div class="card"><div class="cap"><span class="num">04</span><span class="name">RUBY</span><span class="tag">red · gloss</span></div>
+    <div class="row"><button class="kbtn play red"><span class="lbl">▶ PLAY</span></button><button class="kbtn auto red"><span class="lbl">AUTO</span></button></div></div>
+  <div class="card"><div class="cap"><span class="num">05</span><span class="name">STEEL</span><span class="tag">grey · gloss</span></div>
+    <div class="row"><button class="kbtn play grey"><span class="lbl">▶ PLAY</span></button><button class="kbtn auto grey"><span class="lbl">AUTO</span></button></div></div>
+  <div class="card roundpair"><div class="cap"><span class="num">06</span><span class="name">ROUND MIX</span><span class="tag">round · gold + cyan</span></div>
+    <div class="row"><button class="kbtn play"><span class="lbl">▶ PLAY</span></button><button class="kbtn auto"><span class="lbl">AUTO</span></button></div></div>
+</div>
+<p class="foot">Kenney UI Pack — CC0 (public domain), credit optional · public/vendor/kenney-ui/ · corners shown stretched; production would 9-slice via border-image for crisp corners</p>
