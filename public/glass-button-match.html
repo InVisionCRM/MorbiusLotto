@@ -1,0 +1,192 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Glass button — matched (real refraction)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{margin:0;font-family:Inter,system-ui,sans-serif;
+    /* light backdrop WITH faint structure — the diagonal light streaks give the
+       lens something to bend, so the refraction actually reads (Figma reference) */
+    background:
+      /* SMOOTH tonal structure — wide, soft diagonal bands (no hard edges) so
+         there is visibly-darker content behind the glass to see THROUGH and bend,
+         but nothing high-frequency for the lens to seam against. Transparent
+         glass over this reads clearly see-through without artifacts. */
+      linear-gradient(122deg, rgba(120,126,142,0) 8%, rgba(120,126,142,.22) 26%, rgba(120,126,142,0) 44%),
+      linear-gradient(122deg, rgba(120,126,142,0) 52%, rgba(120,126,142,.26) 70%, rgba(120,126,142,0) 88%),
+      linear-gradient(118deg, transparent 14%, rgba(255,255,255,.85) 30%, rgba(255,255,255,0) 46%),
+      radial-gradient(130% 130% at 88% 105%, #b7b9c2 0%, transparent 55%),
+      radial-gradient(120% 120% at 8% -5%, #f3f4f7 0%, transparent 48%),
+      linear-gradient(160deg, #e7e8ec 0%, #d4d5dc 48%, #c6c7cf 100%);
+    min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:60px;padding:64px 24px;overflow:hidden}
+
+  .row{display:flex;gap:44px;align-items:center;flex-wrap:wrap;justify-content:center;position:relative;z-index:1}
+
+  /* ── GLASS: near-clear + REAL refraction ──────────────────────────────────
+     fill is barely there (transparent), so you see the backdrop THROUGH it.
+     The SVG lens map (#lensSm / #lensLg) is applied via backdrop-filter so the
+     background BENDS at the rounded rim like a real piece of glass. */
+  .glass{position:relative;cursor:pointer;border:none;border-radius:999px;isolation:isolate;
+    display:flex;align-items:center;justify-content:center;gap:.5em;white-space:nowrap;
+    font-family:Inter,sans-serif;font-weight:800;letter-spacing:-.015em;
+    /* fill is almost nothing — the surface is the refracted/blurred backdrop, not paint */
+    background:linear-gradient(177deg, rgba(255,255,255,.04) 0%, rgba(255,255,255,0) 55%, rgba(255,255,255,.03) 100%);
+    -webkit-backdrop-filter:blur(1px) saturate(1.35) brightness(1.02);backdrop-filter:blur(1px) saturate(1.35) brightness(1.02);
+    box-shadow:
+      inset 0 1.2px 0.4px rgba(255,255,255,.9),
+      inset 0 -1.4px 1px rgba(110,116,132,.28),
+      0 0 0 1px rgba(255,255,255,.4),
+      0 0 0 1.4px rgba(150,155,170,.3),
+      0 22px 44px -16px rgba(38,46,64,.24),
+      0 5px 12px -5px rgba(38,46,64,.16);
+    transition:transform .12s cubic-bezier(.4,.9,.3,1.25), box-shadow .15s ease}
+  /* upgrade to true displacement refraction where supported */
+  @supports ((backdrop-filter:url("#lensSm")) or (-webkit-backdrop-filter:url("#lensSm"))){
+    .glass.sm{-webkit-backdrop-filter:url("#lensSm") blur(0.5px) saturate(1.35) brightness(1.02);backdrop-filter:url("#lensSm") blur(0.5px) saturate(1.35) brightness(1.02)}
+    .glass.lg{-webkit-backdrop-filter:url("#lensLg") blur(0.5px) saturate(1.35) brightness(1.02);backdrop-filter:url("#lensLg") blur(0.5px) saturate(1.35) brightness(1.02)}
+  }
+  /* THIN top-edge highlight streak only — no full-surface wash (that made it read as solid white) */
+  .glass::before{content:"";position:absolute;left:2%;right:2%;top:1.5px;height:34%;border-radius:999px 999px 60% 60%;pointer-events:none;z-index:2;
+    background:linear-gradient(180deg, rgba(255,255,255,.5) 0%, rgba(255,255,255,.08) 55%, transparent 100%);
+    mix-blend-mode:screen;opacity:.8}
+  /* IDLE SHIMMER — a soft specular streak drifts slowly across the glass forever,
+     so it always looks alive/reflective. Clipped to the pill via border-radius. */
+  .glass::after{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;z-index:1;
+    background:linear-gradient(115deg, transparent 34%, rgba(255,255,255,.34) 48%, rgba(255,255,255,.10) 54%, transparent 66%);
+    background-size:230% 100%;background-repeat:no-repeat;
+    mix-blend-mode:screen;animation:shimmer 5.5s linear infinite}
+  @keyframes shimmer{0%{background-position:160% 0}100%{background-position:-60% 0}}
+  @media (prefers-reduced-motion:reduce){.glass::after{animation:none;opacity:.25;background-position:40% 0}}
+
+  .glass .inner{position:relative;z-index:3;display:flex;align-items:center;gap:.5em}
+
+  /* HOVER GLOW RAMP — brighten + a cool outer halo swells in smoothly, fades on leave */
+  .glass:hover{transform:translateY(-2px);
+    box-shadow:
+      inset 0 1.4px 0.4px rgba(255,255,255,.95), inset 0 -1.6px 1.2px rgba(120,124,135,.22),
+      0 0 0 1px rgba(255,255,255,.6), 0 0 0 1.6px rgba(172,176,188,.3),
+      0 0 26px 2px rgba(255,255,255,.55),
+      0 34px 60px -16px rgba(38,46,64,.26), 0 8px 18px -5px rgba(38,46,64,.17)}
+  .glass:active{transform:translateY(1px) scale(.994)}
+
+  /* WIN / SUCCESS GLOW PULSE — gold rim flares out and settles. Added to .glass
+     on a win/payout (and on the primary "Generate" click as the tap response). */
+  .glass.win{animation:winPulse 1.15s cubic-bezier(.22,.9,.28,1)}
+  @keyframes winPulse{
+    0%{box-shadow:
+        inset 0 1.2px 0.4px rgba(255,255,255,.9), inset 0 -1.4px 1px rgba(110,116,132,.28),
+        0 0 0 1px rgba(255,255,255,.5), 0 0 0 1.6px rgba(232,188,92,0),
+        0 0 0 0 rgba(232,188,92,0),
+        0 22px 44px -16px rgba(38,46,64,.24)}
+    22%{box-shadow:
+        inset 0 1.2px 0.4px rgba(255,255,255,.95), inset 0 -1.4px 1px rgba(110,116,132,.28),
+        0 0 0 1px rgba(255,255,255,.75), 0 0 0 2px rgba(232,188,92,.85),
+        0 0 34px 9px rgba(232,188,92,.7),
+        0 22px 44px -16px rgba(38,46,64,.24)}
+    100%{box-shadow:
+        inset 0 1.2px 0.4px rgba(255,255,255,.9), inset 0 -1.4px 1px rgba(110,116,132,.28),
+        0 0 0 1px rgba(255,255,255,.5), 0 0 0 1.6px rgba(232,188,92,0),
+        0 0 0 0 rgba(232,188,92,0),
+        0 22px 44px -16px rgba(38,46,64,.24)}
+  }
+
+  .sm{padding:15px 32px;font-size:25px}
+  .sm .spark{width:21px;height:21px}
+  .lg{padding:38px 92px;font-size:62px;font-weight:900}
+  .lg .spark{width:50px;height:50px}
+
+  /* text finishes on the inner span only, so the frosted glass body stays clear */
+  .t-frost .inner{color:rgba(255,255,255,.92);
+    text-shadow:0 1px 1px rgba(255,255,255,.9), 0 -1px 1px rgba(110,114,130,.5), 0 0 14px rgba(255,255,255,.4)}
+  .t-frost .spark path{fill:rgba(255,255,255,.95)}
+  .t-gold .inner{background:linear-gradient(180deg,#f4dfa8 0%,#d0a94f 46%,#916b28 100%);-webkit-background-clip:text;background-clip:text;color:transparent;-webkit-text-fill-color:transparent}
+  .t-gold .spark path{fill:#c69544}
+  .t-blue .inner{background:linear-gradient(180deg,#9fb6d2 0%,#4f70a0 46%,#2c4570 100%);-webkit-background-clip:text;background-clip:text;color:transparent;-webkit-text-fill-color:transparent}
+  .t-blue .spark path{fill:#4f70a0}
+  .t-dark .inner{color:#222c3a}
+  .t-dark .spark path{fill:#222c3a}
+
+  .cap{position:fixed;bottom:18px;left:0;right:0;text-align:center;color:#9a9ea8;font-size:12px;font-weight:500;z-index:3}
+  .svg-filters{position:absolute;width:0;height:0;pointer-events:none}
+</style>
+
+<div class="row">
+  <button class="glass sm t-frost"><span class="inner"><svg class="spark" viewBox="0 0 24 24"><path d="M14 2l1.4 4.1L19.5 7.5l-4.1 1.4L14 13l-1.4-4.1L8.5 7.5l4.1-1.4zM6 12l.9 2.6 2.6.9-2.6.9L6 19l-.9-2.6L2.5 15.5l2.6-.9z"/></svg>Generate</span></button>
+  <button class="glass sm t-gold"><span class="inner"><svg class="spark" viewBox="0 0 24 24"><path d="M14 2l1.4 4.1L19.5 7.5l-4.1 1.4L14 13l-1.4-4.1L8.5 7.5l4.1-1.4zM6 12l.9 2.6 2.6.9-2.6.9L6 19l-.9-2.6L2.5 15.5l2.6-.9z"/></svg>Generate</span></button>
+  <button class="glass sm t-blue"><span class="inner"><svg class="spark" viewBox="0 0 24 24"><path d="M14 2l1.4 4.1L19.5 7.5l-4.1 1.4L14 13l-1.4-4.1L8.5 7.5l4.1-1.4zM6 12l.9 2.6 2.6.9-2.6.9L6 19l-.9-2.6L2.5 15.5l2.6-.9z"/></svg>Generate</span></button>
+</div>
+<div class="row">
+  <button class="glass lg t-dark"><span class="inner"><svg class="spark" viewBox="0 0 24 24"><path d="M14 2l1.4 4.1L19.5 7.5l-4.1 1.4L14 13l-1.4-4.1L8.5 7.5l4.1-1.4zM6 12l.9 2.6 2.6.9-2.6.9L6 19l-.9-2.6L2.5 15.5l2.6-.9z"/></svg>Generate</span></button>
+</div>
+<div class="cap">Idle shimmer + hover glow + gold win-pulse (click any pill to fire the pulse — hero auto-pulses to demo a win)</div>
+
+<svg class="svg-filters" aria-hidden="true"><defs></defs></svg>
+
+<script>
+(function(){
+  "use strict";
+  var SVGNS="http://www.w3.org/2000/svg", XLINK="http://www.w3.org/1999/xlink";
+
+  /* bake a lens displacement map using a RADIAL (elliptical) metric so the
+     undistorted centre is a smooth ELLIPSE concentric with the pill — never a
+     rectangle. Displacement is 0 through the inner ellipse, then ramps outward
+     along the radial normal so the backdrop bends only near the rounded rim,
+     exactly like a real convex lens. `inner` = fraction (0..1) of the radius
+     that stays flat. */
+  function makeLensMap(w,h,inner){
+    var cv=document.createElement("canvas");cv.width=w;cv.height=h;
+    var ctx=cv.getContext("2d");var id=ctx.createImageData(w,h),D=id.data;
+    var hw=w/2,hh=h/2;
+    for(var y=0;y<h;y++){for(var x=0;x<w;x++){
+      var u=(x+0.5-hw)/hw, v=(y+0.5-hh)/hh;   // normalised elliptical coords
+      var rr=Math.sqrt(u*u+v*v);
+      var dx=0,dy=0;
+      if(rr>inner){
+        var t=(rr-inner)/(1-inner); if(t>1)t=1;
+        t=t*t*(3-2*t);                        // smoothstep ramp toward the rim
+        dx=(u/rr)*t; dy=(v/rr)*t;             // push outward along the radius
+      }
+      var i=(y*w+x)*4;
+      D[i]=Math.max(0,Math.min(255,Math.round(128+127*dx)));
+      D[i+1]=Math.max(0,Math.min(255,Math.round(128+127*dy)));
+      D[i+2]=128; D[i+3]=255;
+    }}
+    ctx.putImageData(id,0,0);return cv.toDataURL("image/png");
+  }
+
+  var defs=document.querySelector(".svg-filters defs");
+  function el(n,a){var e=document.createElementNS(SVGNS,n);for(var k in a)if(a.hasOwnProperty(k))e.setAttribute(k,a[k]);return e;}
+  function addLens(id,mapUrl,scale){
+    var f=el("filter",{id:id,x:"0%",y:"0%",width:"100%",height:"100%","color-interpolation-filters":"sRGB"});
+    var im=el("feImage",{x:"0%",y:"0%",width:"100%",height:"100%",preserveAspectRatio:"none",result:"m"});
+    im.setAttribute("href",mapUrl); im.setAttributeNS(XLINK,"xlink:href",mapUrl);
+    var dm=el("feDisplacementMap",{in:"SourceGraphic",in2:"m",scale:scale,xChannelSelector:"R",yChannelSelector:"G"});
+    f.appendChild(im);f.appendChild(dm);defs.appendChild(f);
+  }
+
+  // maps stretched to each pill via preserveAspectRatio="none"
+  // inner = fraction of the radius left flat; the ramped ring bends only near
+  // the rim, and because the metric is radial the flat zone is an ellipse — no
+  // rectangle. Keep a modest flat centre so the glass reads flat, not fisheye.
+  addLens("lensSm", makeLensMap(280,64,0.35), 30);   // small pills
+  addLens("lensLg", makeLensMap(680,150,0.4), 64);   // hero pill
+
+  /* ── event lighting (demo wiring) ──────────────────────────────────────────
+     In the app these fire on real events: `pulseWin(btn)` on a Generate/primary
+     click and on a win/payout. Here we self-drive it so the effect is visible. */
+  function pulseWin(btn){
+    btn.classList.remove("win");        // restart the animation if mid-flight
+    void btn.offsetWidth;               // force reflow so re-adding replays it
+    btn.classList.add("win");
+  }
+  var buttons=[].slice.call(document.querySelectorAll(".glass"));
+  buttons.forEach(function(b){
+    b.addEventListener("animationend",function(e){if(e.animationName==="winPulse")b.classList.remove("win");});
+    b.addEventListener("click",function(){pulseWin(b);});           // primary-click tap response
+  });
+  var hero=document.querySelector(".glass.lg");
+  if(hero)setInterval(function(){pulseWin(hero);},4200); // auto-demo a win/payout
+})();
+</script>
