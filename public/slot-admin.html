@@ -1,0 +1,546 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Slot Admin — reel image manager</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box}
+  :root{
+    --bg:#070d15; --bg2:#0b1220; --panel:rgba(15,23,38,.72); --panel-solid:#0e1626;
+    --line:rgba(148,163,184,.16); --line-2:rgba(148,163,184,.28);
+    --ink:#e6ecf5; --sub:#93a0b4; --dim:#5d6b81;
+    --font:'Chakra Petch',system-ui,sans-serif; --mono:'JetBrains Mono',ui-monospace,monospace;
+    --wild:#22d3ee; --scat:#fb7185; --bon:#f59e0b; --high:#a5b4fc; --low:#64748b;
+  }
+  html,body{height:100%}
+  body{margin:0;font-family:var(--font);color:var(--ink);
+    background:
+      radial-gradient(120% 90% at 12% -8%,rgba(56,72,110,.35),transparent 55%),
+      radial-gradient(120% 90% at 100% 0%,rgba(88,40,120,.22),transparent 50%),
+      linear-gradient(180deg,var(--bg),var(--bg2));
+    min-height:100vh}
+
+  /* ── top bar ─────────────────────────────────────────── */
+  header{position:sticky;top:0;z-index:40;backdrop-filter:blur(14px) saturate(1.2);
+    -webkit-backdrop-filter:blur(14px) saturate(1.2);
+    background:linear-gradient(180deg,rgba(9,14,22,.92),rgba(9,14,22,.7));
+    border-bottom:1px solid var(--line);padding:16px clamp(16px,4vw,44px)}
+  .head-row{display:flex;align-items:center;gap:18px;flex-wrap:wrap;max-width:1400px;margin:0 auto}
+  .brand{display:flex;align-items:center;gap:12px;margin-right:auto}
+  .brand .mark{width:38px;height:38px;border-radius:10px;flex:none;display:grid;place-items:center;
+    background:linear-gradient(150deg,#22d3ee,#6366f1);box-shadow:0 6px 18px -6px rgba(34,211,238,.7);
+    font-weight:700;color:#04121b;font-size:19px}
+  .brand h1{font-size:19px;margin:0;letter-spacing:.02em;font-weight:700}
+  .brand p{margin:1px 0 0;font-size:12px;color:var(--sub);font-weight:500}
+  .tools{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .search{display:flex;align-items:center;gap:8px;background:var(--panel);border:1px solid var(--line);
+    border-radius:10px;padding:8px 12px}
+  .search input{background:none;border:0;outline:none;color:var(--ink);font-family:var(--font);font-size:14px;width:150px}
+  .search svg{width:15px;height:15px;color:var(--dim);flex:none}
+  .btn{font-family:var(--font);font-weight:600;font-size:13px;letter-spacing:.02em;cursor:pointer;
+    border:1px solid var(--line-2);background:var(--panel);color:var(--ink);border-radius:10px;
+    padding:9px 14px;transition:.14s;display:inline-flex;align-items:center;gap:7px;white-space:nowrap}
+  .btn:hover{border-color:var(--wild);box-shadow:0 0 16px -6px var(--wild)}
+  .btn.warn:hover{border-color:var(--scat);box-shadow:0 0 16px -6px var(--scat)}
+  .btn svg{width:14px;height:14px}
+  .zoomseg{display:flex;background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+  .zoomseg button{font-family:var(--font);font-weight:600;font-size:12.5px;color:var(--sub);background:none;border:0;
+    padding:8px 12px;cursor:pointer;transition:.12s}
+  .zoomseg button.on{background:rgba(34,211,238,.16);color:#bdf3fb}
+
+  /* ── layout ──────────────────────────────────────────── */
+  main{max-width:1400px;margin:0 auto;padding:clamp(18px,3vw,34px) clamp(16px,4vw,44px) 120px}
+  .intro{display:flex;gap:14px;align-items:flex-start;background:var(--panel);border:1px solid var(--line);
+    border-radius:14px;padding:14px 16px;margin-bottom:26px;font-size:13px;color:var(--sub);line-height:1.5}
+  .intro b{color:var(--ink);font-weight:600}
+  .intro .i{width:20px;height:20px;flex:none;color:var(--wild);margin-top:1px}
+
+  .game{margin-bottom:34px;scroll-margin-top:90px}
+  .game-head{display:flex;align-items:center;gap:14px;margin:0 2px 16px;padding-bottom:12px;
+    border-bottom:1px solid var(--line)}
+  .game-dot{width:11px;height:11px;border-radius:50%;flex:none;box-shadow:0 0 10px currentColor}
+  .game-head h2{font-size:18px;margin:0;font-weight:700;letter-spacing:.01em}
+  .game-meta{font-family:var(--mono);font-size:11.5px;color:var(--dim);display:flex;gap:14px;flex-wrap:wrap;margin-left:2px}
+  .game-meta b{color:var(--sub);font-weight:500}
+  .game-count{margin-left:auto;font-family:var(--mono);font-size:11.5px;color:var(--dim)}
+
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(148px,1fr));gap:14px}
+
+  /* ── symbol card ─────────────────────────────────────── */
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:12px;
+    display:flex;flex-direction:column;align-items:center;gap:10px;cursor:pointer;transition:.15s;position:relative}
+  .card:hover{border-color:var(--line-2);transform:translateY(-2px);
+    box-shadow:0 14px 30px -18px rgba(0,0,0,.9)}
+  .card.overridden{border-color:var(--bon);box-shadow:0 0 0 1px rgba(245,158,11,.4),0 14px 30px -18px rgba(0,0,0,.9)}
+  .card.hit{outline:2px solid var(--wild);outline-offset:2px}
+
+  /* the reel cell — reproduces .reel/.sym so the symbol shows at true game size */
+  .cell{position:relative;display:grid;place-items:center;border-radius:12px;flex:none;
+    background:linear-gradient(180deg,#0b1c28,#06121b);
+    box-shadow:inset 0 0 0 1px rgba(148,163,184,.14),0 6px 14px -8px rgba(0,0,0,.8)}
+  .cell.role-wild{box-shadow:inset 0 0 0 2px var(--wild),0 0 16px -3px var(--wild)}
+  .cell.role-scat{box-shadow:inset 0 0 0 2px var(--scat),0 0 16px -3px var(--scat)}
+  .cell.role-bon{box-shadow:inset 0 0 0 2px var(--bon),0 0 16px -3px var(--bon)}
+  .cell img,.cell video{object-fit:contain;pointer-events:none;display:block}
+  .cell .glyph{display:grid;place-items:center;width:100%;height:100%;text-align:center}
+  .cell .ovbadge{position:absolute;top:5px;right:5px;z-index:4;background:var(--bon);color:#1c1206;
+    font-family:var(--mono);font-weight:700;font-size:9px;letter-spacing:.04em;border-radius:6px;padding:2px 5px;
+    box-shadow:0 2px 8px rgba(0,0,0,.5)}
+  .cell .vidtag{position:absolute;bottom:5px;left:5px;z-index:4;background:rgba(6,12,20,.82);color:#8fe3ff;
+    font-family:var(--mono);font-weight:700;font-size:8.5px;letter-spacing:.05em;border-radius:5px;padding:2px 5px;
+    display:flex;align-items:center;gap:3px}
+
+  .card-name{font-size:13px;font-weight:600;text-align:center;line-height:1.2;margin-top:2px}
+  .card-sub{display:flex;flex-direction:column;align-items:center;gap:5px;width:100%}
+  .tag{font-family:var(--mono);font-size:9.5px;font-weight:700;letter-spacing:.06em;padding:2px 7px;border-radius:20px;
+    border:1px solid currentColor;text-transform:uppercase}
+  .tag.wild{color:var(--wild)} .tag.scat{color:var(--scat)} .tag.bon{color:var(--bon)}
+  .tag.high{color:var(--high)} .tag.low{color:var(--low)} .tag.css{color:#7c8aa5}
+  .path{font-family:var(--mono);font-size:9.5px;color:var(--dim);word-break:break-all;text-align:center;line-height:1.35;max-width:100%}
+  .id-chip{position:absolute;top:9px;left:9px;font-family:var(--mono);font-size:9px;font-weight:700;color:var(--dim);
+    background:rgba(148,163,184,.1);border-radius:5px;padding:1px 5px}
+
+  /* ── glyph approximations (for CSS/text symbols) ─────── */
+  .g-seven{font-family:var(--mono);font-weight:700;background:linear-gradient(180deg,#ffe9a8,#caa028);
+    -webkit-background-clip:text;background-clip:text;color:transparent}
+  .g-bar{font-family:var(--mono);font-weight:700;color:#f4dfa8;letter-spacing:.04em;
+    border:2px solid #caa028;border-radius:6px;padding:.05em .3em;background:rgba(202,160,40,.12)}
+  .g-tagup{font-family:var(--mono);font-weight:700;color:#34d399}
+  .g-tagdown{font-family:var(--mono);font-weight:700;color:#fb7185}
+  .g-bmoon{width:56%;height:56%;border-radius:50%;
+    background:radial-gradient(circle at 38% 34%,#ff6b6b,#7f1d1d 70%);box-shadow:0 0 16px rgba(220,38,38,.6)}
+  .g-cnode{width:52%;height:52%;border-radius:16%;background:linear-gradient(150deg,#c4b5fd,#7c3aed);
+    box-shadow:0 0 14px rgba(124,58,237,.6),inset 0 0 0 2px rgba(255,255,255,.25)}
+  .g-candle{width:26%;height:64%;border-radius:3px;background:linear-gradient(180deg,#86efac,#16a34a);
+    box-shadow:0 0 12px rgba(34,197,94,.5);position:relative}
+  .g-candle::before,.g-candle::after{content:"";position:absolute;left:50%;transform:translateX(-50%);
+    width:2px;height:24%;background:#16a34a}
+  .g-candle::before{top:-22%}.g-candle::after{bottom:-22%}
+  .g-coin{width:60%;height:60%;border-radius:50%;display:grid;place-items:center;
+    background:radial-gradient(circle at 38% 34%,#a7f3d0,#059669 72%);color:#04231a;font-family:var(--mono);
+    font-weight:700;font-size:.5em;box-shadow:0 0 14px rgba(16,185,129,.5)}
+
+  /* ── popover (the "dropdown") ────────────────────────── */
+  .scrim{position:fixed;inset:0;z-index:60;background:rgba(4,8,14,.55);backdrop-filter:blur(2px);
+    opacity:0;pointer-events:none;transition:.18s}
+  .scrim.open{opacity:1;pointer-events:auto}
+  .pop{position:absolute;z-index:70;width:320px;max-width:calc(100vw - 24px);
+    background:var(--panel-solid);border:1px solid var(--line-2);border-radius:16px;
+    box-shadow:0 30px 70px -20px rgba(0,0,0,.85),0 0 0 1px rgba(255,255,255,.04);
+    opacity:0;transform:translateY(-6px) scale(.98);pointer-events:none;transition:.16s cubic-bezier(.3,.9,.3,1.1);
+    overflow:hidden}
+  .pop.open{opacity:1;transform:none;pointer-events:auto}
+  .pop-head{display:flex;align-items:center;gap:11px;padding:14px 15px;border-bottom:1px solid var(--line)}
+  .pop-head .pcell{flex:none}
+  .pop-head .t{font-size:14px;font-weight:700;line-height:1.15}
+  .pop-head .s{font-size:11px;color:var(--sub);margin-top:2px;font-family:var(--mono)}
+  .pop-x{margin-left:auto;background:none;border:0;color:var(--dim);cursor:pointer;font-size:20px;line-height:1;padding:2px 4px}
+  .pop-x:hover{color:var(--ink)}
+  .pop-body{padding:13px 15px 15px}
+  .drop{border:1.5px dashed var(--line-2);border-radius:12px;padding:14px;text-align:center;transition:.14s;
+    cursor:pointer;display:block;margin-bottom:9px}
+  .drop:hover,.drop.drag{border-color:var(--wild);background:rgba(34,211,238,.06)}
+  .drop svg{width:22px;height:22px;color:var(--sub);margin-bottom:6px}
+  .drop .dt{font-size:13px;font-weight:600}
+  .drop .dh{font-size:11px;color:var(--dim);margin-top:3px}
+  .drop input{display:none}
+  .pop-note{font-size:11px;color:var(--dim);line-height:1.45;margin-top:10px;
+    background:rgba(148,163,184,.06);border-radius:9px;padding:9px 10px}
+  .pop-note.warn{color:#f8c98b;background:rgba(245,158,11,.08)}
+  .pop-actions{display:flex;gap:8px;margin-top:11px}
+  .pop-actions .btn{flex:1;justify-content:center;padding:9px}
+  .cur-wrap{display:flex;gap:10px;align-items:center;margin-bottom:12px}
+  .cur-wrap .lbl{font-size:10.5px;color:var(--dim);font-family:var(--mono);text-transform:uppercase;letter-spacing:.05em}
+  .cur-wrap .col{display:flex;flex-direction:column;align-items:center;gap:5px;flex:1}
+  .arrow{color:var(--dim);flex:none}
+
+  .toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%) translateY(20px);z-index:90;
+    background:var(--panel-solid);border:1px solid var(--line-2);border-radius:11px;padding:11px 16px;
+    font-size:13px;color:var(--ink);box-shadow:0 20px 50px -14px rgba(0,0,0,.8);opacity:0;pointer-events:none;
+    transition:.22s;display:flex;align-items:center;gap:9px}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+  .toast .dot{width:8px;height:8px;border-radius:50%;background:#34d399;box-shadow:0 0 8px #34d399}
+  .toast.err .dot{background:var(--scat);box-shadow:0 0 8px var(--scat)}
+
+  /* jump nav */
+  .jump{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:24px}
+  .jump a{font-family:var(--mono);font-size:11.5px;color:var(--sub);text-decoration:none;
+    border:1px solid var(--line);border-radius:8px;padding:6px 11px;transition:.12s;display:flex;align-items:center;gap:7px}
+  .jump a:hover{color:var(--ink);border-color:var(--line-2)}
+  .jump a .d{width:8px;height:8px;border-radius:50%}
+  @media (max-width:560px){.grid{grid-template-columns:repeat(auto-fill,minmax(120px,1fr))}}
+</style>
+
+<header>
+  <div class="head-row">
+    <div class="brand">
+      <div class="mark">◆</div>
+      <div><h1>Slot Admin</h1><p>Reel image &amp; video manager · all slot games</p></div>
+    </div>
+    <div class="tools">
+      <div class="search">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+        <input id="search" type="text" placeholder="Filter symbols…" autocomplete="off">
+      </div>
+      <div class="zoomseg" id="zoom">
+        <button data-z="1" class="on">Actual</button>
+        <button data-z="1.6">1.6×</button>
+        <button data-z="2.4">2.4×</button>
+      </div>
+      <button class="btn" id="exportBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12m0 0 4-4m-4 4-4-4"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>Export</button>
+      <button class="btn warn" id="resetBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>Reset all</button>
+    </div>
+  </div>
+</header>
+
+<main>
+  <div class="intro">
+    <svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 8h.01M11 12h1v4h1"/></svg>
+    <div>Every image on each game's reels is shown below <b>at the exact size it renders in the game</b>. Click any symbol to open its uploader — drop in a <b>new image</b>, or a <b>short video</b> for animated reels. Replacements are saved in this browser (IndexedDB, same origin as the games) and previewed live here. Symbols tagged <span class="tag css" style="display:inline-block">CSS</span> are drawn in code with no image file.</div>
+  </div>
+  <div class="jump" id="jump"></div>
+  <div id="games"></div>
+</main>
+
+<div class="scrim" id="scrim"></div>
+<div class="pop" id="pop"></div>
+<div class="toast" id="toast"><span class="dot"></span><span id="toastMsg"></span></div>
+
+<script>
+"use strict";
+/* ─────────────────────────────────────────────────────────────────────────
+   Reel symbol catalog — mirrors each game's inline `var SYMS` (verified from
+   the game files). cell = the game's desktop reel-cell px (clamp max); sz =
+   symbol image box as % of the cell (per-class overrides included); fit /
+   radius / pix reproduce each game's .sym img styling so what you see here is
+   pixel-faithful to the reels. Symbols with `glyph` are CSS/text (no file).
+   ───────────────────────────────────────────────────────────────────────── */
+const GAMES = [
+  { key:'slots', title:'Abyss Reels', file:'slots-lab.html', accent:'#22d3ee', cols:5, rows:3, cell:84, imgDef:76,
+    syms:[
+      {id:'W', name:'MORB Wild',  role:'wild', art:'morbius/MorbiusChip.png'},
+      {id:'S', name:'Rocket',     role:'scat', art:'crash/rocket.webp', sz:70},
+      {id:'H1',name:'Obsidian',   role:'high', art:'vip-badges/obsidian.png'},
+      {id:'H2',name:'Diamond',    role:'high', art:'vip-badges/diamond.png'},
+      {id:'H3',name:'Platinum',   role:'high', art:'vip-badges/platinum.png'},
+      {id:'H4',name:'Gold',       role:'high', art:'vip-badges/gold.png'},
+      {id:'A', name:'Silver',     role:'high', art:'vip-badges/silver.png'},
+      {id:'K', name:'Bronze',     role:'high', art:'vip-badges/bronze.png'},
+      {id:'Q', name:'Cyan Chip',  role:'low',  art:'PokerChips/cyanpokerchip020.png', sz:64},
+      {id:'J', name:'Red Chip',   role:'low',  art:'PokerChips/redpokerchip015.png', sz:64},
+    ]},
+  { key:'fortune', title:'Fortune', file:'fortune-lab.html', accent:'#f6c445', cols:5, rows:4, cell:72, imgDef:74,
+    syms:[
+      {id:'W', name:'MORB Wild',    role:'wild', art:'morbius/MorbiusChip.png'},
+      {id:'S', name:'Pulse Orb',    role:'scat', art:'Pulse Branding/Logo/ball.png'},
+      {id:'B', name:'Gold Drop',    role:'bon',  art:'Pulse Branding/Logo/ball.png'},
+      {id:'H1',name:'Gold Seven',   role:'high', glyph:'seven'},
+      {id:'H2',name:'Diamond Badge',role:'high', art:'vip-badges/diamond.png'},
+      {id:'H3',name:'Gold Crown',   role:'high', art:'vip-badges/gold.png'},
+      {id:'H4',name:'BAR',          role:'high', glyph:'bar'},
+      {id:'L1',name:'Red Chip',     role:'low',  art:'PokerChips/redpokerchip015.png'},
+      {id:'L2',name:'Green Chip',   role:'low',  art:'PokerChips/greenpokerchip005.png'},
+      {id:'L3',name:'Blue Chip',    role:'low',  art:'PokerChips/bluepokerchip010.png'},
+      {id:'L4',name:'Cyan Chip',    role:'low',  art:'PokerChips/cyanpokerchip020.png'},
+    ]},
+  { key:'midnight', title:'Morbius Midnight', file:'morbius-midnight-lab.html', accent:'#a855f7', cols:5, rows:4, cell:72, imgDef:80,
+    syms:[
+      {id:'W', name:'MORB Chip',    role:'wild', art:'morbius/MorbiusChip.png'},
+      {id:'S', name:'Blood Moon',   role:'scat', glyph:'bmoon'},
+      {id:'B', name:'Circuit Node', role:'bon',  glyph:'cnode'},
+      {id:'H1',name:'Morbius Sigil',role:'high', art:'morbius/OfficialMorbiusLogo.png'},
+      {id:'H2',name:'Obsidian Seal',role:'high', art:'vip-badges/obsidian.png'},
+      {id:'H3',name:'Jeweled Relic',role:'high', art:'Logos/Diamond-Heart.jpg', sz:78, fit:'cover', radius:'14%'},
+      {id:'H4',name:'Cursed Visage',role:'high', art:'Logos/MVS.jpg', sz:78, fit:'cover', radius:'14%'},
+      {id:'L1',name:'Platinum Crest',role:'low', art:'vip-badges/platinum.png'},
+      {id:'L2',name:'Silver Crest', role:'low',  art:'vip-badges/silver.png'},
+      {id:'L3',name:'Bronze Crest', role:'low',  art:'vip-badges/bronze.png'},
+    ]},
+  { key:'pixel', title:'Pixel Pit', file:'pixel-pit-lab.html', accent:'#ff2d95', cols:5, rows:3, cell:88, imgDef:72,
+    syms:[
+      {id:'W', name:'MORB Chip',    role:'wild', art:'morbius/MorbiusChip.png'},
+      {id:'S', name:'Arcade Token', role:'scat', art:'Pulse Branding/Logo/favicon128.png'},
+      {id:'B', name:'Bonus Rocket', role:'bon',  art:'crash/rocket.webp'},
+      {id:'H1',name:'Pixel Girl',   role:'high', art:'avatars/pigtails-pixel-girl.png', pix:true},
+      {id:'H2',name:'Gold Invader', role:'high', art:'Logos/PTGC.png', pix:true},
+      {id:'H3',name:'Arcade Coin',  role:'high', art:'Logos/TIME.png'},
+      {id:'H4',name:'Power Hex',    role:'high', art:'Logos/INC.png'},
+      {id:'L1',name:'Red Token',    role:'low',  art:'PokerChips/redpokerchip015.png'},
+      {id:'L2',name:'Blue Token',   role:'low',  art:'PokerChips/bluepokerchip010.png'},
+      {id:'L3',name:'Green Token',  role:'low',  art:'PokerChips/greenpokerchip005.png'},
+    ]},
+  { key:'orbit', title:'Deep Orbit', file:'deep-orbit-lab.html', accent:'#818cf8', cols:5, rows:4, cell:72, imgDef:74,
+    syms:[
+      {id:'W', name:'Rocket Wild',  role:'wild', art:'crash/rocket.webp'},
+      {id:'S', name:'Warp Gate',    role:'scat', art:'Logos/EMIT.png'},
+      {id:'C', name:'Energy Core',  role:'bon',  art:'Pulse Branding/Logo/ball.png'},
+      {id:'H1',name:'Terra Prime',  role:'high', art:'crash/planet.webp'},
+      {id:'H2',name:'Gas Giant',    role:'high', art:'crash/jupiter.webp'},
+      {id:'H3',name:'Red Planet',   role:'high', art:'crash/red-planet.webp'},
+      {id:'L1',name:'Pulse Beacon', role:'low',  art:'Pulse Branding/Logo/ball1.png', sz:64},
+      {id:'L2',name:'Ion Beacon',   role:'low',  art:'Pulse Branding/Logo/gradient.png', sz:64},
+      {id:'L3',name:'Hex Probe',    role:'low',  art:'Pulse Branding/Logo/favicon128.png', sz:64},
+      {id:'L4',name:'Relay Probe',  role:'low',  art:'Logos/INC.png', sz:64},
+    ]},
+  { key:'pulse', title:'Pulse Street', file:'pulse-street-lab.html', accent:'#22c55e', cols:5, rows:3, cell:84, imgDef:72, round:true,
+    syms:[
+      {id:'W', name:'Green Candle', role:'wild', glyph:'candle'},
+      {id:'S', name:'TMC Chart',    role:'scat', art:'Logos/TMC.jpg', fit:'cover', radius:'14%'},
+      {id:'B', name:'PUMP Coin',    role:'bon',  glyph:'coin'},
+      {id:'H1',name:'WHALE',        role:'high', art:'Logos/WHALE.png'},
+      {id:'H2',name:'pTIGER',       role:'high', art:'Logos/pTIGER.png'},
+      {id:'H3',name:'DrDoge',       role:'high', art:'Logos/DrDoge.png'},
+      {id:'H4',name:'pCOCK',        role:'high', art:'Logos/pCOCK.png'},
+      {id:'A', name:'RICH',         role:'high', art:'Logos/RICH.png'},
+      {id:'K', name:'TIME',         role:'high', art:'Logos/TIME.png'},
+      {id:'Q', name:'Pump Tick',    role:'low',  glyph:'tagup'},
+      {id:'J', name:'Dump Tick',    role:'low',  glyph:'tagdown'},
+    ]},
+];
+
+const ROLE_LABEL = {wild:'Wild', scat:'Scatter', bon:'Bonus', high:'High pay', low:'Low pay'};
+const GLYPH_LABEL = {seven:'Gold Seven (text)', bar:'BAR (text)', bmoon:'Blood Moon (CSS)',
+  cnode:'Circuit Node (CSS)', candle:'Green Candle (CSS)', coin:'PUMP Coin (CSS)',
+  tagup:'Pump tick (text)', tagdown:'Dump tick (text)'};
+
+/* ── IndexedDB blob store (same origin ⇒ games can read it too) ─────────── */
+const DB_NAME='slotAdmin', STORE='overrides';
+function idb(){return new Promise((res,rej)=>{const r=indexedDB.open(DB_NAME,1);
+  r.onupgradeneeded=()=>{r.result.createObjectStore(STORE,{keyPath:'key'});};
+  r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error);});}
+async function ovPut(o){const db=await idb();return new Promise((res,rej)=>{
+  const t=db.transaction(STORE,'readwrite');t.objectStore(STORE).put(o);t.oncomplete=()=>res();t.onerror=()=>rej(t.error);});}
+async function ovGet(key){const db=await idb();return new Promise((res,rej)=>{
+  const r=db.transaction(STORE,'readonly').objectStore(STORE).get(key);r.onsuccess=()=>res(r.result||null);r.onerror=()=>rej(r.error);});}
+async function ovAll(){const db=await idb();return new Promise((res,rej)=>{
+  const r=db.transaction(STORE,'readonly').objectStore(STORE).getAll();r.onsuccess=()=>res(r.result||[]);r.onerror=()=>rej(r.error);});}
+async function ovDel(key){const db=await idb();return new Promise((res,rej)=>{
+  const t=db.transaction(STORE,'readwrite');t.objectStore(STORE).delete(key);t.oncomplete=()=>res();t.onerror=()=>rej(t.error);});}
+async function ovClear(){const db=await idb();return new Promise((res,rej)=>{
+  const t=db.transaction(STORE,'readwrite');t.objectStore(STORE).clear();t.oncomplete=()=>res();t.onerror=()=>rej(t.error);});}
+
+const keyOf=(g,s)=>g+':'+s;
+const enc=p=>p.split('/').map(encodeURIComponent).join('/');   // handle the "Pulse Branding" space
+const urlCache=new Map();   // key -> objectURL (revoke on replace)
+function objURL(key,blob){ if(urlCache.has(key)) URL.revokeObjectURL(urlCache.get(key));
+  const u=URL.createObjectURL(blob); urlCache.set(key,u); return u; }
+
+/* ── render the inner visual of a cell (img / video / glyph) ───────────── */
+function cellInner(sym, cell, override){
+  if(override){
+    const url=objURL(keyOf(override.game,override.sym), override.blob);
+    if(override.type==='video')
+      return `<video src="${url}" autoplay loop muted playsinline style="width:100%;height:100%;object-fit:cover;border-radius:${sym.radius||(sym.game&&sym.game.round?'50%':'8%')}"></video>`
+        +`<span class="vidtag">▶ VIDEO</span>`;
+    const st=imgStyle(sym,100,'cover');
+    return `<img src="${url}" alt="" style="${st}">`;
+  }
+  if(sym.glyph){
+    const g=sym.glyph, fs=Math.round(cell*0.4)+'px';
+    if(g==='seven')   return `<span class="glyph"><span class="g-seven" style="font-size:${Math.round(cell*.52)}px">7</span></span>`;
+    if(g==='bar')     return `<span class="glyph"><span class="g-bar" style="font-size:${Math.round(cell*.24)}px">BAR</span></span>`;
+    if(g==='tagup')   return `<span class="glyph"><span class="g-tagup" style="font-size:${Math.round(cell*.2)}px">+12%</span></span>`;
+    if(g==='tagdown') return `<span class="glyph"><span class="g-tagdown" style="font-size:${Math.round(cell*.2)}px">−5%</span></span>`;
+    if(g==='bmoon')   return `<span class="glyph"><span class="g-bmoon"></span></span>`;
+    if(g==='cnode')   return `<span class="glyph"><span class="g-cnode"></span></span>`;
+    if(g==='candle')  return `<span class="glyph"><span class="g-candle"></span></span>`;
+    if(g==='coin')    return `<span class="glyph"><span class="g-coin" style="font-size:${Math.round(cell*.34)}px">PUMP</span></span>`;
+  }
+  return `<img src="${enc(sym.art)}" alt="${sym.name}" style="${imgStyle(sym)}" loading="lazy"
+    onerror="this.style.opacity=.25;this.parentNode.dataset.err=1">`;
+}
+function imgStyle(sym, forcePct, forceFit){
+  const pct=(forcePct||sym.sz||sym._imgDef)+'%';
+  const fit=forceFit||sym.fit||'contain';
+  const rad=sym.radius||(sym._round?'50%':'0');
+  const pix=sym.pix?'image-rendering:pixelated;':'';
+  return `width:${pct};height:${pct};object-fit:${fit};border-radius:${rad};${pix}`;
+}
+
+/* ── build the DOM ─────────────────────────────────────── */
+let ZOOM=1;
+const gamesEl=document.getElementById('games'), jumpEl=document.getElementById('jump');
+function build(){
+  gamesEl.innerHTML=''; jumpEl.innerHTML='';
+  GAMES.forEach(g=>{
+    const a=document.createElement('a'); a.href='#g-'+g.key;
+    a.innerHTML=`<span class="d" style="background:${g.accent}"></span>${g.title}`; jumpEl.appendChild(a);
+
+    const sec=document.createElement('section'); sec.className='game'; sec.id='g-'+g.key;
+    const imgCount=g.syms.filter(s=>!s.glyph).length;
+    sec.innerHTML=`<div class="game-head" style="color:${g.accent}">
+        <span class="game-dot" style="background:${g.accent}"></span>
+        <h2 style="color:var(--ink)">${g.title}</h2>
+        <span class="game-meta"><b>${g.cols}×${g.rows} reels</b><b>${g.cell}px cells</b><b>${g.file}</b></span>
+        <span class="game-count">${imgCount} images · ${g.syms.length} symbols</span>
+      </div>`;
+    const grid=document.createElement('div'); grid.className='grid';
+    g.syms.forEach(s=>{ s.game=g; s._imgDef=g.imgDef; s._round=!!g.round;
+      grid.appendChild(card(g,s)); });
+    sec.appendChild(grid); gamesEl.appendChild(sec);
+  });
+  refreshOverrides();
+}
+function card(g,s){
+  const el=document.createElement('div'); el.className='card'; el.dataset.key=keyOf(g.key,s.id);
+  el.dataset.search=(g.title+' '+s.name+' '+s.id+' '+(s.art||'')+' '+ROLE_LABEL[s.role]).toLowerCase();
+  const csize=Math.round(g.cell*ZOOM);
+  const roleCls=(s.role==='wild'||s.role==='scat'||s.role==='bon')?('role-'+s.role):'';
+  const roleTag=`<span class="tag ${s.role}">${ROLE_LABEL[s.role]}</span>`;
+  const pathLine=s.glyph?`<span class="tag css">CSS / text</span>`:`<span class="path">${s.art}</span>`;
+  el.innerHTML=`<span class="id-chip">${s.id}</span>
+    <div class="cell ${roleCls}" style="width:${csize}px;height:${csize}px">${cellInner(s,csize)}</div>
+    <div class="card-name">${s.name}</div>
+    <div class="card-sub">${roleTag}${pathLine}</div>`;
+  el.addEventListener('click',()=>openPop(g,s,el));
+  return el;
+}
+
+/* apply stored overrides to the cards on screen */
+async function refreshOverrides(){
+  const all=await ovAll();
+  document.querySelectorAll('.card').forEach(c=>c.classList.remove('overridden'));
+  for(const o of all){
+    const card=document.querySelector(`.card[data-key="${o.key}"]`); if(!card)continue;
+    const g=GAMES.find(x=>x.key===o.game); const s=g&&g.syms.find(y=>y.id===o.sym); if(!s)continue;
+    const cell=card.querySelector('.cell'); const csize=Math.round(g.cell*ZOOM);
+    cell.innerHTML=cellInner(s,csize,o)+`<span class="ovbadge">NEW</span>`;
+    card.classList.add('overridden');
+  }
+}
+
+/* ── zoom + search ─────────────────────────────────────── */
+document.getElementById('zoom').addEventListener('click',e=>{
+  const b=e.target.closest('button'); if(!b)return;
+  document.querySelectorAll('#zoom button').forEach(x=>x.classList.remove('on')); b.classList.add('on');
+  ZOOM=parseFloat(b.dataset.z); build();
+});
+document.getElementById('search').addEventListener('input',e=>{
+  const q=e.target.value.trim().toLowerCase();
+  document.querySelectorAll('.card').forEach(c=>{
+    const hit=!q||c.dataset.search.includes(q); c.style.display=hit?'':'none';
+    c.classList.toggle('hit', !!q&&hit);
+  });
+  document.querySelectorAll('.game').forEach(sec=>{
+    const any=[...sec.querySelectorAll('.card')].some(c=>c.style.display!=='none');
+    sec.style.display=any?'':'none';
+  });
+});
+
+/* ── popover ("dropdown") ──────────────────────────────── */
+const scrim=document.getElementById('scrim'), pop=document.getElementById('pop');
+let popCtx=null;
+async function openPop(g,s,cardEl){
+  popCtx={g,s,cardEl};
+  const key=keyOf(g.key,s.id); const ov=await ovGet(key);
+  const cur=cardEl.querySelector('.cell').cloneNode(true);
+  cur.querySelectorAll('.ovbadge,.vidtag').forEach(n=>n.remove());
+  cur.style.width=cur.style.height='58px';
+  const pcell=cur.outerHTML;
+  const glyphNote=s.glyph
+    ? `<div class="pop-note warn">This symbol is drawn in <b>CSS/code</b> (${GLYPH_LABEL[s.glyph]||'no image'}) — it has no image file. Uploading here stores a replacement that will apply once this game is wired to read overrides.</div>`
+    : `<div class="pop-note">Original file · <b>${s.art}</b></div>`;
+  const revert = ov ? `<div class="pop-actions"><button class="btn warn" id="revertBtn">↺ Revert to original</button></div>` : '';
+  pop.innerHTML=`
+    <div class="pop-head">
+      <div class="pcell">${pcell}</div>
+      <div><div class="t">${s.name}</div><div class="s">${g.title} · ${g.cell}px${ov?' · overridden':''}</div></div>
+      <button class="pop-x" id="popX">×</button>
+    </div>
+    <div class="pop-body">
+      <label class="drop" id="dropImg">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>
+        <div class="dt">Upload new image</div>
+        <div class="dh">PNG · WebP · JPG · SVG — click or drop</div>
+        <input type="file" accept="image/*" id="fileImg">
+      </label>
+      <label class="drop" id="dropVid">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="3"/><path d="m10 9 5 3-5 3z"/></svg>
+        <div class="dt">Upload short video</div>
+        <div class="dh">MP4 · WebM — for animated reels</div>
+        <input type="file" accept="video/*" id="fileVid">
+      </label>
+      ${glyphNote}
+      ${revert}
+    </div>`;
+  // position under the card
+  const r=cardEl.getBoundingClientRect();
+  const w=320; let left=r.left+window.scrollX+(r.width/2)-(w/2);
+  left=Math.max(12+window.scrollX, Math.min(left, window.scrollX+document.documentElement.clientWidth-w-12));
+  let top=r.bottom+window.scrollY+8;
+  pop.style.left=left+'px'; pop.style.top=top+'px';
+  scrim.classList.add('open'); pop.classList.add('open');
+  // if it would overflow the viewport bottom, flip above
+  requestAnimationFrame(()=>{ const pr=pop.getBoundingClientRect();
+    if(pr.bottom>window.innerHeight-10){ pop.style.top=(r.top+window.scrollY-pr.height-8)+'px'; } });
+
+  pop.querySelector('#popX').onclick=closePop;
+  pop.querySelector('#fileImg').onchange=e=>handleFile(e.target.files[0],'image');
+  pop.querySelector('#fileVid').onchange=e=>handleFile(e.target.files[0],'video');
+  wireDrop(pop.querySelector('#dropImg'),'image'); wireDrop(pop.querySelector('#dropVid'),'video');
+  const rb=pop.querySelector('#revertBtn'); if(rb) rb.onclick=revertCurrent;
+}
+function closePop(){ scrim.classList.remove('open'); pop.classList.remove('open'); popCtx=null; }
+scrim.addEventListener('click',closePop);
+document.addEventListener('keydown',e=>{ if(e.key==='Escape')closePop(); });
+
+function wireDrop(el,type){
+  if(!el)return;
+  ['dragenter','dragover'].forEach(ev=>el.addEventListener(ev,e=>{e.preventDefault();el.classList.add('drag');}));
+  ['dragleave','drop'].forEach(ev=>el.addEventListener(ev,e=>{e.preventDefault();el.classList.remove('drag');}));
+  el.addEventListener('drop',e=>{ const f=e.dataTransfer.files[0]; if(f)handleFile(f,type); });
+}
+
+async function handleFile(file,type){
+  if(!file||!popCtx)return;
+  const isVid=file.type.startsWith('video/'), isImg=file.type.startsWith('image/');
+  if(type==='image'&&!isImg) return toast('That is not an image file.',true);
+  if(type==='video'&&!isVid) return toast('That is not a video file.',true);
+  const LIMIT = isVid? 40*1024*1024 : 8*1024*1024;
+  if(file.size>LIMIT) return toast(`File too large (${(file.size/1048576).toFixed(1)} MB · max ${LIMIT/1048576} MB).`,true);
+  const {g,s}=popCtx; const key=keyOf(g.key,s.id);
+  try{
+    await ovPut({key,game:g.key,sym:s.id,type:isVid?'video':'image',blob:file,name:file.name,size:file.size,ts:Date.now()});
+    await refreshOverrides();
+    closePop();
+    toast(`${isVid?'Video':'Image'} set for ${g.title} · ${s.name}`);
+  }catch(err){ toast('Could not save: '+err.message,true); }
+}
+async function revertCurrent(){
+  if(!popCtx)return; const {g,s,cardEl}=popCtx; const key=keyOf(g.key,s.id);
+  await ovDel(key);
+  const cell=cardEl.querySelector('.cell'); const csize=Math.round(g.cell*ZOOM);
+  cell.innerHTML=cellInner(s,csize); cardEl.classList.remove('overridden');
+  closePop(); toast(`Reverted ${g.title} · ${s.name} to original`);
+}
+
+/* ── export / reset ────────────────────────────────────── */
+function blobToDataURL(b){return new Promise(res=>{const r=new FileReader();r.onload=()=>res(r.result);r.readAsDataURL(b);});}
+document.getElementById('exportBtn').onclick=async ()=>{
+  const all=await ovAll();
+  if(!all.length) return toast('No overrides to export yet.',true);
+  toast(`Exporting ${all.length} override${all.length>1?'s':''}…`);
+  const out={exported:new Date().toISOString(), count:all.length, overrides:[]};
+  for(const o of all){
+    const g=GAMES.find(x=>x.key===o.game), s=g&&g.syms.find(y=>y.id===o.sym);
+    out.overrides.push({ game:o.game, gameFile:g?g.file:null, symbol:o.sym, symbolName:s?s.name:null,
+      originalArt:s&&s.art?s.art:null, type:o.type, filename:o.name, bytes:o.size,
+      dataUrl: await blobToDataURL(o.blob) });
+  }
+  const blob=new Blob([JSON.stringify(out,null,2)],{type:'application/json'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
+  a.download='slot-reel-overrides.json'; a.click(); URL.revokeObjectURL(a.href);
+};
+document.getElementById('resetBtn').onclick=async ()=>{
+  const all=await ovAll(); if(!all.length) return toast('Nothing to reset.',true);
+  if(!confirm(`Remove all ${all.length} image/video override${all.length>1?'s':''}? Originals are restored.`))return;
+  await ovClear(); build(); toast('All overrides cleared.');
+};
+
+let toastT;
+function toast(msg,err){ const t=document.getElementById('toast');
+  document.getElementById('toastMsg').textContent=msg; t.classList.toggle('err',!!err);
+  t.classList.add('show'); clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove('show'),2600); }
+
+build();
+</script>
