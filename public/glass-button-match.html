@@ -10,12 +10,16 @@
     /* light backdrop WITH faint structure — the diagonal light streaks give the
        lens something to bend, so the refraction actually reads (Figma reference) */
     background:
-      /* broad diagonal light sweep that crosses the pills so the glass has
-         something to bend + a bright band to see through (Figma reference) */
-      linear-gradient(118deg, transparent 20%, rgba(255,255,255,.85) 33%, rgba(255,255,255,0) 44%),
-      linear-gradient(118deg, transparent 60%, rgba(148,153,166,.30) 71%, transparent 82%),
-      radial-gradient(120% 120% at 85% 100%, #c9cad1 0%, transparent 55%),
-      linear-gradient(160deg, #eceef1 0%, #dcdde3 48%, #d0d1d8 100%);
+      /* structured backdrop — bright diagonal sweep + darker gray bands so there
+         is real, visibly-DARKER content behind the glass. Without contrast here,
+         "transparent" and "white" look identical. You should see these bands
+         continue (and bend at the rim) THROUGH each pill. */
+      repeating-linear-gradient(122deg, rgba(90,96,112,.10) 0 26px, transparent 26px 78px),
+      linear-gradient(118deg, transparent 18%, rgba(255,255,255,.9) 30%, rgba(255,255,255,0) 43%),
+      linear-gradient(118deg, transparent 55%, rgba(120,126,142,.34) 67%, transparent 80%),
+      radial-gradient(130% 130% at 88% 105%, #b7b9c2 0%, transparent 52%),
+      radial-gradient(120% 120% at 8% -5%, #f2f3f6 0%, transparent 45%),
+      linear-gradient(160deg, #e7e8ec 0%, #d4d5dc 48%, #c6c7cf 100%);
     min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:60px;padding:64px 24px;overflow:hidden}
 
   .row{display:flex;gap:44px;align-items:center;flex-wrap:wrap;justify-content:center;position:relative;z-index:1}
@@ -27,30 +31,26 @@
   .glass{position:relative;cursor:pointer;border:none;border-radius:999px;isolation:isolate;
     display:flex;align-items:center;justify-content:center;gap:.5em;white-space:nowrap;
     font-family:Inter,sans-serif;font-weight:800;letter-spacing:-.015em;
-    background:linear-gradient(177deg, rgba(255,255,255,.11) 0%, rgba(255,255,255,.02) 46%, rgba(255,255,255,.07) 100%);
-    -webkit-backdrop-filter:blur(2px) saturate(1.15);backdrop-filter:blur(2px) saturate(1.15);
+    /* fill is almost nothing — the surface is the refracted/blurred backdrop, not paint */
+    background:linear-gradient(177deg, rgba(255,255,255,.04) 0%, rgba(255,255,255,0) 55%, rgba(255,255,255,.03) 100%);
+    -webkit-backdrop-filter:blur(1px) saturate(1.35) brightness(1.04);backdrop-filter:blur(1px) saturate(1.35) brightness(1.04);
     box-shadow:
-      inset 0 1.4px 0.4px rgba(255,255,255,.95),
-      inset 0 -1.6px 1.2px rgba(120,124,135,.22),
-      inset 1.2px 0 1px rgba(255,255,255,.5),
-      inset -1.2px 0 1px rgba(255,255,255,.32),
-      0 0 0 1px rgba(255,255,255,.55),
-      0 0 0 1.6px rgba(172,176,188,.28),
-      0 26px 50px -16px rgba(38,46,64,.22),
-      0 6px 14px -5px rgba(38,46,64,.15);
+      inset 0 1.2px 0.4px rgba(255,255,255,.9),
+      inset 0 -1.4px 1px rgba(110,116,132,.28),
+      0 0 0 1px rgba(255,255,255,.4),
+      0 0 0 1.4px rgba(150,155,170,.3),
+      0 22px 44px -16px rgba(38,46,64,.24),
+      0 5px 12px -5px rgba(38,46,64,.16);
     transition:transform .12s cubic-bezier(.4,.9,.3,1.25), box-shadow .15s ease}
   /* upgrade to true displacement refraction where supported */
   @supports ((backdrop-filter:url("#lensSm")) or (-webkit-backdrop-filter:url("#lensSm"))){
-    .glass.sm{-webkit-backdrop-filter:url("#lensSm") blur(1px) saturate(1.15);backdrop-filter:url("#lensSm") blur(1px) saturate(1.15)}
-    .glass.lg{-webkit-backdrop-filter:url("#lensLg") blur(1px) saturate(1.15);backdrop-filter:url("#lensLg") blur(1px) saturate(1.15)}
+    .glass.sm{-webkit-backdrop-filter:url("#lensSm") blur(0.5px) saturate(1.35) brightness(1.04);backdrop-filter:url("#lensSm") blur(0.5px) saturate(1.35) brightness(1.04)}
+    .glass.lg{-webkit-backdrop-filter:url("#lensLg") blur(0.5px) saturate(1.35) brightness(1.04);backdrop-filter:url("#lensLg") blur(0.5px) saturate(1.35) brightness(1.04)}
   }
-  /* diagonal top sheen */
-  .glass::before{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;z-index:2;
-    background:linear-gradient(118deg, rgba(255,255,255,.75) 0%, rgba(255,255,255,.14) 24%, rgba(255,255,255,0) 42%);
-    mix-blend-mode:screen}
-  /* lower soft glow */
-  .glass::after{content:"";position:absolute;left:6%;right:6%;bottom:2px;height:44%;border-radius:999px;pointer-events:none;z-index:0;
-    background:radial-gradient(120% 100% at 50% 100%, rgba(255,255,255,.30), transparent 72%)}
+  /* THIN top-edge highlight streak only — no full-surface wash (that made it read as solid white) */
+  .glass::before{content:"";position:absolute;left:2%;right:2%;top:1.5px;height:34%;border-radius:999px 999px 60% 60%;pointer-events:none;z-index:2;
+    background:linear-gradient(180deg, rgba(255,255,255,.5) 0%, rgba(255,255,255,.08) 55%, transparent 100%);
+    mix-blend-mode:screen;opacity:.8}
   .glass .inner{position:relative;z-index:3;display:flex;align-items:center;gap:.5em}
   .glass:hover{transform:translateY(-2px);
     box-shadow:
