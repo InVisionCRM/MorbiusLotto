@@ -10,15 +10,15 @@
     /* light backdrop WITH faint structure — the diagonal light streaks give the
        lens something to bend, so the refraction actually reads (Figma reference) */
     background:
-      /* structured backdrop — bright diagonal sweep + darker gray bands so there
-         is real, visibly-DARKER content behind the glass. Without contrast here,
-         "transparent" and "white" look identical. You should see these bands
-         continue (and bend at the rim) THROUGH each pill. */
-      repeating-linear-gradient(122deg, rgba(90,96,112,.10) 0 26px, transparent 26px 78px),
-      linear-gradient(118deg, transparent 18%, rgba(255,255,255,.9) 30%, rgba(255,255,255,0) 43%),
-      linear-gradient(118deg, transparent 55%, rgba(120,126,142,.34) 67%, transparent 80%),
-      radial-gradient(130% 130% at 88% 105%, #b7b9c2 0%, transparent 52%),
-      radial-gradient(120% 120% at 8% -5%, #f2f3f6 0%, transparent 45%),
+      /* SMOOTH tonal structure — wide, soft diagonal bands (no hard edges) so
+         there is visibly-darker content behind the glass to see THROUGH and bend,
+         but nothing high-frequency for the lens to seam against. Transparent
+         glass over this reads clearly see-through without artifacts. */
+      linear-gradient(122deg, rgba(120,126,142,0) 8%, rgba(120,126,142,.22) 26%, rgba(120,126,142,0) 44%),
+      linear-gradient(122deg, rgba(120,126,142,0) 52%, rgba(120,126,142,.26) 70%, rgba(120,126,142,0) 88%),
+      linear-gradient(118deg, transparent 14%, rgba(255,255,255,.85) 30%, rgba(255,255,255,0) 46%),
+      radial-gradient(130% 130% at 88% 105%, #b7b9c2 0%, transparent 55%),
+      radial-gradient(120% 120% at 8% -5%, #f3f4f7 0%, transparent 48%),
       linear-gradient(160deg, #e7e8ec 0%, #d4d5dc 48%, #c6c7cf 100%);
     min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:60px;padding:64px 24px;overflow:hidden}
 
@@ -33,7 +33,7 @@
     font-family:Inter,sans-serif;font-weight:800;letter-spacing:-.015em;
     /* fill is almost nothing — the surface is the refracted/blurred backdrop, not paint */
     background:linear-gradient(177deg, rgba(255,255,255,.04) 0%, rgba(255,255,255,0) 55%, rgba(255,255,255,.03) 100%);
-    -webkit-backdrop-filter:blur(1px) saturate(1.35) brightness(1.04);backdrop-filter:blur(1px) saturate(1.35) brightness(1.04);
+    -webkit-backdrop-filter:blur(1px) saturate(1.35) brightness(1.02);backdrop-filter:blur(1px) saturate(1.35) brightness(1.02);
     box-shadow:
       inset 0 1.2px 0.4px rgba(255,255,255,.9),
       inset 0 -1.4px 1px rgba(110,116,132,.28),
@@ -44,8 +44,8 @@
     transition:transform .12s cubic-bezier(.4,.9,.3,1.25), box-shadow .15s ease}
   /* upgrade to true displacement refraction where supported */
   @supports ((backdrop-filter:url("#lensSm")) or (-webkit-backdrop-filter:url("#lensSm"))){
-    .glass.sm{-webkit-backdrop-filter:url("#lensSm") blur(0.5px) saturate(1.35) brightness(1.04);backdrop-filter:url("#lensSm") blur(0.5px) saturate(1.35) brightness(1.04)}
-    .glass.lg{-webkit-backdrop-filter:url("#lensLg") blur(0.5px) saturate(1.35) brightness(1.04);backdrop-filter:url("#lensLg") blur(0.5px) saturate(1.35) brightness(1.04)}
+    .glass.sm{-webkit-backdrop-filter:url("#lensSm") blur(0.5px) saturate(1.35) brightness(1.02);backdrop-filter:url("#lensSm") blur(0.5px) saturate(1.35) brightness(1.02)}
+    .glass.lg{-webkit-backdrop-filter:url("#lensLg") blur(0.5px) saturate(1.35) brightness(1.02);backdrop-filter:url("#lensLg") blur(0.5px) saturate(1.35) brightness(1.02)}
   }
   /* THIN top-edge highlight streak only — no full-surface wash (that made it read as solid white) */
   .glass::before{content:"";position:absolute;left:2%;right:2%;top:1.5px;height:34%;border-radius:999px 999px 60% 60%;pointer-events:none;z-index:2;
@@ -96,29 +96,24 @@
   "use strict";
   var SVGNS="http://www.w3.org/2000/svg", XLINK="http://www.w3.org/1999/xlink";
 
-  /* signed distance to a rounded-rect / stadium; r=hh gives a pill */
-  function sdRound(px,py,hw,hh,r){
-    var qx=Math.abs(px)-(hw-r), qy=Math.abs(py)-(hh-r);
-    var mx=Math.max(qx,0), my=Math.max(qy,0);
-    return Math.min(Math.max(qx,qy),0)+Math.sqrt(mx*mx+my*my)-r;
-  }
-  /* bake a lens displacement map: 0 in the flat centre, ramps to max along the
-     outward normal at the rounded rim — this is what bends the backdrop. */
-  function makeLensMap(w,h,bevel){
+  /* bake a lens displacement map using a RADIAL (elliptical) metric so the
+     undistorted centre is a smooth ELLIPSE concentric with the pill — never a
+     rectangle. Displacement is 0 through the inner ellipse, then ramps outward
+     along the radial normal so the backdrop bends only near the rounded rim,
+     exactly like a real convex lens. `inner` = fraction (0..1) of the radius
+     that stays flat. */
+  function makeLensMap(w,h,inner){
     var cv=document.createElement("canvas");cv.width=w;cv.height=h;
     var ctx=cv.getContext("2d");var id=ctx.createImageData(w,h),D=id.data;
-    var hw=w/2,hh=h/2,r=hh,e=1;
+    var hw=w/2,hh=h/2;
     for(var y=0;y<h;y++){for(var x=0;x<w;x++){
-      var px=x+0.5-hw, py=y+0.5-hh;
-      var d=sdRound(px,py,hw,hh,r);
+      var u=(x+0.5-hw)/hw, v=(y+0.5-hh)/hh;   // normalised elliptical coords
+      var rr=Math.sqrt(u*u+v*v);
       var dx=0,dy=0;
-      if(d<0){
-        var edge=-d, t=edge<bevel?1-edge/bevel:0;
-        t=t*t*(3-2*t);
-        var gx=sdRound(px+e,py,hw,hh,r)-sdRound(px-e,py,hw,hh,r);
-        var gy=sdRound(px,py+e,hw,hh,r)-sdRound(px,py-e,hw,hh,r);
-        var gl=Math.sqrt(gx*gx+gy*gy)||1;
-        dx=(gx/gl)*t; dy=(gy/gl)*t;
+      if(rr>inner){
+        var t=(rr-inner)/(1-inner); if(t>1)t=1;
+        t=t*t*(3-2*t);                        // smoothstep ramp toward the rim
+        dx=(u/rr)*t; dy=(v/rr)*t;             // push outward along the radius
       }
       var i=(y*w+x)*4;
       D[i]=Math.max(0,Math.min(255,Math.round(128+127*dx)));
@@ -139,7 +134,10 @@
   }
 
   // maps stretched to each pill via preserveAspectRatio="none"
-  addLens("lensSm", makeLensMap(280,64,22), 40);   // small pills — crisp rim lens
-  addLens("lensLg", makeLensMap(680,150,60), 82);  // hero pill — deep bevel, stronger bend
+  // inner = fraction of the radius left flat; the ramped ring bends only near
+  // the rim, and because the metric is radial the flat zone is an ellipse — no
+  // rectangle. Keep a modest flat centre so the glass reads flat, not fisheye.
+  addLens("lensSm", makeLensMap(280,64,0.35), 30);   // small pills
+  addLens("lensLg", makeLensMap(680,150,0.4), 64);   // hero pill
 })();
 </script>
