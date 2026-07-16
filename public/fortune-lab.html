@@ -347,6 +347,43 @@ h1 .glyph{color:var(--vio);-webkit-text-fill-color:var(--vio);filter:drop-shadow
   .reel.antic::before,.sym.mult .frame,.banner.mega .b-k,.lockcell .frame{animation:none}
   .reel.land,.reel.flash::before,.sym.hit,.sym.jphit,.sym .mbadge,.arc-banner-in,.felt-flash.go,.jp.hitflash,.lockcell.lockin,.drop-slot.flip{animation:none}
 }
+
+/* ─── SLOT-FX: glass spin button + idle shimmer + hover glow + win pulse + auto toggle ─── */
+.actions{--fx:#F6C445}  /* accent shared by spin + auto (set per game theme) */
+.btn-go{position:relative;overflow:hidden;isolation:isolate;
+  -webkit-backdrop-filter:blur(2px) saturate(1.2);backdrop-filter:blur(2px) saturate(1.2)}
+.btn-go>*{position:relative;z-index:2}
+/* idle shimmer — a soft glint drifts across the button forever */
+.btn-go::after{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;z-index:1;
+  background:linear-gradient(115deg,transparent 34%,rgba(255,255,255,.5) 48%,rgba(255,255,255,.14) 54%,transparent 66%);
+  background-size:230% 100%;background-repeat:no-repeat;mix-blend-mode:screen;
+  animation:goShimmer 5.5s linear infinite}
+@keyframes goShimmer{0%{background-position:160% 0}100%{background-position:-60% 0}}
+/* hover glow ramp — accent halo swells in, fades on leave */
+.btn-go:not(:disabled):hover{transform:translateY(-1px);
+  box-shadow:0 0 26px -2px var(--fx),0 0 11px -3px var(--fx),inset 0 1px 0 rgba(255,255,255,.5)}
+/* win / payout pulse — gold rim flares and settles (fired from settle() on a win) */
+.btn-go.win{animation:goWin 1.15s cubic-bezier(.22,.9,.28,1)}
+@keyframes goWin{
+  0%{box-shadow:0 0 0 0 rgba(245,158,11,0),inset 0 1px 0 rgba(255,255,255,.4)}
+  22%{box-shadow:0 0 36px 8px var(--win,#F59E0B),0 0 0 2px var(--win,#F59E0B),inset 0 1px 0 rgba(255,255,255,.85)}
+  100%{box-shadow:0 0 0 0 rgba(245,158,11,0),inset 0 1px 0 rgba(255,255,255,.4)}}
+/* auto toggle button */
+.actions.has-auto{grid-template-columns:1fr 108px}
+.btn-auto{position:relative;overflow:hidden;isolation:isolate;border:0;border-radius:14px;padding:0 12px;
+  font-family:var(--font-disp);font-weight:700;font-size:13px;letter-spacing:.06em;text-transform:uppercase;cursor:pointer;
+  color:var(--fx);background:rgba(255,255,255,.05);
+  -webkit-backdrop-filter:blur(7px) saturate(1.25);backdrop-filter:blur(7px) saturate(1.25);
+  box-shadow:inset 0 0 0 1px var(--fx),inset 0 1px 0 rgba(255,255,255,.22);
+  transition:.15s;display:flex;align-items:center;justify-content:center;gap:7px}
+.btn-auto:hover{box-shadow:inset 0 0 0 1.5px var(--fx),0 0 18px -4px var(--fx)}
+.btn-auto .dot{width:8px;height:8px;border-radius:50%;background:var(--fx);box-shadow:0 0 8px var(--fx)}
+.btn-auto.on{color:#04141b;background:var(--fx);
+  box-shadow:0 0 22px -4px var(--fx),inset 0 1px 0 rgba(255,255,255,.55);animation:autoOn 1.5s ease-in-out infinite}
+.btn-auto.on .dot{background:#04141b;box-shadow:none;animation:autoBlink 1s steps(1) infinite}
+@keyframes autoOn{0%,100%{filter:brightness(1)}50%{filter:brightness(1.14)}}
+@keyframes autoBlink{0%,100%{opacity:1}50%{opacity:.25}}
+@media (prefers-reduced-motion:reduce){.btn-go::after{animation:none;opacity:.3}.btn-auto.on{animation:none}}
 </style>
 </head>
 <body>
@@ -1423,6 +1460,7 @@ h1 .glyph{color:var(--vio);-webkit-text-fill-color:var(--vio);filter:drop-shadow
       serverSeed:S.serverSeed, serverHash:S.serverHash, clientSeed:S.clientSeed, nonce:S.nonce });
     if(S.history.length>15)S.history.pop();
     setControls(true);syncHud();renderActions();renderHistory();
+    if(window.SlotFX)window.SlotFX.onSettle(win);
   }
 
   function showBanner(k,a,b){banner.className='banner show '+k+' arc-banner-in';bannerK.textContent=a;bannerV.textContent=b;}
@@ -1631,6 +1669,50 @@ h1 .glyph{color:var(--vio);-webkit-text-fill-color:var(--vio);filter:drop-shadow
 
   // expose for the provably-fair / forced-seed test harness
   window.__fortune={S:S,openFairness:openFairness};
+})();
+</script>
+<script>
+/* ─── SlotFX: auto-spin toggle + win-pulse driver (shared across slot games) ───
+   The spin button (#spinBtn) is re-rendered by the game each round, so we keep
+   the Auto button alive with a MutationObserver and drive spins by clicking the
+   live spin button — no coupling to the game's internal functions. The game
+   calls SlotFX.onSettle(win) at the end of each round. */
+(function(){
+  "use strict";
+  var auto=false;
+  function actions(){return document.getElementById('actions');}
+  function spinBtn(){return document.getElementById('spinBtn');}
+  function autoBtn(){return document.getElementById('autoBtn');}
+  function label(){var b=autoBtn();if(!b)return;
+    b.classList.toggle('on',auto);
+    b.innerHTML='<span class="dot"></span>'+(auto?'Stop':'Auto');
+    b.setAttribute('aria-pressed',auto?'true':'false');}
+  function toggle(){auto=!auto;label();
+    if(auto){var s=spinBtn();if(s&&!s.disabled)s.click();}}
+  function ensureAuto(){var a=actions();if(!a)return;
+    a.classList.add('has-auto');
+    if(!autoBtn()){
+      var b=document.createElement('button');
+      b.id='autoBtn';b.type='button';b.className='btn-auto'+(auto?' on':'');
+      b.title='Auto-spin — keeps spinning until you stop it (pauses for bonus rounds)';
+      b.addEventListener('click',toggle);
+      a.appendChild(b);label();
+    }}
+  window.SlotFX={
+    get auto(){return auto;},
+    onSettle:function(win){
+      var s=spinBtn();
+      if(win>0&&s){s.classList.remove('win');void s.offsetWidth;s.classList.add('win');}
+      if(auto){setTimeout(function(){
+        var b=spinBtn();
+        if(auto&&b&&!b.disabled)b.click();
+      },850);}
+    }
+  };
+  function boot(){var a=actions();if(!a){return setTimeout(boot,60);}
+    ensureAuto();
+    new MutationObserver(ensureAuto).observe(a,{childList:true});}
+  if(document.readyState!=='loading')boot();else document.addEventListener('DOMContentLoaded',boot);
 })();
 </script>
 </body>
