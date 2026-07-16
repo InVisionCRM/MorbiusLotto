@@ -1,53 +1,62 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Glass button — matched</title>
+<title>Glass button — matched (real refraction)</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;600;700;800;900&display=swap" rel="stylesheet">
 <style>
   *{box-sizing:border-box}
   html,body{height:100%}
   body{margin:0;font-family:Inter,system-ui,sans-serif;
+    /* light backdrop WITH faint structure — the diagonal light streaks give the
+       lens something to bend, so the refraction actually reads (Figma reference) */
     background:
-      linear-gradient(125deg, rgba(255,255,255,.9) 0%, rgba(255,255,255,0) 24%),
-      linear-gradient(300deg, rgba(255,255,255,.55) 0%, rgba(255,255,255,0) 30%),
-      radial-gradient(135% 135% at 20% 2%, #eff0f2 0%, #e4e5e9 55%, #d9dade 100%);
-    min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:56px;padding:60px 24px;overflow:hidden}
-  body::before{content:"";position:fixed;inset:-25%;pointer-events:none;
-    background:
-      linear-gradient(122deg, transparent 32%, rgba(255,255,255,.55) 43%, transparent 51%),
-      linear-gradient(122deg, transparent 62%, rgba(255,255,255,.4) 71%, transparent 79%);
-    filter:blur(10px)}
+      /* broad diagonal light sweep that crosses the pills so the glass has
+         something to bend + a bright band to see through (Figma reference) */
+      linear-gradient(118deg, transparent 20%, rgba(255,255,255,.85) 33%, rgba(255,255,255,0) 44%),
+      linear-gradient(118deg, transparent 60%, rgba(148,153,166,.30) 71%, transparent 82%),
+      radial-gradient(120% 120% at 85% 100%, #c9cad1 0%, transparent 55%),
+      linear-gradient(160deg, #eceef1 0%, #dcdde3 48%, #d0d1d8 100%);
+    min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:60px;padding:64px 24px;overflow:hidden}
 
-  .row{display:flex;gap:40px;align-items:center;flex-wrap:wrap;justify-content:center;position:relative;z-index:1}
+  .row{display:flex;gap:44px;align-items:center;flex-wrap:wrap;justify-content:center;position:relative;z-index:1}
 
-  .glass{position:relative;cursor:pointer;border:none;border-radius:999px;
+  /* ── GLASS: near-clear + REAL refraction ──────────────────────────────────
+     fill is barely there (transparent), so you see the backdrop THROUGH it.
+     The SVG lens map (#lensSm / #lensLg) is applied via backdrop-filter so the
+     background BENDS at the rounded rim like a real piece of glass. */
+  .glass{position:relative;cursor:pointer;border:none;border-radius:999px;isolation:isolate;
     display:flex;align-items:center;justify-content:center;gap:.5em;white-space:nowrap;
     font-family:Inter,sans-serif;font-weight:800;letter-spacing:-.015em;
-    background:linear-gradient(177deg, rgba(255,255,255,.62) 0%, rgba(255,255,255,.30) 46%, rgba(255,255,255,.40) 100%);
-    -webkit-backdrop-filter:blur(10px) saturate(1.2);backdrop-filter:blur(10px) saturate(1.2);
+    background:linear-gradient(177deg, rgba(255,255,255,.11) 0%, rgba(255,255,255,.02) 46%, rgba(255,255,255,.07) 100%);
+    -webkit-backdrop-filter:blur(2px) saturate(1.15);backdrop-filter:blur(2px) saturate(1.15);
     box-shadow:
-      inset 0 1.4px 0.4px rgba(255,255,255,.98),
-      inset 0 -1.6px 1.2px rgba(120,124,135,.20),
-      inset 1.2px 0 1px rgba(255,255,255,.55),
-      inset -1.2px 0 1px rgba(255,255,255,.35),
-      0 0 0 1px rgba(255,255,255,.6),
-      0 0 0 1.6px rgba(172,176,188,.32),
-      0 26px 50px -16px rgba(38,46,64,.24),
-      0 6px 14px -5px rgba(38,46,64,.16);
-    transition:transform .12s cubic-bezier(.4,.9,.3,1.25), filter .15s ease, box-shadow .15s ease}
+      inset 0 1.4px 0.4px rgba(255,255,255,.95),
+      inset 0 -1.6px 1.2px rgba(120,124,135,.22),
+      inset 1.2px 0 1px rgba(255,255,255,.5),
+      inset -1.2px 0 1px rgba(255,255,255,.32),
+      0 0 0 1px rgba(255,255,255,.55),
+      0 0 0 1.6px rgba(172,176,188,.28),
+      0 26px 50px -16px rgba(38,46,64,.22),
+      0 6px 14px -5px rgba(38,46,64,.15);
+    transition:transform .12s cubic-bezier(.4,.9,.3,1.25), box-shadow .15s ease}
+  /* upgrade to true displacement refraction where supported */
+  @supports ((backdrop-filter:url("#lensSm")) or (-webkit-backdrop-filter:url("#lensSm"))){
+    .glass.sm{-webkit-backdrop-filter:url("#lensSm") blur(1px) saturate(1.15);backdrop-filter:url("#lensSm") blur(1px) saturate(1.15)}
+    .glass.lg{-webkit-backdrop-filter:url("#lensLg") blur(1px) saturate(1.15);backdrop-filter:url("#lensLg") blur(1px) saturate(1.15)}
+  }
   /* diagonal top sheen */
   .glass::before{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;z-index:2;
-    background:linear-gradient(118deg, rgba(255,255,255,.8) 0%, rgba(255,255,255,.18) 24%, rgba(255,255,255,0) 42%);
+    background:linear-gradient(118deg, rgba(255,255,255,.75) 0%, rgba(255,255,255,.14) 24%, rgba(255,255,255,0) 42%);
     mix-blend-mode:screen}
   /* lower soft glow */
   .glass::after{content:"";position:absolute;left:6%;right:6%;bottom:2px;height:44%;border-radius:999px;pointer-events:none;z-index:0;
-    background:radial-gradient(120% 100% at 50% 100%, rgba(255,255,255,.38), transparent 72%)}
-  .glass .inner{position:relative;z-index:1;display:flex;align-items:center;gap:.5em}
+    background:radial-gradient(120% 100% at 50% 100%, rgba(255,255,255,.30), transparent 72%)}
+  .glass .inner{position:relative;z-index:3;display:flex;align-items:center;gap:.5em}
   .glass:hover{transform:translateY(-2px);
     box-shadow:
-      inset 0 1.4px 0.4px rgba(255,255,255,.98), inset 0 -1.6px 1.2px rgba(120,124,135,.20),
-      0 0 0 1px rgba(255,255,255,.65), 0 0 0 1.6px rgba(172,176,188,.32),
-      0 34px 60px -16px rgba(38,46,64,.28), 0 8px 18px -5px rgba(38,46,64,.18)}
+      inset 0 1.4px 0.4px rgba(255,255,255,.95), inset 0 -1.6px 1.2px rgba(120,124,135,.22),
+      0 0 0 1px rgba(255,255,255,.6), 0 0 0 1.6px rgba(172,176,188,.3),
+      0 34px 60px -16px rgba(38,46,64,.26), 0 8px 18px -5px rgba(38,46,64,.17)}
   .glass:active{transform:translateY(1px) scale(.994)}
 
   .sm{padding:15px 32px;font-size:25px}
@@ -55,9 +64,9 @@
   .lg{padding:38px 92px;font-size:62px;font-weight:900}
   .lg .spark{width:50px;height:50px}
 
-  /* text finishes apply to the inner span only, so the frosted glass body stays intact */
-  .t-frost .inner{color:rgba(255,255,255,.9);
-    text-shadow:0 1px 1px rgba(255,255,255,.95), 0 -1px 1px rgba(110,114,130,.5), 0 0 14px rgba(255,255,255,.4)}
+  /* text finishes on the inner span only, so the frosted glass body stays clear */
+  .t-frost .inner{color:rgba(255,255,255,.92);
+    text-shadow:0 1px 1px rgba(255,255,255,.9), 0 -1px 1px rgba(110,114,130,.5), 0 0 14px rgba(255,255,255,.4)}
   .t-frost .spark path{fill:rgba(255,255,255,.95)}
   .t-gold .inner{background:linear-gradient(180deg,#f4dfa8 0%,#d0a94f 46%,#916b28 100%);-webkit-background-clip:text;background-clip:text;color:transparent;-webkit-text-fill-color:transparent}
   .t-gold .spark path{fill:#c69544}
@@ -67,7 +76,9 @@
   .t-dark .spark path{fill:#222c3a}
 
   .cap{position:fixed;bottom:18px;left:0;right:0;text-align:center;color:#9a9ea8;font-size:12px;font-weight:500;z-index:3}
+  .svg-filters{position:absolute;width:0;height:0;pointer-events:none}
 </style>
+
 <div class="row">
   <button class="glass sm t-frost"><span class="inner"><svg class="spark" viewBox="0 0 24 24"><path d="M14 2l1.4 4.1L19.5 7.5l-4.1 1.4L14 13l-1.4-4.1L8.5 7.5l4.1-1.4zM6 12l.9 2.6 2.6.9-2.6.9L6 19l-.9-2.6L2.5 15.5l2.6-.9z"/></svg>Generate</span></button>
   <button class="glass sm t-gold"><span class="inner"><svg class="spark" viewBox="0 0 24 24"><path d="M14 2l1.4 4.1L19.5 7.5l-4.1 1.4L14 13l-1.4-4.1L8.5 7.5l4.1-1.4zM6 12l.9 2.6 2.6.9-2.6.9L6 19l-.9-2.6L2.5 15.5l2.6-.9z"/></svg>Generate</span></button>
@@ -76,4 +87,59 @@
 <div class="row">
   <button class="glass lg t-dark"><span class="inner"><svg class="spark" viewBox="0 0 24 24"><path d="M14 2l1.4 4.1L19.5 7.5l-4.1 1.4L14 13l-1.4-4.1L8.5 7.5l4.1-1.4zM6 12l.9 2.6 2.6.9-2.6.9L6 19l-.9-2.6L2.5 15.5l2.6-.9z"/></svg>Generate</span></button>
 </div>
-<div class="cap">Reproduced from your Figma reference — frosted glass pill, four text finishes</div>
+<div class="cap">Reproduced from your Figma reference — near-clear glass with real feDisplacementMap edge refraction</div>
+
+<svg class="svg-filters" aria-hidden="true"><defs></defs></svg>
+
+<script>
+(function(){
+  "use strict";
+  var SVGNS="http://www.w3.org/2000/svg", XLINK="http://www.w3.org/1999/xlink";
+
+  /* signed distance to a rounded-rect / stadium; r=hh gives a pill */
+  function sdRound(px,py,hw,hh,r){
+    var qx=Math.abs(px)-(hw-r), qy=Math.abs(py)-(hh-r);
+    var mx=Math.max(qx,0), my=Math.max(qy,0);
+    return Math.min(Math.max(qx,qy),0)+Math.sqrt(mx*mx+my*my)-r;
+  }
+  /* bake a lens displacement map: 0 in the flat centre, ramps to max along the
+     outward normal at the rounded rim — this is what bends the backdrop. */
+  function makeLensMap(w,h,bevel){
+    var cv=document.createElement("canvas");cv.width=w;cv.height=h;
+    var ctx=cv.getContext("2d");var id=ctx.createImageData(w,h),D=id.data;
+    var hw=w/2,hh=h/2,r=hh,e=1;
+    for(var y=0;y<h;y++){for(var x=0;x<w;x++){
+      var px=x+0.5-hw, py=y+0.5-hh;
+      var d=sdRound(px,py,hw,hh,r);
+      var dx=0,dy=0;
+      if(d<0){
+        var edge=-d, t=edge<bevel?1-edge/bevel:0;
+        t=t*t*(3-2*t);
+        var gx=sdRound(px+e,py,hw,hh,r)-sdRound(px-e,py,hw,hh,r);
+        var gy=sdRound(px,py+e,hw,hh,r)-sdRound(px,py-e,hw,hh,r);
+        var gl=Math.sqrt(gx*gx+gy*gy)||1;
+        dx=(gx/gl)*t; dy=(gy/gl)*t;
+      }
+      var i=(y*w+x)*4;
+      D[i]=Math.max(0,Math.min(255,Math.round(128+127*dx)));
+      D[i+1]=Math.max(0,Math.min(255,Math.round(128+127*dy)));
+      D[i+2]=128; D[i+3]=255;
+    }}
+    ctx.putImageData(id,0,0);return cv.toDataURL("image/png");
+  }
+
+  var defs=document.querySelector(".svg-filters defs");
+  function el(n,a){var e=document.createElementNS(SVGNS,n);for(var k in a)if(a.hasOwnProperty(k))e.setAttribute(k,a[k]);return e;}
+  function addLens(id,mapUrl,scale){
+    var f=el("filter",{id:id,x:"0%",y:"0%",width:"100%",height:"100%","color-interpolation-filters":"sRGB"});
+    var im=el("feImage",{x:"0%",y:"0%",width:"100%",height:"100%",preserveAspectRatio:"none",result:"m"});
+    im.setAttribute("href",mapUrl); im.setAttributeNS(XLINK,"xlink:href",mapUrl);
+    var dm=el("feDisplacementMap",{in:"SourceGraphic",in2:"m",scale:scale,xChannelSelector:"R",yChannelSelector:"G"});
+    f.appendChild(im);f.appendChild(dm);defs.appendChild(f);
+  }
+
+  // maps stretched to each pill via preserveAspectRatio="none"
+  addLens("lensSm", makeLensMap(280,64,22), 40);   // small pills — crisp rim lens
+  addLens("lensLg", makeLensMap(680,150,60), 82);  // hero pill — deep bevel, stronger bend
+})();
+</script>
