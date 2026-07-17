@@ -500,7 +500,7 @@ async function handleFile(file,type){
   if(file.size>LIMIT) return toast(`File too large (${(file.size/1048576).toFixed(1)} MB · max ${LIMIT/1048576} MB).`,true);
   const {g,s}=popCtx; const key=keyOf(g.key,s.id);
   try{
-    await ovPut({key,game:g.key,sym:s.id,type:isVid?'video':'image',blob:file,name:file.name,size:file.size,ts:Date.now()});
+    await ovPut({key,game:g.key,sym:s.id,art:s.art||null,type:isVid?'video':'image',blob:file,name:file.name,size:file.size,ts:Date.now()});
     await refreshOverrides();
     closePop();
     toast(`${isVid?'Video':'Image'} set for ${g.title} · ${s.name}`);
