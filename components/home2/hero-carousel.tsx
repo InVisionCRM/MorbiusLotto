@@ -169,9 +169,7 @@ export function HeroCarousel({
 
   return (
     <header
-      className="hero only-visitor"
-      onMouseEnter={() => setPaused(true)}
-      onMouseLeave={() => setPaused(false)}
+      className="hero hc-hero"
       onFocusCapture={() => setPaused(true)}
       onBlurCapture={() => setPaused(false)}
     >
