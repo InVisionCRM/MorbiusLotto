@@ -11,7 +11,6 @@ import { SceneDefs } from '@/components/home2/scenes'
 import {
   HomeTicker,
   HeroPlayer,
-  HeroVisitor,
   VaultStrip,
   TonightsTable,
   TheFloor,
@@ -21,6 +20,7 @@ import {
   type HeroPlayerDigestItem,
   type WeeklyDropWinner,
 } from '@/components/home2/sections'
+import { HeroCarousel } from '@/components/home2/hero-carousel'
 import { HomeSidebar, ChipDock, MobileTopBar } from '@/components/home2/nav'
 import { GameLauncherSheet } from '@/components/home2/game-launcher-sheet'
 import { DropSheet } from '@/components/home2/drop-sheet'
@@ -279,12 +279,14 @@ export default function Home2Client() {
               onDashboard={onDashboard}
             />
           ) : (
-            <HeroVisitor
+            <HeroCarousel
               gamesPlayed={gamesPlayed}
               morbiusWon={totalWon}
               biggestWin={allTimeBiggest ?? topWin?.amount}
               chartBg={<PriceChartBg />}
               onTakeSeat={onConnect}
+              onOpenDrop={() => setActiveSheet('drop')}
+              onRefer={onConnect}
             />
           )}
           <VaultStrip
