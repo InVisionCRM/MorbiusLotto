@@ -771,3 +771,103 @@
 .home2 .home2-entrants-modal .row .tix{
   flex:none; font-size:11px; font-weight:800; color:var(--gold); font-variant-numeric:tabular-nums;
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   HERO CAROUSEL — auto-rotating promo cards (sportsbook-ad style)
+   ═══════════════════════════════════════════════════════════════════════════ */
+.home2 .hc{position:relative; z-index:2}
+.home2 .hc-viewport{position:relative; height:clamp(300px,40vw,360px); border-radius:22px; overflow:hidden;
+  isolation:isolate}
+.home2 .hc-slide{position:absolute; inset:0; display:grid; grid-template-columns:1.15fr .85fr; align-items:center;
+  gap:20px; padding:30px 34px; border-radius:22px; overflow:hidden;
+  background:
+    radial-gradient(120% 130% at 82% 20%, color-mix(in srgb, var(--acc) 26%, transparent), transparent 60%),
+    radial-gradient(90% 120% at 8% 100%, color-mix(in srgb, var(--acc2) 20%, transparent), transparent 55%),
+    linear-gradient(120deg, #0a0e18 0%, #0d1220 52%, #070a12 100%);
+  box-shadow:inset 0 0 0 1px color-mix(in srgb, var(--acc) 34%, transparent),
+    inset 0 1px 0 rgba(255,255,255,.06), 0 24px 60px -30px rgba(0,0,0,.9)}
+/* halftone dot depth + accent wash on the graphic side */
+.home2 .hc-halftone{position:absolute; inset:0; pointer-events:none; z-index:0; opacity:.5;
+  background-image:radial-gradient(rgba(255,255,255,.09) 1px, transparent 1.4px);
+  background-size:13px 13px;
+  -webkit-mask:linear-gradient(90deg, transparent 40%, #000 100%);
+  mask:linear-gradient(90deg, transparent 40%, #000 100%)}
+.home2 .hc-slide::after{content:''; position:absolute; right:-8%; top:-30%; width:60%; height:160%; z-index:0;
+  background:radial-gradient(circle at 50% 50%, color-mix(in srgb, var(--acc) 30%, transparent), transparent 62%);
+  filter:blur(6px); pointer-events:none}
+
+.home2 .hc-text{position:relative; z-index:2; min-width:0}
+.home2 .hc-kick{display:inline-flex; align-items:center; gap:9px; font-size:10px; font-weight:800;
+  letter-spacing:.24em; color:var(--acc); margin-bottom:13px;
+  padding:5px 11px 5px 9px; border-radius:99px; background:color-mix(in srgb, var(--acc) 12%, transparent);
+  box-shadow:inset 0 0 0 1px color-mix(in srgb, var(--acc) 40%, transparent)}
+.home2 .hc-kdot{width:7px; height:7px; border-radius:50%; background:var(--acc);
+  box-shadow:0 0 9px var(--acc)}
+.home2 .hc-title{font-family:var(--display); font-weight:400; letter-spacing:.005em; line-height:.98;
+  font-size:clamp(26px,3.7vw,44px); color:#f4f8ff; text-shadow:0 3px 0 rgba(0,0,0,.35); margin:0 0 14px}
+.home2 .hc-title .l2{display:block;
+  background:linear-gradient(92deg, var(--acc), var(--acc2)); -webkit-background-clip:text; background-clip:text;
+  color:transparent; filter:drop-shadow(0 2px 10px color-mix(in srgb, var(--acc) 40%, transparent))}
+.home2 .hc-sub{font-size:13.5px; line-height:1.6; color:var(--text2); max-width:430px; margin:0 0 20px}
+.home2 .hc-sub b{color:var(--text); font-weight:700}
+.home2 .hc-cta{display:inline-flex; align-items:center; gap:8px; font-family:var(--font); font-weight:800;
+  font-size:14px; letter-spacing:.02em; color:#050810; padding:14px 22px; border-radius:13px;
+  background:linear-gradient(180deg, color-mix(in srgb, var(--acc) 88%, #fff), var(--acc));
+  box-shadow:0 10px 26px -8px color-mix(in srgb, var(--acc) 70%, transparent), inset 0 1px 0 rgba(255,255,255,.6);
+  transition:transform .16s ease, box-shadow .16s ease}
+.home2 .hc-cta:hover{transform:translateY(-2px) scale(1.02);
+  box-shadow:0 16px 34px -8px color-mix(in srgb, var(--acc) 80%, transparent), inset 0 1px 0 rgba(255,255,255,.7)}
+.home2 .hc-cta svg{margin-right:-3px}
+
+.home2 .hc-art{position:relative; z-index:2; display:grid; place-items:center; height:100%}
+.home2 .hc-graphic{position:relative; width:100%; max-width:290px; aspect-ratio:26/22; display:grid; place-items:center}
+.home2 .hc-svg{width:100%; height:100%; overflow:visible;
+  filter:drop-shadow(0 14px 30px rgba(0,0,0,.55))}
+.home2 .hc-glow{position:absolute; inset:14% 10%; border-radius:50%; z-index:0;
+  background:radial-gradient(circle, color-mix(in srgb, var(--acc) 42%, transparent), transparent 66%);
+  filter:blur(20px)}
+.home2 .hc-badge-icon{position:absolute; left:6%; bottom:8%; z-index:3; width:34px; height:34px; border-radius:11px;
+  display:grid; place-items:center; color:#050810;
+  background:linear-gradient(180deg, color-mix(in srgb, var(--acc) 90%, #fff), var(--acc));
+  box-shadow:0 8px 18px -6px color-mix(in srgb, var(--acc) 70%, transparent), inset 0 1px 0 rgba(255,255,255,.6)}
+.home2 .hc-coin{transform-box:fill-box; transform-origin:center; animation:hc-bob 2.6s ease-in-out infinite}
+@keyframes hc-bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-7px)}}
+.home2 .hc-sweep{transform-box:view-box; transform-origin:130px 110px; animation:hc-spin 3.4s linear infinite}
+@keyframes hc-spin{to{transform:rotate(360deg)}}
+
+/* arrows */
+.home2 .hc-arrow{position:absolute; top:50%; transform:translateY(-50%); z-index:5; width:38px; height:38px;
+  border-radius:50%; display:grid; place-items:center; color:var(--text);
+  background:rgba(8,12,20,.6); backdrop-filter:blur(6px);
+  box-shadow:inset 0 0 0 1px var(--line2); opacity:0; transition:opacity .18s, background .18s}
+.home2 .hc-viewport:hover .hc-arrow{opacity:1}
+.home2 .hc-arrow:hover{background:rgba(8,12,20,.85); color:var(--acc)}
+.home2 .hc-arrow.left{left:12px} .home2 .hc-arrow.right{right:12px}
+
+/* dots with auto-advance progress fill */
+.home2 .hc-dots{display:flex; gap:9px; justify-content:center; margin:16px 0 4px}
+.home2 .hc-dot{position:relative; width:34px; height:5px; border-radius:99px; overflow:hidden;
+  background:rgba(148,163,184,.24)}
+.home2 .hc-dot.on{background:rgba(148,163,184,.3)}
+.home2 .hc-dot-fill{position:absolute; inset:0; width:0; border-radius:99px; background:var(--acc);
+  box-shadow:0 0 8px var(--acc)}
+.home2 .hc-dot.on .hc-dot-fill{animation:hc-fill linear forwards}
+@keyframes hc-fill{from{width:0}to{width:100%}}
+
+/* stat strip (3 tiles) */
+.home2 .hc-stats{display:flex; gap:40px; flex-wrap:wrap; margin-top:22px; padding-top:20px;
+  border-top:1px solid var(--line)}
+.home2 .hc-stat-n{font-size:24px; font-weight:800; font-variant-numeric:tabular-nums; line-height:1}
+.home2 .hc-stat-n.c{color:var(--cyan)} .home2 .hc-stat-n.g{color:var(--gold)} .home2 .hc-stat-n.o{color:#fb923c}
+.home2 .hc-stat-l{font-size:9.5px; letter-spacing:.14em; color:var(--muted); font-weight:700; margin-top:5px}
+
+@media (max-width:760px){
+  .home2 .hc-slide{grid-template-columns:1fr; padding:22px 20px; align-content:center}
+  .home2 .hc-art{display:none}
+  .home2 .hc-viewport{height:clamp(260px,64vw,320px)}
+  .home2 .hc-sub{max-width:none}
+  .home2 .hc-stats{gap:26px}
+}
+@media (prefers-reduced-motion:reduce){
+  .home2 .hc-coin,.home2 .hc-sweep,.home2 .hc-dot.on .hc-dot-fill{animation:none}
+}
