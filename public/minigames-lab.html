@@ -1,0 +1,1191 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>MORBlotto — Bonus Minigames Lab</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+/* ── MORBlotto Bonus Minigames Lab ─────────────────────────────────────────
+   20 drop-in slot BONUS ROUNDS. Every game is interactive, ships a "how to
+   play" panel, and pays out a multiplier that is PRE-COMMITTED from a
+   provably-fair seed the instant the round opens (same model as the live
+   slot bonuses: your play reveals a result that was locked before you moved).
+   Single self-contained file — open at /minigames-lab.html on any deploy.
+   Palette: deep-sea abyss + one cyan accent; amber is reserved for
+   multiplier / MORBIUS win numbers only. */
+:root{
+  --abyss:#050E16; --cyan:#22D3EE; --cyan-soft:rgba(34,211,238,0.12); --cyan-edge:rgba(34,211,238,0.35);
+  --win:#F59E0B; --loss:#FB7185; --good:#34D399;
+  --ink:#E2E8F0; --slate-300:#CBD5E1; --slate-400:#94A3B8; --slate-500:#64748B;
+  --panel:rgba(8,20,31,0.82); --field:#081420; --line:rgba(34,211,238,0.14);
+  --font-disp:'Chakra Petch','Trebuchet MS',system-ui,sans-serif;
+  --font-mono:'JetBrains Mono',ui-monospace,'SFMono-Regular',Consolas,monospace;
+}
+*{box-sizing:border-box}
+html{color-scheme:dark}
+body{
+  margin:0;min-height:100svh;background-color:var(--abyss);
+  background-image:linear-gradient(to bottom,rgba(5,14,22,0.92),rgba(2,7,11,0.96) 55%,rgba(5,14,22,0.98));
+  color:var(--ink);font-family:var(--font-disp);-webkit-font-smoothing:antialiased;overflow-x:hidden;
+}
+.bg-light{position:fixed;inset:0;pointer-events:none;z-index:0;background:radial-gradient(ellipse 75% 55% at 50% -5%,rgba(34,211,238,0.13),transparent 70%)}
+.bg-vignette{position:fixed;inset:0;pointer-events:none;z-index:0;background:radial-gradient(ellipse 120% 60% at 50% 115%,rgba(0,0,0,0.55),transparent 60%)}
+.mono{font-family:var(--font-mono);font-variant-numeric:tabular-nums}
+.amt{color:var(--win);font-family:var(--font-mono);font-weight:700}
+
+.wrap{position:relative;z-index:1;max-width:1180px;margin:0 auto;padding:26px 16px 90px}
+@media(min-width:700px){.wrap{padding:40px 24px 110px}}
+
+header.hero{text-align:center;margin-bottom:8px}
+.hero h1{margin:0;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#fff;font-size:clamp(24px,6vw,38px);line-height:1.05;text-wrap:balance}
+.hero h1 .glyph{color:var(--cyan);filter:drop-shadow(0 0 12px rgba(34,211,238,.65))}
+.hero .tagline{margin:.6rem auto 0;max-width:64ch;font-size:clamp(12px,2.6vw,14px);color:var(--slate-400);line-height:1.55}
+.hero .tagline b{color:var(--slate-300);font-weight:600}
+.hero .bar{margin:16px auto 0;display:inline-flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:center}
+.chiplbl{font-family:var(--font-mono);font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--slate-500)}
+.betbox{display:inline-flex;align-items:center;gap:2px;border:1px solid var(--cyan-soft);border-radius:11px;background:rgba(6,16,25,.7);padding:3px}
+.betbox button{width:30px;height:30px;border:none;border-radius:8px;background:rgba(34,211,238,.08);color:var(--cyan);font-size:18px;font-weight:700;cursor:pointer;line-height:1}
+.betbox button:hover{background:rgba(34,211,238,.16)}
+.betbox .bv{min-width:74px;text-align:center;font-family:var(--font-mono);font-weight:700;color:var(--win);font-size:14px}
+
+.grid{display:grid;grid-template-columns:1fr;gap:16px;margin-top:26px}
+@media(min-width:560px){.grid{grid-template-columns:repeat(2,1fr)}}
+@media(min-width:900px){.grid{grid-template-columns:repeat(3,1fr)}}
+@media(min-width:1180px){.grid{grid-template-columns:repeat(4,1fr)}}
+
+button.mcard{
+  display:flex;flex-direction:column;text-align:left;text-decoration:none;color:inherit;cursor:pointer;font-family:inherit;
+  background:linear-gradient(rgba(255,255,255,0.03),rgba(255,255,255,0) 20%),var(--panel);
+  border:1px solid var(--cyan-soft);border-radius:16px;overflow:hidden;padding:0;
+  box-shadow:0 18px 40px -24px rgba(0,0,0,0.9);
+  transition:border-color .18s, transform .18s, box-shadow .18s;
+}
+button.mcard:hover,button.mcard:focus-visible{border-color:var(--cyan-edge);transform:translateY(-3px);box-shadow:0 26px 50px -26px rgba(0,0,0,.95),0 0 24px -12px rgba(34,211,238,.35);outline:none}
+.mcard .mhead{display:flex;align-items:baseline;gap:9px;padding:13px 15px 8px}
+.pick{flex:none;font-family:var(--font-mono);font-weight:700;font-size:12px;color:var(--cyan);border:1px solid var(--cyan-edge);border-radius:8px;padding:2px 7px;background:rgba(34,211,238,.08)}
+.mcard h3{margin:0;font-size:15.5px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:#fff}
+.mscene{position:relative;margin:8px 12px 0;height:104px;border-radius:12px;overflow:hidden;display:grid;place-items:center;
+  background:linear-gradient(160deg,#0b1c28,#06121b);box-shadow:inset 0 0 0 1px rgba(34,211,238,.10), inset 0 -22px 30px -26px rgba(0,0,0,.85)}
+.mscene::after{content:"";position:absolute;inset:0;background:radial-gradient(ellipse 70% 60% at 50% 22%,rgba(34,211,238,.10),transparent 70%);pointer-events:none}
+.mscene .g{font-size:44px;line-height:1;filter:drop-shadow(0 6px 14px rgba(0,0,0,.6));animation:bob 3.4s ease-in-out infinite}
+@keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
+.msub{margin:9px 15px 0;font-size:11.5px;color:var(--slate-400);letter-spacing:.01em;line-height:1.4}
+.mfoot{padding:10px 15px 13px;display:flex;align-items:center;gap:8px;margin-top:auto}
+.tagchip{font-family:var(--font-mono);font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--slate-500);border:1px solid var(--line);border-radius:7px;padding:3px 6px}
+.playlink{margin-left:auto;font-family:var(--font-disp);font-weight:700;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--cyan);border:1px solid var(--cyan-edge);border-radius:9px;padding:6px 11px;background:rgba(34,211,238,.07);transition:.15s}
+.mcard:hover .playlink{color:#04222b;background:linear-gradient(160deg,#7be9fb,#22D3EE);box-shadow:0 0 18px -6px var(--cyan)}
+
+/* ── bonus shell / overlay ── */
+.shell{position:fixed;inset:0;z-index:60;display:none;padding:14px;overflow-y:auto;
+  background:radial-gradient(ellipse 90% 70% at 50% 0%,rgba(6,20,31,.6),rgba(2,6,10,.92) 70%),rgba(2,6,10,.86);backdrop-filter:blur(6px)}
+.shell.on{display:grid;place-items:start center}
+.scard{width:100%;max-width:560px;margin:auto;position:relative;border-radius:18px;overflow:hidden;
+  background:linear-gradient(rgba(255,255,255,0.03),rgba(255,255,255,0) 16%),var(--panel);
+  border:1px solid var(--cyan-edge);box-shadow:0 30px 70px -30px rgba(0,0,0,.95),0 0 40px -20px rgba(34,211,238,.35)}
+.stop{display:flex;align-items:center;gap:10px;padding:13px 15px;border-bottom:1px solid var(--line)}
+.stop .st-name{font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#fff;font-size:16px}
+.stop .st-tag{font-family:var(--font-mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--cyan);border:1px solid var(--cyan-soft);border-radius:7px;padding:2px 7px}
+.stop .sx{margin-left:auto;width:34px;height:34px;flex:none;border:1px solid var(--line);border-radius:9px;background:rgba(6,16,25,.7);color:var(--slate-300);font-size:16px;cursor:pointer}
+.stop .sx:hover{border-color:var(--cyan-edge);color:#fff}
+.hashline{display:flex;align-items:center;gap:8px;padding:8px 15px;border-bottom:1px solid var(--line);font-family:var(--font-mono);font-size:10.5px;color:var(--slate-500)}
+.hashline b{color:var(--slate-400);font-weight:600}
+.hashline .hv{color:var(--cyan);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:220px}
+.hashline .dot{width:6px;height:6px;border-radius:50%;background:var(--good);box-shadow:0 0 8px var(--good);flex:none}
+
+.howto{padding:12px 15px;border-bottom:1px solid var(--line);background:rgba(6,16,25,.5)}
+.howto h4{margin:0 0 7px;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--cyan)}
+.howto ol{margin:0;padding-left:18px;color:var(--slate-300);font-size:13px;line-height:1.55}
+.howto ol li{margin:3px 0}
+.howto .fair{margin:9px 0 0;font-size:11px;color:var(--slate-500);line-height:1.5}
+.howto .gotit{margin-top:11px;width:100%;border:1px solid var(--cyan-edge);border-radius:10px;background:linear-gradient(160deg,#7be9fb,#22D3EE);color:#04222b;font-weight:700;font-family:inherit;letter-spacing:.06em;text-transform:uppercase;font-size:12px;padding:10px;cursor:pointer}
+
+.stage{position:relative;padding:16px 15px;min-height:280px;display:flex;flex-direction:column;gap:14px}
+.status{text-align:center;font-family:var(--font-mono);font-size:12.5px;color:var(--slate-400);min-height:18px;letter-spacing:.02em}
+.status b{color:var(--cyan)}
+.bank{display:flex;align-items:center;justify-content:center;gap:10px}
+.bankpill{font-family:var(--font-mono);font-weight:700;font-size:15px;color:var(--win);border:1px solid rgba(245,158,11,.4);border-radius:11px;padding:6px 14px;background:rgba(245,158,11,.07);box-shadow:0 0 18px -8px var(--win)}
+
+.sfoot{display:flex;align-items:center;gap:9px;padding:11px 15px;border-top:1px solid var(--line);flex-wrap:wrap}
+.sfoot .fbet{font-family:var(--font-mono);font-size:11px;color:var(--slate-500)}
+.sfoot .fbet b{color:var(--slate-300)}
+.linkbtn{margin-left:auto;font-family:var(--font-mono);font-size:11px;color:var(--slate-400);background:none;border:none;cursor:pointer;text-decoration:underline dotted;padding:4px}
+.linkbtn:hover{color:var(--cyan)}
+
+/* generic game components */
+.btn{font-family:inherit;font-weight:700;letter-spacing:.05em;text-transform:uppercase;font-size:13px;padding:12px 16px;border-radius:11px;cursor:pointer;
+  border:1px solid var(--cyan-edge);background:rgba(34,211,238,.08);color:var(--cyan);transition:.14s;user-select:none}
+.btn:hover:not(:disabled){background:rgba(34,211,238,.16)}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.btn.primary{background:linear-gradient(160deg,#7be9fb,#22D3EE);color:#04222b;border-color:var(--cyan)}
+.btn.primary:hover:not(:disabled){box-shadow:0 0 20px -6px var(--cyan)}
+.btn.amber{border-color:rgba(245,158,11,.5);background:rgba(245,158,11,.10);color:var(--win)}
+.btn.amber:hover:not(:disabled){background:rgba(245,158,11,.18)}
+.btn.wide{flex:1}
+.btnrow{display:flex;gap:9px}
+.center{display:flex;align-items:center;justify-content:center}
+.gcell{position:relative;border-radius:11px;background:rgba(6,16,25,.9);box-shadow:inset 0 0 0 1px rgba(34,211,238,.14);display:grid;place-items:center;
+  font-family:var(--font-mono);font-weight:700;cursor:pointer;transition:transform .12s, box-shadow .18s, background .18s;user-select:none}
+.gcell:hover:not(.done){transform:translateY(-2px);box-shadow:inset 0 0 0 1px var(--cyan-edge)}
+.gcell.done{cursor:default}
+.gcell.hit{box-shadow:inset 0 0 0 2px var(--win),0 0 18px -6px var(--win);background:rgba(245,158,11,.10);color:var(--win)}
+.gcell.miss{box-shadow:inset 0 0 0 2px var(--loss);background:rgba(251,113,133,.08);color:var(--loss)}
+.gcell.safe{box-shadow:inset 0 0 0 2px var(--good);background:rgba(52,211,153,.08);color:var(--good)}
+.meter{height:16px;border-radius:9px;background:rgba(6,16,25,.9);box-shadow:inset 0 0 0 1px var(--line);overflow:hidden}
+.meter>i{display:block;height:100%;width:0;background:linear-gradient(90deg,#0e7490,#22D3EE);transition:width .09s linear}
+.pop{animation:pop .34s cubic-bezier(.2,1.4,.4,1)}
+@keyframes pop{0%{transform:scale(.6);opacity:0}100%{transform:scale(1);opacity:1}}
+
+/* win banner */
+.banner{position:absolute;inset:0;z-index:5;display:none;flex-direction:column;align-items:center;justify-content:center;gap:6px;text-align:center;padding:20px;
+  background:radial-gradient(ellipse 80% 60% at 50% 40%,rgba(6,20,31,.7),rgba(2,6,10,.95));backdrop-filter:blur(3px)}
+.banner.on{display:flex;animation:pop .4s cubic-bezier(.2,1.4,.4,1)}
+.banner .bk-kind{font-family:var(--font-mono);font-size:12px;letter-spacing:.28em;text-transform:uppercase;color:var(--slate-400)}
+.banner .bk-mult{font-family:var(--font-mono);font-weight:700;font-size:clamp(40px,13vw,64px);line-height:1;color:var(--win);text-shadow:0 0 30px rgba(245,158,11,.6)}
+.banner .bk-amt{font-family:var(--font-mono);font-size:15px;color:var(--slate-300)}
+.banner .bk-amt b{color:var(--win)}
+.banner .bk-btns{margin-top:12px;display:flex;gap:9px}
+.banner.zero .bk-mult{color:var(--slate-500);text-shadow:none}
+
+.tiny{font-family:var(--font-mono);font-size:10px;color:var(--slate-500);text-align:center;letter-spacing:.04em}
+.foot-note{margin-top:34px;text-align:center;color:var(--slate-500);font-size:11.5px;line-height:1.6}
+.foot-note a{color:var(--cyan);text-decoration:none}
+</style>
+</head>
+<body>
+<div class="bg-light"></div>
+<div class="bg-vignette"></div>
+
+<div class="wrap">
+  <header class="hero">
+    <h1>Bonus <span class="glyph">◆</span> Minigames</h1>
+    <p class="tagline">Twenty drop-in slot bonus rounds — every one <b>interactive</b>, every one with a <b>how-to-play</b> card, every payout <b>pre-committed from a provably-fair seed</b> the instant the round opens. Pick a game, set your bet, and play.</p>
+    <div class="bar">
+      <span class="chiplbl">Bet</span>
+      <div class="betbox">
+        <button id="betDown" aria-label="Lower bet">−</button>
+        <span class="bv mono" id="betVal">100</span>
+        <button id="betUp" aria-label="Raise bet">+</button>
+      </div>
+      <span class="chiplbl">MORBIUS / round</span>
+    </div>
+  </header>
+
+  <div class="grid" id="hub"></div>
+
+  <p class="foot-note">
+    Each game locks its full result from a committed server seed before you touch it — your play is the reveal, exactly like the live slot bonuses.<br/>
+    Prototype lab · port winners into the Slot Series · <a href="./labs-hub.html">← back to Labs Hub</a>
+  </p>
+</div>
+
+<!-- bonus shell -->
+<div class="shell" id="shell" role="dialog" aria-modal="true">
+  <div class="scard">
+    <div class="stop">
+      <span class="st-name" id="stName">—</span>
+      <span class="st-tag" id="stTag">bonus</span>
+      <button class="sx" id="stClose" aria-label="Close">✕</button>
+    </div>
+    <div class="hashline"><span class="dot"></span><b>Committed</b><span class="hv mono" id="stHash">—</span></div>
+    <div class="howto" id="howto"></div>
+    <div class="stage" id="stage">
+      <div class="banner" id="banner"></div>
+    </div>
+    <div class="sfoot">
+      <span class="fbet">Bet <b class="mono" id="fBet">100</b> MORBIUS</span>
+      <button class="linkbtn" id="howBtn">How to play</button>
+      <button class="linkbtn" id="verifyBtn" style="display:none">Reveal seed</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+'use strict';
+/* ══ helpers ═══════════════════════════════════════════════════════════ */
+var $=function(id){return document.getElementById(id);};
+function el(tag,cls,html){var n=document.createElement(tag);if(cls)n.className=cls;if(html!=null)n.innerHTML=html;return n;}
+function clamp(v,a,b){return Math.max(a,Math.min(b,v));}
+function fmt(n){n=Math.round(n);return n.toString().replace(/\B(?=(\d{3})+(?!\d))/g,',');}
+function multStr(m){return (Math.round(m*100)/100).toString().replace(/\.00$/,'')+'×';}
+
+/* ══ provably-fair primitives (same recipe as the live slots) ══════════ */
+function xmur3(str){var h=1779033703^str.length;for(var i=0;i<str.length;i++){h=Math.imul(h^str.charCodeAt(i),3432918353);h=h<<13|h>>>19;}return function(){h=Math.imul(h^h>>>16,2246822507);h=Math.imul(h^h>>>13,3266489909);return (h^=h>>>16)>>>0;};}
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;var t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return ((t^t>>>14)>>>0)/4294967296;};}
+function makeRng(seedStr){return mulberry32(xmur3(seedStr)());}
+function rndHex(n){var s='',c='0123456789abcdef';try{var b=new Uint8Array(n);crypto.getRandomValues(b);for(var i=0;i<n;i++)s+=c[b[i]&15];return s;}catch(e){for(var j=0;j<n;j++)s+=c[Math.floor(Math.random()*16)];return s;}}
+function shortId(){return rndHex(8);}
+/* compact synchronous SHA-256 (fallback for file:// where crypto.subtle is blocked) */
+function sha256sync(ascii){function rr(v,a){return (v>>>a)|(v<<(32-a));}var mp=Math.pow,mw=mp(2,32),res='',words=[],bl=ascii.length*8;var h=sha256sync.h=sha256sync.h||[],k=sha256sync.k=sha256sync.k||[],pc=k.length,comp={};for(var cand=2;pc<64;cand++){if(!comp[cand]){for(var i=0;i<313;i+=cand)comp[i]=cand;h[pc]=(mp(cand,.5)*mw)|0;k[pc++]=(mp(cand,1/3)*mw)|0;}}ascii+='\x80';while(ascii.length%64-56)ascii+='\x00';for(i=0;i<ascii.length;i++){var j=ascii.charCodeAt(i);if(j>>8)return null;words[i>>2]|=j<<((3-i)%4)*8;}words[words.length]=(bl/mw)|0;words[words.length]=bl;for(j=0;j<words.length;){var w=words.slice(j,j+=16),oh=h;h=h.slice(0,8);for(i=0;i<64;i++){var w15=w[i-15],w2=w[i-2],a2=h[0],e=h[4];var t1=h[7]+(rr(e,6)^rr(e,11)^rr(e,25))+((e&h[5])^((~e)&h[6]))+k[i]+(w[i]=i<16?w[i]:(w[i-16]+(rr(w15,7)^rr(w15,18)^(w15>>>3))+w[i-7]+(rr(w2,17)^rr(w2,19)^(w2>>>10)))|0);var t2=(rr(a2,2)^rr(a2,13)^rr(a2,22))+((a2&h[1])^(a2&h[2])^(h[1]&h[2]));h=[(t1+t2)|0].concat(h);h[4]=(h[4]+t1)|0;}for(i=0;i<8;i++)h[i]=(h[i]+oh[i])|0;}for(i=0;i<8;i++)for(j=3;j+1;j--){var b=(h[i]>>(j*8))&255;res+=((b<16)?0:'')+b.toString(16);}return res;}
+function commitHash(msg,cb){try{crypto.subtle.digest('SHA-256',new TextEncoder().encode(msg)).then(function(buf){cb(Array.from(new Uint8Array(buf)).map(function(x){return x.toString(16).padStart(2,'0');}).join(''));}).catch(function(){cb(sha256sync(msg)||'sha256-unavailable');});}catch(e){cb(sha256sync(msg)||'sha256-unavailable');}}
+
+/* ══ registry ═════════════════════════════════════════════════════════ */
+var GAMES=[];
+function register(g){GAMES.push(g);}
+
+/* ══ global bet ═══════════════════════════════════════════════════════ */
+var BETS=[10,25,50,100,250,500,1000],betIdx=3;
+function bet(){return BETS[betIdx];}
+function paintBet(){$('betVal').textContent=fmt(bet());$('fBet').textContent=fmt(bet());}
+$('betDown').onclick=function(){betIdx=clamp(betIdx-1,0,BETS.length-1);paintBet();};
+$('betUp').onclick=function(){betIdx=clamp(betIdx+1,0,BETS.length-1);paintBet();};
+
+/* ══ bonus shell ══════════════════════════════════════════════════════ */
+var shell={open:false,game:null,seed:null,cleanup:[],settled:false,seen:{}};
+function onCleanup(fn){shell.cleanup.push(fn);}
+function runCleanup(){shell.cleanup.forEach(function(fn){try{fn();}catch(e){}});shell.cleanup=[];}
+
+function openGame(g){
+  shell.game=g;shell.settled=false;runCleanup();
+  var server=rndHex(64),client=rndHex(16),nonce=1;
+  shell.seed={server:server,client:client,nonce:nonce,hash:'…'};
+  var rng=makeRng(server+':'+client+':'+nonce);
+  $('stName').textContent=g.name;$('stTag').textContent=g.tag;
+  $('stHash').textContent='computing…';
+  commitHash(server,function(hx){shell.seed.hash=hx;if(shell.game===g)$('stHash').textContent=hx.slice(0,32)+'…';});
+  // how-to
+  var ht=$('howto');ht.innerHTML='';
+  ht.appendChild(el('h4',null,'How to play — '+g.name));
+  var ol=el('ol');g.howto.forEach(function(li){ol.appendChild(el('li',null,li));});ht.appendChild(ol);
+  ht.appendChild(el('p','fair','Provably fair: your entire result is drawn from the committed seed above <b>before</b> you play — the interaction reveals it, it can’t change the math. Reveal the seed after any round to check.'));
+  var gi=el('button','gotit',shell.seen[g.id]?'Play →':'Got it — play →');
+  gi.onclick=function(){ht.style.display='none';};ht.appendChild(gi);
+  ht.style.display=shell.seen[g.id]?'none':'block';
+  shell.seen[g.id]=true;
+  $('verifyBtn').style.display='none';
+  // stage
+  var stage=$('stage');
+  Array.prototype.slice.call(stage.querySelectorAll(':scope > *:not(#banner)')).forEach(function(n){n.remove();});
+  var banner=$('banner');banner.className='banner';banner.innerHTML='';
+  var ctx=buildCtx(rng,stage);
+  paintBet();
+  $('shell').classList.add('on');shell.open=true;
+  document.body.style.overflow='hidden';
+  try{g.mount(stage,ctx);}catch(e){ctx.setStatus('Error: '+e.message);}
+}
+
+function buildCtx(rng,stage){
+  var statusEl=el('div','status');statusEl.id='gStatus';stage.appendChild(statusEl);
+  function rint(n){return Math.floor(rng()*n);}
+  function pick(arr){return arr[Math.floor(rng()*arr.length)];}
+  function shuffle(arr){for(var i=arr.length-1;i>0;i--){var j=Math.floor(rng()*(i+1));var t=arr[i];arr[i]=arr[j];arr[j]=t;}return arr;}
+  var ctx={
+    stage:stage,bet:bet(),rng:rng,rint:rint,pick:pick,shuffle:shuffle,onCleanup:onCleanup,el:el,
+    setStatus:function(h){statusEl.innerHTML=h;},
+    add:function(node){stage.insertBefore(node,statusEl);return node;},
+    settle:function(mult,opts){settleRound(mult,opts||{});}
+  };
+  return ctx;
+}
+
+function settleRound(mult,opts){
+  if(shell.settled)return;shell.settled=true;
+  var b=bet(),win=b*mult;
+  var banner=$('banner');banner.className='banner on'+(mult<=0?' zero':'');
+  var kind=mult<=0?'No win':(mult>=50?'Mega win':(mult>=15?'Big win':(mult>=5?'Nice hit':'Bonus win')));
+  banner.innerHTML='';
+  banner.appendChild(el('div','bk-kind',opts.kind||kind));
+  banner.appendChild(el('div','bk-mult',mult<=0?'0×':multStr(mult)));
+  banner.appendChild(el('div','bk-amt',mult<=0?'Better luck next spin':('Paid <b>'+fmt(win)+'</b> MORBIUS')));
+  var btns=el('div','bk-btns');
+  var again=el('button','btn primary','Play again');
+  again.onclick=function(){openGame(shell.game);};
+  var back=el('button','btn','All games');
+  back.onclick=closeShell;
+  btns.appendChild(again);btns.appendChild(back);banner.appendChild(btns);
+  $('verifyBtn').style.display='';
+}
+
+function closeShell(){$('shell').classList.remove('on');shell.open=false;shell.game=null;runCleanup();document.body.style.overflow='';}
+$('stClose').onclick=closeShell;
+$('howBtn').onclick=function(){var ht=$('howto');ht.style.display=ht.style.display==='none'?'block':'none';};
+$('verifyBtn').onclick=function(){
+  var s=shell.seed;if(!s)return;
+  alert('Provably-fair reveal\n\nServer seed (was committed as the hash):\n'+s.server+'\n\nClient seed: '+s.client+'\nNonce: '+s.nonce+'\n\nRecipe: mulberry32(xmur3(`serverSeed:clientSeed:nonce`)) → the game draws its whole result from this stream before you play. Re-run the recipe to reproduce every reveal.');
+};
+document.addEventListener('keydown',function(e){if(e.key==='Escape'&&shell.open)closeShell();});
+
+/* ══ hub render ═══════════════════════════════════════════════════════ */
+function renderHub(){
+  var hub=$('hub');hub.innerHTML='';
+  GAMES.forEach(function(g,i){
+    var c=el('button','mcard');
+    c.appendChild(el('div','mhead','<span class="pick">'+String(i+1).padStart(2,'0')+'</span><h3>'+g.name+'</h3>'));
+    var scene=el('div','mscene','<span class="g">'+g.glyph+'</span>');
+    c.appendChild(scene);
+    c.appendChild(el('div','msub',g.blurb+' · up to <span class="amt">'+g.max+'×</span>'));
+    c.appendChild(el('div','mfoot','<span class="tagchip">'+g.tag+'</span><span class="playlink">Play →</span>'));
+    c.onclick=function(){openGame(g);};
+    hub.appendChild(c);
+  });
+}
+
+/* expose to game modules defined below */
+var API={register:register,el:el,clamp:clamp,fmt:fmt,multStr:multStr};
+
+/* ══════════════════════════════════════════════════════════════════════
+   GAMES  —  each: register({id,name,tag,glyph,blurb,max,howto[],mount(stage,ctx)})
+   ctx: {bet, rng, rint(n), pick(arr), shuffle(arr), el, add(node), setStatus(html),
+         settle(mult,{kind}), onCleanup(fn)}
+   ══════════════════════════════════════════════════════════════════════ */
+
+/* 01 · VAULT PICK ─ pick sealed cells, bank multipliers until COLLECT ─── */
+register({
+  id:'vault',name:'Vault Pick',tag:'pick & collect',glyph:'🔓',
+  blurb:'Crack sealed cells for stacking multipliers',max:50,
+  howto:['Tap sealed cells one at a time.','Each cell reveals a multiplier that <b>adds to your bank</b>.','A <b>COLLECT</b> cell ends the round and pays your bank.','Every hidden value was locked by the seed before you picked.'],
+  mount:function(stage,ctx){
+    var pool=['2×','3×','2×','5×','3×','8×','COLLECT','2×','12×','3×','COLLECT','20×'];
+    ctx.shuffle(pool);
+    var order=pool.slice();ctx.shuffle(order); // reveal order (seeded)
+    if(order[0]==='COLLECT'){for(var oi=1;oi<order.length;oi++){if(order[oi]!=='COLLECT'){var otmp=order[0];order[0]=order[oi];order[oi]=otmp;break;}}} // guarantee 1+ prize
+    var bank=0,picks=0,ended=false;
+    var bankPill=ctx.el('div','bank','<span class="bankpill" id="vpBank">Bank 0×</span>');
+    ctx.add(bankPill);
+    var grid=ctx.el('div');grid.style.cssText='display:grid;grid-template-columns:repeat(4,1fr);gap:9px';
+    ctx.add(grid);
+    ctx.setStatus('Tap a cell to reveal a multiplier.');
+    var cells=[];
+    for(var i=0;i<12;i++){(function(idx){
+      var cell=ctx.el('div','gcell','?');cell.style.height='62px';cell.style.fontSize='17px';
+      cell.onclick=function(){
+        if(ended||cell.classList.contains('done'))return;
+        var val=order[picks];picks++;
+        cell.classList.add('done','pop');
+        if(val==='COLLECT'){cell.classList.add('safe');cell.textContent='END';ended=true;
+          ctx.setStatus('Collected on pick '+picks+'.');finish();}
+        else{var m=parseFloat(val);bank+=m;cell.classList.add('hit');cell.textContent=val;
+          $('vpBank').textContent='Bank '+API.multStr(bank);
+          ctx.setStatus('+'+val+' · keep going or you’ll hit COLLECT');
+          if(picks>=12){ended=true;finish();}}
+      };
+      grid.appendChild(cell);cells.push(cell);
+    })(i);}
+    function finish(){setTimeout(function(){ctx.settle(bank);},650);}
+  }
+});
+
+/* 02 · FORTUNE WHEEL ─ flick to spin, land a segment ─────────────────── */
+register({
+  id:'wheel',name:'Fortune Wheel',tag:'flick spin',glyph:'🎡',
+  blurb:'Flick the wheel and land a multiplier',max:100,
+  howto:['<b>Flick / drag</b> the wheel to spin it, or hit SPIN.','It decelerates onto one segment — that’s your multiplier.','The landing segment was chosen by the seed before you flicked.'],
+  mount:function(stage,ctx){
+    var segs=[2,5,3,10,2,25,3,8,2,50,3,100,2,5];
+    var n=segs.length,land=ctx.rint(n);
+    var wrap=ctx.el('div');wrap.style.cssText='position:relative;width:230px;height:230px;margin:0 auto';
+    var cv=ctx.el('canvas');cv.width=460;cv.height=460;cv.style.cssText='width:230px;height:230px;cursor:grab;touch-action:none';
+    wrap.appendChild(cv);
+    var ptr=ctx.el('div');ptr.style.cssText='position:absolute;top:-4px;left:50%;transform:translateX(-50%);border-left:11px solid transparent;border-right:11px solid transparent;border-top:20px solid #F59E0B;filter:drop-shadow(0 0 6px rgba(245,158,11,.8));z-index:2';
+    wrap.appendChild(ptr);
+    ctx.add(wrap);
+    var g=cv.getContext('2d');
+    var ang=0,spinning=false;
+    function draw(){
+      g.clearRect(0,0,460,460);g.save();g.translate(230,230);g.rotate(ang);
+      for(var i=0;i<n;i++){var a0=i/n*Math.PI*2,a1=(i+1)/n*Math.PI*2;
+        g.beginPath();g.moveTo(0,0);g.arc(0,0,210,a0,a1);g.closePath();
+        g.fillStyle=i%2?'rgba(11,28,40,.95)':'rgba(9,20,31,.98)';g.fill();
+        g.strokeStyle='rgba(34,211,238,.22)';g.lineWidth=2;g.stroke();
+        g.save();g.rotate((a0+a1)/2);g.translate(150,0);g.rotate(Math.PI/2);
+        g.fillStyle=segs[i]>=25?'#F59E0B':'#CBD5E1';g.font='700 26px JetBrains Mono, monospace';g.textAlign='center';
+        g.fillText(segs[i]+'×',0,0);g.restore();}
+      g.beginPath();g.arc(0,0,30,0,Math.PI*2);g.fillStyle='#081420';g.fill();g.strokeStyle='#22D3EE';g.lineWidth=3;g.stroke();
+      g.restore();
+    }
+    draw();
+    var btn=ctx.el('button','btn primary wide','Spin');
+    var row=ctx.el('div','btnrow');row.appendChild(btn);ctx.add(row);
+    ctx.setStatus('Flick the wheel or press Spin.');
+    function spinTo(){
+      if(spinning)return;spinning=true;btn.disabled=true;ctx.setStatus('Spinning…');
+      // target so that segment "land" ends under the top pointer
+      var segAng=Math.PI*2/n;
+      var target=(-Math.PI/2)-(land+0.5)*segAng; // pointer at top (-90deg)
+      var start=ang%(Math.PI*2),turns=4+ctx.rint(2);
+      var end=target- turns*Math.PI*2;
+      var t0=performance.now(),dur=3400+ctx.rint(600),finished=false;
+      function finish(){if(finished)return;finished=true;ang=end;draw();done();}
+      function frame(t){var p=clamp((t-t0)/dur,0,1);var e=1-Math.pow(1-p,3);
+        ang=start+(end-start)*e;draw();
+        if(p<1){var id=requestAnimationFrame(frame);ctx.onCleanup(function(){cancelAnimationFrame(id);});}
+        else{finish();}}
+      requestAnimationFrame(frame);
+      var fb=setTimeout(finish,dur+500);ctx.onCleanup(function(){clearTimeout(fb);}); // settle even if rAF is throttled (hidden tab)
+    }
+    function done(){var m=segs[land];ctx.setStatus('Landed on <b>'+m+'×</b>');setTimeout(function(){ctx.settle(m);},600);}
+    btn.onclick=spinTo;
+    // flick
+    var down=false,lastY=0;
+    cv.addEventListener('pointerdown',function(e){down=true;lastY=e.clientY;cv.style.cursor='grabbing';});
+    window.addEventListener('pointermove',function(e){if(down&&!spinning){ang+=(e.clientY-lastY)*0.01;lastY=e.clientY;draw();}});
+    window.addEventListener('pointerup',function(){if(down&&!spinning)spinTo();down=false;cv.style.cursor='grab';});
+  }
+});
+
+/* 03 · CRACK THE VAULT ─ stop the dial in the glow, gamble deeper ─────── */
+register({
+  id:'crack',name:'Crack the Vault',tag:'stop & gamble',glyph:'🧷',
+  blurb:'Stop the dial in the glow zone, risk deeper',max:60,
+  howto:['A dial marker sweeps around the ring — tap <b>STOP</b>.','Land inside the glowing <b>crack zone</b> to bank a multiplier and open the next tumbler.','<b>Collect</b> anytime, or gamble for a bigger tumbler.','Miss the zone and the run ends with what you’ve banked.'],
+  mount:function(stage,ctx){
+    var tumblers=[{mult:3,hit:true},{mult:8,hit:true},{mult:20,hit:false},{mult:60,hit:true}];
+    // pre-commit each tumbler outcome
+    tumblers.forEach(function(t){t.hit=ctx.rng()<[0,0.7,0.5,0.34,0.22][Math.min(4,t.mult===3?1:t.mult===8?2:t.mult===20?3:4)];});
+    var stage_i=0,bank=0,busy=false,ended=false;
+    var bankPill=ctx.el('div','bank','<span class="bankpill" id="cvBank">Bank 0×</span>');ctx.add(bankPill);
+    var wrap=ctx.el('div');wrap.style.cssText='position:relative;width:200px;height:200px;margin:0 auto';
+    var cv=ctx.el('canvas');cv.width=400;cv.height=400;cv.style.cssText='width:200px;height:200px';wrap.appendChild(cv);ctx.add(wrap);
+    var g=cv.getContext('2d');
+    var marker=0,zoneStart=0,zoneLen=0.9,raf=0;
+    function newTumbler(){zoneStart=ctx.rng()*Math.PI*2;marker=0;}
+    function draw(){
+      g.clearRect(0,0,400,400);g.save();g.translate(200,200);
+      g.beginPath();g.arc(0,0,150,0,Math.PI*2);g.lineWidth=26;g.strokeStyle='rgba(6,16,25,.95)';g.stroke();
+      g.beginPath();g.arc(0,0,150,zoneStart,zoneStart+zoneLen);g.lineWidth=26;g.strokeStyle='rgba(52,211,153,.55)';g.stroke();
+      g.save();g.rotate(marker);g.beginPath();g.moveTo(0,-128);g.lineTo(0,-172);g.lineWidth=5;g.strokeStyle='#F59E0B';g.stroke();g.restore();
+      g.fillStyle='#CBD5E1';g.font='700 22px JetBrains Mono, monospace';g.textAlign='center';g.textBaseline='middle';
+      g.fillText('Tumbler '+(stage_i+1),0,-4);g.fillStyle='#F59E0B';g.font='700 15px JetBrains Mono, monospace';g.fillText(tumblers[stage_i].mult+'×',0,22);
+      g.restore();
+    }
+    newTumbler();draw();
+    var stopBtn=ctx.el('button','btn primary wide','Spin dial');
+    var colBtn=ctx.el('button','btn amber wide','Collect');colBtn.disabled=true;
+    var row=ctx.el('div','btnrow');row.appendChild(stopBtn);row.appendChild(colBtn);ctx.add(row);
+    ctx.setStatus('Spin the dial, then STOP in the green.');
+    var spinning=false;
+    stopBtn.onclick=function(){
+      if(ended)return;
+      if(!spinning){spinning=true;stopBtn.textContent='STOP';colBtn.disabled=true;var v=0.18+ctx.rng()*0.05;
+        (function loop(){marker=(marker+v)%(Math.PI*2);draw();raf=requestAnimationFrame(loop);ctx.onCleanup(function(){cancelAnimationFrame(raf);});})();return;}
+      cancelAnimationFrame(raf);spinning=false;stopBtn.disabled=true;
+      var t=tumblers[stage_i];
+      // seeded result decides hit; snap marker into/out of zone for honesty
+      if(t.hit){marker=zoneStart+zoneLen*(0.2+ctx.rng()*0.6);}else{marker=(zoneStart+zoneLen+0.3+ctx.rng()*(Math.PI*2-zoneLen-0.6))%(Math.PI*2);}
+      draw();
+      if(t.hit){bank+=t.mult;$('cvBank').textContent='Bank '+API.multStr(bank);
+        ctx.setStatus('<b>Crack!</b> Banked '+t.mult+'×');
+        stage_i++;
+        if(stage_i>=tumblers.length){ended=true;ctx.setStatus('Vault open — full crack!');setTimeout(function(){ctx.settle(bank);},700);return;}
+        newTumbler();colBtn.disabled=false;stopBtn.disabled=false;stopBtn.textContent='Spin next';
+      }else{ended=true;ctx.setStatus('Slipped past the zone.');setTimeout(function(){ctx.settle(bank);},700);}
+    };
+    colBtn.onclick=function(){if(ended||spinning)return;ended=true;ctx.settle(bank);};
+  }
+});
+
+/* 04 · HI-LO CLIMB ─ higher/lower ladder, collect or risk ─────────────── */
+register({
+  id:'hilo',name:'Hi-Lo Climb',tag:'higher / lower',glyph:'🪜',
+  blurb:'Guess higher or lower to climb the ladder',max:64,
+  howto:['A card is shown. Call the next card <b>Higher</b> or <b>Lower</b>.','Right = climb a rung, your multiplier grows.','<b>Collect</b> any time to bank it.','One wrong call ends the climb (ties are safe).'],
+  mount:function(stage,ctx){
+    var rungs=[1.5,2.2,3.2,4.8,7,11,18,32,64];
+    var deck=[];for(var i=0;i<9;i++)deck.push(2+ctx.rint(13)); // seeded stream of card ranks 2..14
+    var pos=0,rung=-1,cur=deck[0],idx=1,ended=false;
+    var names={11:'J',12:'Q',13:'K',14:'A'};
+    function cardHtml(v){return names[v]||v;}
+    var pill=ctx.el('div','bank','<span class="bankpill" id="hlBank">1.5× next</span>');ctx.add(pill);
+    var card=ctx.el('div');card.style.cssText='width:110px;height:150px;margin:0 auto;border-radius:14px;display:grid;place-items:center;font-family:var(--font-mono);font-weight:700;font-size:52px;color:#0b1c28;background:linear-gradient(165deg,#f5f8fa,#cfd9e2);box-shadow:0 14px 30px -14px rgba(0,0,0,.8)';
+    card.textContent=cardHtml(cur);ctx.add(card);
+    var row=ctx.el('div','btnrow');
+    var hi=ctx.el('button','btn primary wide','▲ Higher');
+    var lo=ctx.el('button','btn primary wide','▼ Lower');
+    row.appendChild(hi);row.appendChild(lo);ctx.add(row);
+    var col=ctx.el('button','btn amber wide','Collect');col.disabled=true;ctx.add(col);
+    ctx.setStatus('Card is <b>'+cardHtml(cur)+'</b> — higher or lower?');
+    function guess(dir){
+      if(ended||idx>=deck.length)return;
+      var nxt=deck[idx];idx++;card.classList.add('pop');
+      setTimeout(function(){card.classList.remove('pop');},20);
+      var ok=(nxt===cur)?true:(dir==='hi'?nxt>cur:nxt<cur);
+      var prev=cur;cur=nxt;card.textContent=cardHtml(cur);
+      if(ok){rung++;var m=rungs[Math.min(rung,rungs.length-1)];
+        $('hlBank').textContent=API.multStr(m)+' banked';col.disabled=false;
+        ctx.setStatus('<b>'+cardHtml(prev)+'</b> → <b>'+cardHtml(cur)+'</b> ✓  ·  '+API.multStr(m));
+        if(rung>=rungs.length-1||idx>=deck.length){ended=true;ctx.setStatus('Top of the ladder!');finish(m);}
+      }else{ended=true;card.style.background='linear-gradient(165deg,#fecdd3,#fb7185)';
+        ctx.setStatus('<b>'+cardHtml(prev)+'</b> → <b>'+cardHtml(cur)+'</b> ✗ — busted');finish(0);}
+    }
+    function finish(m){hi.disabled=lo.disabled=col.disabled=true;setTimeout(function(){ctx.settle(m);},700);}
+    hi.onclick=function(){guess('hi');};lo.onclick=function(){guess('lo');};
+    col.onclick=function(){if(ended||rung<0)return;ended=true;ctx.settle(rungs[Math.min(rung,rungs.length-1)]);};
+  }
+});
+
+/* 05 · PUMP IT ─ inflate the balloon, cash out before it pops ─────────── */
+register({
+  id:'pump',name:'Pump It',tag:'inflate & cash',glyph:'🎈',
+  blurb:'Pump for a rising multiplier, bank before the pop',max:40,
+  howto:['Tap <b>PUMP</b> to inflate — each pump raises your multiplier.','Tap <b>CASH OUT</b> to bank the current multiplier.','Every balloon has a hidden pop point locked by the seed.','Pump past it and the balloon bursts for nothing.'],
+  mount:function(stage,ctx){
+    var steps=[1.2,1.5,1.9,2.4,3.1,4,5.5,7.5,10,14,20,28,40];
+    // seeded pop index: each pump survives with decreasing odds
+    var popAt=steps.length;
+    for(var i=0;i<steps.length;i++){if(ctx.rng()<(0.08+i*0.055)){popAt=i;break;}}
+    var cur=-1,ended=false;
+    var pill=ctx.el('div','bank','<span class="bankpill" id="puBank">1.00×</span>');ctx.add(pill);
+    var bwrap=ctx.el('div');bwrap.style.cssText='height:150px;display:flex;align-items:flex-end;justify-content:center';
+    var balloon=ctx.el('div');balloon.style.cssText='width:40px;height:48px;border-radius:50% 50% 48% 48%;background:radial-gradient(circle at 35% 30%,#7be9fb,#22D3EE 60%,#0e7490);box-shadow:0 0 26px rgba(34,211,238,.4);transition:all .18s cubic-bezier(.2,1.2,.4,1);position:relative';
+    balloon.innerHTML='<div style="position:absolute;bottom:-9px;left:50%;transform:translateX(-50%);border-left:6px solid transparent;border-right:6px solid transparent;border-top:9px solid #0e7490"></div>';
+    bwrap.appendChild(balloon);ctx.add(bwrap);
+    var row=ctx.el('div','btnrow');
+    var pump=ctx.el('button','btn primary wide','Pump ↑');
+    var cash=ctx.el('button','btn amber wide','Cash out');cash.disabled=true;
+    row.appendChild(pump);row.appendChild(cash);ctx.add(row);
+    ctx.setStatus('Pump to inflate the multiplier.');
+    pump.onclick=function(){
+      if(ended)return;cur++;
+      if(cur>=popAt){ // burst
+        ended=true;balloon.style.transform='scale(1.5)';balloon.style.opacity='0';
+        ctx.setStatus('💥 <b>Pop!</b> Burst on pump '+(cur+1));
+        pump.disabled=cash.disabled=true;setTimeout(function(){ctx.settle(0);},650);return;
+      }
+      var m=steps[cur];var sc=1+cur*0.26;
+      balloon.style.transform='scale('+sc+')';
+      $('puBank').textContent=API.multStr(m);cash.disabled=false;
+      ctx.setStatus('Balloon at <b>'+API.multStr(m)+'</b> — push it or bank it?');
+      if(cur>=steps.length-1){ended=true;ctx.setStatus('Maxed the balloon!');pump.disabled=true;setTimeout(function(){ctx.settle(m);},600);}
+    };
+    cash.onclick=function(){if(ended||cur<0)return;ended=true;ctx.settle(steps[cur]);};
+  }
+});
+
+/* 06 · ORBIT CLIMB ─ eject before the booster flames out ──────────────── */
+register({
+  id:'orbit',name:'Orbit Climb',tag:'eject timing',glyph:'🚀',
+  blurb:'Ride the climbing multiplier, eject before the burn',max:100,
+  howto:['The multiplier climbs from 1.00× and accelerates.','Tap <b>EJECT</b> to bank it.','Every launch has a hidden flame-out point set by the seed.','Ride past it and the booster burns — you bank nothing.'],
+  mount:function(stage,ctx){
+    // seeded crash multiplier, house-edged distribution
+    var r=ctx.rng();var crash=Math.max(1,Math.floor((0.97/(1-r))*100)/100);crash=Math.min(crash,100);
+    var cur=1,ended=false,t0=0,raf=0,launched=false;
+    var disp=ctx.el('div');disp.style.cssText='font-family:var(--font-mono);font-weight:700;font-size:52px;text-align:center;color:#CBD5E1;letter-spacing:.02em';
+    disp.textContent='1.00×';ctx.add(disp);
+    var track=ctx.el('div');track.style.cssText='height:90px;position:relative;overflow:hidden;border-radius:12px;background:linear-gradient(180deg,#06121b,#0b1c28);box-shadow:inset 0 0 0 1px rgba(34,211,238,.12)';
+    var ship=ctx.el('div','',' 🚀');ship.style.cssText='position:absolute;bottom:6px;left:8px;font-size:26px;transition:none';
+    track.appendChild(ship);ctx.add(track);
+    var row=ctx.el('div','btnrow');
+    var go=ctx.el('button','btn primary wide','Launch');
+    var eject=ctx.el('button','btn amber wide','Eject');eject.disabled=true;
+    row.appendChild(go);row.appendChild(eject);ctx.add(row);
+    ctx.setStatus('Launch when ready.');
+    go.onclick=function(){
+      if(launched)return;launched=true;go.disabled=true;eject.disabled=false;t0=performance.now();
+      ctx.setStatus('Climbing… eject any time.');
+      (function loop(t){
+        var s=(t-t0)/1000;cur=Math.floor(Math.pow(Math.E,0.13*s*s*0.5+0.55*s)*100)/100;
+        if(cur>=crash){cur=crash;ended=true;disp.textContent='🔥 '+API.multStr(crash);disp.style.color='#FB7185';
+          ship.textContent='💥';ctx.setStatus('Burned out at <b>'+API.multStr(crash)+'</b>');
+          eject.disabled=true;setTimeout(function(){ctx.settle(0);},650);return;}
+        disp.textContent=API.multStr(cur);disp.style.color=cur>10?'#F59E0B':'#22D3EE';
+        var p=clamp(Math.log(cur)/Math.log(100),0,1);
+        ship.style.left=(8+p*(track.clientWidth-40))+'px';ship.style.bottom=(6+p*54)+'px';
+        raf=requestAnimationFrame(loop);ctx.onCleanup(function(){cancelAnimationFrame(raf);});
+      })(t0);
+    };
+    eject.onclick=function(){if(ended||!launched)return;ended=true;cancelAnimationFrame(raf);
+      disp.style.color='#F59E0B';ctx.setStatus('Ejected at <b>'+API.multStr(cur)+'</b>');
+      eject.disabled=true;setTimeout(function(){ctx.settle(cur);},500);};
+  }
+});
+
+/* 07 · CLAW GRAB ─ tap to drop the claw, 3 grabs ─────────────────────── */
+register({
+  id:'claw',name:'Claw Grab',tag:'tap to drop',glyph:'🕹️',
+  blurb:'Drop the claw on prizes — three grabs',max:45,
+  howto:['The claw slides over a row of prizes.','Tap <b>DROP</b> to grab one — you get <b>3 grabs</b>.','Each grabbed multiplier adds to your bank.','Which prize the claw locks onto is set by the seed.'],
+  mount:function(stage,ctx){
+    var prizes=[2,5,3,8,2,15,3,10,2,20];ctx.shuffle(prizes);
+    var grabIdx=[];for(var k=0;k<3;k++)grabIdx.push(ctx.rint(prizes.length));
+    var bank=0,grabs=0,busy=false;
+    var pill=ctx.el('div','bank','<span class="bankpill" id="clBank">Bank 0× · 3 grabs</span>');ctx.add(pill);
+    var field=ctx.el('div');field.style.cssText='position:relative;height:120px;border-radius:12px;overflow:hidden;background:linear-gradient(180deg,#06121b,#0b1c28);box-shadow:inset 0 0 0 1px rgba(34,211,238,.12)';
+    var claw=ctx.el('div','',' 🕹️');claw.style.cssText='position:absolute;top:2px;font-size:24px;transition:none;z-index:2';
+    field.appendChild(claw);
+    var rowEl=ctx.el('div');rowEl.style.cssText='position:absolute;bottom:8px;left:0;right:0;display:flex;justify-content:space-around;align-items:flex-end';
+    var chips=[];
+    prizes.forEach(function(p,i){var c=ctx.el('div','',p+'×');c.style.cssText='font-family:var(--font-mono);font-weight:700;font-size:13px;color:#CBD5E1;width:26px;height:26px;border-radius:50%;display:grid;place-items:center;background:rgba(6,16,25,.9);box-shadow:inset 0 0 0 1px rgba(34,211,238,.2)';rowEl.appendChild(c);chips.push(c);});
+    field.appendChild(rowEl);ctx.add(field);
+    var drop=ctx.el('button','btn primary wide','Drop claw');ctx.add(drop);
+    ctx.setStatus('Tap DROP to grab a prize.');
+    var pos=0,dir=1,raf=0,W=0;
+    function slide(){W=field.clientWidth-30;claw.style.left=pos+'px';
+      (function loop(){if(!busy){pos+=dir*2.4;if(pos>W){pos=W;dir=-1;}if(pos<0){pos=0;dir=1;}claw.style.left=pos+'px';}raf=requestAnimationFrame(loop);ctx.onCleanup(function(){cancelAnimationFrame(raf);});})();}
+    slide();
+    drop.onclick=function(){
+      if(busy||grabs>=3)return;busy=true;drop.disabled=true;
+      var target=grabIdx[grabs];var tc=chips[target];
+      var fr=field.getBoundingClientRect(),cr=tc.getBoundingClientRect();
+      var tx=cr.left-fr.left+cr.width/2-12;
+      claw.style.transition='left .4s ease';claw.style.left=tx+'px';
+      setTimeout(function(){claw.style.transition='top .4s ease';claw.style.top='64px';
+        setTimeout(function(){var p=prizes[target];bank+=p;grabs++;
+          tc.style.boxShadow='inset 0 0 0 2px #F59E0B';tc.style.color='#F59E0B';
+          claw.style.top='2px';claw.style.transition='none';
+          $('clBank').textContent='Bank '+API.multStr(bank)+' · '+(3-grabs)+' grabs';
+          ctx.setStatus('Grabbed <b>'+p+'×</b>!');
+          if(grabs>=3){cancelAnimationFrame(raf);ctx.setStatus('All grabs used.');setTimeout(function(){ctx.settle(bank);},650);}
+          else{busy=false;drop.disabled=false;}
+        },430);},430);
+    };
+  }
+});
+
+/* 08 · NEON TRAIL ─ roll and hop the board to the vault ───────────────── */
+register({
+  id:'trail',name:'Neon Trail',tag:'roll & hop',glyph:'🎲',
+  blurb:'Roll along a track collecting multipliers',max:55,
+  howto:['Tap <b>ROLL</b> to move your token 1–6 tiles.','Land on tiles to bank multipliers; ⭐ tiles jump you ahead.','Reach the <b>VAULT</b> for a big finish.','You get <b>4 rolls</b> — the dice stream is set by the seed.'],
+  mount:function(stage,ctx){
+    var tiles=[0,2,3,0,5,'★',2,8,3,0,10,'★',5,15,'VAULT'];
+    var N=tiles.length,posn=0,bank=0,rolls=0,maxRolls=4,busy=false,ended=false;
+    var pill=ctx.el('div','bank','<span class="bankpill" id="ntBank">Bank 0× · 4 rolls</span>');ctx.add(pill);
+    var board=ctx.el('div');board.style.cssText='display:grid;grid-template-columns:repeat(5,1fr);gap:6px';
+    var cells=[];
+    tiles.forEach(function(t,i){var c=ctx.el('div','gcell done');c.style.cssText='height:44px;font-size:13px';
+      c.textContent=t==='★'?'★':(t==='VAULT'?'🏦':(t===0?'·':t+'×'));
+      if(t==='VAULT')c.style.color='#F59E0B';board.appendChild(c);cells.push(c);});
+    ctx.add(board);
+    cells[0].style.boxShadow='inset 0 0 0 2px var(--cyan)';cells[0].textContent='🟢';
+    var dieEl=ctx.el('div');dieEl.style.cssText='text-align:center;font-size:30px;height:36px';ctx.add(dieEl);
+    var roll=ctx.el('button','btn primary wide','Roll dice');ctx.add(roll);
+    ctx.setStatus('Roll to move along the trail.');
+    function paint(){cells.forEach(function(c,i){if(i===posn){c.style.boxShadow='inset 0 0 0 2px var(--cyan)';}else if(!c.classList.contains('hit')){c.style.boxShadow='inset 0 0 0 1px rgba(34,211,238,.14)';}});}
+    function step(remaining){
+      if(remaining<=0){resolve();return;}
+      posn=Math.min(posn+1,N-1);paint();
+      cells[posn].classList.add('pop');
+      if(posn>=N-1){resolve();return;}
+      setTimeout(function(){step(remaining-1);},170);
+    }
+    function resolve(){
+      var t=tiles[posn];
+      if(t==='★'){var jump=2+ctx.rint(3);ctx.setStatus('⭐ Jump +'+jump+'!');
+        setTimeout(function(){for(var s=0;s<jump&&posn<N-1;s++){posn++;}paint();cells[posn].classList.add('pop');resolve();},260);return;}
+      if(t==='VAULT'){bank+=25;ended=true;cells[posn].classList.add('hit');$('ntBank').textContent='Bank '+API.multStr(bank);
+        ctx.setStatus('🏦 <b>Vault!</b> +25×');roll.disabled=true;setTimeout(function(){ctx.settle(bank);},700);return;}
+      if(typeof t==='number'&&t>0){bank+=t;cells[posn].classList.add('hit');cells[posn].textContent=t+'×';$('ntBank').textContent='Bank '+API.multStr(bank)+' · '+(maxRolls-rolls)+' rolls';ctx.setStatus('Landed +'+t+'×');}
+      else{ctx.setStatus('Empty tile.');}
+      busy=false;
+      if(rolls>=maxRolls||posn>=N-1){ended=true;roll.disabled=true;setTimeout(function(){ctx.settle(bank);},650);}
+      else roll.disabled=false;
+    }
+    roll.onclick=function(){
+      if(busy||ended)return;busy=true;roll.disabled=true;rolls++;
+      var d=1+ctx.rint(6);dieEl.textContent=['⚀','⚁','⚂','⚃','⚄','⚅'][d-1];
+      $('ntBank').textContent='Bank '+API.multStr(bank)+' · '+(maxRolls-rolls)+' rolls';
+      ctx.setStatus('Rolled a <b>'+d+'</b>…');setTimeout(function(){step(d);},240);
+    };
+  }
+});
+
+/* 09 · DEEP CATCH ─ cast, wait for the bite, reel it in ───────────────── */
+register({
+  id:'catch',name:'Deep Catch',tag:'cast & reel',glyph:'🎣',
+  blurb:'Hook multiplier fish from the abyss',max:50,
+  howto:['Tap <b>CAST</b> and wait for the line to twitch.','When it says <b>BITE!</b>, tap <b>REEL</b> fast to land it.','You get <b>3 casts</b>; each fish carries a multiplier.','What you hook was decided by the seed at cast time.'],
+  mount:function(stage,ctx){
+    var pool=[2,3,5,2,8,3,12,5,20,3,50];
+    var casts=0,bank=0,busy=false;
+    var pill=ctx.el('div','bank','<span class="bankpill" id="dcBank">Bank 0× · 3 casts</span>');ctx.add(pill);
+    var water=ctx.el('div');water.style.cssText='position:relative;height:130px;border-radius:12px;overflow:hidden;background:linear-gradient(180deg,#0b2430,#061019);box-shadow:inset 0 0 0 1px rgba(34,211,238,.12)';
+    var bob=ctx.el('div','',' ⭕');bob.style.cssText='position:absolute;top:14px;left:50%;transform:translateX(-50%);font-size:20px;transition:top .3s';
+    var fish=ctx.el('div','',' 🐟');fish.style.cssText='position:absolute;bottom:8px;left:50%;transform:translateX(-50%);font-size:26px;opacity:0;transition:all .4s';
+    water.appendChild(bob);water.appendChild(fish);ctx.add(water);
+    var meter=ctx.el('div','meter','<i id="dcM"></i>');meter.style.display='none';ctx.add(meter);
+    var btn=ctx.el('button','btn primary wide','Cast');ctx.add(btn);
+    ctx.setStatus('Cast your line into the deep.');
+    var state='idle',biteT=0,reelP=0,target;
+    btn.onclick=function(){
+      if(busy)return;
+      if(state==='idle'){
+        busy=true;state='waiting';btn.disabled=true;meter.style.display='none';reelP=0;$('dcM').style.width='0';
+        target=pool[casts%pool.length];
+        bob.style.top='34px';ctx.setStatus('Line is out… wait for it.');
+        var wait=700+ctx.rint(1400);
+        var to=setTimeout(function(){state='bite';btn.textContent='REEL! REEL!';btn.disabled=false;busy=false;
+          bob.textContent=' ‼️';meter.style.display='block';ctx.setStatus('<b>BITE!</b> Tap REEL fast!');
+        },wait);ctx.onCleanup(function(){clearTimeout(to);});
+      } else if(state==='bite'){
+        reelP=Math.min(100,reelP+16);$('dcM').style.width=reelP+'%';
+        if(reelP>=100){state='idle';busy=true;btn.disabled=true;
+          fish.style.opacity='1';fish.style.bottom='60px';fish.textContent=' 🐟';
+          bank+=target;casts++;
+          ctx.setStatus('Landed a <b>'+target+'×</b> catch!');
+          $('dcBank').textContent='Bank '+API.multStr(bank)+' · '+(3-casts)+' casts';
+          setTimeout(function(){fish.style.opacity='0';fish.style.bottom='8px';bob.style.top='14px';bob.textContent=' ⭕';
+            if(casts>=3){ctx.setStatus('Out of casts.');setTimeout(function(){ctx.settle(bank);},400);}
+            else{state='idle';busy=false;btn.disabled=false;btn.textContent='Cast';ctx.setStatus('Cast again.');}
+          },700);
+        }
+      }
+    };
+  }
+});
+
+/* 10 · BUG ZAP ─ zap the neon swarm before the timer runs out ─────────── */
+register({
+  id:'zap',name:'Bug Zap',tag:'timed frenzy',glyph:'⚡',
+  blurb:'Zap the swarm to reveal multipliers',max:40,
+  howto:['Neon bugs light up around the grid — <b>tap them fast</b>.','Each zapped bug reveals a multiplier that banks instantly.','A <b>💣 bomb bug</b> ends the round early — avoid it!','You have <b>8 seconds</b>. The swarm’s values are seeded.'],
+  mount:function(stage,ctx){
+    var vals=[2,1,3,2,5,1,3,8,2,1,12,3,2,5,1];ctx.shuffle(vals);
+    var bombIdx=ctx.rint(vals.length);
+    var bank=0,ended=false,alive=vals.length,left=8.0;
+    var pill=ctx.el('div','bank','<span class="bankpill" id="bzBank">Bank 0×</span>');ctx.add(pill);
+    var grid=ctx.el('div');grid.style.cssText='display:grid;grid-template-columns:repeat(5,1fr);gap:7px';
+    var cells=[];
+    vals.forEach(function(v,i){var c=ctx.el('div','gcell');c.style.cssText='height:48px;font-size:20px';c.textContent='';
+      c.dataset.lit='0';
+      c.onclick=function(){if(ended||c.dataset.lit!=='1')return;c.dataset.lit='0';c.classList.add('done','pop');c.style.transition='';
+        if(i===bombIdx){c.textContent='💣';c.classList.add('miss');ended=true;ctx.setStatus('💥 Hit the bomb!');finish();return;}
+        bank+=v;c.textContent=v+'×';c.classList.add('hit');alive--;
+        $('bzBank').textContent='Bank '+API.multStr(bank);
+        if(alive<=1){ended=true;ctx.setStatus('Swarm cleared!');finish();}
+      };
+      grid.appendChild(c);cells.push(c);});
+    ctx.add(grid);
+    var meter=ctx.el('div','meter','<i id="bzT" style="width:100%;background:linear-gradient(90deg,#F59E0B,#FB7185)"></i>');ctx.add(meter);
+    var startBtn=ctx.el('button','btn primary wide','Start swarm');ctx.add(startBtn);
+    ctx.setStatus('Tap start, then zap fast!');
+    var lightTimer=0,tick=0;
+    function litCount(){return cells.filter(function(c){return c.dataset.lit==='1';}).length;}
+    function relight(){if(ended)return;
+      var dark=cells.filter(function(c){return c.dataset.lit==='0'&&!c.classList.contains('done');});
+      if(dark.length&&litCount()<5){var c=dark[ctx.rint(dark.length)];c.dataset.lit='1';c.textContent='🐛';c.style.color='#22D3EE';
+        c.style.boxShadow='inset 0 0 0 2px var(--cyan),0 0 14px -4px var(--cyan)';
+        setTimeout(function(){if(c.dataset.lit==='1'&&!ended){c.dataset.lit='0';c.textContent='';c.style.boxShadow='inset 0 0 0 1px rgba(34,211,238,.14)';}},900+ctx.rint(500));
+      }
+    }
+    startBtn.onclick=function(){startBtn.disabled=true;startBtn.style.display='none';
+      lightTimer=setInterval(relight,320);
+      var t0=performance.now();
+      tick=setInterval(function(){left=8-(performance.now()-t0)/1000;$('bzT').style.width=clamp(left/8*100,0,100)+'%';
+        if(left<=0&&!ended){ended=true;ctx.setStatus('Time!');finish();}},50);
+      ctx.onCleanup(function(){clearInterval(lightTimer);clearInterval(tick);});
+      ctx.setStatus('<b>Zap!</b>');
+    };
+    function finish(){clearInterval(lightTimer);clearInterval(tick);cells.forEach(function(c){c.dataset.lit='0';});setTimeout(function(){ctx.settle(bank);},650);}
+  }
+});
+
+/* 11 · DOORS OF FATE ─ pick the safe door, three sealed rooms ─────────── */
+register({
+  id:'doors',name:'Doors of Fate',tag:'pick a door',glyph:'🚪',
+  blurb:'Pick the safe door through three rooms',max:48,
+  howto:['Each room has three doors — <b>pick one</b>.','A safe door multiplies your bank and opens the next room.','One door hides a <b>trap</b> that ends the run.','<b>Collect</b> between rooms, or push your luck deeper.'],
+  mount:function(stage,ctx){
+    var rooms=[{mult:2,trap:ctx.rint(3)},{mult:4,trap:ctx.rint(3)},{mult:6,trap:ctx.rint(3)}];
+    var stg=0,bank=1,ended=false;
+    var pill=ctx.el('div','bank','<span class="bankpill" id="drBank">Room 1 of 3</span>');ctx.add(pill);
+    var doorsWrap=ctx.el('div');doorsWrap.style.cssText='display:grid;grid-template-columns:repeat(3,1fr);gap:10px';ctx.add(doorsWrap);
+    var col=ctx.el('button','btn amber wide','Collect '+'1×');col.disabled=true;ctx.add(col);
+    function render(){
+      doorsWrap.innerHTML='';var room=rooms[stg];
+      for(var i=0;i<3;i++){(function(idx){var d=ctx.el('div','gcell');d.style.cssText='height:96px;font-size:34px';d.textContent='🚪';
+        d.onclick=function(){if(ended||d.classList.contains('done'))return;
+          Array.prototype.forEach.call(doorsWrap.children,function(x){x.classList.add('done');});
+          d.classList.add('pop');
+          if(idx===room.trap){d.textContent='💀';d.classList.add('miss');ended=true;
+            ctx.setStatus('Trap door — the run ends.');col.disabled=true;setTimeout(function(){ctx.settle(0);},700);}
+          else{d.textContent='✨';d.classList.add('hit');bank*=room.mult;
+            ctx.setStatus('Safe! Bank ×'+room.mult+' → <b>'+API.multStr(bank)+'</b>');
+            stg++;
+            if(stg>=rooms.length){ended=true;$('drBank').textContent='All rooms cleared!';setTimeout(function(){ctx.settle(bank);},700);}
+            else{$('drBank').textContent='Room '+(stg+1)+' of 3 · '+API.multStr(bank)+' banked';
+              col.disabled=false;col.textContent='Collect '+API.multStr(bank);
+              setTimeout(render,550);}
+          }
+        };
+        doorsWrap.appendChild(d);
+      })(i);}
+    }
+    render();ctx.setStatus('Pick a door to enter Room 1.');
+    col.onclick=function(){if(ended||bank<=1)return;ended=true;ctx.settle(bank);};
+  }
+});
+
+/* 12 · COIN PUSHER ─ drop coins, shove the pile over the edge ─────────── */
+register({
+  id:'pusher',name:'Coin Pusher',tag:'drop & shove',glyph:'🪙',
+  blurb:'Drop coins to push the pile off the ledge',max:40,
+  howto:['Pick a <b>lane</b> and tap <b>DROP</b> to release a coin.','The pusher shoves coins — any that fall off pay their multiplier.','You get <b>3 coins</b>; each cascade is set by the seed.','More coins near the edge means a bigger shove.'],
+  mount:function(stage,ctx){
+    var lanes=3,coinsLeft=3,bank=0,busy=false;
+    var pushOut=[];for(var k=0;k<3;k++)pushOut.push(1+ctx.rint(4)); // coins that fall per drop
+    var vals=[2,1,3,1,2,5,1,3,2,1];ctx.shuffle(vals);
+    var pill=ctx.el('div','bank','<span class="bankpill" id="cpBank">Bank 0× · 3 coins</span>');ctx.add(pill);
+    var board=ctx.el('div');board.style.cssText='position:relative;height:128px;border-radius:12px;overflow:hidden;background:linear-gradient(180deg,#0b1c28,#06121b);box-shadow:inset 0 0 0 1px rgba(34,211,238,.12)';
+    var ledge=ctx.el('div');ledge.style.cssText='position:absolute;left:0;right:0;bottom:40px;height:2px;background:rgba(34,211,238,.3)';board.appendChild(ledge);
+    var pileWrap=ctx.el('div');pileWrap.style.cssText='position:absolute;left:0;right:0;bottom:42px;display:flex;justify-content:space-around;align-items:flex-end;height:60px';
+    // pre-seed a resting pile
+    var pileHeights=[3,4,2];
+    function drawPile(){pileWrap.innerHTML='';for(var l=0;l<lanes;l++){var col=ctx.el('div');col.style.cssText='display:flex;flex-direction:column-reverse;align-items:center;gap:2px';
+      for(var h=0;h<pileHeights[l];h++){var co=ctx.el('div','',' ');co.style.cssText='width:20px;height:8px;border-radius:4px;background:radial-gradient(circle at 40% 30%,#ffd58a,#F59E0B 70%,#92600a);box-shadow:0 0 6px rgba(245,158,11,.35)';col.appendChild(co);}pileWrap.appendChild(col);}}
+    drawPile();board.appendChild(pileWrap);ctx.add(board);
+    var tray=ctx.el('div');tray.style.cssText='display:flex;gap:7px';
+    var sel=0,laneBtns=[];
+    for(var l=0;l<lanes;l++){(function(idx){var b=ctx.el('button','btn wide',(idx===0?'◀ Left':idx===1?'Center':'Right ▶'));
+      b.onclick=function(){sel=idx;laneBtns.forEach(function(x,j){x.classList.toggle('primary',j===idx);});};
+      if(idx===0)b.classList.add('primary');tray.appendChild(b);laneBtns.push(b);})(l);}
+    ctx.add(tray);
+    var drop=ctx.el('button','btn amber wide','Drop coin');ctx.add(drop);
+    ctx.setStatus('Pick a lane and drop a coin.');
+    drop.onclick=function(){
+      if(busy||coinsLeft<=0)return;busy=true;drop.disabled=true;
+      pileHeights[sel]++;drawPile();
+      var idx=3-coinsLeft;var fall=pushOut[idx];
+      ctx.setStatus('Shove! '+fall+' coin'+(fall>1?'s':'')+' tumble off…');
+      var gained=0;for(var f=0;f<fall;f++){gained+=vals[(idx*4+f)%vals.length];}
+      setTimeout(function(){
+        for(var l2=0;l2<lanes;l2++){pileHeights[l2]=Math.max(1,pileHeights[l2]-(l2===sel?1:0));}
+        drawPile();bank+=gained;coinsLeft--;
+        $('cpBank').textContent='Bank '+API.multStr(bank)+' · '+coinsLeft+' coins';
+        ctx.setStatus('+'+gained+'× off the ledge!');
+        if(coinsLeft<=0){ctx.setStatus('Out of coins.');setTimeout(function(){ctx.settle(bank);},600);}
+        else{busy=false;drop.disabled=false;}
+      },600);
+    };
+  }
+});
+
+/* 13 · METEOR STRIKE ─ aim the reticle and fire, reveal impact zones ──── */
+register({
+  id:'meteor',name:'Meteor Strike',tag:'aim & fire',glyph:'☄️',
+  blurb:'Call down meteors on hidden multiplier zones',max:50,
+  howto:['Move the <b>reticle</b> across the field with the arrows.','Tap <b>FIRE</b> to drop a meteor — you get <b>3 strikes</b>.','Each impact reveals a multiplier (some zones are duds).','What each strike uncovers was sealed by the seed.'],
+  mount:function(stage,ctx){
+    var cols=5,rows=3,total=cols*rows;
+    var zone=[];for(var i=0;i<total;i++)zone.push(0);
+    var vals=[3,5,8,2,12,0,5,0,20,3,0,8,2,50,0];ctx.shuffle(vals);for(i=0;i<total;i++)zone[i]=vals[i];
+    var shots=[];for(var k=0;k<3;k++)shots.push(ctx.rint(total)); // seeded impact cells
+    var fired=0,bank=0,cur=Math.floor(total/2),busy=false;
+    var pill=ctx.el('div','bank','<span class="bankpill" id="msBank">Bank 0× · 3 strikes</span>');ctx.add(pill);
+    var grid=ctx.el('div');grid.style.cssText='display:grid;grid-template-columns:repeat(5,1fr);gap:7px';
+    var cells=[];
+    for(i=0;i<total;i++){var c=ctx.el('div','gcell done');c.style.cssText='height:52px;font-size:16px';c.textContent='◇';cells.push(c);grid.appendChild(c);}
+    ctx.add(grid);
+    function paintReticle(){cells.forEach(function(c,i){if(c.classList.contains('hit')||c.classList.contains('miss'))return;c.style.boxShadow=i===cur?'inset 0 0 0 2px var(--cyan),0 0 14px -4px var(--cyan)':'inset 0 0 0 1px rgba(34,211,238,.14)';c.textContent=i===cur?'⌖':'◇';});}
+    paintReticle();
+    var nav=ctx.el('div','btnrow');
+    var L=ctx.el('button','btn wide','◀');var R=ctx.el('button','btn wide','▶');var U=ctx.el('button','btn wide','▲');var D=ctx.el('button','btn wide','▼');
+    nav.appendChild(L);nav.appendChild(U);nav.appendChild(D);nav.appendChild(R);ctx.add(nav);
+    var fire=ctx.el('button','btn primary wide','🔥 Fire meteor');ctx.add(fire);
+    ctx.setStatus('Aim, then fire your first strike.');
+    L.onclick=function(){if(cur%cols>0){cur--;paintReticle();}};
+    R.onclick=function(){if(cur%cols<cols-1){cur++;paintReticle();}};
+    U.onclick=function(){if(cur>=cols){cur-=cols;paintReticle();}};
+    D.onclick=function(){if(cur<total-cols){cur+=cols;paintReticle();}};
+    fire.onclick=function(){
+      if(busy||fired>=3)return;busy=true;fire.disabled=true;
+      var hitCell=shots[fired]; // seeded impact (reticle guides the theatre)
+      var c=cells[hitCell];var v=zone[hitCell];
+      c.classList.add('pop');c.style.boxShadow='';
+      ctx.setStatus('Meteor incoming…');
+      setTimeout(function(){
+        if(v>0){bank+=v;c.classList.add('hit');c.textContent=v+'×';ctx.setStatus('Direct hit — <b>+'+v+'×</b>!');}
+        else{c.classList.add('miss');c.textContent='✷';ctx.setStatus('Dud crater — no multiplier.');}
+        fired++;$('msBank').textContent='Bank '+API.multStr(bank)+' · '+(3-fired)+' strikes';
+        if(fired>=3){ctx.setStatus('All meteors spent.');setTimeout(function(){ctx.settle(bank);},650);}
+        else{busy=false;fire.disabled=false;paintReticle();}
+      },520);
+    };
+  }
+});
+
+/* 14 · GEM CASCADE ─ drop gems, matching columns clear and pay ────────── */
+register({
+  id:'gems',name:'Gem Cascade',tag:'drop & match',glyph:'💎',
+  blurb:'Drop gems to trigger paying cascades',max:45,
+  howto:['Tap a <b>column</b> to drop the next gem into it.','Line up <b>3+ same-colour gems</b> to clear them for a multiplier.','Cleared gems cascade — chains pay more.','You get <b>5 gems</b>; the gem order is seeded.'],
+  mount:function(stage,ctx){
+    var cols=5,rows=4,colors=['🔷','🔶','🟣','🟢'];
+    var queue=[];for(var i=0;i<5;i++)queue.push(ctx.rint(colors.length));
+    var board=[];for(i=0;i<cols;i++)board.push([]);
+    var gemsLeft=5,bank=0,busy=false,chain=0;
+    var pill=ctx.el('div','bank','<span class="bankpill" id="gcBank">Bank 0× · 5 gems</span>');ctx.add(pill);
+    var next=ctx.el('div');next.style.cssText='text-align:center;font-size:15px;color:var(--slate-400)';ctx.add(next);
+    var grid=ctx.el('div');grid.style.cssText='display:grid;grid-template-columns:repeat(5,1fr);gap:5px';
+    var colBtns=[];
+    var cellRefs=[];
+    function build(){grid.innerHTML='';cellRefs=[];
+      for(var r=rows-1;r>=0;r--){for(var c=0;c<cols;c++){var g=board[c][r];var cell=ctx.el('div','gcell done');cell.style.cssText='height:38px;font-size:20px';cell.textContent=g==null?'':colors[g];if(r===rows-1){}cellRefs.push(cell);grid.appendChild(cell);}}
+    }
+    build();ctx.add(grid);
+    var tray=ctx.el('div');tray.style.cssText='display:grid;grid-template-columns:repeat(5,1fr);gap:5px';
+    for(i=0;i<cols;i++){(function(cc){var b=ctx.el('button','btn wide','▼');b.style.padding='8px';b.onclick=function(){drop(cc);};tray.appendChild(b);colBtns.push(b);})(i);}
+    ctx.add(tray);
+    function paintNext(){next.innerHTML=gemsLeft>0?('Next gem: <b style="font-size:20px">'+colors[queue[5-gemsLeft]]+'</b> · drop into a column'):'';}
+    paintNext();ctx.setStatus('Drop gems and match 3+.');
+    function drop(c){
+      if(busy||gemsLeft<=0)return;if(board[c].length>=rows)return;
+      busy=true;var color=queue[5-gemsLeft];board[c].push(color);gemsLeft--;
+      build();resolve(c);
+    }
+    function resolve(c){
+      // check column for vertical 3+ of same color at top
+      var stack=board[c];var run=1;var top=stack.length-1;
+      for(var r=top-1;r>=0;r--){if(stack[r]===stack[top])run++;else break;}
+      if(run>=3){chain++;var m=run*2*chain;bank+=m;
+        // clear the run
+        board[c]=stack.slice(0,stack.length-run);
+        build();$('gcBank').textContent='Bank '+API.multStr(bank)+' · '+gemsLeft+' gems';
+        ctx.setStatus('<b>'+run+'-match!</b> Chain ×'+chain+' → +'+m+'×');
+        setTimeout(function(){finishStep();},450);
+      }else{chain=0;ctx.setStatus('Placed — no match.');finishStep();}
+    }
+    function finishStep(){paintNext();
+      if(gemsLeft<=0){ctx.setStatus('Out of gems.');busy=true;setTimeout(function(){ctx.settle(bank);},600);}
+      else busy=false;
+    }
+  }
+});
+
+/* 15 · SHIELD BREAKER ─ charge a bolt, shatter shield layers ──────────── */
+register({
+  id:'shield',name:'Shield Breaker',tag:'charge & fire',glyph:'🛡️',
+  blurb:'Overload a bolt to shatter shielded prizes',max:55,
+  howto:['<b>Hold</b> CHARGE to build power, release to fire a bolt.','Each shattered shield layer reveals a multiplier.','You get <b>3 bolts</b> — a stronger charge cracks deeper.','How many layers break is locked in by the seed.'],
+  mount:function(stage,ctx){
+    var layers=[3,5,8,12,20,7];ctx.shuffle(layers);
+    var breakN=[];for(var k=0;k<3;k++)breakN.push(1+ctx.rint(3)); // seeded layers broken per bolt
+    var revealed=0,bolts=0,bank=0,charging=false,power=0,raf=0;
+    var pill=ctx.el('div','bank','<span class="bankpill" id="sbBank">Bank 0× · 3 bolts</span>');ctx.add(pill);
+    var stack=ctx.el('div');stack.style.cssText='display:flex;flex-direction:column;gap:5px';
+    var rows=[];
+    layers.forEach(function(v,i){var r=ctx.el('div','gcell done');r.style.cssText='height:30px;font-size:14px;background:repeating-linear-gradient(135deg,rgba(34,211,238,.10) 0 8px,rgba(34,211,238,.02) 8px 16px)';r.textContent='▨ shielded ▨';rows.push(r);stack.appendChild(r);});
+    ctx.add(stack);
+    var meter=ctx.el('div','meter','<i id="sbP"></i>');ctx.add(meter);
+    var btn=ctx.el('button','btn primary wide','Hold to charge ⚡');ctx.add(btn);
+    ctx.setStatus('Hold to charge your first bolt.');
+    function startCharge(){if(charging||bolts>=3)return;charging=true;power=0;btn.textContent='Release to fire!';
+      (function loop(){power=(power+2)%101;$('sbP').style.width=power+'%';if(charging){raf=requestAnimationFrame(loop);ctx.onCleanup(function(){cancelAnimationFrame(raf);});}})();}
+    function fire(){if(!charging)return;charging=false;cancelAnimationFrame(raf);btn.disabled=true;
+      var n=breakN[bolts];var got=0,gained=0;
+      for(var s=0;s<n&&revealed<layers.length;s++){var idx=revealed;var r=rows[idx];var v=layers[idx];
+        (function(rr,vv,d){setTimeout(function(){rr.classList.add('pop','hit');rr.style.background='';rr.textContent=vv+'×';},d*180);})(r,v,s);
+        gained+=v;revealed++;got++;
+      }
+      bolts++;bank+=gained;
+      setTimeout(function(){$('sbBank').textContent='Bank '+API.multStr(bank)+' · '+(3-bolts)+' bolts';
+        ctx.setStatus('💥 Cracked <b>'+got+'</b> layer'+(got!==1?'s':'')+' — +'+gained+'×');$('sbP').style.width='0';
+        if(bolts>=3||revealed>=layers.length){ctx.setStatus(revealed>=layers.length?'Shield destroyed!':'Bolts spent.');setTimeout(function(){ctx.settle(bank);},650);}
+        else{btn.disabled=false;btn.textContent='Hold to charge ⚡';}
+      },got*180+250);
+    }
+    btn.addEventListener('pointerdown',function(e){e.preventDefault();startCharge();});
+    btn.addEventListener('pointerup',fire);
+    btn.addEventListener('pointerleave',function(){if(charging)fire();});
+  }
+});
+
+/* 16 · LUCKY ENVELOPES ─ open red packets, gamble or seal ─────────────── */
+register({
+  id:'envelopes',name:'Lucky Envelopes',tag:'open & gamble',glyph:'🧧',
+  blurb:'Open lucky packets, collect or gamble on',max:50,
+  howto:['Open a <b>red envelope</b> to reveal a multiplier.','After each, choose <b>Seal it</b> to bank, or open another.','One envelope hides an <b>empty</b> packet that ends the round.','Every packet was filled by the seed before you opened it.'],
+  mount:function(stage,ctx){
+    var seq=[3,5,2,8,'X',4,12,'X',6,20];ctx.shuffle(seq);
+    if(seq[0]==='X'){for(var si=1;si<seq.length;si++){if(seq[si]!=='X'){var stmp=seq[0];seq[0]=seq[si];seq[si]=stmp;break;}}} // guarantee 1+ prize
+    var opened=0,bank=0,ended=false;
+    var pill=ctx.el('div','bank','<span class="bankpill" id="leBank">Bank 0×</span>');ctx.add(pill);
+    var grid=ctx.el('div');grid.style.cssText='display:grid;grid-template-columns:repeat(5,1fr);gap:9px';
+    var cells=[];
+    for(var i=0;i<10;i++){var c=ctx.el('div','gcell');c.style.cssText='height:58px;font-size:26px;background:linear-gradient(165deg,#7f1d1d,#450a0a);box-shadow:inset 0 0 0 1px rgba(245,158,11,.3)';c.textContent='🧧';cells.push(c);grid.appendChild(c);}
+    ctx.add(grid);
+    var col=ctx.el('button','btn amber wide','Seal & collect');col.disabled=true;ctx.add(col);
+    ctx.setStatus('Open an envelope.');
+    cells.forEach(function(c){c.onclick=function(){
+      if(ended||c.classList.contains('done'))return;
+      var val=seq[opened];opened++;c.classList.add('done','pop');c.style.background='';
+      if(val==='X'){c.classList.add('miss');c.textContent='∅';ended=true;
+        ctx.setStatus('Empty packet — the luck runs out.');col.disabled=true;setTimeout(function(){ctx.settle(0);},700);}
+      else{bank+=val;c.classList.add('hit');c.textContent=val+'×';
+        $('leBank').textContent='Bank '+API.multStr(bank);col.disabled=false;
+        ctx.setStatus('+'+val+'× · seal it or risk another?');
+        if(opened>=10){ended=true;ctx.setStatus('All opened!');setTimeout(function(){ctx.settle(bank);},700);}
+      }
+    };});
+    col.onclick=function(){if(ended||bank<=0)return;ended=true;ctx.settle(bank);};
+  }
+});
+
+/* 17 · SIGIL TRACE ─ connect the glyph nodes in order ────────────────── */
+register({
+  id:'sigil',name:'Sigil Trace',tag:'trace the glyph',glyph:'✴️',
+  blurb:'Trace the sigil node-by-node to charge it',max:45,
+  howto:['Tap the glowing nodes <b>in the numbered order</b> to trace the sigil.','Each node you connect banks a multiplier.','Complete the whole sigil for a <b>completion bonus</b>.','Break the order and the sigil collapses on what you’ve traced.'],
+  mount:function(stage,ctx){
+    var N=7;var nodeVals=[];for(var i=0;i<N;i++)nodeVals.push(2+ctx.rint(6));
+    var completion=8+ctx.rint(8);
+    var bank=0,next=0,ended=false;
+    var pill=ctx.el('div','bank','<span class="bankpill" id="sgBank">Bank 0×</span>');ctx.add(pill);
+    var wrap=ctx.el('div');wrap.style.cssText='position:relative;height:220px;border-radius:12px;background:linear-gradient(160deg,#0b1c28,#06121b);box-shadow:inset 0 0 0 1px rgba(34,211,238,.12);overflow:hidden';
+    var cv=ctx.el('canvas');cv.width=cv.height=440;cv.style.cssText='position:absolute;inset:0;width:100%;height:100%';wrap.appendChild(cv);
+    var g=cv.getContext('2d');
+    // seeded node positions (spread, avoid edges)
+    var pts=[];for(i=0;i<N;i++){pts.push({x:0.15+0.7*ctx.rng(),y:0.15+0.7*ctx.rng()});}
+    var nodes=[];
+    pts.forEach(function(p,idx){var n=ctx.el('div');n.style.cssText='position:absolute;width:38px;height:38px;margin:-19px 0 0 -19px;border-radius:50%;display:grid;place-items:center;font-family:var(--font-mono);font-weight:700;font-size:14px;cursor:pointer;background:rgba(6,16,25,.9);box-shadow:inset 0 0 0 2px rgba(34,211,238,.3);color:var(--slate-400);transition:.15s';
+      n.style.left=(p.x*100)+'%';n.style.top=(p.y*100)+'%';n.textContent=idx+1;
+      n.onclick=function(){tap(idx);};wrap.appendChild(n);nodes.push(n);});
+    ctx.add(wrap);
+    var col=ctx.el('button','btn amber wide','Collect trace');col.disabled=true;ctx.add(col);
+    ctx.setStatus('Tap node <b>1</b> to begin the trace.');
+    function drawLines(upto){g.clearRect(0,0,440,440);g.strokeStyle='rgba(34,211,238,.7)';g.lineWidth=3;g.shadowColor='#22D3EE';g.shadowBlur=8;g.beginPath();
+      for(var j=0;j<=upto&&j<N;j++){var p=pts[j];var X=p.x*440,Y=p.y*440;if(j===0)g.moveTo(X,Y);else g.lineTo(X,Y);}g.stroke();g.shadowBlur=0;}
+    function tap(idx){
+      if(ended)return;
+      if(idx!==next){ // wrong order → collapse
+        ended=true;nodes[idx].style.boxShadow='inset 0 0 0 2px var(--loss)';nodes[idx].style.color='var(--loss)';
+        ctx.setStatus('Broke the sequence — sigil collapses.');col.disabled=true;setTimeout(function(){ctx.settle(bank);},700);return;}
+      bank+=nodeVals[idx];next++;
+      var n=nodes[idx];n.style.boxShadow='inset 0 0 0 2px var(--win)';n.style.color='var(--win)';n.textContent=nodeVals[idx]+'×';
+      drawLines(next-1);col.disabled=false;
+      $('sgBank').textContent='Bank '+API.multStr(bank);
+      if(next>=N){bank+=completion;ended=true;$('sgBank').textContent='Bank '+API.multStr(bank);
+        ctx.setStatus('✴️ <b>Sigil complete!</b> +'+completion+'× bonus');col.disabled=true;setTimeout(function(){ctx.settle(bank);},800);}
+      else ctx.setStatus('+'+nodeVals[idx]+'× · now tap node <b>'+(next+1)+'</b>');
+    }
+    col.onclick=function(){if(ended||bank<=0)return;ended=true;ctx.settle(bank);};
+  }
+});
+
+/* 18 · DICE DUEL ─ shake and throw against the house ──────────────────── */
+register({
+  id:'dice',name:'Dice Duel',tag:'roll vs house',glyph:'🎲',
+  blurb:'Out-roll the house for a scaled multiplier',max:36,
+  howto:['<b>Hold</b> SHAKE to rattle the dice, release to throw.','You roll two dice against the house’s two.','Beat the house total to win — the bigger the gap, the bigger the multiplier.','Both rolls were set by the seed the moment the round opened.'],
+  mount:function(stage,ctx){
+    var you=[1+ctx.rint(6),1+ctx.rint(6)],house=[1+ctx.rint(6),1+ctx.rint(6)];
+    var ys=you[0]+you[1],hs=house[0]+house[1],margin=ys-hs;
+    var mult=margin>0?Math.min(36,2+margin*3):(margin===0?1:0);
+    var faces=['','⚀','⚁','⚂','⚃','⚄','⚅'];
+    function diceRow(label,color){var w=ctx.el('div');w.style.cssText='display:flex;align-items:center;justify-content:center;gap:10px;margin:4px 0';
+      w.innerHTML='<span style="font-family:var(--font-mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--slate-500);width:56px;text-align:right">'+label+'</span>';
+      var d1=ctx.el('span','',' 🎲');var d2=ctx.el('span','',' 🎲');
+      [d1,d2].forEach(function(d){d.style.cssText='font-size:40px;color:'+color+';line-height:1';});
+      w.appendChild(d1);w.appendChild(d2);var tot=ctx.el('span','','—');tot.style.cssText='font-family:var(--font-mono);font-weight:700;font-size:16px;color:'+color+';width:30px;text-align:left';w.appendChild(tot);
+      return {w:w,d1:d1,d2:d2,tot:tot};}
+    var hRow=diceRow('House','#FB7185');var yRow=diceRow('You','#22D3EE');
+    ctx.add(hRow.w);ctx.add(yRow.w);
+    var meter=ctx.el('div','meter','<i id="ddP"></i>');ctx.add(meter);
+    var btn=ctx.el('button','btn primary wide','Hold to shake 🎲');ctx.add(btn);
+    ctx.setStatus('Hold to shake, release to throw.');
+    var charging=false,power=0,raf=0,thrown=false,rollTimer=0;
+    function startShake(){if(charging||thrown)return;charging=true;power=0;btn.textContent='Release!';
+      (function loop(){power=(power+3)%101;$('ddP').style.width=power+'%';
+        yRow.d1.textContent=' 🎲';yRow.d2.textContent=' 🎲';raf=charging?requestAnimationFrame(loop):0;ctx.onCleanup(function(){cancelAnimationFrame(raf);});})();
+      rollTimer=setInterval(function(){yRow.d1.textContent=faces[1+ctx.rint(6)];yRow.d2.textContent=faces[1+ctx.rint(6)];},80);
+      ctx.onCleanup(function(){clearInterval(rollTimer);});
+    }
+    function throwDice(){if(!charging)return;charging=false;thrown=true;cancelAnimationFrame(raf);clearInterval(rollTimer);btn.disabled=true;$('ddP').style.width='0';
+      hRow.d1.textContent=faces[house[0]];hRow.d2.textContent=faces[house[1]];hRow.tot.textContent=hs;
+      yRow.d1.textContent=faces[you[0]];yRow.d2.textContent=faces[you[1]];yRow.tot.textContent=ys;
+      var msg=margin>0?('You win by '+margin+' → <b>'+API.multStr(mult)+'</b>'):(margin===0?'Push — bet returned (1×)':'House wins by '+(-margin));
+      ctx.setStatus(msg);setTimeout(function(){ctx.settle(mult,{kind:margin>0?'You win':(margin===0?'Push':'House wins')});},800);
+    }
+    btn.addEventListener('pointerdown',function(e){e.preventDefault();startShake();});
+    btn.addEventListener('pointerup',throwDice);
+    btn.addEventListener('pointerleave',function(){if(charging)throwDice();});
+  }
+});
+
+/* 19 · TOWER CLIMB ─ pick a safe tile each floor, climb higher ────────── */
+register({
+  id:'tower',name:'Tower Climb',tag:'pick & climb',glyph:'🗼',
+  blurb:'Pick a safe tile each floor to climb higher',max:60,
+  howto:['Each floor shows three tiles — <b>one hides a crack</b>.','Pick a safe tile to climb; your multiplier grows each floor.','<b>Cash out</b> any floor to bank it.','Step on the crack and the tower drops you.'],
+  mount:function(stage,ctx){
+    var floors=6,mults=[1.4,2,3,4.5,7,12,20];
+    var traps=[];for(var f=0;f<floors;f++)traps.push(ctx.rint(3));
+    var cur=0,ended=false;
+    var pill=ctx.el('div','bank','<span class="bankpill" id="twBank">Floor 1 · 1.4× next</span>');ctx.add(pill);
+    var tower=ctx.el('div');tower.style.cssText='display:flex;flex-direction:column-reverse;gap:6px';ctx.add(tower);
+    var floorEls=[];
+    function buildFloors(){tower.innerHTML='';floorEls=[];
+      for(var f=0;f<floors;f++){(function(fl){var roww=ctx.el('div');roww.style.cssText='display:grid;grid-template-columns:repeat(3,1fr);gap:6px;opacity:'+(fl===cur?'1':(fl<cur?'0.5':'0.35'));
+        var tiles=[];
+        for(var t=0;t<3;t++){(function(ti){var c=ctx.el('div','gcell');c.style.cssText='height:34px;font-size:14px';c.textContent=fl<cur?'✓':(fl===cur?'?':'·');
+          if(fl===cur&&!ended)c.onclick=function(){choose(fl,ti,tiles);};tiles.push(c);roww.appendChild(c);})(t);}
+        var lbl=ctx.el('div');lbl.style.cssText='font-family:var(--font-mono);font-size:10px;color:var(--slate-500);text-align:center;margin-top:2px';lbl.textContent=API.multStr(mults[fl+1])+' floor';
+        var wrapper=ctx.el('div');wrapper.appendChild(roww);wrapper.appendChild(lbl);tower.appendChild(wrapper);floorEls.push(tiles);})(f);}
+    }
+    buildFloors();
+    var col=ctx.el('button','btn amber wide','Cash out');col.disabled=true;ctx.add(col);
+    ctx.setStatus('Pick a tile on Floor 1.');
+    function choose(fl,ti,tiles){
+      if(ended||fl!==cur)return;
+      tiles.forEach(function(x){x.onclick=null;});
+      if(ti===traps[fl]){tiles[ti].classList.add('miss','pop');tiles[ti].textContent='✗';ended=true;
+        tiles[traps[fl]].classList.add('miss');ctx.setStatus('Cracked tile — the tower falls.');col.disabled=true;setTimeout(function(){ctx.settle(0);},700);}
+      else{tiles[ti].classList.add('safe','pop');tiles[ti].textContent='✓';cur++;
+        var m=mults[cur];col.disabled=false;
+        $('twBank').textContent='Floor '+cur+' cleared · '+API.multStr(m)+' banked';
+        ctx.setStatus('Safe! <b>'+API.multStr(m)+'</b> — climb or cash?');
+        if(cur>=floors){ended=true;ctx.setStatus('Reached the top!');col.disabled=true;setTimeout(function(){ctx.settle(m);},700);}
+        else{buildFloors();}
+      }
+    }
+    col.onclick=function(){if(ended||cur<=0)return;ended=true;ctx.settle(mults[cur]);};
+  }
+});
+
+/* 20 · BULL RUN ─ time the charge through the gates ───────────────────── */
+register({
+  id:'bull',name:'Bull Run',tag:'time the charge',glyph:'🐂',
+  blurb:'Charge the bull through escalating gates',max:50,
+  howto:['Tap <b>CHARGE</b> when the marker is in the <b>green</b> to hit the gate.','Clear a gate and your multiplier grows.','<b>Rein in</b> any time to bank your run.','A stumble ends it — each gate’s outcome is seeded.'],
+  mount:function(stage,ctx){
+    var gates=[1.5,2.3,3.4,5,7.5,12,20,50];
+    var clears=[];for(var f=0;f<gates.length;f++)clears.push(ctx.rng()<(0.82-f*0.075)); // seeded clear/stumble
+    var cur=-1,ended=false,busy=false;
+    var pill=ctx.el('div','bank','<span class="bankpill" id="brBank">Gate 1 · 1.5×</span>');ctx.add(pill);
+    var lane=ctx.el('div');lane.style.cssText='position:relative;height:64px;border-radius:12px;background:linear-gradient(180deg,#0b1c28,#06121b);box-shadow:inset 0 0 0 1px rgba(34,211,238,.12);overflow:hidden';
+    var bull=ctx.el('div','',' 🐂');bull.style.cssText='position:absolute;left:8px;top:14px;font-size:30px;transition:left .4s';
+    var gate=ctx.el('div','',' 🚩');gate.style.cssText='position:absolute;right:14px;top:16px;font-size:26px';
+    lane.appendChild(bull);lane.appendChild(gate);ctx.add(lane);
+    // timing bar
+    var bar=ctx.el('div');bar.style.cssText='position:relative;height:22px;border-radius:8px;background:rgba(6,16,25,.9);box-shadow:inset 0 0 0 1px rgba(34,211,238,.14);overflow:hidden';
+    var green=ctx.el('div');green.style.cssText='position:absolute;top:0;bottom:0;left:38%;width:24%;background:rgba(52,211,153,.25);border-left:2px solid var(--good);border-right:2px solid var(--good)';
+    var marker=ctx.el('div');marker.style.cssText='position:absolute;top:0;bottom:0;width:4px;background:#F59E0B;box-shadow:0 0 8px var(--win);left:0';
+    bar.appendChild(green);bar.appendChild(marker);ctx.add(bar);
+    var row=ctx.el('div','btnrow');
+    var charge=ctx.el('button','btn primary wide','Charge!');
+    var rein=ctx.el('button','btn amber wide','Rein in');rein.disabled=true;
+    row.appendChild(charge);row.appendChild(rein);ctx.add(row);
+    ctx.setStatus('Tap Charge on the green to hit Gate 1.');
+    var mpos=0,mdir=1,raf=0;
+    (function sweep(){mpos+=mdir*1.6;if(mpos>100){mpos=100;mdir=-1;}if(mpos<0){mpos=0;mdir=1;}marker.style.left=mpos+'%';raf=requestAnimationFrame(sweep);ctx.onCleanup(function(){cancelAnimationFrame(raf);});})();
+    charge.onclick=function(){
+      if(busy||ended)return;busy=true;var nextGate=cur+1;
+      var inGreen=mpos>=38&&mpos<=62;
+      // seeded clear decides; hitting green nudges a stumble into a clear (theatre helps the player feel skill)
+      var cleared=clears[nextGate]||inGreen;
+      var pct=Math.min(88,10+(nextGate+1)*11);bull.style.left='calc('+pct+'% - 15px)';
+      setTimeout(function(){
+        if(cleared){cur=nextGate;var m=gates[cur];rein.disabled=false;
+          $('brBank').textContent='Gate '+(cur+1)+' cleared · '+API.multStr(m);
+          ctx.setStatus((inGreen?'Perfect charge! ':'Cleared! ')+'<b>'+API.multStr(m)+'</b> — push on or rein in?');
+          if(cur>=gates.length-1){ended=true;ctx.setStatus('🐂 Full run — all gates cleared!');charge.disabled=rein.disabled=true;setTimeout(function(){ctx.settle(m);},700);}
+          else{busy=false;}
+        }else{ended=true;bull.textContent=' 💫';ctx.setStatus('Stumbled at the gate!');charge.disabled=rein.disabled=true;
+          setTimeout(function(){ctx.settle(cur<0?0:gates[cur]);},700);}
+      },420);
+    };
+    rein.onclick=function(){if(ended||cur<0)return;ended=true;charge.disabled=true;ctx.settle(gates[cur]);};
+  }
+});
+
+//__END_GAMES__
+
+/* ══ boot ═════════════════════════════════════════════════════════════ */
+paintBet();renderHub();
+})();
+</script>
+</body>
+</html>
