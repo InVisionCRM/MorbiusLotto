@@ -69,6 +69,11 @@
 .home2 .sb-balance .row button{
   flex:1; font-size:10.5px; font-weight:700; padding:7px 0; border-radius:8px; letter-spacing:.04em;
 }
+.home2 .sb-disconnect{position:relative; z-index:1; width:100%; margin-top:7px; padding:6px 0; border-radius:8px;
+  font-size:10px; font-weight:700; letter-spacing:.05em; cursor:pointer; color:var(--text2);
+  background:transparent; border:1px solid var(--line2);
+  transition:color .14s, border-color .14s, background .14s}
+.home2 .sb-disconnect:hover{color:#fca5a5; border-color:rgba(248,113,113,.5); background:rgba(248,113,113,.08)}
 .home2 .btn-gold{background:linear-gradient(180deg,#fcd34d,#f59e0b); color:#3b2503; box-shadow:0 2px 12px rgba(245,158,11,.35)}
 .home2 .btn-ghost{background:rgba(255,255,255,.06); color:var(--text2); border:1px solid var(--line2)!important}
 
