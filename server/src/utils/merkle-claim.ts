@@ -1,10 +1,10 @@
-import { createWalletClient, http } from 'viem';
+import { createWalletClient } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { pulsechain } from 'viem/chains';
 import { merkleClaimMorbiusAbi } from '../abi/merkle-claim-morbius';
 import { erc20Abi } from '../abi/erc20';
 import { logger } from './logger';
-import { getPublicClient } from './chain-client';
+import { getPublicClient, pulsechainTransport } from './chain-client';
 
 // Must match lib/contracts.ts MERKLE_CLAIM_MORBIUS_ADDRESS; override via server .env
 const MERKLE_CLAIM_ADDRESS = (
@@ -36,7 +36,7 @@ function getWalletClient() {
     walletClient = createWalletClient({
       account,
       chain: pulsechain,
-      transport: http(process.env.PULSECHAIN_RPC_URL || 'https://rpc.pulsechain.com'),
+      transport: pulsechainTransport(),
     });
   }
   return walletClient;
@@ -52,7 +52,7 @@ function getOwnerWalletClient() {
     ownerWalletClient = createWalletClient({
       account,
       chain: pulsechain,
-      transport: http(process.env.PULSECHAIN_RPC_URL || 'https://rpc.pulsechain.com'),
+      transport: pulsechainTransport(),
     });
   }
   return ownerWalletClient;

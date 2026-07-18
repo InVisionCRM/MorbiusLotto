@@ -9,11 +9,11 @@
  * per LP token) and fetching LP token holders from the PulseChain API.
  */
 
-import { createWalletClient, http, parseAbi } from 'viem';
+import { createWalletClient, parseAbi } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { pulsechain } from 'viem/chains';
 import { merkleClaimLpAbi } from '../abi/merkle-claim-lp';
-import { getPublicClient } from './chain-client';
+import { getPublicClient, pulsechainTransport } from './chain-client';
 import { logger } from './logger';
 
 // Must match lib/contracts.ts MERKLE_CLAIM_LP_ADDRESS; override via server .env
@@ -44,7 +44,7 @@ function getWalletClient() {
     walletClient = createWalletClient({
       account,
       chain: pulsechain,
-      transport: http(process.env.PULSECHAIN_RPC_URL || 'https://rpc.pulsechain.com'),
+      transport: pulsechainTransport(),
     });
   }
   return walletClient;
@@ -60,7 +60,7 @@ function getOwnerWalletClient() {
     ownerWalletClient = createWalletClient({
       account,
       chain: pulsechain,
-      transport: http(process.env.PULSECHAIN_RPC_URL || 'https://rpc.pulsechain.com'),
+      transport: pulsechainTransport(),
     });
   }
   return ownerWalletClient;

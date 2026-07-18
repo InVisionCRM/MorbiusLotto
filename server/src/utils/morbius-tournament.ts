@@ -1,9 +1,9 @@
-import { createWalletClient, http } from 'viem';
+import { createWalletClient } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { pulsechain } from 'viem/chains';
 import { morbiusTournamentAbi } from '../abi/morbius-tournament';
 import { logger } from './logger';
-import { getPublicClient } from './chain-client';
+import { getPublicClient, pulsechainTransport } from './chain-client';
 
 const MORBIUS_TOURNAMENT_ADDRESS = '0x1F30Aa16B4Da0124308E33b8650C351BBCA70704' as const;
 const AUTHORIZED_KEY = (process.env.TOURNAMENT_PRIZE_ESCROW_AUTHORIZED_KEY || process.env.SETTLEMENT_PRIVATE_KEY) as `0x${string}` | undefined;
@@ -19,7 +19,7 @@ function getWalletClient() {
     walletClient = createWalletClient({
       account,
       chain: pulsechain,
-      transport: http(process.env.PULSECHAIN_RPC_URL || 'https://rpc.pulsechain.com'),
+      transport: pulsechainTransport(),
     });
   }
   return walletClient;

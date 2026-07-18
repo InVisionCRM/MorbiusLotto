@@ -10,10 +10,10 @@
  * Requires MERKLE_OWNER_PRIVATE_KEY (the same key MerkleClaim's revokeEpoch needs).
  */
 
-import { createWalletClient, http, parseAbi } from 'viem';
+import { createWalletClient, parseAbi } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { pulsechain } from 'viem/chains';
-import { getPublicClient } from './chain-client';
+import { getPublicClient, pulsechainTransport } from './chain-client';
 import { logger } from './logger';
 
 // Vault contracts (override via server .env)
@@ -102,7 +102,7 @@ export async function rescueAndTopUpHotWallet(cohort: RescueCohort): Promise<Res
   const walletClient = createWalletClient({
     account,
     chain: pulsechain,
-    transport: http(process.env.PULSECHAIN_RPC_URL || 'https://rpc.pulsechain.com'),
+    transport: pulsechainTransport(),
   });
 
   const amountWei = await readVaultBalance(cohort);

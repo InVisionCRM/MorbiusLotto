@@ -1,4 +1,4 @@
-import { createWalletClient, http } from 'viem';
+import { createWalletClient } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { pulsechain } from 'viem/chains';
 import { tournamentPrizeEscrowAbi } from '../abi/tournament-prize-escrow';
@@ -8,6 +8,7 @@ import { getEscrowPoolStatus, getEscrowV3PoolStatus } from './escrow-status';
 import { tournamentIdToBytes32 } from './tournament-id-bytes32';
 import { getTournamentPrizeEscrowAddress } from './tournament-escrow-address';
 import { logger } from './logger';
+import { pulsechainTransport } from './chain-client';
 
 function escrowBytes32Address(): `0x${string}` {
   return getTournamentPrizeEscrowAddress();
@@ -27,7 +28,7 @@ function getWalletClient() {
     walletClient = createWalletClient({
       account,
       chain: pulsechain,
-      transport: http(process.env.PULSECHAIN_RPC_URL || 'https://rpc.pulsechain.com'),
+      transport: pulsechainTransport(),
     });
   }
   return walletClient;
