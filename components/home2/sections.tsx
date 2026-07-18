@@ -17,6 +17,7 @@ import {
   MinesScene,
   FLOOR_GAMES,
 } from '@/components/home2/scenes';
+import { SelfExclusionModal } from '@/components/ResponsibleGaming';
 
 /* ────────────────────────────────────────────────────────────
    Shared: hero ember particles (port of the lab's embers())
@@ -870,22 +871,111 @@ export function VipLadder({ currentTier = 'SILVER' }: { currentTier?: string }) 
 /* ────────────────────────────────────────────────────────────
    9. FOOTER
    ──────────────────────────────────────────────────────────── */
+const MORBIUS_TOKEN = '0xB7d4eB5fDfE3d4d3B5C16a44A49948c6EC77c6F1';
+const X_URL = 'https://x.com/Morbius_io';
+const TELEGRAM_URL = 'https://t.me/Morbius_cash';
+
+const FOOTER_COLUMNS: Array<{
+  title: string;
+  links: Array<{ label: string; href: string; external?: boolean }>;
+}> = [
+  {
+    title: 'Games',
+    links: [
+      { label: 'Plinko', href: '/plinko2' },
+      { label: 'Blackjack', href: '/BLACKJACK' },
+      { label: 'Poker', href: '/poker' },
+      { label: 'Keno', href: '/keno' },
+      { label: 'Crash', href: '/crash' },
+      { label: 'Lottery', href: '/lottery' },
+    ],
+  },
+  {
+    title: 'Platform',
+    links: [
+      { label: 'VIP Club', href: '/vip' },
+      { label: 'Buy MORBIUS', href: '/swap' },
+      { label: 'Referrals', href: '/referrals' },
+      { label: 'Creators', href: '/creators' },
+      { label: 'Brand kit', href: '/branding' },
+    ],
+  },
+  {
+    title: 'Token',
+    links: [
+      { label: 'Token Analyzer', href: 'https://scan.morbius.io', external: true },
+      { label: 'Live Chart', href: `https://scan.morbius.io/geicko?address=${MORBIUS_TOKEN}&tab=chart`, external: true },
+      { label: 'Buy on PulseX', href: `https://app.pulsex.com/swap?outputCurrency=${MORBIUS_TOKEN}`, external: true },
+    ],
+  },
+  {
+    title: 'Community',
+    links: [
+      { label: 'X / Twitter', href: X_URL, external: true },
+      { label: 'Telegram', href: TELEGRAM_URL, external: true },
+    ],
+  },
+];
+
 export function HomeFooter() {
+  const [rgOpen, setRgOpen] = useState(false);
+
   return (
     <footer className="foot">
-      <span className="brand">
-        MORBIUS<i>.IO</i>
-      </span>
-      <div className="links">
-        <a>Docs</a>
-        <a>VIP Club</a>
-        <a>Brand kit</a>
-        <a>Responsible gaming</a>
-        <a>X</a>
-        <a>Telegram</a>
-        <a>Discord</a>
+      <div className="foot-top">
+        <div className="foot-brand">
+          <span className="brand">
+            MORBIUS<i>.IO</i>
+          </span>
+          <p className="foot-tag">
+            The Web3 casino on PulseChain — 25+ provably-fair games, one chip, VIP rakeback on every
+            loss.
+          </p>
+          <div className="foot-social">
+            <a href={X_URL} target="_blank" rel="noopener noreferrer" aria-label="Morbius on X">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+              </svg>
+            </a>
+            <a href={TELEGRAM_URL} target="_blank" rel="noopener noreferrer" aria-label="Morbius on Telegram">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0zM5.573 11.72c3.497-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635.1-.002.321.023.465.14a.51.51 0 0 1 .171.327c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.209.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.139-5.061 3.345-.479.329-.913.489-1.302.481-.428-.009-1.252-.242-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663z" />
+              </svg>
+            </a>
+          </div>
+        </div>
+
+        <nav className="foot-cols" aria-label="Footer">
+          {FOOTER_COLUMNS.map((col) => (
+            <div key={col.title} className="foot-col">
+              <h4>{col.title}</h4>
+              {col.links.map((l) =>
+                l.external ? (
+                  <a key={l.label} href={l.href} target="_blank" rel="noopener noreferrer">
+                    {l.label}
+                  </a>
+                ) : (
+                  <Link key={l.label} href={l.href}>
+                    {l.label}
+                  </Link>
+                ),
+              )}
+            </div>
+          ))}
+        </nav>
       </div>
-      <span className="fair">Play responsibly · 18+</span>
+
+      <div className="foot-bottom">
+        <span className="fair">Play responsibly · 18+</span>
+        <div className="foot-legal">
+          <button type="button" className="foot-rg" onClick={() => setRgOpen(true)}>
+            Responsible gaming
+          </button>
+          <span className="foot-copy">© 2026 Morbius.io</span>
+        </div>
+      </div>
+
+      <SelfExclusionModal isOpen={rgOpen} onClose={() => setRgOpen(false)} />
     </footer>
   );
 }
