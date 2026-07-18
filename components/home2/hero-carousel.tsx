@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { ArrowUpRight, ChevronLeft, ChevronRight } from 'lucide-react';
 
@@ -37,9 +37,6 @@ type Slide = {
 const AUTO_MS = 5600;
 
 export function HeroCarousel({
-  gamesPlayed,
-  morbiusWon,
-  biggestWin,
   onTakeSeat,
   onOpenDrop,
   onRefer,
@@ -164,7 +161,7 @@ export function HeroCarousel({
               <button
                 key={s.key}
                 className={'hc-dot' + (i === idx ? ' on' : '')}
-                aria-label={s.kick}
+                aria-label={s.alt}
                 aria-selected={i === idx}
                 role="tab"
                 onClick={() => jump(i)}
@@ -174,8 +171,6 @@ export function HeroCarousel({
             ))}
           </div>
         </div>
-
-        <StatStrip gamesPlayed={gamesPlayed} morbiusWon={morbiusWon} biggestWin={biggestWin} />
       </div>
     </header>
   );
@@ -186,53 +181,3 @@ const slideVariants = {
   center: { x: 0, opacity: 1 },
   exit: (d: number) => ({ x: d > 0 ? '-102%' : '102%', opacity: 0 }),
 };
-
-/* ── stat strip (3 tiles, real data, eased count-up) ───────────────────────── */
-function StatStrip({
-  gamesPlayed,
-  morbiusWon,
-  biggestWin,
-}: {
-  gamesPlayed?: number;
-  morbiusWon?: number;
-  biggestWin?: number;
-}) {
-  return (
-    <div className="hc-stats">
-      <Stat cls="c" value={gamesPlayed} label="GAMES PLAYED" />
-      <Stat cls="g" value={morbiusWon} label="MORBIUS WON" />
-      <Stat cls="o" value={biggestWin} label="BIGGEST WIN" />
-    </div>
-  );
-}
-
-function Stat({ cls, value, label }: { cls: string; value?: number; label: string }) {
-  const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    if (value == null) {
-      el.textContent = '—';
-      return;
-    }
-    let raf = 0;
-    const t0 = performance.now();
-    const step = (t: number) => {
-      const p = Math.min((t - t0) / 1600, 1);
-      const eased = 1 - Math.pow(1 - p, 3);
-      el.textContent = Math.floor(value * eased).toLocaleString('en-US');
-      if (p < 1) raf = requestAnimationFrame(step);
-    };
-    raf = requestAnimationFrame(step);
-    return () => cancelAnimationFrame(raf);
-  }, [value]);
-  return (
-    <div className="hc-stat">
-      <div className={'hc-stat-n ' + cls} ref={ref}>
-        {value == null ? '—' : '0'}
-      </div>
-      <div className="hc-stat-l">{label}</div>
-    </div>
-  );
-}
-

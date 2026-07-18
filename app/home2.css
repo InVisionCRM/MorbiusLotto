@@ -317,8 +317,10 @@
 .home2 .scene-card .stage::before{content:''; position:absolute; inset:auto 8% -34% 8%; height:70%;
   background:radial-gradient(ellipse at 50% 0%, var(--glow, rgba(34,211,238,.22)), transparent 65%)}
 .home2 .scene-card .stage svg{width:min(84%,300px); height:auto; transform:rotateX(9deg);
-  filter:drop-shadow(0 18px 22px rgba(0,0,0,.55)); animation:h2-sceneFloat 5s ease-in-out infinite}
+  filter:drop-shadow(0 18px 22px rgba(0,0,0,.55))}
 @keyframes h2-sceneFloat{50%{transform:rotateX(9deg) translateY(-6px)}}
+/* game cards are static — no idle animation on the card or its contents */
+.home2 .scene-card, .home2 .scene-card *{animation:none !important}
 .home2 .scene-card .meta{padding:13px 16px 15px; border-top:1px solid var(--line); background:rgba(0,0,0,.25)}
 .home2 .scene-card .meta .name{font-size:16px; letter-spacing:.03em}
 .home2 .scene-card .meta .row{display:flex; align-items:center; gap:10px; margin-top:5px; font-size:10px; color:var(--muted)}

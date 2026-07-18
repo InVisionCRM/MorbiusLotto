@@ -86,10 +86,10 @@ export function PlinkoScene() {
       <circle cx="126" cy="76" r="9" fill="url(#gOrbC)" opacity=".5" />
       <g filter="url(#glCyan)">
         <circle cx="108" cy="104" r="10" fill="url(#gOrbC)">
-          <animate attributeName="cy" values="101;108;101" dur="1.4s" repeatCount="indefinite" />
+          
         </circle>
         <ellipse cx="104" cy="99" rx="3.4" ry="2.2" fill="#fff" opacity=".85">
-          <animate attributeName="cy" values="96;103;96" dur="1.4s" repeatCount="indefinite" />
+          
         </ellipse>
       </g>
       <ellipse cx="108" cy="132" rx="11" ry="2.6" fill="#000" opacity=".45" />
@@ -119,10 +119,10 @@ export function CrashScene() {
         <path d="M-7.5 -4 Q0 -22 7.5 -4 Q0 -10 -7.5 -4Z" fill="url(#gGoldEdge)" />
         <circle cx="0" cy="-3" r="3.4" fill="url(#gOrbC)" />
         <path d="M-7 8 L-13 17 L-5 13 Z" fill="#fb7185" /><path d="M7 8 L13 17 L5 13 Z" fill="#fb7185" />
-        <path d="M-3.5 14 Q0 26 3.5 14 Q0 18 -3.5 14Z" fill="url(#gFlame)"><animate attributeName="opacity" values="1;.5;1" dur=".35s" repeatCount="indefinite" /></path>
+        <path d="M-3.5 14 Q0 26 3.5 14 Q0 18 -3.5 14Z" fill="url(#gFlame)"></path>
       </g>
-      <circle cx="158" cy="44" r="1.6" fill="#fbbf24"><animate attributeName="opacity" values=".9;0;.9" dur="1.1s" repeatCount="indefinite" /></circle>
-      <circle cx="146" cy="58" r="1.3" fill="#fb7185"><animate attributeName="opacity" values="0;.8;0" dur="1.4s" repeatCount="indefinite" /></circle>
+      <circle cx="158" cy="44" r="1.6" fill="#fbbf24"></circle>
+      <circle cx="146" cy="58" r="1.3" fill="#fb7185"></circle>
       <text x="24" y="38" fontSize="24" fill="#fda4af" fontFamily="'Bowlby One SC'" filter="url(#glPink)">12.4×</text>
     </svg>
   );
@@ -139,7 +139,7 @@ export function MinesScene() {
           <path d="M152 24 L164 38 L152 54 L140 38 Z" fill="url(#gGem)" />
           <path d="M152 24 L158 38 L152 54 L146 38 Z" fill="#fff" opacity=".22" />
           <path d="M140 38 L164 38 L152 54 Z" fill="#022c22" opacity=".3" />
-          <circle cx="147" cy="31" r="1.6" fill="#fff" opacity=".9"><animate attributeName="opacity" values=".9;.2;.9" dur="1.8s" repeatCount="indefinite" /></circle>
+          <circle cx="147" cy="31" r="1.6" fill="#fff" opacity=".9"></circle>
         </g>
         <rect x="28" y="74" width="40" height="40" rx="7" fill="#0b1322" /><rect x="28" y="70" width="40" height="40" rx="7" fill="#0a2018" stroke="#155e46" />
         <path d="M48 76 L60 90 L48 106 L36 90 Z" fill="url(#gGem)" /><path d="M48 76 L54 90 L48 106 L42 90 Z" fill="#fff" opacity=".22" /><path d="M36 90 L60 90 L48 106 Z" fill="#022c22" opacity=".3" />
@@ -148,8 +148,8 @@ export function MinesScene() {
           <circle cx="100" cy="92" r="11" fill="url(#gMine)" />
           <ellipse cx="96" cy="87" rx="3.6" ry="2.4" fill="#cbd5e1" opacity=".5" />
           <path d="M100 78 v-6" stroke="#475569" strokeWidth="2.5" strokeLinecap="round" />
-          <circle cx="100" cy="70" r="2.4" fill="url(#gFlame)" filter="url(#glOrange)"><animate attributeName="r" values="2.4;3.4;2.4" dur=".5s" repeatCount="indefinite" /></circle>
-          <circle cx="100" cy="92" r="14" fill="none" stroke="#fb7185" strokeWidth="1.5" opacity=".4"><animate attributeName="opacity" values=".4;.05;.4" dur="1.2s" repeatCount="indefinite" /></circle>
+          <circle cx="100" cy="70" r="2.4" fill="url(#gFlame)" filter="url(#glOrange)"></circle>
+          <circle cx="100" cy="92" r="14" fill="none" stroke="#fb7185" strokeWidth="1.5" opacity=".4"></circle>
         </g>
         <rect x="132" y="74" width="40" height="40" rx="7" fill="#0b1322" /><rect x="132" y="70" width="40" height="40" rx="7" fill="url(#gTile)" stroke="#2b3a55" /><rect x="132" y="70" width="40" height="20" rx="7" fill="url(#gGloss)" opacity=".25" />
       </g>
@@ -227,7 +227,7 @@ export function KenoScene() {
         <g filter="url(#fS2)"><circle cx="52" cy="46" r="17" fill="url(#gOrbC)" /><ellipse cx="46" cy="39" rx="5.5" ry="3.5" fill="#fff" opacity=".8" /><text x="52" y="51" fontSize="13" fontWeight="800" fill="#03242e">7</text></g>
         <g filter="url(#fS2)"><circle cx="100" cy="34" r="17" fill="url(#gOrbC)" /><ellipse cx="94" cy="27" rx="5.5" ry="3.5" fill="#fff" opacity=".8" /><text x="100" y="39" fontSize="13" fontWeight="800" fill="#03242e">23</text></g>
         <g filter="url(#fS2)"><circle cx="148" cy="48" r="17" fill="url(#gOrbC)" /><ellipse cx="142" cy="41" rx="5.5" ry="3.5" fill="#fff" opacity=".8" /><text x="148" y="53" fontSize="13" fontWeight="800" fill="#03242e">41</text></g>
-        <g filter="url(#glGold)"><circle cx="72" cy="92" r="18" fill="url(#gGold)"><animate attributeName="r" values="18;19.5;18" dur="2s" repeatCount="indefinite" /></circle><ellipse cx="65" cy="84" rx="6" ry="3.8" fill="#fff" opacity=".85" /><text x="72" y="97" fontSize="13" fontWeight="800" fill="#57340a">55</text></g>
+        <g filter="url(#glGold)"><circle cx="72" cy="92" r="18" fill="url(#gGold)"></circle><ellipse cx="65" cy="84" rx="6" ry="3.8" fill="#fff" opacity=".85" /><text x="72" y="97" fontSize="13" fontWeight="800" fill="#57340a">55</text></g>
         <g filter="url(#fS2)"><circle cx="126" cy="94" r="17" fill="url(#gOrbC)" /><ellipse cx="120" cy="87" rx="5.5" ry="3.5" fill="#fff" opacity=".8" /><text x="126" y="99" fontSize="13" fontWeight="800" fill="#03242e">12</text></g>
       </g>
       <ellipse cx="72" cy="116" rx="14" ry="3" fill="#000" opacity=".4" />
@@ -266,7 +266,7 @@ export function RouletteScene() {
         <circle r="60" fill="#0b0e16" filter="url(#fS)" />
         <circle r="58" fill="none" stroke="url(#gGoldEdge)" strokeWidth="5" />
         <circle r="53" fill="#1c2333" />
-        <g><animateTransform attributeName="transform" type="rotate" from="0" to="360" dur="14s" repeatCount="indefinite" />
+        <g>
           <g>
             <path d="M0 0 L0 -50 A50 50 0 0 1 25 -43.3 Z" fill="#b91c1c" /><path d="M0 0 L25 -43.3 A50 50 0 0 1 43.3 -25 Z" fill="#111827" />
             <path d="M0 0 L43.3 -25 A50 50 0 0 1 50 0 Z" fill="#b91c1c" /><path d="M0 0 L50 0 A50 50 0 0 1 43.3 25 Z" fill="#111827" />
@@ -281,7 +281,7 @@ export function RouletteScene() {
         <circle r="19" fill="url(#gSteelR)" />
         <circle r="7" fill="url(#gGold)" />
         <g stroke="url(#gGoldEdge)" strokeWidth="3.5" strokeLinecap="round"><path d="M0 -16 V-7 M0 7 V16 M-16 0 H-7 M7 0 H16" /></g>
-        <g><animateTransform attributeName="transform" type="rotate" from="360" to="0" dur="3.5s" repeatCount="indefinite" />
+        <g>
           <circle cx="0" cy="-41" r="4.5" fill="url(#gDiceTop)" filter="url(#fS2)" />
           <ellipse cx="-1.5" cy="-42.5" rx="1.6" ry="1.1" fill="#fff" />
         </g>
@@ -310,7 +310,7 @@ export function DiceX2Scene() {
       <ellipse cx="68" cy="110" rx="24" ry="4.5" fill="#000" opacity=".4" />
       <ellipse cx="134" cy="106" rx="24" ry="4.5" fill="#000" opacity=".4" />
       <text x="100" y="30" fontSize="17" fill="#c4b5fd" textAnchor="middle" fontFamily="'Bowlby One SC'" filter="url(#glViolet)">×2
-        <animate attributeName="opacity" values="1;.55;1" dur="1.6s" repeatCount="indefinite" />
+        
       </text>
     </svg>
   );
@@ -328,8 +328,8 @@ export function TowersScene() {
       </g>
       <g stroke="#a78bfa" strokeOpacity=".2" strokeWidth="1"><path d="M30 112 H170 M46 90 H154 M62 68 H138" /></g>
       <g filter="url(#glViolet)">
-        <circle cx="100" cy="22" r="9" fill="url(#gChipV)"><animate attributeName="cy" values="22;16;22" dur="2s" repeatCount="indefinite" /></circle>
-        <ellipse cx="97" cy="19" rx="3" ry="2" fill="#fff" opacity=".8"><animate attributeName="cy" values="19;13;19" dur="2s" repeatCount="indefinite" /></ellipse>
+        <circle cx="100" cy="22" r="9" fill="url(#gChipV)"></circle>
+        <ellipse cx="97" cy="19" rx="3" ry="2" fill="#fff" opacity=".8"></ellipse>
       </g>
       <ellipse cx="100" cy="36" rx="9" ry="2" fill="#000" opacity=".45" />
     </svg>
@@ -345,7 +345,7 @@ export function LimboScene() {
       <path d="M30 110 A76 76 0 0 1 170 110" stroke="#1f2937" strokeWidth="11" fill="none" strokeLinecap="round" />
       <path d="M30 110 A76 76 0 0 1 170 110" stroke="#000" strokeOpacity=".4" strokeWidth="5" fill="none" strokeLinecap="round" />
       <path d="M30 110 A76 76 0 0 1 128 46" stroke="url(#gGem)" strokeWidth="11" fill="none" strokeLinecap="round" filter="url(#glGreen)">
-        <animate attributeName="opacity" values="1;.75;1" dur="2s" repeatCount="indefinite" />
+        
       </path>
       <circle cx="128" cy="46" r="7" fill="url(#gGem)" filter="url(#glGreen)" />
       <ellipse cx="126" cy="43.5" rx="2.4" ry="1.6" fill="#fff" opacity=".85" />
@@ -404,7 +404,7 @@ export function VideoPokerScene() {
       </g>
       <g textAnchor="middle">
         <g filter="url(#glGold)"><rect x="40" y="82" width="18" height="8" rx="4" fill="url(#gGold)" /><rect x="66" y="82" width="18" height="8" rx="4" fill="url(#gGold)" /><rect x="92" y="82" width="18" height="8" rx="4" fill="url(#gGold)" /><rect x="118" y="82" width="18" height="8" rx="4" fill="url(#gGold)" />
-          <animate attributeName="opacity" values="1;.55;1" dur="2.2s" repeatCount="indefinite" /></g>
+          </g>
         <text x="49" y="88" fontSize="5" fontWeight="800" fill="#57340a">HOLD</text><text x="75" y="88" fontSize="5" fontWeight="800" fill="#57340a">HOLD</text><text x="101" y="88" fontSize="5" fontWeight="800" fill="#57340a">HOLD</text><text x="127" y="88" fontSize="5" fontWeight="800" fill="#57340a">HOLD</text>
       </g>
       <rect x="82" y="106" width="36" height="7" rx="3.5" fill="url(#gChipC)" filter="url(#fS2)" />
@@ -424,14 +424,14 @@ export function CrapsScene() {
         <path d="M84 34 L94 24 L94 60 L84 70 Z" fill="url(#gRDiceSide)" />
         <rect x="48" y="34" width="36" height="36" rx="6" fill="url(#gRDiceFront)" />
         <g fill="#fff"><circle cx="58" cy="44" r="3.4" /><circle cx="74" cy="60" r="3.4" /><circle cx="66" cy="52" r="3.4" /></g>
-        <animateTransform attributeName="transform" type="rotate" values="-14 68 52;-7 68 52;-14 68 52" dur="2.4s" repeatCount="indefinite" />
+        
       </g>
       <g transform="rotate(12 132 46)" filter="url(#fS)">
         <path d="M112 30 L122 20 L158 20 L148 30 Z" fill="url(#gRDiceTop)" />
         <path d="M148 30 L158 20 L158 56 L148 66 Z" fill="url(#gRDiceSide)" />
         <rect x="112" y="30" width="36" height="36" rx="6" fill="url(#gRDiceFront)" />
         <g fill="#fff"><circle cx="122" cy="40" r="3.4" /><circle cx="138" cy="40" r="3.4" /><circle cx="122" cy="56" r="3.4" /><circle cx="138" cy="56" r="3.4" /></g>
-        <animateTransform attributeName="transform" type="rotate" values="12 132 46;19 132 46;12 132 46" dur="2.4s" repeatCount="indefinite" />
+        
       </g>
       <ellipse cx="66" cy="92" rx="20" ry="4" fill="#000" opacity=".4" />
       <ellipse cx="132" cy="86" rx="20" ry="4" fill="#000" opacity=".4" />
@@ -466,7 +466,7 @@ export function DragonTigerScene() {
         <rect x="118" y="26" width="52" height="30" rx="6" fill="url(#gGloss)" opacity=".22" />
       </g>
       <path d="M104 30 L94 60 L102 60 L92 92 L112 56 L103 56 Z" fill="url(#gGold)" filter="url(#glGold)">
-        <animate attributeName="opacity" values="1;.45;1" dur="1.4s" repeatCount="indefinite" />
+        
       </path>
     </svg>
   );
@@ -499,10 +499,10 @@ export function AndarBaharScene() {
         <text x="100" y="58" fontSize="14" fill="#dc2626" textAnchor="middle">♥</text>
       </g>
       <path d="M84 106 h-9 m0 0 l5 -4 m-5 4 l5 4" stroke="#22d3ee" strokeWidth="2.5" fill="none" strokeLinecap="round" filter="url(#glCyan)">
-        <animate attributeName="opacity" values="1;.2;1" dur="1.6s" repeatCount="indefinite" />
+        
       </path>
       <path d="M116 106 h9 m0 0 l-5 -4 m5 4 l-5 4" stroke="#fb7185" strokeWidth="2.5" fill="none" strokeLinecap="round" filter="url(#glPink)">
-        <animate attributeName="opacity" values=".2;1;.2" dur="1.6s" repeatCount="indefinite" />
+        
       </path>
       <text x="100" y="110" fontSize="9" fontWeight="800" fill="#94a3b8" textAnchor="middle">VS</text>
     </svg>
@@ -522,12 +522,12 @@ export function PachinkoScene() {
       <circle cx="123" cy="56" r="5.5" fill="url(#gSteelR)" opacity=".5" />
       <circle cx="112" cy="76" r="6" fill="url(#gSteelR)" opacity=".75" />
       <g filter="url(#glPink)">
-        <circle cx="100" cy="98" r="7" fill="url(#gOrbP)"><animate attributeName="cy" values="96;103;96" dur="1.3s" repeatCount="indefinite" /></circle>
-        <ellipse cx="97.5" cy="95" rx="2.2" ry="1.5" fill="#fff" opacity=".85"><animate attributeName="cy" values="93;100;93" dur="1.3s" repeatCount="indefinite" /></ellipse>
+        <circle cx="100" cy="98" r="7" fill="url(#gOrbP)"></circle>
+        <ellipse cx="97.5" cy="95" rx="2.2" ry="1.5" fill="#fff" opacity=".85"></ellipse>
       </g>
       <g filter="url(#fS2)">
         <rect x="50" y="112" width="28" height="13" rx="3" fill="#4a1d5f" />
-        <rect x="86" y="112" width="28" height="13" rx="3" fill="url(#gOrbP)" filter="url(#glPink)"><animate attributeName="opacity" values="1;.6;1" dur="1.2s" repeatCount="indefinite" /></rect>
+        <rect x="86" y="112" width="28" height="13" rx="3" fill="url(#gOrbP)" filter="url(#glPink)"></rect>
         <rect x="122" y="112" width="28" height="13" rx="3" fill="#4a1d5f" />
         <text x="100" y="121.5" fontSize="6.5" fontWeight="800" fill="#fdf2f8" textAnchor="middle">★777</text>
       </g>
@@ -540,9 +540,9 @@ export function CascadeScene() {
     <svg viewBox="0 0 200 140">
       <g filter="url(#fS2)">
         <g opacity=".9"><path d="M59 14 L72 27 L59 42 L46 27 Z" fill="url(#gGem)" /><path d="M59 14 L65 27 L59 42 L53 27 Z" fill="#fff" opacity=".2" />
-          <animateTransform attributeName="transform" type="translate" values="0 0;0 14;0 0" dur="2.6s" repeatCount="indefinite" /></g>
+          </g>
         <g opacity=".75"><path d="M125 6 L138 19 L125 34 L112 19 Z" fill="url(#gOrbC)" /><path d="M112 19 L138 19 L125 34 Z" fill="#0c4a6e" opacity=".4" />
-          <animateTransform attributeName="transform" type="translate" values="0 0;0 16;0 0" dur="2.2s" repeatCount="indefinite" /></g>
+          </g>
       </g>
       <g filter="url(#fS2)">
         <path d="M59 58 L74 73 L59 92 L44 73 Z" fill="url(#gGem)" /><path d="M59 58 L66 73 L59 92 L52 73 Z" fill="#fff" opacity=".22" /><path d="M44 73 L74 73 L59 92 Z" fill="#064e3b" opacity=".35" />
@@ -553,7 +553,7 @@ export function CascadeScene() {
         <g filter="url(#glViolet)"><path d="M158 96 L173 111 L158 130 L143 111 Z" fill="url(#gChipV)" /><path d="M158 96 L165 111 L158 130 L151 111 Z" fill="#fff" opacity=".22" /></g>
       </g>
       <g stroke="#5eead4" strokeWidth="2.5" strokeLinecap="round" filter="url(#glGreen)">
-        <path d="M92 106 l-7 -8 m7 8 l7 -8 m-7 8 v-17"><animate attributeName="opacity" values="1;.25;1" dur="1.5s" repeatCount="indefinite" /></path>
+        <path d="M92 106 l-7 -8 m7 8 l7 -8 m-7 8 v-17"></path>
       </g>
       <g filter="url(#glGold)"><rect x="150" y="20" width="30" height="15" rx="7.5" fill="url(#gGold)" /><text x="165" y="30.5" fontSize="8.5" fontWeight="800" fill="#57340a" textAnchor="middle">×3</text></g>
     </svg>
@@ -567,9 +567,9 @@ export function FirewalkScene() {
       <g filter="url(#fS2)">
         <ellipse cx="100" cy="122" rx="44" ry="12" fill="#57230c" />
         <ellipse cx="100" cy="118" rx="44" ry="12" fill="#7c2d12" />
-        <path d="M64 116 q10 4 20 1 M96 122 q12 3 22 -1 M126 114 q8 3 12 1" stroke="#fb923c" strokeOpacity=".5" strokeWidth="1.5" fill="none"><animate attributeName="stroke-opacity" values=".5;.9;.5" dur="1.6s" repeatCount="indefinite" /></path>
+        <path d="M64 116 q10 4 20 1 M96 122 q12 3 22 -1 M126 114 q8 3 12 1" stroke="#fb923c" strokeOpacity=".5" strokeWidth="1.5" fill="none"></path>
         <ellipse cx="100" cy="94" rx="34" ry="9.5" fill="#3f1503" />
-        <ellipse cx="100" cy="90" rx="34" ry="9.5" fill="url(#gGoldEdge)"><animate attributeName="opacity" values="1;.75;1" dur="2s" repeatCount="indefinite" /></ellipse>
+        <ellipse cx="100" cy="90" rx="34" ry="9.5" fill="url(#gGoldEdge)"></ellipse>
         <path d="M72 88 q14 6 28 2 M104 92 q14 3 24 -2" stroke="#fde68a" strokeOpacity=".6" strokeWidth="1.5" fill="none" />
         <ellipse cx="100" cy="70" rx="25" ry="7" fill="#2c0e02" />
         <ellipse cx="100" cy="66" rx="25" ry="7" fill="#7c2d12" />
@@ -578,13 +578,13 @@ export function FirewalkScene() {
       </g>
       <g filter="url(#glOrange)">
         <path d="M100 86 q-8 -13 0 -25 q3 8 8 11 q4 -6 3 -11 q9 11 -1 25 q-5 4 -10 0z" fill="url(#gFlame)">
-          <animate attributeName="opacity" values="1;.7;1" dur=".8s" repeatCount="indefinite" />
+          
         </path>
         <path d="M100 82 q-3 -7 0 -12 q3 4 4 8 q2 -4 1 -7 q4 7 -1 12 q-2 2 -4 -1z" fill="#fef3c7" />
       </g>
-      <circle cx="84" cy="32" r="1.7" fill="#fdba74"><animate attributeName="cy" values="32;16" dur="1.8s" repeatCount="indefinite" /><animate attributeName="opacity" values=".9;0" dur="1.8s" repeatCount="indefinite" /></circle>
-      <circle cx="118" cy="38" r="1.4" fill="#fdba74"><animate attributeName="cy" values="38;20" dur="2.3s" repeatCount="indefinite" /><animate attributeName="opacity" values=".8;0" dur="2.3s" repeatCount="indefinite" /></circle>
-      <circle cx="102" cy="26" r="1.2" fill="#fde68a"><animate attributeName="cy" values="26;12" dur="2s" repeatCount="indefinite" /><animate attributeName="opacity" values=".7;0" dur="2s" repeatCount="indefinite" /></circle>
+      <circle cx="84" cy="32" r="1.7" fill="#fdba74"></circle>
+      <circle cx="118" cy="38" r="1.4" fill="#fdba74"></circle>
+      <circle cx="102" cy="26" r="1.2" fill="#fde68a"></circle>
     </svg>
   );
 }
@@ -595,7 +595,7 @@ export function HeistScene() {
       <rect x="34" y="12" width="132" height="116" rx="11" fill="#141b2b" filter="url(#fS)" />
       <rect x="38" y="16" width="124" height="108" rx="8" fill="#1c2333" stroke="#2b3651" />
       <path d="M148 24 L188 12 L188 128 L148 116 Z" fill="url(#gShaft)">
-        <animate attributeName="opacity" values="1;.55;1" dur="2.4s" repeatCount="indefinite" />
+        
       </path>
       <circle cx="92" cy="70" r="47" fill="url(#gSteelR)" filter="url(#fS2)" />
       <circle cx="92" cy="70" r="47" fill="none" stroke="#0f172a" strokeWidth="2" />
@@ -607,13 +607,13 @@ export function HeistScene() {
       <circle cx="92" cy="70" r="17" fill="url(#gSteel)" stroke="#0f172a" strokeWidth="1.5" />
       <g stroke="url(#gSteel)" strokeWidth="6" strokeLinecap="round">
         <path d="M92 42 v14 M92 84 v14 M64 70 h14 M106 70 h14" />
-        <animateTransform attributeName="transform" type="rotate" values="0 92 70;28 92 70;28 92 70;0 92 70" keyTimes="0;.4;.7;1" dur="3.5s" repeatCount="indefinite" />
+        
       </g>
       <circle cx="92" cy="70" r="6" fill="url(#gGold)" filter="url(#glGold)" />
       <g filter="url(#glGold)">
         <ellipse cx="166" cy="108" rx="8" ry="3.2" fill="url(#gGold)" />
-        <ellipse cx="172" cy="98" rx="6.5" ry="2.6" fill="url(#gGold)"><animate attributeName="cy" values="98;92;98" dur="2.6s" repeatCount="indefinite" /></ellipse>
-        <ellipse cx="160" cy="86" rx="5" ry="2" fill="url(#gGold)"><animate attributeName="cy" values="86;78;86" dur="3s" repeatCount="indefinite" /></ellipse>
+        <ellipse cx="172" cy="98" rx="6.5" ry="2.6" fill="url(#gGold)"></ellipse>
+        <ellipse cx="160" cy="86" rx="5" ry="2" fill="url(#gGold)"></ellipse>
       </g>
     </svg>
   );
@@ -648,7 +648,7 @@ export function ThreeCardScene() {
         <ellipse cx="100" cy="102" rx="14" ry="5" fill="none" stroke="#fff" strokeWidth="1.3" strokeDasharray="4 5" opacity=".8" />
         <text x="100" y="104.5" fontSize="5.5" fontWeight="800" fill="#03301f" textAnchor="middle">PAIR+</text>
       </g>
-      <path d="M100 14 l1.8 4 4.2 .5 -3 3 .8 4.2 -3.8 -2 -3.8 2 .8 -4.2 -3 -3 4.2 -.5z" fill="#fde68a" opacity=".9"><animate attributeName="opacity" values=".9;.3;.9" dur="1.8s" repeatCount="indefinite" /></path>
+      <path d="M100 14 l1.8 4 4.2 .5 -3 3 .8 4.2 -3.8 -2 -3.8 2 .8 -4.2 -3 -3 4.2 -.5z" fill="#fde68a" opacity=".9"></path>
     </svg>
   );
 }
@@ -669,7 +669,7 @@ export function GreedDiceScene() {
         <path d="M102 42 L113 31 L113 75 L102 86 Z" fill="url(#gGDiceSide)" />
         <rect x="58" y="42" width="44" height="44" rx="7" fill="url(#gGDiceFront)" />
         <text x="80" y="73" fontSize="24" fontWeight="800" fill="#713f12" textAnchor="middle">$</text>
-        <animateTransform attributeName="transform" type="rotate" values="-9 82 62;-4 82 62;-9 82 62" dur="2.8s" repeatCount="indefinite" />
+        
       </g>
       <g transform="rotate(11 138 76)" filter="url(#fS)">
         <path d="M118 58 L128 48 L166 48 L156 58 Z" fill="url(#gGDiceTop)" />
@@ -678,7 +678,7 @@ export function GreedDiceScene() {
         <g fill="#713f12"><circle cx="129" cy="69" r="3.6" /><circle cx="145" cy="85" r="3.6" /></g>
       </g>
       <text x="58" y="24" fontSize="11" fontWeight="800" fill="#fde68a" filter="url(#glGold)">+250
-        <animate attributeName="opacity" values=".9;.4;.9" dur="1.8s" repeatCount="indefinite" />
+        
       </text>
     </svg>
   );
@@ -693,16 +693,16 @@ export function CipherScene() {
       <g stroke="#34d399" strokeOpacity=".05" strokeWidth="1"><path d="M38 36 H162 M38 50 H162 M38 64 H162 M38 78 H162 M38 92 H162 M38 106 H162" /></g>
       <g fontSize="11" fontWeight="700" fill="#34d399" fontFamily="monospace" textAnchor="middle">
         <g opacity=".35"><text x="56" y="42">7</text><text x="56" y="60">K</text><text x="56" y="78">2</text><text x="56" y="96">X</text>
-          <animate attributeName="opacity" values=".35;.7;.35" dur="1.8s" repeatCount="indefinite" /></g>
+          </g>
         <g opacity=".55"><text x="78" y="42">A</text><text x="78" y="60">9</text><text x="78" y="78">F</text><text x="78" y="96">4</text>
-          <animate attributeName="opacity" values=".55;.2;.55" dur="2.3s" repeatCount="indefinite" /></g>
+          </g>
         <g opacity=".4"><text x="122" y="42">3</text><text x="122" y="60">Z</text><text x="122" y="78">8</text><text x="122" y="96">Q</text>
-          <animate attributeName="opacity" values=".4;.8;.4" dur="2s" repeatCount="indefinite" /></g>
+          </g>
         <g opacity=".3"><text x="144" y="42">E</text><text x="144" y="60">5</text><text x="144" y="78">M</text><text x="144" y="96">1</text>
-          <animate attributeName="opacity" values=".3;.6;.3" dur="1.5s" repeatCount="indefinite" /></g>
+          </g>
       </g>
       <rect x="38" y="24" width="124" height="10" fill="#34d399" opacity=".1">
-        <animate attributeName="y" values="24;102;24" dur="4s" repeatCount="indefinite" />
+        
       </rect>
       <g filter="url(#glGold)">
         <rect x="89" y="60" width="22" height="24" rx="4" fill="rgba(251,191,36,.14)" stroke="#fbbf24" strokeWidth="1.5" />
@@ -720,11 +720,11 @@ export function HiLoScene() {
       <g filter="url(#glGreen)">
         <path d="M100 10 l17 19 h-9.5 v12 h-15 v-12 h-9.5 z" fill="url(#gGem)" />
         <path d="M100 10 l8 19 h-4.5 v12 h-7.5 v-12 h-4.5 z" fill="#fff" opacity=".18" />
-        <animate attributeName="opacity" values="1;.4;1" dur="1.8s" repeatCount="indefinite" />
+        
       </g>
       <g filter="url(#glPink)" opacity=".4">
         <path d="M100 130 l17 -19 h-9.5 v-12 h-15 v12 h-9.5 z" fill="url(#gOrbP)" />
-        <animate attributeName="opacity" values=".4;1;.4" dur="1.8s" repeatCount="indefinite" />
+        
       </g>
       <g filter="url(#fS)">
         <rect x="76" y="44" width="48" height="52" rx="6" fill="url(#gCard)" stroke="#94a3b8" strokeOpacity=".4" />
@@ -756,12 +756,12 @@ export function ChickenScene() {
         <text x="121" y="113.5" fontSize="7.5" fontWeight="800" fill="#57340a" textAnchor="middle">M</text>
       </g>
       <g filter="url(#glOrange)">
-        <path d="M164 108 q-5 -9 1 -15 q2 5 5 7 q2 -4 1 -7 q6 7 -1 15 q-3 2 -6 0z" fill="url(#gFlame)"><animate attributeName="opacity" values="1;.6;1" dur=".8s" repeatCount="indefinite" /></path>
+        <path d="M164 108 q-5 -9 1 -15 q2 5 5 7 q2 -4 1 -7 q6 7 -1 15 q-3 2 -6 0z" fill="url(#gFlame)"></path>
         <path d="M165 105 q-2 -4 0 -7 q2 2 3 4 q1 -2 1 -4 q2 4 -1 7 q-1 1 -3 0z" fill="#fef3c7" />
       </g>
       <ellipse cx="76" cy="94" rx="18" ry="3.4" fill="#000" opacity=".45" />
       <g filter="url(#fS2)">
-        <animateTransform attributeName="transform" type="translate" values="0 0;0 -8;0 0" dur="1.1s" repeatCount="indefinite" />
+        
         <ellipse cx="72" cy="70" rx="19" ry="16" fill="url(#gCard)" />
         <path d="M58 76 q-2 8 6 10 q6 1 10 -4" fill="#dbe3ee" />
         <circle cx="86" cy="56" r="10" fill="url(#gCard)" />
