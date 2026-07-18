@@ -71,9 +71,9 @@ import { resolveDisplayNameForProfileUpsert } from './lib/resolve-profile-displa
 import { logger } from './utils/logger';
 import { assertPokerBotControlAllowed, assertPokerTournamentBotControlAllowed } from './utils/poker-bot-auth';
 import { MIN_WITHDRAWAL_WEI } from './utils/withdraw-sign';
-import { getPublicClient } from './utils/chain-client';
+import { getPublicClient, pulsechainTransport } from './utils/chain-client';
 import { blackjackAbi } from './abi/blackjack';
-import { createWalletClient, http, decodeEventLog, getAddress } from 'viem';
+import { createWalletClient, decodeEventLog, getAddress } from 'viem';
 import { pulsechain } from 'viem/chains';
 import { privateKeyToAccount } from 'viem/accounts';
 import { PLINKO_ADDRESS, KENO_ADDRESS, LOTTERY_INSTANT_ADDRESS, BLACKJACK_ADDRESS, MORBIUS_VAULT_ADDRESS, MORBIUS_TOKEN_ADDRESS, getAllBlackjackContracts } from './config/contracts';
@@ -93,7 +93,7 @@ function getHotWalletClient(): ReturnType<typeof createWalletClient> | null {
   return createWalletClient({
     account,
     chain: pulsechain,
-    transport: http(process.env.PULSECHAIN_RPC_URL || 'https://rpc.pulsechain.com'),
+    transport: pulsechainTransport(),
   });
 }
 

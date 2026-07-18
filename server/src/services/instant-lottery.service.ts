@@ -3,10 +3,10 @@
  * Generates winning numbers via ProvablyFairService, stores for verification, calls contract resolvePlay as operator.
  */
 
-import { createWalletClient, http } from 'viem';
+import { createWalletClient } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { pulsechain } from 'viem/chains';
-import { getPublicClient } from '../utils/chain-client';
+import { getPublicClient, pulsechainTransport } from '../utils/chain-client';
 import { logger } from '../utils/logger';
 import type { DatabaseService } from './database.service';
 import { ProvablyFairService } from './provably-fair.service';
@@ -40,7 +40,7 @@ function getOperatorWallet() {
     walletClient = createWalletClient({
       account,
       chain: pulsechain,
-      transport: http(process.env.PULSECHAIN_RPC_URL || 'https://rpc.pulsechain.com'),
+      transport: pulsechainTransport(),
     });
   }
   return walletClient;
