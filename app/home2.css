@@ -432,6 +432,9 @@
   font-family:var(--display); font-size:16px; color:#0b0e16;
   background:radial-gradient(circle at 32% 28%, hsla(var(--h),80%,80%,1), hsla(var(--h),75%,50%,1) 60%, hsla(var(--h),70%,30%,1));
   box-shadow:0 4px 16px hsla(var(--h),80%,55%,.35), inset 0 1px 1px rgba(255,255,255,.5)}
+/* real VIP tier badge (PNG medallion) in place of the letter medal */
+.home2 .vip-card .medal-img{display:block; width:48px; height:48px; margin:0 auto 10px;
+  filter:drop-shadow(0 4px 12px rgba(0,0,0,.45))}
 .home2 .vip-card .nm{font-size:11px; font-weight:800; letter-spacing:.1em}
 .home2 .vip-card .rb{font-size:17px; font-weight:800; color:hsl(var(--h),85%,68%); margin-top:3px}
 .home2 .vip-card .rl{font-size:8.5px; letter-spacing:.12em; color:var(--muted); font-weight:700}

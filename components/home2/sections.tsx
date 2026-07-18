@@ -10,6 +10,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { nextSundayDropUtc } from '@/lib/weekly-drop-time';
+import { VipTierBadge } from '@/components/vip/VipTierBadge';
 import {
   PlinkoScene,
   CrashScene,
@@ -827,12 +828,12 @@ export function WeeklyDrop({
    8. THE LADDER — VIP strip
    ──────────────────────────────────────────────────────────── */
 const VIP_TIERS = [
-  { h: '25', letter: 'B', name: 'BRONZE', rb: '5%' },
-  { h: '210', letter: 'S', name: 'SILVER', rb: '8%' },
-  { h: '45', letter: 'G', name: 'GOLD', rb: '12%' },
-  { h: '190', letter: 'P', name: 'PLATINUM', rb: '16%' },
-  { h: '260', letter: 'D', name: 'DIAMOND', rb: '20%' },
-  { h: '285', letter: 'O', name: 'OBSIDIAN', rb: '25%' },
+  { h: '25', level: 1, name: 'BRONZE', rb: '5%', hex: '#cd7f32' },
+  { h: '210', level: 2, name: 'SILVER', rb: '8%', hex: '#cbd5e1' },
+  { h: '45', level: 3, name: 'GOLD', rb: '12%', hex: '#f6c445' },
+  { h: '190', level: 4, name: 'PLATINUM', rb: '16%', hex: '#e5e4e2' },
+  { h: '260', level: 5, name: 'DIAMOND', rb: '20%', hex: '#9fe6ff' },
+  { h: '285', level: 6, name: 'OBSIDIAN', rb: '25%', hex: '#6d5ea8' },
 ];
 
 export function VipLadder({ currentTier = 'SILVER' }: { currentTier?: string }) {
@@ -851,7 +852,11 @@ export function VipLadder({ currentTier = 'SILVER' }: { currentTier?: string }) 
             className={`vip-card${t.name === currentTier.toUpperCase() ? ' you' : ''}`}
             style={{ '--h': t.h } as React.CSSProperties}
           >
-            <div className="medal">{t.letter}</div>
+            <VipTierBadge
+              tier={{ tierName: t.name, color: t.hex, tierLevel: t.level }}
+              size="md"
+              className="medal-img"
+            />
             <div className="nm">{t.name}</div>
             <div className="rb">{t.rb}</div>
             <div className="rl">RAKEBACK</div>
