@@ -126,6 +126,7 @@ export interface HomeSidebarProps {
   onConnect?: () => void;
   onDeposit?: () => void;
   onWithdraw?: () => void;
+  onDisconnect?: () => void;
   /** When provided, the "Swap · LP · Chart" footer row opens the chart modal. */
   onChartClick?: () => void;
 }
@@ -143,6 +144,7 @@ export function HomeSidebar({
   onConnect,
   onDeposit,
   onWithdraw,
+  onDisconnect,
   onChartClick,
 }: HomeSidebarProps) {
   return (
@@ -168,6 +170,9 @@ export function HomeSidebar({
                 Withdraw
               </button>
             </div>
+            <button type="button" className="sb-disconnect" onClick={onDisconnect}>
+              Disconnect wallet
+            </button>
           </div>
         ) : (
           <div className="sb-balance only-visitor">

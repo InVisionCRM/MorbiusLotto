@@ -259,6 +259,7 @@ export default function Home2Client() {
           onConnect={onConnect}
           onDeposit={onDeposit}
           onWithdraw={onDeposit}
+          onDisconnect={() => disconnect()}
           onChartClick={() => setChartOpen(true)}
         />
         <div className="main">
