@@ -776,25 +776,15 @@
    HERO CAROUSEL — auto-rotating promo cards (sportsbook-ad style)
    ═══════════════════════════════════════════════════════════════════════════ */
 .home2 .hc{position:relative; z-index:2}
-.home2 .hc-viewport{position:relative; height:clamp(300px,40vw,360px); border-radius:22px; overflow:hidden;
-  isolation:isolate}
-.home2 .hc-slide{position:absolute; inset:0; display:grid; grid-template-columns:1.15fr .85fr; align-items:center;
-  gap:20px; padding:30px 34px; border-radius:22px; overflow:hidden;
-  background:
-    radial-gradient(120% 130% at 82% 20%, color-mix(in srgb, var(--acc) 26%, transparent), transparent 60%),
-    radial-gradient(90% 120% at 8% 100%, color-mix(in srgb, var(--acc2) 20%, transparent), transparent 55%),
-    linear-gradient(120deg, #0a0e18 0%, #0d1220 52%, #070a12 100%);
-  box-shadow:inset 0 0 0 1px color-mix(in srgb, var(--acc) 34%, transparent),
-    inset 0 1px 0 rgba(255,255,255,.06), 0 24px 60px -30px rgba(0,0,0,.9)}
-/* halftone dot depth + accent wash on the graphic side */
-.home2 .hc-halftone{position:absolute; inset:0; pointer-events:none; z-index:0; opacity:.5;
-  background-image:radial-gradient(rgba(255,255,255,.09) 1px, transparent 1.4px);
-  background-size:13px 13px;
-  -webkit-mask:linear-gradient(90deg, transparent 40%, #000 100%);
-  mask:linear-gradient(90deg, transparent 40%, #000 100%)}
-.home2 .hc-slide::after{content:''; position:absolute; right:-8%; top:-30%; width:60%; height:160%; z-index:0;
-  background:radial-gradient(circle at 50% 50%, color-mix(in srgb, var(--acc) 30%, transparent), transparent 62%);
-  filter:blur(6px); pointer-events:none}
+.home2 .hc-viewport{position:relative; width:100%; aspect-ratio:16/9; max-height:min(58vh,560px);
+  border-radius:22px; overflow:hidden; isolation:isolate;
+  box-shadow:inset 0 0 0 1px var(--line2), 0 24px 60px -30px rgba(0,0,0,.9)}
+.home2 .hc-slide{position:absolute; inset:0; border-radius:22px; overflow:hidden; background:#070a12}
+/* full-bleed promo artwork */
+.home2 .hc-img{position:absolute; inset:0; width:100%; height:100%; object-fit:cover; object-position:center;
+  z-index:0; user-select:none; -webkit-user-drag:none}
+/* CTA anchored to the lower-right of the image */
+.home2 .hc-cta-wrap{position:absolute; right:clamp(14px,2.6vw,30px); bottom:clamp(14px,2.6vw,30px); z-index:4}
 
 .home2 .hc-text{position:relative; z-index:2; min-width:0}
 .home2 .hc-kick{display:inline-flex; align-items:center; gap:9px; font-size:10px; font-weight:800;
@@ -862,9 +852,9 @@
 .home2 .hc-stat-l{font-size:9.5px; letter-spacing:.14em; color:var(--muted); font-weight:700; margin-top:5px}
 
 @media (max-width:760px){
-  .home2 .hc-slide{grid-template-columns:1fr; padding:22px 20px; align-content:center}
-  .home2 .hc-art{display:none}
-  .home2 .hc-viewport{height:clamp(260px,64vw,320px)}
+  .home2 .hc-viewport{aspect-ratio:16/10; max-height:none}
+  .home2 .hc-cta-wrap{right:12px; bottom:12px}
+  .home2 .hc-cta{padding:11px 16px; font-size:12.5px}
   .home2 .hc-sub{max-width:none}
   .home2 .hc-stats{gap:26px}
 }
