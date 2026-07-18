@@ -31,6 +31,7 @@ type Slide = {
   cta: string;
   ctaHref?: string;
   action?: 'seat' | 'drop' | 'refer';
+  ctaSide?: 'left' | 'right';   // corner the CTA sits in (default left)
 };
 
 const AUTO_MS = 5600;
@@ -81,6 +82,7 @@ export function HeroCarousel({
         alt: 'Token Analyzer — scan any token in one tap',
         cta: 'SCAN A TOKEN',
         ctaHref: 'https://scan.morbius.io',
+        ctaSide: 'right',
       },
     ],
     []
@@ -140,7 +142,7 @@ export function HeroCarousel({
                 style={{ '--acc': slide.accent, '--acc2': slide.accent2 } as React.CSSProperties}
               >
                 <img className="hc-img" src={slide.img} alt={slide.alt} draggable={false} />
-                <div className="hc-cta-wrap">
+                <div className={'hc-cta-wrap ' + (slide.ctaSide === 'right' ? 'right' : 'left')}>
                   <button className="hc-cta" onClick={() => fireCta(slide)}>
                     {slide.cta}
                     <ArrowUpRight size={18} strokeWidth={2.6} />
