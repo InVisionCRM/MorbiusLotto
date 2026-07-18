@@ -264,6 +264,17 @@ export default function Home2Client() {
         <div className="main">
           <MobileTopBar mode={mode} onConnect={onConnect} />
           <HomeTicker items={tickerItems} />
+          {/* Promo carousel is the top hero for everyone (auto-rotating). */}
+          <HeroCarousel
+            gamesPlayed={gamesPlayed}
+            morbiusWon={totalWon}
+            biggestWin={allTimeBiggest ?? topWin?.amount}
+            chartBg={<PriceChartBg />}
+            onTakeSeat={mode === 'player' ? onDashboard : onConnect}
+            onOpenDrop={() => setActiveSheet('drop')}
+            onRefer={mode === 'player' ? onDashboard : onConnect}
+          />
+          {/* Connected players keep their personalized hero directly below it. */}
           {mode === 'player' ? (
             <HeroPlayer
               name={displayName}
@@ -278,17 +289,7 @@ export default function Home2Client() {
               onDeposit={onDeposit}
               onDashboard={onDashboard}
             />
-          ) : (
-            <HeroCarousel
-              gamesPlayed={gamesPlayed}
-              morbiusWon={totalWon}
-              biggestWin={allTimeBiggest ?? topWin?.amount}
-              chartBg={<PriceChartBg />}
-              onTakeSeat={onConnect}
-              onOpenDrop={() => setActiveSheet('drop')}
-              onRefer={onConnect}
-            />
-          )}
+          ) : null}
           <VaultStrip
             value={totalWon}
             gamesPlayed={gamesPlayed != null ? gamesPlayed.toLocaleString('en-US') : undefined}
