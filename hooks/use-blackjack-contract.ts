@@ -1,8 +1,39 @@
 import { useReadContract, useWriteContract, useWatchContractEvent } from 'wagmi'
 import { blackjackAbi } from '../abi/blackjack'
-import { BLACKJACK_ADDRESS, MORBIUS_VAULT_ADDRESS, BLACKJACK_LEGACY_ADDRESS, BLACKJACK_LEGACY_ADDRESS_2, BLACKJACK_LEGACY_ADDRESS_3, LEGACY_BLACKJACK_ADDRESSES } from '../lib/contracts'
+import {
+  BLACKJACK_ADDRESS,
+  MORBIUS_VAULT_ADDRESS,
+  BLACKJACK_LEGACY_ADDRESS,
+  BLACKJACK_LEGACY_ADDRESS_2,
+  BLACKJACK_LEGACY_ADDRESS_3,
+  LEGACY_BLACKJACK_ADDRESSES,
+  PULSEX_V1_ROUTER_ADDRESS,
+  WPLS_TOKEN_ADDRESS,
+  MORBIUS_TOKEN_ADDRESS,
+} from '../lib/contracts'
 import { useAccount } from 'wagmi'
 import { useGasParams } from '../lib/tx-gas'
+
+/**
+ * PulseX router — exact-IN swap only. swapExactETHForTokens internally uses
+ * getAmountsOut, which is verified working on this router; the exact-OUT
+ * variants route through getAmountsIn, which reverts (ds-math-sub-underflow)
+ * on the WPLS/MORBIUS pair and must not be used.
+ */
+const PULSEX_SWAP_ABI = [
+  {
+    name: 'swapExactETHForTokens',
+    type: 'function',
+    stateMutability: 'payable',
+    inputs: [
+      { name: 'amountOutMin', type: 'uint256' },
+      { name: 'path', type: 'address[]' },
+      { name: 'to', type: 'address' },
+      { name: 'deadline', type: 'uint256' },
+    ],
+    outputs: [{ name: 'amounts', type: 'uint256[]' }],
+  },
+] as const
 
 const LEGACY_ZERO = '0x0000000000000000000000000000000000000000'
 
@@ -341,14 +372,24 @@ export function useBlackjackContract() {
   useWatchGameSettlements()
 
   // Helper functions
-  const deposit = async (plsAmount: bigint) => {
+  /**
+   * PLS deposit = a REAL PulseX market buy in one transaction: the user's PLS
+   * swaps to MORBIUS on the router and the MORBIUS is delivered straight to
+   * the MorbiusVault (swap recipient = vault). The server credits the ACTUAL
+   * swapped amount by reading the MORBIUS Transfer→vault log from this tx.
+   * One signature, no token approval (input is native PLS), amountOutMin
+   * protects against price movement between quote and inclusion.
+   */
+  const deposit = async (plsAmount: bigint, minMorbiusOut: bigint) => {
     if (!address) throw new Error('Wallet not connected')
+    const deadline = BigInt(Math.floor(Date.now() / 1000) + 20 * 60)
 
     return depositContract.writeContractAsync({
-      address: MORBIUS_VAULT_ADDRESS, // deposits route to the vault, not the V7 reserve contract
-      abi: blackjackAbi,
-      functionName: 'deposit',
-      value: plsAmount, // Send PLS to deposit function
+      address: PULSEX_V1_ROUTER_ADDRESS,
+      abi: PULSEX_SWAP_ABI,
+      functionName: 'swapExactETHForTokens',
+      args: [minMorbiusOut, [WPLS_TOKEN_ADDRESS, MORBIUS_TOKEN_ADDRESS], MORBIUS_VAULT_ADDRESS, deadline],
+      value: plsAmount,
       ...getGas(),
     } as unknown as Parameters<typeof depositContract.writeContractAsync>[0])
   }

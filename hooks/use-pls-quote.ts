@@ -49,10 +49,10 @@ interface UsePlsQuoteReturn {
 // wallet cannot reach the RPC to read the pool, it cannot send the deposit
 // transaction either, so an off-chain price would only invite bad sends.
 //
-// No markup is applied. `Blackjack.deposit()` performs NO on-chain swap: it
-// credits getAmountsOut(msg.value) at the PulseX spot rate and forwards the
-// PLS to treasury. Because nothing is actually swapped there is no slippage to
-// tolerate — sending exactly this quote credits ~the requested MORBIUS.
+// No markup is applied. The PLS deposit is a REAL PulseX swap
+// (swapExactETHForTokens → MORBIUS delivered to the MorbiusVault), so this
+// quote is exactly what the router will charge at current reserves; the swap's
+// amountOutMin (set by the caller) guards against price movement in flight.
 
 export interface PlsQuoteInputs {
   /** WPLS/MORBIUS pair getReserves result, if it resolved. */
