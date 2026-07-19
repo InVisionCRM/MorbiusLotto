@@ -450,13 +450,29 @@
 /* ============================================================
    FOOTER
    ============================================================ */
-.home2 .foot{margin-top:52px; border-top:1px solid var(--line); padding:30px 34px calc(30px + var(--dock-h)); display:flex; gap:30px; flex-wrap:wrap; align-items:center}
-.home2 .foot .brand{font-family:var(--display); font-size:15px}
+.home2 .foot{margin-top:52px; border-top:1px solid var(--line); padding:40px 34px calc(30px + var(--dock-h)); display:flex; flex-direction:column; gap:30px}
+.home2 .foot-top{display:flex; gap:48px; flex-wrap:wrap; justify-content:space-between}
+.home2 .foot-brand{max-width:300px; display:flex; flex-direction:column; gap:12px}
+.home2 .foot .brand{font-family:var(--display); font-size:19px; letter-spacing:.02em}
 .home2 .foot .brand i{color:var(--cyan); font-style:normal}
-.home2 .foot .links{display:flex; gap:20px; font-size:11px; color:var(--text2); flex-wrap:wrap}
-.home2 .foot .links a:hover{color:var(--cyan)}
-.home2 .foot .fair{margin-left:auto; font-size:10px; color:var(--muted); display:flex; align-items:center; gap:7px}
+.home2 .foot-tag{font-size:12px; color:var(--muted); line-height:1.55; margin:0}
+.home2 .foot-social{display:flex; gap:9px; margin-top:4px}
+.home2 .foot-social a{width:34px; height:34px; border-radius:9px; display:grid; place-items:center; color:var(--text2);
+  border:1px solid var(--line); background:rgba(255,255,255,.02); transition:color .2s, border-color .2s, transform .2s}
+.home2 .foot-social a:hover{color:var(--cyan); border-color:rgba(34,211,238,.4); transform:translateY(-2px)}
+.home2 .foot-social svg{width:16px; height:16px; fill:currentColor}
+.home2 .foot-cols{display:flex; gap:44px; flex-wrap:wrap}
+.home2 .foot-col{display:flex; flex-direction:column; gap:10px; min-width:112px}
+.home2 .foot-col h4{font-family:var(--display); font-size:11px; letter-spacing:.14em; text-transform:uppercase; color:var(--text); margin:0 0 3px}
+.home2 .foot-col a{font-size:12px; color:var(--text2); transition:color .2s; width:fit-content}
+.home2 .foot-col a:hover{color:var(--cyan)}
+.home2 .foot-bottom{display:flex; gap:16px; flex-wrap:wrap; align-items:center; padding-top:22px; border-top:1px solid var(--line)}
+.home2 .foot .fair{font-size:10px; color:var(--muted); display:flex; align-items:center; gap:7px}
 .home2 .foot .fair::before{content:''; width:7px; height:7px; border-radius:50%; background:var(--emerald); box-shadow:0 0 8px var(--emerald)}
+.home2 .foot-legal{margin-left:auto; display:flex; gap:18px; align-items:center; flex-wrap:wrap}
+.home2 .foot-rg{font-size:11px; color:var(--text2); background:none; border:0; cursor:pointer; padding:0; transition:color .2s; font-family:inherit}
+.home2 .foot-rg:hover{color:var(--cyan)}
+.home2 .foot-copy{font-size:10px; color:var(--muted)}
 
 /* ============================================================
    MOBILE — top mini bar + CHIP-RAIL DOCK
