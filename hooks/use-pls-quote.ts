@@ -1,12 +1,10 @@
-import { useMemo, useState, useEffect } from 'react'
+import { useMemo } from 'react'
 import { useReadContract } from 'wagmi'
 import type { Address } from 'viem'
 import {
   WPLS_TOKEN_ADDRESS,
   WPLS_MORBIUS_PAIR,
-  TOKEN_DECIMALS,
 } from '@/lib/contracts'
-import { fetchDexScreenerProxy } from '@/lib/dexscreener-client'
 
 const PAIR_ABI = [
   {
@@ -40,14 +38,16 @@ interface UsePlsQuoteReturn {
   isLoading: boolean
   error: Error | null
   hasQuote: boolean
-  usingFallback: boolean
 }
 
-// PRIMARY source is the WPLS/MORBIUS pair itself (getReserves + the exact
-// UniswapV2 getAmountIn formula, 0.3% fee). The PulseX router's getAmountsIn
-// was verified on-chain to revert with ds-math-sub-underflow for ANY amount on
-// this pair (both router deployments), so it is not used — quoting from the
-// pair reserves is byte-for-byte the same math a working router would do.
+// The quote comes straight from PulseX: the WPLS/MORBIUS pair's getReserves
+// plus the exact UniswapV2 getAmountIn formula (0.3% fee). The PulseX router's
+// getAmountsIn was verified on-chain to revert with ds-math-sub-underflow for
+// ANY amount on this pair (both router deployments), so it is not used —
+// quoting from the pair reserves is byte-for-byte the same math a working
+// router would do. There is deliberately NO off-chain price fallback: if the
+// wallet cannot reach the RPC to read the pool, it cannot send the deposit
+// transaction either, so an off-chain price would only invite bad sends.
 //
 // No markup is applied. `Blackjack.deposit()` performs NO on-chain swap: it
 // credits getAmountsOut(msg.value) at the PulseX spot rate and forwards the
@@ -59,19 +59,15 @@ export interface PlsQuoteInputs {
   reserves: readonly [bigint, bigint, number] | readonly bigint[] | undefined
   /** Pair token0 address, needed to orient the reserves. */
   token0: string | undefined
-  /** DexScreener priceNative scaled to 1e18, if fetched. */
-  dexScreenerPrice: bigint | null
   morbiusCost: bigint
   wplsAddress: string
-  tokenDecimals: number
 }
 
 export interface PlsQuoteSelection {
   plsValue: bigint
   basePlsQuote: bigint
   hasQuote: boolean
-  usingFallback: boolean
-  source: 'reserves' | 'dexscreener' | 'none'
+  source: 'reserves' | 'none'
 }
 
 /**
@@ -88,16 +84,15 @@ export function getAmountInV2(amountOut: bigint, reserveIn: bigint, reserveOut: 
 }
 
 /**
- * Pure quote selection — pair reserves (exact router math) first, DexScreener
- * as last resort. Extracted from the hook so the decision logic is
- * unit-testable without wagmi/react-query. Returns hasQuote:false (zero value)
- * when no source is available, which callers MUST treat as "block the
- * transaction".
+ * Pure quote selection from the PulseX pair reserves (exact router math).
+ * Extracted from the hook so the decision logic is unit-testable without
+ * wagmi/react-query. Returns hasQuote:false (zero value) when the pool data
+ * is unavailable or cannot satisfy the request, which callers MUST treat as
+ * "block the transaction".
  */
 export function selectPlsQuote(inputs: PlsQuoteInputs): PlsQuoteSelection {
-  const { reserves, token0, dexScreenerPrice, morbiusCost, wplsAddress, tokenDecimals } = inputs
+  const { reserves, token0, morbiusCost, wplsAddress } = inputs
 
-  // Priority 1: pair reserves + exact getAmountIn math (matches a working router)
   if (reserves && token0 && morbiusCost > BigInt(0)) {
     const isToken0Wpls = token0.toLowerCase() === wplsAddress.toLowerCase()
     const wplsReserve = isToken0Wpls ? reserves[0] : reserves[1]
@@ -105,32 +100,19 @@ export function selectPlsQuote(inputs: PlsQuoteInputs): PlsQuoteSelection {
     if (typeof morbiusReserve === 'bigint' && typeof wplsReserve === 'bigint') {
       const amountIn = getAmountInV2(morbiusCost, wplsReserve, morbiusReserve)
       if (amountIn != null && amountIn > BigInt(0)) {
-        return { plsValue: amountIn, basePlsQuote: amountIn, hasQuote: true, usingFallback: false, source: 'reserves' }
+        return { plsValue: amountIn, basePlsQuote: amountIn, hasQuote: true, source: 'reserves' }
       }
     }
   }
 
-  // Priority 2: DexScreener API (spot ratio, no fee — close enough as a fallback)
-  if (dexScreenerPrice && dexScreenerPrice > BigInt(0) && morbiusCost > BigInt(0)) {
-    const decimalFactor = BigInt(10) ** BigInt(tokenDecimals)
-    const basePlsCost = (morbiusCost * dexScreenerPrice) / decimalFactor
-    if (basePlsCost > BigInt(0)) {
-      return { plsValue: basePlsCost, basePlsQuote: basePlsCost, hasQuote: true, usingFallback: true, source: 'dexscreener' }
-    }
-  }
-
-  // No price source available — zero value blocks the transaction.
-  // Safer than guessing with a stale hardcoded value.
-  return { plsValue: BigInt(0), basePlsQuote: BigInt(0), hasQuote: false, usingFallback: false, source: 'none' }
+  // No usable pool data — zero value blocks the transaction.
+  return { plsValue: BigInt(0), basePlsQuote: BigInt(0), hasQuote: false, source: 'none' }
 }
 
 export function usePlsQuote({
   morbiusCost,
   enabled = true,
 }: UsePlsQuoteParams): UsePlsQuoteReturn {
-  // DexScreener fallback state
-  const [dexScreenerPrice, setDexScreenerPrice] = useState<bigint | null>(null)
-
   const { data: token0 } = useReadContract({
     address: WPLS_MORBIUS_PAIR as Address,
     abi: PAIR_ABI,
@@ -157,48 +139,13 @@ export function usePlsQuote({
     },
   })
 
-  // Last resort: DexScreener API, only fetched when the on-chain read fails
-  const hasReserves = !!(reserves && token0)
-
-  useEffect(() => {
-    if (hasReserves || !enabled) return
-
-    const fetchDexScreener = async () => {
-      try {
-        const res = await fetchDexScreenerProxy('pairs', WPLS_MORBIUS_PAIR)
-        if (!res.ok) return
-        const data = await res.json()
-        if (data.pairs?.[0]?.priceNative) {
-          const price = parseFloat(data.pairs[0].priceNative)
-          if (price > 0) {
-            setDexScreenerPrice(BigInt(Math.floor(price * 1e18)))
-          }
-        }
-      } catch {
-        // Non-fatal — will return hasQuote: false
-      }
-    }
-
-    fetchDexScreener()
-  }, [hasReserves, enabled])
-
   const result = useMemo(() => {
     const sel = selectPlsQuote({
       reserves: reserves as readonly [bigint, bigint, number] | undefined,
       token0: token0 as string | undefined,
-      dexScreenerPrice,
       morbiusCost,
       wplsAddress: WPLS_TOKEN_ADDRESS,
-      tokenDecimals: TOKEN_DECIMALS,
     })
-
-    if (sel.hasQuote && sel.usingFallback) {
-      console.warn(`⚠️ PLS quote using fallback (${sel.source}):`, {
-        morbiusCost: morbiusCost.toString(),
-        basePlsCost: sel.basePlsQuote.toString(),
-        finalPls: sel.plsValue.toString(),
-      })
-    }
 
     return {
       plsValue: sel.plsValue,
@@ -208,9 +155,8 @@ export function usePlsQuote({
       isLoading: !sel.hasQuote && isLoadingReserves,
       error: (reservesError as Error | null) ?? null,
       hasQuote: sel.hasQuote,
-      usingFallback: sel.usingFallback,
     }
-  }, [morbiusCost, reserves, token0, isLoadingReserves, reservesError, dexScreenerPrice])
+  }, [morbiusCost, reserves, token0, isLoadingReserves, reservesError])
 
   return result
 }

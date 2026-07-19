@@ -5,10 +5,12 @@
  * The deposit CTA is gated on this logic — when it misbehaves the Deposit
  * button either stays disabled (quote stuck "loading") or enables while the
  * handler silently no-ops (no quote). These tests pin the pure selection
- * logic across every price-source branch. Background (verified on-chain):
- * the PulseX router's getAmountsIn reverts (ds-math-sub-underflow) for ANY
- * amount on the WPLS/MORBIUS pair, so the quote is computed from the pair's
- * own reserves with the exact UniswapV2 getAmountIn formula.
+ * logic. Background (verified on-chain): the PulseX router's getAmountsIn
+ * reverts (ds-math-sub-underflow) for ANY amount on the WPLS/MORBIUS pair,
+ * so the quote is computed from the pair's own reserves with the exact
+ * UniswapV2 getAmountIn formula. The quote is 100% PulseX on-chain — no
+ * off-chain price fallback (if the RPC is unreachable, the deposit tx could
+ * not be sent anyway).
  * Run: node scripts/test-pls-quote.cjs
  */
 const path = require('path');
@@ -26,9 +28,8 @@ const stubs = {
   wagmi: { useReadContract: () => ({ data: undefined, error: null, isLoading: false }) },
   '@/lib/contracts': {
     WPLS_TOKEN_ADDRESS: '0xA1077a294dDE1B09bB078844df40758a5D0f9a27',
-    WPLS_MORBIUS_PAIR: '0xpair', TOKEN_DECIMALS: 18,
+    WPLS_MORBIUS_PAIR: '0xpair',
   },
-  '@/lib/dexscreener-client': { fetchDexScreenerProxy: async () => ({ ok: false }) },
 };
 const mod = { exports: {} };
 new Function('exports', 'require', 'module', js)(mod.exports, (name) => {
@@ -42,7 +43,7 @@ if (typeof selectPlsQuote !== 'function' || typeof getAmountInV2 !== 'function')
 
 const WPLS = '0xA1077a294dDE1B09bB078844df40758a5D0f9a27';
 const E18 = 10n ** 18n;
-const base = { reserves: undefined, token0: undefined, dexScreenerPrice: null, morbiusCost: 10000n * E18, wplsAddress: WPLS, tokenDecimals: 18 };
+const base = { reserves: undefined, token0: undefined, morbiusCost: 10000n * E18, wplsAddress: WPLS };
 
 let pass = 0, fail = 0;
 function t(name, fn) {
@@ -84,45 +85,38 @@ t('live-pool sanity: 10,000 MORBIUS from the on-chain probed reserves costs ~37.
   ok(pls > 37000 && pls < 39000, `quote out of range: ${pls}`);
 });
 
-console.log('selectPlsQuote — price source priority & failure modes');
+console.log('selectPlsQuote — pure PulseX pool selection & failure modes');
 
-t('reserves are the PRIMARY source (WPLS is token0), exact formula applied', () => {
+t('quotes from the pair reserves (WPLS is token0), exact formula applied', () => {
   const rIn = 2000000n * E18, rOut = 1000000n * E18;
   const r = selectPlsQuote({ ...base, reserves: [rIn, rOut, 0], token0: WPLS });
-  eq(r.source, 'reserves', 'source'); eq(r.hasQuote, true, 'hasQuote'); eq(r.usingFallback, false, 'fallback');
+  eq(r.source, 'reserves', 'source'); eq(r.hasQuote, true, 'hasQuote');
   eq(r.plsValue, refAmountIn(10000n * E18, rIn, rOut), 'plsValue');
 });
 
-t('reserves orient correctly when WPLS is token1', () => {
+t('orients reserves correctly when WPLS is token1', () => {
   const rIn = 2000000n * E18, rOut = 1000000n * E18;
   const r = selectPlsQuote({ ...base, reserves: [rOut, rIn, 0], token0: '0xother' });
   eq(r.source, 'reserves', 'source');
   eq(r.plsValue, refAmountIn(10000n * E18, rIn, rOut), 'plsValue (flipped)');
 });
 
-t('dexscreener is the fallback when reserves are missing', () => {
-  // priceNative 2.0 → 10,000 MORBIUS costs 20,000 PLS
-  const r = selectPlsQuote({ ...base, dexScreenerPrice: 2n * E18 });
-  eq(r.source, 'dexscreener', 'source'); eq(r.usingFallback, true, 'fallback');
-  eq(r.plsValue, 20000n * E18, 'plsValue');
-});
-
-t('THE BUG CASE: no source at all → hasQuote false, zero value (CTA must show a reason, not silently no-op)', () => {
+t('THE BUG CASE: no pool data → hasQuote false, zero value (CTA must show a reason, not silently no-op)', () => {
   const r = selectPlsQuote({ ...base });
   eq(r.hasQuote, false, 'hasQuote'); eq(r.plsValue, 0n, 'plsValue'); eq(r.source, 'none', 'source');
 });
 
 t('zero morbiusCost never produces a quote', () => {
-  const r = selectPlsQuote({ ...base, morbiusCost: 0n, reserves: [2n * E18, E18, 0], token0: WPLS, dexScreenerPrice: 2n * E18 });
+  const r = selectPlsQuote({ ...base, morbiusCost: 0n, reserves: [2n * E18, E18, 0], token0: WPLS });
   eq(r.hasQuote, false, 'hasQuote'); eq(r.plsValue, 0n, 'plsValue');
 });
 
-t('empty pool (zero MORBIUS reserve) falls through to dexscreener when available', () => {
-  const r = selectPlsQuote({ ...base, reserves: [2000000n * E18, 0n, 0], token0: WPLS, dexScreenerPrice: 2n * E18 });
-  eq(r.source, 'dexscreener', 'source'); eq(r.hasQuote, true, 'hasQuote');
+t('empty pool (zero MORBIUS reserve) is not quotable and does not divide by zero', () => {
+  const r = selectPlsQuote({ ...base, reserves: [2000000n * E18, 0n, 0], token0: WPLS });
+  eq(r.hasQuote, false, 'hasQuote');
 });
 
-t('amountOut exceeding the pool reserve is not quotable from reserves', () => {
+t('amountOut exceeding the pool reserve is not quotable', () => {
   const r = selectPlsQuote({ ...base, morbiusCost: 2000000n * E18, reserves: [2000000n * E18, 1000000n * E18, 0], token0: WPLS });
   eq(r.hasQuote, false, 'hasQuote');
 });
