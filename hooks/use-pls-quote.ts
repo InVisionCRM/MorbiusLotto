@@ -64,6 +64,76 @@ interface UsePlsQuoteReturn {
 // can revert — sending exactly the getAmountsIn() quote credits ~the requested MORBIUS. MORBIUS
 // has no transfer tax, and none would apply on deposit anyway since no MORBIUS is moved here.
 
+export interface PlsQuoteInputs {
+  /** getAmountsIn result from the PulseX router, if it resolved. */
+  plsBaseQuote: readonly bigint[] | undefined
+  /** WPLS/MORBIUS pair getReserves result, if it resolved. */
+  reserves: readonly [bigint, bigint, number] | readonly bigint[] | undefined
+  /** Pair token0 address, needed to orient the reserves. */
+  token0: string | undefined
+  /** DexScreener priceNative scaled to 1e18, if fetched. */
+  dexScreenerPrice: bigint | null
+  morbiusCost: bigint
+  wplsAddress: string
+  tokenDecimals: number
+}
+
+export interface PlsQuoteSelection {
+  plsValue: bigint
+  basePlsQuote: bigint
+  hasQuote: boolean
+  usingFallback: boolean
+  source: 'router' | 'reserves' | 'dexscreener' | 'none'
+}
+
+/**
+ * Pure quote selection — picks the best available price source in priority
+ * order (router → LP reserves → DexScreener) and computes the PLS required.
+ * Extracted from the hook so the decision logic is unit-testable without
+ * wagmi/react-query. Returns hasQuote:false (zero value) when no source is
+ * available, which callers MUST treat as "block the transaction".
+ */
+export function selectPlsQuote(inputs: PlsQuoteInputs): PlsQuoteSelection {
+  const { plsBaseQuote, reserves, token0, dexScreenerPrice, morbiusCost, wplsAddress, tokenDecimals } = inputs
+
+  // Priority 1: Router getAmountsIn (most accurate)
+  if (plsBaseQuote && Array.isArray(plsBaseQuote) && plsBaseQuote[0]) {
+    return {
+      plsValue: plsBaseQuote[0],
+      basePlsQuote: plsBaseQuote[0],
+      hasQuote: true,
+      usingFallback: false,
+      source: 'router',
+    }
+  }
+
+  // Priority 2: LP reserves (calculate from pool ratio)
+  if (reserves && token0 && morbiusCost > BigInt(0)) {
+    const isToken0Wpls = token0.toLowerCase() === wplsAddress.toLowerCase()
+    const wplsReserve = isToken0Wpls ? reserves[0] : reserves[1]
+    const morbiusReserve = isToken0Wpls ? reserves[1] : reserves[0]
+    if (typeof morbiusReserve === 'bigint' && typeof wplsReserve === 'bigint' && morbiusReserve > BigInt(0)) {
+      const basePlsCost = (morbiusCost * wplsReserve) / morbiusReserve
+      if (basePlsCost > BigInt(0)) {
+        return { plsValue: basePlsCost, basePlsQuote: basePlsCost, hasQuote: true, usingFallback: true, source: 'reserves' }
+      }
+    }
+  }
+
+  // Priority 3: DexScreener API
+  if (dexScreenerPrice && dexScreenerPrice > BigInt(0) && morbiusCost > BigInt(0)) {
+    const decimalFactor = BigInt(10) ** BigInt(tokenDecimals)
+    const basePlsCost = (morbiusCost * dexScreenerPrice) / decimalFactor
+    if (basePlsCost > BigInt(0)) {
+      return { plsValue: basePlsCost, basePlsQuote: basePlsCost, hasQuote: true, usingFallback: true, source: 'dexscreener' }
+    }
+  }
+
+  // No price source available — zero value blocks the transaction.
+  // Safer than guessing with a stale hardcoded value.
+  return { plsValue: BigInt(0), basePlsQuote: BigInt(0), hasQuote: false, usingFallback: false, source: 'none' }
+}
+
 export function usePlsQuote({
   morbiusCost,
   enabled = true,
@@ -71,7 +141,10 @@ export function usePlsQuote({
   // DexScreener fallback state
   const [dexScreenerPrice, setDexScreenerPrice] = useState<bigint | null>(null)
 
-  // Primary: PulseX router getAmountsIn (most accurate, accounts for slippage)
+  // Primary: PulseX router getAmountsIn (most accurate, accounts for slippage).
+  // placeholderData keeps the PREVIOUS quote while a new amount refetches, so
+  // changing the amount doesn't flip isLoading and blank out the deposit CTA —
+  // the quote is only "loading" on the true first fetch.
   const {
     data: plsBaseQuote,
     error: plsQuoteError,
@@ -88,6 +161,7 @@ export function usePlsQuote({
       refetchInterval: 10000, // Refresh every 10 seconds
       retry: 3,
       retryDelay: 1000,
+      placeholderData: (prev) => prev,
     },
   })
 
@@ -106,6 +180,7 @@ export function usePlsQuote({
     query: {
       enabled,
       refetchInterval: 30000,
+      placeholderData: (prev) => prev,
     },
   })
 
@@ -136,67 +211,33 @@ export function usePlsQuote({
   }, [hasOnChainQuote, hasReserves, enabled])
 
   const result = useMemo(() => {
-    let basePlsCost = BigInt(0)
-    let usingFallback = false
-    let source = ''
+    const sel = selectPlsQuote({
+      plsBaseQuote: plsBaseQuote as readonly bigint[] | undefined,
+      reserves: reserves as readonly [bigint, bigint, number] | undefined,
+      token0: token0 as string | undefined,
+      dexScreenerPrice,
+      morbiusCost,
+      wplsAddress: WPLS_TOKEN_ADDRESS,
+      tokenDecimals: TOKEN_DECIMALS,
+    })
 
-    // Priority 1: Router getAmountsIn (most accurate)
-    if (plsBaseQuote && Array.isArray(plsBaseQuote) && plsBaseQuote[0]) {
-      basePlsCost = plsBaseQuote[0]
-      source = 'router'
-    }
-    // Priority 2: LP reserves (calculate from pool ratio)
-    else if (reserves && token0 && morbiusCost > BigInt(0)) {
-      const isToken0Wpls = (token0 as string).toLowerCase() === WPLS_TOKEN_ADDRESS.toLowerCase()
-      const wplsReserve = isToken0Wpls ? reserves[0] : reserves[1]
-      const morbiusReserve = isToken0Wpls ? reserves[1] : reserves[0]
-
-      if (morbiusReserve > BigInt(0)) {
-        // price = wplsReserve / morbiusReserve, applied to morbiusCost
-        basePlsCost = (morbiusCost * BigInt(wplsReserve)) / BigInt(morbiusReserve)
-        source = 'reserves'
-        usingFallback = true
-      }
-    }
-    // Priority 3: DexScreener API
-    else if (dexScreenerPrice && morbiusCost > BigInt(0)) {
-      const decimalFactor = BigInt(10) ** BigInt(TOKEN_DECIMALS)
-      basePlsCost = (morbiusCost * dexScreenerPrice) / decimalFactor
-      source = 'dexscreener'
-      usingFallback = true
-    }
-
-    // No price source available — return zero to BLOCK the transaction
-    // This is safer than guessing with a stale hardcoded value
-    if (basePlsCost === BigInt(0)) {
-      return {
-        plsValue: BigInt(0),
-        basePlsQuote: BigInt(0),
-        isLoading: isLoadingPlsQuote || isLoadingReserves,
-        error: plsQuoteError as Error | null,
-        hasQuote: false,
-        usingFallback: false,
-      }
-    }
-
-    // Send exactly the spot-rate quote — no tax/slippage markup (see note above).
-    const totalPlsRequired = basePlsCost
-
-    if (usingFallback) {
-      console.warn(`⚠️ PLS quote using fallback (${source}):`, {
+    if (sel.hasQuote && sel.usingFallback) {
+      console.warn(`⚠️ PLS quote using fallback (${sel.source}):`, {
         morbiusCost: morbiusCost.toString(),
-        basePlsCost: basePlsCost.toString(),
-        finalPls: totalPlsRequired.toString(),
+        basePlsCost: sel.basePlsQuote.toString(),
+        finalPls: sel.plsValue.toString(),
       })
     }
 
     return {
-      plsValue: totalPlsRequired,
-      basePlsQuote: basePlsCost,
-      isLoading: isLoadingPlsQuote || isLoadingReserves,
+      plsValue: sel.plsValue,
+      basePlsQuote: sel.basePlsQuote,
+      // Only report loading while we genuinely have no quote to show — a
+      // background refetch of an existing quote must not disable the CTA.
+      isLoading: !sel.hasQuote && (isLoadingPlsQuote || isLoadingReserves),
       error: plsQuoteError as Error | null,
-      hasQuote: true,
-      usingFallback,
+      hasQuote: sel.hasQuote,
+      usingFallback: sel.usingFallback,
     }
   }, [plsBaseQuote, morbiusCost, plsQuoteError, isLoadingPlsQuote, reserves, token0, isLoadingReserves, dexScreenerPrice])
 

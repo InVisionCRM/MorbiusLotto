@@ -94,7 +94,7 @@ function WalletHowToVideoModal({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-full p-1.5 text-gray-400 hover:text-white hover:bg-white/10 transition-colors"
+            className="rounded-full p-1.5 text-slate-500 hover:text-white hover:bg-white/10 transition-colors"
             aria-label="Close"
           >
             <X size={18} />
@@ -365,7 +365,7 @@ export function GameWalletModal({
   const { balance: morbiusBalance } = useTokenBalance(address);
   const { balance: plsBalance } = useNativeBalance(address ?? undefined);
 
-  const { plsValue: plsEquivalent, isLoading: plsQuoteLoading } = usePlsQuote({
+  const { plsValue: plsEquivalent, isLoading: plsQuoteLoading, hasQuote: hasPlsQuote } = usePlsQuote({
     morbiusCost: depositAmount ? parseEther(depositAmount) : 0n,
     enabled: tab === 'deposit' && depositMethod === 'pls' && depositAmount !== '',
   });
@@ -781,7 +781,15 @@ export function GameWalletModal({
 
   // ── Deposit PLS ────────────────────────────────────────────────────────
   const handleDepositPLS = async () => {
-    if (!depositAmount || !plsEquivalent || !publicClient) return;
+    if (!depositAmount || !publicClient) return;
+    // Never no-op silently: if every price source failed, say so — the quote
+    // hook keeps retrying in the background (10s router / 30s reserves).
+    if (!plsEquivalent) {
+      toast.error('PLS price unavailable', {
+        description: 'Could not fetch the PLS/MORBIUS rate. Retrying automatically — try again in a few seconds.',
+      });
+      return;
+    }
     setDepositError(null);
     // Establish the SIWE session BEFORE paying. The post-confirmation `notify` call is the
     // first authenticated request in this flow; without a live session it 401s and pops a
@@ -1248,12 +1256,12 @@ export function GameWalletModal({
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
               className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none p-4"
             >
-              <div className="bg-white text-gray-900 p-6 sm:p-10 rounded-[2.5rem] shadow-2xl w-full max-w-md relative border border-gray-100 pointer-events-auto overflow-y-auto max-h-[90vh]">
+              <div className="bg-gradient-to-b from-[#111a2c] to-[#0a101d] text-slate-100 p-6 sm:p-8 rounded-3xl shadow-[0_30px_80px_-20px_rgba(0,0,0,0.9)] w-full max-w-md relative border border-white/10 ring-1 ring-cyan-400/10 pointer-events-auto overflow-y-auto max-h-[90vh]">
 
                 {/* Close */}
                 <button
                   onClick={onClose}
-                  className="absolute top-6 right-6 z-20 text-gray-400 hover:text-black bg-gray-100 p-2 rounded-full transition-colors"
+                  className="absolute top-6 right-6 z-20 text-slate-400 hover:text-white bg-white/5 hover:bg-white/10 p-2 rounded-full transition-colors"
                 >
                   <X size={20} />
                 </button>
@@ -1261,36 +1269,36 @@ export function GameWalletModal({
                 <div className="relative min-h-[280px]">
                   {/* External lock overlay (withdrawal in flight from before page refresh) */}
                   {externalWithdrawLock && withdrawPhase === 'idle' && (
-                    <div className="absolute inset-0 z-10 flex items-center justify-center rounded-[2.5rem] bg-white/90 backdrop-blur-sm">
+                    <div className="absolute inset-0 z-10 flex items-center justify-center rounded-3xl bg-[#0a101d]/92 backdrop-blur-sm">
                       <div className="text-center px-4">
                         <Loader2 className="w-10 h-10 animate-spin text-cyan-500 mx-auto mb-3" />
-                        <p className="text-sm font-medium text-gray-900">Withdrawal in progress…</p>
-                        <p className="text-xs text-gray-500 mt-1">Deposit and withdraw are disabled until it completes.</p>
+                        <p className="text-sm font-medium text-white">Withdrawal in progress…</p>
+                        <p className="text-xs text-slate-400 mt-1">Deposit and withdraw are disabled until it completes.</p>
                       </div>
                     </div>
                   )}
 
                   {/* Withdraw overlay */}
                   {(withdrawPhase !== 'idle' || isLegacyWithdrawLoading) && (
-                    <div className="absolute inset-0 z-10 flex items-center justify-center rounded-[2.5rem] bg-white/90 backdrop-blur-sm">
+                    <div className="absolute inset-0 z-10 flex items-center justify-center rounded-3xl bg-[#0a101d]/92 backdrop-blur-sm">
                       <div className="text-center px-4">
                         {isLegacyWithdrawLoading && withdrawPhase === 'idle' ? (
                           <>
                             <Loader2 className="w-10 h-10 animate-spin text-cyan-500 mx-auto mb-3" />
-                            <p className="text-sm font-medium text-gray-900">Withdrawing from previous contract...</p>
+                            <p className="text-sm font-medium text-white">Withdrawing from previous contract...</p>
                           </>
                         ) : withdrawPhase === 'queued' ? (
                           <>
                             <Loader2 className="w-10 h-10 animate-spin text-cyan-500 mx-auto mb-3" />
-                            <p className="text-sm font-medium text-gray-900">Processing withdrawal...</p>
-                            <p className="text-xs text-gray-500 mt-1">Queued with server</p>
+                            <p className="text-sm font-medium text-white">Processing withdrawal...</p>
+                            <p className="text-xs text-slate-400 mt-1">Queued with server</p>
                           </>
                         ) : withdrawPhase === 'confirming' ? (
                           <>
                             <Loader2 className="w-10 h-10 animate-spin text-cyan-500 mx-auto mb-3" />
-                            <p className="text-sm font-medium text-gray-900">Confirming on chain...</p>
+                            <p className="text-sm font-medium text-white">Confirming on chain...</p>
                             {withdrawTxHash && (
-                              <p className="text-xs text-gray-600 mt-3 font-mono break-all text-left max-w-full px-1">
+                              <p className="text-xs text-slate-300 mt-3 font-mono break-all text-left max-w-full px-1">
                                 Tx: {withdrawTxHash}
                               </p>
                             )}
@@ -1298,9 +1306,9 @@ export function GameWalletModal({
                         ) : withdrawPhase === 'success' ? (
                           <>
                             <Check className="w-10 h-10 text-green-500 mx-auto mb-3" />
-                            <p className="text-sm font-medium text-gray-900">Withdrawal successful</p>
+                            <p className="text-sm font-medium text-white">Withdrawal successful</p>
                             {withdrawTxHash && (
-                              <p className="text-xs text-gray-600 mt-3 font-mono break-all text-left max-w-full px-1">
+                              <p className="text-xs text-slate-300 mt-3 font-mono break-all text-left max-w-full px-1">
                                 Tx: {withdrawTxHash}
                               </p>
                             )}
@@ -1308,8 +1316,8 @@ export function GameWalletModal({
                         ) : withdrawPhase === 'error' ? (
                           <>
                             <X className="w-10 h-10 text-red-500 mx-auto mb-3" />
-                            <p className="text-sm font-medium text-gray-900">Withdrawal failed</p>
-                            {withdrawError && <p className="text-xs text-gray-500 mt-1">{withdrawError}</p>}
+                            <p className="text-sm font-medium text-white">Withdrawal failed</p>
+                            {withdrawError && <p className="text-xs text-slate-400 mt-1">{withdrawError}</p>}
                           </>
                         ) : null}
                       </div>
@@ -1321,7 +1329,7 @@ export function GameWalletModal({
                     <button
                       type="button"
                       onClick={() => setShowLegacyPanel((v) => !v)}
-                      className="absolute bottom-4 left-4 text-xs text-gray-500 hover:text-cyan-500 transition-colors"
+                      className="absolute bottom-4 left-4 text-xs text-slate-400 hover:text-cyan-500 transition-colors"
                     >
                       {showLegacyPanel ? 'Hide' : 'Previous contract'} withdrawals
                     </button>
@@ -1329,13 +1337,13 @@ export function GameWalletModal({
 
                   {/* Balance hero */}
                   <div className="text-center mt-4 mb-8">
-                    <p className="text-sm text-gray-500 uppercase tracking-widest font-semibold mb-2">
+                    <p className="text-sm text-slate-400 uppercase tracking-widest font-semibold mb-2">
                       {balanceLabel}
                     </p>
                     <div className="flex items-center justify-center gap-2">
-                      <h4 className="text-5xl font-light tracking-tight text-gray-900">
+                      <h4 className="text-5xl font-light tracking-tight text-white">
                         {balanceLoading ? (
-                          <Loader2 className="w-8 h-8 animate-spin text-gray-300 inline" />
+                          <Loader2 className="w-8 h-8 animate-spin text-slate-600 inline" />
                         ) : (
                           (displayBalance != null
                             ? Math.floor(Number(formatEther(displayBalance))).toLocaleString()
@@ -1346,34 +1354,34 @@ export function GameWalletModal({
                         <button
                           onClick={fetchBalance}
                           disabled={balanceLoading}
-                          className="text-gray-300 hover:text-gray-600 transition-colors mt-1"
+                          className="text-slate-500 hover:text-slate-200 transition-colors mt-1"
                         >
                           <RefreshCw size={14} className={balanceLoading ? 'animate-spin' : ''} />
                         </button>
                       )}
                     </div>
-                    <p className="text-gray-400 font-medium mt-1 inline-flex items-center gap-1">
+                    <p className="text-slate-500 font-medium mt-1 inline-flex items-center gap-1">
                       <img src={MORBIUS_LOGO} alt="" className="w-4 h-4 object-contain" />
                       MORBIUS
                     </p>
                     {atTable && currentStack != null && (
-                      <p className="text-xs text-gray-400 mt-2">
+                      <p className="text-xs text-slate-500 mt-2">
                         Table stack:{' '}
-                        <span className="font-semibold text-gray-600">{fmt(currentStack)} MORBIUS</span>
+                        <span className="font-semibold text-slate-300">{fmt(currentStack)} MORBIUS</span>
                       </p>
                     )}
                   </div>
 
                   {/* Tabs */}
-                  <div className="flex gap-2 mb-6 bg-gray-50 p-1 rounded-2xl">
+                  <div className="flex gap-2 mb-6 bg-white/5 p-1 rounded-2xl">
                     {tabs.map((t) => (
                       <button
                         key={t.id}
                         onClick={() => setTab(t.id)}
                         className={`flex-1 py-3 text-sm font-medium rounded-xl transition-all ${
                           tab === t.id
-                            ? 'bg-white text-cyan-500 shadow-sm'
-                            : 'text-gray-600 hover:text-black'
+                            ? 'bg-cyan-400/15 text-cyan-300 shadow-sm ring-1 ring-cyan-400/30'
+                            : 'text-slate-300 hover:text-white'
                         }`}
                       >
                         {t.label}
@@ -1384,12 +1392,12 @@ export function GameWalletModal({
                   {/* ── Deposit ── */}
                   {tab === 'deposit' && (
                     <div className="space-y-4">
-                      <div className="flex gap-2 bg-gray-50 p-1 rounded-xl">
+                      <div className="flex gap-2 bg-white/5 p-1 rounded-xl">
                         <button
                           onClick={() => setDepositMethod('pls')}
                           disabled={controlsDisabled}
                           className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all ${
-                            depositMethod === 'pls' ? 'bg-white text-cyan-500 shadow-sm' : 'text-gray-500 hover:text-black'
+                            depositMethod === 'pls' ? 'bg-cyan-400/15 text-cyan-300 shadow-sm ring-1 ring-cyan-400/30' : 'text-slate-400 hover:text-white'
                           }`}
                         >
                           <TokenLabel symbol="PLS" />
@@ -1398,7 +1406,7 @@ export function GameWalletModal({
                           onClick={() => setDepositMethod('morbius')}
                           disabled={controlsDisabled}
                           className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all ${
-                            depositMethod === 'morbius' ? 'bg-white text-cyan-500 shadow-sm' : 'text-gray-500 hover:text-black'
+                            depositMethod === 'morbius' ? 'bg-cyan-400/15 text-cyan-300 shadow-sm ring-1 ring-cyan-400/30' : 'text-slate-400 hover:text-white'
                           }`}
                         >
                           <TokenLabel symbol="MORBIUS" />
@@ -1408,8 +1416,8 @@ export function GameWalletModal({
                       {!isDepositWaiting && (
                       <div className="space-y-2">
                         <div className="flex justify-between items-center px-1">
-                          <label className="text-sm font-medium text-gray-700">Amount</label>
-                          <span className="text-xs text-gray-500">
+                          <label className="text-sm font-medium text-slate-300">Amount</label>
+                          <span className="text-xs text-slate-400">
                             {depositMethod === 'pls' ? (
                               <span className="inline-flex flex-wrap items-center gap-x-1 gap-y-0.5">
                                 Avail: {maxDepositPLS.toLocaleString()} <TokenLabel symbol="PLS" size="sm" />
@@ -1433,7 +1441,7 @@ export function GameWalletModal({
                             min="0"
                             step="1"
                             disabled={controlsDisabled}
-                            className="flex-1 w-full bg-white text-black/90 placeholder:text-black/30 border border-gray-200 rounded-xl px-4 py-3 text-lg focus:outline-none focus:ring-2 focus:ring-black/5 transition-all"
+                            className="flex-1 w-full bg-white/5 text-white placeholder:text-slate-500 border border-white/10 rounded-xl px-4 py-3 text-lg focus:outline-none focus:ring-2 focus:ring-cyan-400/30 transition-all"
                           />
                           <button
                             onClick={() =>
@@ -1447,7 +1455,7 @@ export function GameWalletModal({
                               controlsDisabled ||
                               (depositMethod === 'pls' && maxMorbiusFromPls === 0n)
                             }
-                            className="px-4 bg-gray-100 text-gray-700 text-sm font-medium rounded-xl hover:bg-gray-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="px-4 bg-white/10 text-slate-200 text-sm font-medium rounded-xl hover:bg-white/15 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                           >
                             MAX
                           </button>
@@ -1464,8 +1472,8 @@ export function GameWalletModal({
                                 disabled={controlsDisabled}
                                 className={`py-2 text-xs font-semibold rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
                                   isActive
-                                    ? 'bg-black text-white'
-                                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                                    ? 'bg-cyan-400/20 text-cyan-200 ring-1 ring-cyan-400/40'
+                                    : 'bg-white/10 text-slate-300 hover:bg-white/15'
                                 }`}
                               >
                                 {preset >= 1000 ? `${preset / 1000}K` : preset}
@@ -1501,7 +1509,7 @@ export function GameWalletModal({
                               })
                             }
                             disabled={controlsDisabled || isSigningIn}
-                            className="w-full py-4 text-sm font-medium rounded-xl flex items-center justify-center transition-colors bg-black text-white hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="w-full py-4 text-sm font-medium rounded-xl flex items-center justify-center transition-colors bg-gradient-to-b from-amber-300 to-amber-500 text-[#3b2503] font-bold shadow-[0_2px_16px_rgba(245,158,11,0.3)] hover:brightness-110 disabled:opacity-40 disabled:saturate-50 disabled:cursor-not-allowed"
                           >
                             {isSigningIn ? (
                               <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Check your wallet…</>
@@ -1509,7 +1517,7 @@ export function GameWalletModal({
                               'Sign in to deposit'
                             )}
                           </button>
-                          <p className="text-xs text-center text-gray-500">
+                          <p className="text-xs text-center text-slate-400">
                             One-time signature to prove you own this wallet. No funds move.
                           </p>
                         </div>
@@ -1520,7 +1528,7 @@ export function GameWalletModal({
                           disabled={
                             controlsDisabled ||
                             !depositAmount ||
-                            plsQuoteLoading ||
+                            (depositMethod === 'pls' && (plsQuoteLoading || !hasPlsQuote)) ||
                             (depositMethod === 'morbius' && isLoadingAllowance) ||
                             (depositMethod === 'morbius' && isApproving) ||
                             depositPhase === 'confirming' ||
@@ -1530,10 +1538,10 @@ export function GameWalletModal({
                           }
                           className={`w-full py-4 text-sm font-medium rounded-xl flex items-center justify-center transition-colors disabled:cursor-not-allowed ${
                             depositPhase === 'error'
-                              ? 'bg-red-100 text-red-700 hover:bg-red-200'
+                              ? 'bg-red-500/15 text-red-300 hover:bg-red-500/25'
                               : depositPhase === 'success'
                                 ? 'bg-green-600 text-white cursor-default'
-                                : 'bg-black text-white hover:bg-gray-800 disabled:opacity-50'
+                                : 'bg-gradient-to-b from-amber-300 to-amber-500 text-[#3b2503] font-bold shadow-[0_2px_16px_rgba(245,158,11,0.3)] hover:brightness-110 disabled:opacity-40 disabled:saturate-50'
                           }${showDepositNow ? ' ring-2 ring-cyan-400 ring-offset-2 animate-pulse' : ''}`}
                         >
                           {depositPhase === 'confirming' && (
@@ -1559,6 +1567,12 @@ export function GameWalletModal({
                                 <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Approving...</>
                               ) : depositMethod === 'morbius' && needsApproval ? (
                                 'Approve MORBIUS'
+                              ) : depositMethod === 'pls' && !!depositAmount && plsQuoteLoading ? (
+                                // Quote still fetching — say so instead of a blank disabled button.
+                                <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Fetching PLS price...</>
+                              ) : depositMethod === 'pls' && !!depositAmount && !hasPlsQuote ? (
+                                // Every price source failed — the hook keeps retrying on its own.
+                                'PLS price unavailable — retrying...'
                               ) : showDepositNow ? (
                                 'Deposit now'
                               ) : (
@@ -1568,7 +1582,7 @@ export function GameWalletModal({
                           )}
                         </button>
                         {depositPhase !== 'idle' && depositPhase !== 'error' && (
-                          <p className="text-xs text-center text-gray-500">
+                          <p className="text-xs text-center text-slate-400">
                             {depositPhase === 'confirming' && 'Approve the transaction in your wallet'}
                             {depositPhase === 'confirming_on_chain' &&
                               (depositBlockNumber != null
@@ -1580,14 +1594,14 @@ export function GameWalletModal({
                         )}
                       </div>
                       )}
-                      <p className="text-[10px] text-gray-400 text-center mt-3">
+                      <p className="text-[10px] text-slate-500 text-center mt-3">
                         Withdrawals capped at 1,000,000 <TokenLabel symbol="MORBIUS" size="sm" />/day.
                       </p>
                       <p className="text-[10px] text-center">
                         <button
                           type="button"
                           onClick={() => setHowToVideo('deposit')}
-                          className="text-gray-500 hover:text-cyan-600 underline underline-offset-2 transition-colors"
+                          className="text-slate-400 hover:text-cyan-300 underline underline-offset-2 transition-colors"
                         >
                           How to deposit
                         </button>
@@ -1600,10 +1614,10 @@ export function GameWalletModal({
                     <div className="space-y-4">
                       <div className="space-y-2">
                         <div className="flex justify-between items-center px-1">
-                          <label className="text-sm font-medium text-gray-700">
+                          <label className="text-sm font-medium text-slate-300">
                             Amount (<TokenLabel symbol="MORBIUS" size="sm" />)
                           </label>
-                          <span className="text-xs text-gray-500">
+                          <span className="text-xs text-slate-400">
                             Avail: {maxWithdraw.toLocaleString()} <TokenLabel symbol="MORBIUS" size="sm" />
                           </span>
                         </div>
@@ -1617,12 +1631,12 @@ export function GameWalletModal({
                             step="1"
                             max={maxWithdraw}
                             disabled={controlsDisabled}
-                            className="flex-1 w-full bg-white text-black/90 placeholder:text-black/50 border border-gray-200 rounded-xl px-4 py-3 text-lg focus:outline-none focus:ring-2 focus:ring-black/5 transition-all"
+                            className="flex-1 w-full bg-white/5 text-white placeholder:text-slate-500 border border-white/10 rounded-xl px-4 py-3 text-lg focus:outline-none focus:ring-2 focus:ring-cyan-400/30 transition-all"
                           />
                           <button
                             onClick={() => setWithdrawAmount(maxWithdraw.toString())}
                             disabled={controlsDisabled}
-                            className="px-4 bg-gray-100 text-gray-700 text-sm font-medium rounded-xl hover:bg-gray-200 transition-colors"
+                            className="px-4 bg-white/10 text-slate-200 text-sm font-medium rounded-xl hover:bg-white/15 transition-colors"
                           >
                             MAX
                           </button>
@@ -1632,7 +1646,7 @@ export function GameWalletModal({
                       <button
                         onClick={handleWithdraw}
                         disabled={controlsDisabled || !withdrawAmount}
-                        className="w-full py-4 bg-black text-white text-sm font-medium rounded-xl hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+                        className="w-full py-4 bg-gradient-to-b from-amber-300 to-amber-500 text-[#3b2503] text-sm font-bold rounded-xl shadow-[0_2px_16px_rgba(245,158,11,0.3)] hover:brightness-110 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
                       >
                         {isPreparingWithdraw ? (
                           <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Processing...</>
@@ -1640,14 +1654,14 @@ export function GameWalletModal({
                           <>Withdraw <span className="ml-1"><TokenLabel symbol="MORBIUS" /></span></>
                         )}
                       </button>
-                      <p className="text-[10px] text-gray-400 text-center mt-3">
+                      <p className="text-[10px] text-slate-500 text-center mt-3">
                         Withdrawals capped at 1,000,000 <TokenLabel symbol="MORBIUS" size="sm" />/day.
                       </p>
                       <p className="text-[10px] text-center">
                         <button
                           type="button"
                           onClick={() => setHowToVideo('withdraw')}
-                          className="text-gray-500 hover:text-cyan-600 underline underline-offset-2 transition-colors"
+                          className="text-slate-400 hover:text-cyan-300 underline underline-offset-2 transition-colors"
                         >
                           How to withdraw
                         </button>
@@ -1658,25 +1672,25 @@ export function GameWalletModal({
                   {/* ── Re-up (optional; disabled for cash poker MVP — leave table to change buy-in) ── */}
                   {tab === 'reup' && showReupTab && (
                     <div className="space-y-4">
-                      <div className="bg-gray-50 rounded-2xl p-4 space-y-1 text-sm">
+                      <div className="bg-white/5 rounded-2xl p-4 border border-white/5 space-y-1 text-sm">
                         <div className="flex justify-between">
-                          <span className="text-gray-500">Available</span>
-                          <span className="font-semibold text-gray-900">
+                          <span className="text-slate-400">Available</span>
+                          <span className="font-semibold text-white">
                             {formatChips(totalReupChips)} chips
                           </span>
                         </div>
                         {currentStack != null && (
                           <div className="flex justify-between">
-                            <span className="text-gray-500">Current table stack</span>
-                            <span className="font-semibold text-gray-900">{formatChips(currentStack)} chips</span>
+                            <span className="text-slate-400">Current table stack</span>
+                            <span className="font-semibold text-white">{formatChips(currentStack)} chips</span>
                           </div>
                         )}
                       </div>
 
                       <div className="space-y-2">
                         <div className="flex justify-between items-center px-1">
-                          <label className="text-sm font-medium text-gray-700">Add to stack (whole chips)</label>
-                          <span className="text-xs text-gray-500">Max: {formatChips(totalReupChips)}</span>
+                          <label className="text-sm font-medium text-slate-300">Add to stack (whole chips)</label>
+                          <span className="text-xs text-slate-400">Max: {formatChips(totalReupChips)}</span>
                         </div>
                         <div className="flex gap-2">
                           <input
@@ -1688,12 +1702,12 @@ export function GameWalletModal({
                             step="1"
                             max={maxReupChipsNum}
                             disabled={isReupPending}
-                            className="flex-1 w-full bg-white border border-gray-200 rounded-xl px-4 py-3 text-lg focus:outline-none focus:ring-2 focus:ring-black/5 transition-all"
+                            className="flex-1 w-full bg-white/5 text-white border border-white/10 rounded-xl px-4 py-3 text-lg focus:outline-none focus:ring-2 focus:ring-cyan-400/30 transition-all"
                           />
                           <button
                             onClick={() => setReupAmount(totalReupChips.toString())}
                             disabled={isReupPending}
-                            className="px-4 bg-gray-100 text-gray-700 text-sm font-medium rounded-xl hover:bg-gray-200 transition-colors"
+                            className="px-4 bg-white/10 text-slate-200 text-sm font-medium rounded-xl hover:bg-white/15 transition-colors"
                           >
                             MAX
                           </button>
@@ -1703,7 +1717,7 @@ export function GameWalletModal({
                       <button
                         onClick={handleReup}
                         disabled={isReupPending || !reupAmount}
-                        className="w-full py-4 bg-black text-white text-sm font-medium rounded-xl hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+                        className="w-full py-4 bg-gradient-to-b from-amber-300 to-amber-500 text-[#3b2503] text-sm font-bold rounded-xl shadow-[0_2px_16px_rgba(245,158,11,0.3)] hover:brightness-110 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
                       >
                         {isReupPending ? (
                           <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Adding chips...</>
@@ -1711,7 +1725,7 @@ export function GameWalletModal({
                           'Add to Stack'
                         )}
                       </button>
-                      <p className="text-[11px] text-gray-400 text-center">
+                      <p className="text-[11px] text-slate-500 text-center">
                         Re-ups are available between hands and apply to your next deal immediately.
                       </p>
                     </div>
@@ -1719,19 +1733,19 @@ export function GameWalletModal({
 
                   {/* ── History ── */}
                   {tab === 'history' && (
-                    <div className="border border-gray-100 rounded-2xl p-5">
+                    <div className="border border-white/10 rounded-2xl p-5">
                       <div className="flex justify-between items-center mb-4">
                         <h5 className="font-medium text-sm text-cyan-500">Last 50 transactions</h5>
                         <button
                           onClick={() => { setTxLoaded(false); setTxHistory([]); fetchTxHistory(); }}
                           disabled={txLoading}
-                          className="text-gray-400 hover:text-black transition-colors"
+                          className="text-slate-500 hover:text-white transition-colors"
                         >
                           <RefreshCw size={14} className={txLoading ? 'animate-spin' : ''} />
                         </button>
                       </div>
                       {txLoading && (
-                        <div className="flex items-center justify-center py-8 text-sm text-gray-400 bg-gray-50 rounded-xl">
+                        <div className="flex items-center justify-center py-8 text-sm text-slate-500 bg-white/5 rounded-xl">
                           <Loader2 className="w-4 h-4 animate-spin mr-2" /> Loading...
                         </div>
                       )}
@@ -1739,7 +1753,7 @@ export function GameWalletModal({
                         <p className="text-sm text-red-500 text-center py-4">{txError}</p>
                       )}
                       {!txLoading && !txError && txHistory.length === 0 && (
-                        <div className="text-center py-8 text-sm text-gray-400 bg-gray-50 rounded-xl">
+                        <div className="text-center py-8 text-sm text-slate-500 bg-white/5 rounded-xl">
                           No transactions yet.
                         </div>
                       )}
@@ -1756,22 +1770,22 @@ export function GameWalletModal({
                             return (
                               <div
                                 key={i}
-                                className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0"
+                                className="flex items-center justify-between py-2 border-b border-white/5 last:border-0"
                               >
                                 <div className="flex items-center gap-3">
                                   <div
                                     className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                                      isDeposit ? 'bg-green-50 text-green-600' : 'bg-gray-50 text-gray-600'
+                                      isDeposit ? 'bg-emerald-400/15 text-emerald-300' : 'bg-white/10 text-slate-300'
                                     }`}
                                   >
                                     {isDeposit ? <ArrowDownCircle size={16} /> : <ArrowUpCircle size={16} />}
                                   </div>
                                   <div>
-                                    <p className="text-sm font-medium text-gray-900">
+                                    <p className="text-sm font-medium text-white">
                                       {isDeposit ? '+' : '−'}{morbius}{' '}
                                       <TokenLabel symbol="MORBIUS" size="sm" />
                                     </p>
-                                    <div className="flex items-center gap-2 text-xs text-gray-500">
+                                    <div className="flex items-center gap-2 text-xs text-slate-400">
                                       <span>{dateStr} · {timeStr}</span>
                                       {tx.tx_hash && (
                                         <CopyButton
@@ -1779,7 +1793,7 @@ export function GameWalletModal({
                                           copyToast="Copied to clipboard"
                                           variant="ghost"
                                           size="xs"
-                                          className="h-5 w-5 p-0 text-gray-500 hover:text-gray-900"
+                                          className="h-5 w-5 p-0 text-slate-400 hover:text-white"
                                           title="Copy transaction hash"
                                           aria-label="Copy transaction hash"
                                         />
@@ -1787,7 +1801,7 @@ export function GameWalletModal({
                                     </div>
                                   </div>
                                 </div>
-                                <span className="text-xs font-medium text-gray-400 capitalize">
+                                <span className="text-xs font-medium text-slate-500 capitalize">
                                   {tx.type}
                                 </span>
                               </div>
@@ -1820,17 +1834,17 @@ export function GameWalletModal({
                             setLegacyWithdrawAmounts((prev) => ({ ...prev, [item.address]: formatEther(maxAllowedWei) }));
 
                           return (
-                            <div key={item.address} className="border border-gray-100 rounded-2xl p-5 bg-gray-50">
+                            <div key={item.address} className="border border-white/10 rounded-2xl p-5 bg-white/5">
                               <div className="flex justify-between items-center mb-4">
-                                <h5 className="font-medium text-sm text-gray-900">{item.label}</h5>
+                                <h5 className="font-medium text-sm text-white">{item.label}</h5>
                                 <button
                                   onClick={() => setDismissedLegacy((prev) => new Set(prev).add(item.address))}
                                 >
-                                  <X size={14} className="text-gray-400 hover:text-black transition-colors" />
+                                  <X size={14} className="text-slate-500 hover:text-white transition-colors" />
                                 </button>
                               </div>
                               <div className="flex justify-between items-center mb-2">
-                                <span className="text-xs text-gray-500 font-medium">
+                                <span className="text-xs text-slate-400 font-medium">
                                   Balance: {Math.floor(Number(formatEther(item.reserve))).toLocaleString()}{' '}
                                   <TokenLabel symbol="MORBIUS" size="sm" />
                                 </span>
@@ -1846,19 +1860,19 @@ export function GameWalletModal({
                                     setLegacyWithdrawAmounts((prev) => ({ ...prev, [item.address]: e.target.value }))
                                   }
                                   disabled={controlsDisabled}
-                                  className="flex-1 w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black/5 transition-all"
+                                  className="flex-1 w-full bg-white/5 text-white border border-white/10 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-400/30 transition-all"
                                 />
                                 <button
                                   type="button"
                                   onClick={setMax}
                                   disabled={controlsDisabled}
-                                  className="px-4 bg-black text-white text-sm font-medium rounded-xl hover:bg-gray-800 transition-colors disabled:opacity-50"
+                                  className="px-4 bg-gradient-to-b from-amber-300 to-amber-500 text-[#3b2503] text-sm font-bold rounded-xl shadow-[0_2px_16px_rgba(245,158,11,0.3)] hover:brightness-110 transition-colors disabled:opacity-50"
                                 >
                                   MAX
                                 </button>
                               </div>
                               <div className="flex justify-between items-center">
-                                <p className="text-xs text-gray-500">Max 1M / tx</p>
+                                <p className="text-xs text-slate-400">Max 1M / tx</p>
                                 <button
                                   onClick={() => validAmount && handleWithdrawLegacy(item.address, amountWei, item.refetch)}
                                   disabled={item.paused || controlsDisabled || !validAmount}
@@ -1880,7 +1894,7 @@ export function GameWalletModal({
                     <button
                       type="button"
                       onClick={() => setReportOpen(true)}
-                      className="flex items-center gap-1.5 text-xs text-red-500 hover:text-gray-700"
+                      className="flex items-center gap-1.5 text-xs text-red-500 hover:text-slate-300"
                     >
                       <Flag size={12} />
                       Report
