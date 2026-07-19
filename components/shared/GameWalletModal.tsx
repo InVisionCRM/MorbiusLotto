@@ -809,11 +809,14 @@ export function GameWalletModal({
     preDepositBalanceRef.current = await fetchServerBalanceDirect();
     setDepositPhase('confirming');
     const toastId = toast.loading('Confirm in wallet...', {
-      description: `Depositing ${depositAmount} MORBIUS worth of PLS`,
+      description: `Swapping PLS → ${depositAmount} MORBIUS on PulseX (one transaction)`,
     });
     depositToastIdRef.current = toastId;
     try {
-      const txHash = await deposit(plsEquivalent);
+      // Real market buy: tolerate 0.5% price drift between quote and inclusion.
+      const requestedWei = parseEther(depositAmount);
+      const minMorbiusOut = (requestedWei * 9950n) / 10000n;
+      const txHash = await deposit(plsEquivalent, minMorbiusOut);
       savePendingDepositToStorage(address, txHash);
       setDepositPhase('confirming_on_chain');
       toast.loading('Confirming...', {

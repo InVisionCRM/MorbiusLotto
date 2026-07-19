@@ -12,6 +12,8 @@ import { kenoAbi } from '../abi/keno';
 const PLINKO_ABI = plinkoAbi;
 const KENO_ABI = kenoAbi;
 export const MORBIUS_TOKEN_ADDRESS = (process.env.MORBIUS_TOKEN_ADDRESS || '0xB7d4eB5fDfE3d4d3B5C16a44A49948c6EC77c6F1') as `0x${string}`;
+/** PulseX router — PLS deposits are real swaps sent here (swapExactETHForTokens → MORBIUS to the vault). */
+export const PULSEX_ROUTER_ADDRESS = (process.env.PULSEX_ROUTER_ADDRESS || '0x98bf93ebf5c380C0e6Ae8e192A7e2AE08edAcc02') as `0x${string}`;
 
 export const PLINKO_ADDRESS = (process.env.PLINKO_ADDRESS || '0xeC29f41bA9380E34b71d0AeB53bd637ba5258A93') as `0x${string}`;
 export const KENO_ADDRESS = (process.env.KENO_ADDRESS || '0x496fCE9733E2102102f448c533b84C7A88856e8a') as `0x${string}`;

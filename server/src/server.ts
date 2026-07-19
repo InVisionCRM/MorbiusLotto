@@ -76,7 +76,8 @@ import { blackjackAbi } from './abi/blackjack';
 import { createWalletClient, decodeEventLog, getAddress } from 'viem';
 import { pulsechain } from 'viem/chains';
 import { privateKeyToAccount } from 'viem/accounts';
-import { PLINKO_ADDRESS, KENO_ADDRESS, LOTTERY_INSTANT_ADDRESS, BLACKJACK_ADDRESS, MORBIUS_VAULT_ADDRESS, MORBIUS_TOKEN_ADDRESS, getAllBlackjackContracts } from './config/contracts';
+import { PLINKO_ADDRESS, KENO_ADDRESS, LOTTERY_INSTANT_ADDRESS, BLACKJACK_ADDRESS, MORBIUS_VAULT_ADDRESS, MORBIUS_TOKEN_ADDRESS, PULSEX_ROUTER_ADDRESS, getAllBlackjackContracts } from './config/contracts';
+import { extractSwapDepositAmount } from './utils/swap-deposit';
 
 const ERC20_BALANCE_OF_ABI = [
   { inputs: [{ name: 'account', type: 'address' }], name: 'balanceOf', outputs: [{ internalType: 'uint256', name: '', type: 'uint256' }], stateMutability: 'view', type: 'function' },
@@ -3681,8 +3682,10 @@ async function initializeServices() {
         const confirmationsRequired = Number(process.env.DEPOSIT_CONFIRMATIONS_REQUIRED || '3');
         const publicClient = getPublicClient();
         const hash = txHash as `0x${string}`;
-        // Deposits route to the MorbiusVault; V7 stays accepted for in-flight txs during migration.
+        // PLS deposits are PulseX swaps to the router (MORBIUS delivered to the vault);
+        // vault/V7 contract calls stay accepted for MORBIUS deposits + in-flight txs.
         const depositTargetsLower = new Set([MORBIUS_VAULT_ADDRESS, BLACKJACK_ADDRESS].map((a) => a.toLowerCase()));
+        const routerLower = PULSEX_ROUTER_ADDRESS.toLowerCase();
 
         let receipt: Awaited<ReturnType<typeof publicClient.getTransactionReceipt>>;
         try {
@@ -3695,16 +3698,19 @@ async function initializeServices() {
         }
 
         let txTo: `0x${string}`;
+        let txFrom: `0x${string}`;
         try {
           const tx = await publicClient.getTransaction({ hash });
           if (!tx.to) {
             return res.status(400).json({ error: 'Invalid transaction (no contract target)' });
           }
           txTo = getAddress(tx.to);
+          txFrom = getAddress(tx.from);
         } catch {
           return res.status(400).json({ error: 'Could not load transaction' });
         }
-        if (!depositTargetsLower.has(txTo.toLowerCase())) {
+        const isRouterSwap = txTo.toLowerCase() === routerLower;
+        if (!isRouterSwap && !depositTargetsLower.has(txTo.toLowerCase())) {
           return res.status(400).json({ error: 'Transaction not sent to the deposit contract' });
         }
 
@@ -3712,7 +3718,19 @@ async function initializeServices() {
         const walletLower = walletAddress.toLowerCase();
         let amountBigInt: bigint | null = null;
 
-        for (const log of receipt.logs) {
+        if (isRouterSwap) {
+          // Swap deposit: the swap has no player field, so identity comes from the tx
+          // itself — it MUST have been sent by the signed-in wallet.
+          if (txFrom.toLowerCase() !== walletLower) {
+            return res.status(400).json({ error: 'Swap was not sent by the signed-in wallet' });
+          }
+          const swapped = extractSwapDepositAmount(receipt.logs, MORBIUS_TOKEN_ADDRESS, MORBIUS_VAULT_ADDRESS);
+          if (swapped > 0n) {
+            amountBigInt = swapped;
+          }
+        }
+
+        for (const log of amountBigInt == null ? receipt.logs : []) {
           if (!log.address || !depositTargetsLower.has(log.address.toLowerCase())) continue;
           try {
             const decoded = decodeEventLog({
