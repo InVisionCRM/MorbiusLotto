@@ -11,7 +11,6 @@ import { SceneDefs } from '@/components/home2/scenes'
 import {
   HomeTicker,
   HeroPlayer,
-  VaultStrip,
   TonightsTable,
   TheFloor,
   WeeklyDrop,
@@ -288,12 +287,6 @@ export default function Home2Client() {
               onDashboard={onDashboard}
             />
           ) : null}
-          <VaultStrip
-            value={totalWon}
-            gamesPlayed={gamesPlayed != null ? gamesPlayed.toLocaleString('en-US') : undefined}
-            biggestWin={(allTimeBiggest ?? topWin?.amount)?.toLocaleString('en-US')}
-            onPriceClick={() => setChartOpen(true)}
-          />
           <TonightsTable />
           <TheFloor />
           {weeklyDrop ? (
