@@ -16,6 +16,12 @@ export function fetchDexScreenerProxy(
   address: string,
   opts: DexScreenerProxyOptions = {},
 ): Promise<Response> {
-  const url = `https://api.dexscreener.com/latest/dex/${kind}/${address}`;
+  // The pairs endpoint REQUIRES a chain segment (/latest/dex/pairs/{chain}/{pair});
+  // without it DexScreener returns a 404 HTML page. Tokens does not take a chain.
+  // All pair lookups in this app are PulseChain pairs.
+  const url =
+    kind === 'pairs'
+      ? `https://api.dexscreener.com/latest/dex/pairs/pulsechain/${address}`
+      : `https://api.dexscreener.com/latest/dex/tokens/${address}`;
   return fetch(url, { signal: opts.signal });
 }
