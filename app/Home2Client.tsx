@@ -25,7 +25,6 @@ import { HomeSidebar, ChipDock, MobileTopBar } from '@/components/home2/nav'
 import { GameLauncherSheet } from '@/components/home2/game-launcher-sheet'
 import { DropSheet } from '@/components/home2/drop-sheet'
 import { WalletSheet } from '@/components/home2/wallet-sheet'
-import { PriceChartBg } from '@/components/home2/price-chart-bg'
 import { ChartModal } from '@/components/home2/chart-modal'
 import { EntrantsModal } from '@/components/home2/entrants-modal'
 import { formatWholeMorbius } from '@/components/shared/NavBalanceDisplay'
@@ -270,7 +269,6 @@ export default function Home2Client() {
             gamesPlayed={gamesPlayed}
             morbiusWon={totalWon}
             biggestWin={allTimeBiggest ?? topWin?.amount}
-            chartBg={<PriceChartBg />}
             onTakeSeat={mode === 'player' ? onDashboard : onConnect}
             onOpenDrop={() => setActiveSheet('drop')}
             onRefer={mode === 'player' ? onDashboard : onConnect}
@@ -286,7 +284,6 @@ export default function Home2Client() {
               resume={resume}
               balance={balanceStr}
               balanceUsd=""
-              chartBg={<PriceChartBg />}
               onDeposit={onDeposit}
               onDashboard={onDashboard}
             />
