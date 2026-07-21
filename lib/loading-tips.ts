@@ -50,7 +50,6 @@ export const LOADING_TIPS = [
   'Are you a **deployer** or **power user**? Some wallets see extra **analytics** views in **Blackjack**—explore the sidebar when available.',
   'Are you new to **Morbius** entirely? **Blackjack** is an easy first stop—**one seat**, **clear** actions, then branch to **Poker** or **Plinko**.',
   // Everything else (44–50)
-  'Are you a holder of the **$MORBIUS** token? Make sure to go to the **CLAIM** page and claim any rewards you may have earned. More info on **morbius.io/claim**.',
   'Are you stacking **Plinko** drops? Tune **risk** and **rows** before you commit—**Plinko** rewards consistency over tilt.',
   'Are you picking **Keno** numbers tonight? Check the **prize pool** view when you want context before you lock picks.',
   'Are you playing the **Lottery**? Follow draws from the **Lottery** page and use **verify** when you want **transparent** checks.',
