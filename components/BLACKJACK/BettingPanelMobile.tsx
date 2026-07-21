@@ -51,8 +51,11 @@ export function BettingPanelMobile({
     }
   }, [currentBetAmount, isFocused]);
 
-  const minBetNum = Number(formatEther(betLimits.MIN_BET));
-  const maxBetNum = Number(formatEther(betLimits.MAX_BET));
+  // Bets are placed in whole MORBIUS (1 chip = 1 MORBIUS); the server rejects sub-chip amounts.
+  // Ceil the min / floor the max so every preset and the max chip stay whole even if a tier's
+  // limit isn't an exact multiple of 1e18.
+  const minBetNum = Math.ceil(Number(formatEther(betLimits.MIN_BET)));
+  const maxBetNum = Math.floor(Number(formatEther(betLimits.MAX_BET)));
   const formatThousands = (n: number) => n.toLocaleString('en-US');
   const commitValue = (raw: string) => {
     const parsed = Math.floor(parseFloat(raw.replace(/,/g, '')) || 0);

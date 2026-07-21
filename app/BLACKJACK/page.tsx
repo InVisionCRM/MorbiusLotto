@@ -748,7 +748,8 @@ export default function BlackjackPage() {
       return;
     }
     const amount = Math.floor(parseFloat(betAmount) || 0);
-    const maxBetNum = Number(formatEther(tierLimits.MAX_BET));
+    // Floor to whole MORBIUS: the max bet must be a whole number of chips or the server rejects it.
+    const maxBetNum = Math.floor(Number(formatEther(tierLimits.MAX_BET)));
     const clamped = Math.min(amount, maxBetNum);
     setManualBetAmount(String(clamped));
     setChipStack(amountToChipStack(clamped));
@@ -1917,7 +1918,13 @@ export default function BlackjackPage() {
 
   // Handle starting a new game (optional Perfect Pairs side bet)
   const handleStartGame = useCallback(async (betAmount: bigint, _clientSeedFromPanel: string, perfectPairsBetAmount?: bigint) => {
-    const sideBet = perfectPairsBetAmount ?? 0n;
+    // Snap the main and side bets down to a whole number of MORBIUS. The server debits/credits
+    // whole chips (1 chip = 1 MORBIUS) and rejects any sub-chip remainder with the error
+    // "Bet must be a whole number of MORBIUS". A wager tier whose max isn't an exact multiple of
+    // 1e18 would otherwise let the max bet clamp to a fractional value and trip that check.
+    const WHOLE_MORBIUS_WEI = 10n ** 18n;
+    betAmount = (betAmount / WHOLE_MORBIUS_WEI) * WHOLE_MORBIUS_WEI;
+    const sideBet = ((perfectPairsBetAmount ?? 0n) / WHOLE_MORBIUS_WEI) * WHOLE_MORBIUS_WEI;
     const totalStake = betAmount + sideBet;
 
     if (betAmount < tierLimits.MIN_BET) {
