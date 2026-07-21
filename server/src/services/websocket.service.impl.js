@@ -4011,6 +4011,26 @@ class WebSocketService {
                 logger_1.logger.error('BJMulti auto-stand error', { tableId: row.table_id, error: err });
             }
         }
+        // Recover rounds stranded in the dealer-turn phase. The dealer-turn → settle step
+        // runs outside the settlement transaction, so a thrown settle or a mid-dealer-turn
+        // server restart (e.g. a redeploy) leaves the table frozen in 'dealer_turn' with no
+        // player able to act. Re-run the (idempotent) dealer turn to finish the round. The
+        // 10s threshold clears the normal ~300ms reveal delay so live rounds are never touched.
+        const stuckDealerTurn = await pool.query(`
+      SELECT DISTINCT r.table_id
+      FROM blackjack_multi_rounds r
+      WHERE r.status = 'dealer_turn'
+        AND COALESCE(r.turn_started_at, r.created_at) < NOW() - INTERVAL '10 seconds'
+    `);
+        for (const row of stuckDealerTurn.rows) {
+            try {
+                await this.bjMultiService.recoverStuckDealerTurn(row.table_id);
+                await this.broadcastBJMultiTableState(row.table_id);
+            }
+            catch (err) {
+                logger_1.logger.error('BJMulti dealer-turn recovery error', { tableId: row.table_id, error: err });
+            }
+        }
         // Find tables in 'betting' status where the round is older than 30s and at least one seat has a bet
         const expiredBetting = await pool.query(`
       SELECT DISTINCT r.table_id

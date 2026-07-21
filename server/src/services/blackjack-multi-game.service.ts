@@ -769,6 +769,39 @@ export class BlackjackMultiGameService {
   }
 
   /**
+   * Called by the timer watchdog: recover a round stranded in the `dealer_turn` phase.
+   *
+   * The dealer-turn → settle step (runDealerTurnInternal) flips the round/table to
+   * `dealer_turn` OUTSIDE the settlement transaction, then draws the dealer, waits
+   * ~300ms and settles. If settle throws, or the server restarts mid-dealer-turn
+   * (e.g. a backend redeploy), the round/table are left in `dealer_turn` with no
+   * player able to act — a permanently frozen table, since the other watchdog cases
+   * only cover `betting`/`playing`/`waiting`/`completed`.
+   *
+   * Re-running the dealer turn is safe/idempotent: the dealer draw reads the current
+   * dealer_cards and is a no-op once the dealer has reached 17+, the deck is
+   * deterministic from the round seeds (so a pre-save crash reproduces the same
+   * cards), and settleRoundInternal skips already-settled seats and completed rounds.
+   */
+  async recoverStuckDealerTurn(tableId: string): Promise<void> {
+    const release = await this.tableLocks.acquire(tableId);
+    try {
+      const roundResult = await this.pool.query(
+        `SELECT * FROM blackjack_multi_rounds WHERE table_id = $1 AND status = 'dealer_turn' ORDER BY round_number DESC LIMIT 1`,
+        [tableId],
+      );
+      if (roundResult.rows.length === 0) return; // already completed by the live path
+      const round = roundResult.rows[0];
+      logger.warn('BJMulti: recovering round stuck in dealer_turn', { tableId, roundId: round.id });
+      const deck = this.pfService.fisherYatesShuffle(round.server_seed, round.client_seed, round.round_number);
+      const dp = await this.computeDeckPositionAsync(round.id, round.dealer_cards);
+      await this.runDealerTurnInternal(tableId, round.id, deck, dp);
+    } finally {
+      release();
+    }
+  }
+
+  /**
    * Called by the timer watchdog: auto-stand the acting player if their 30s has expired.
    */
   async autoStandTimedOut(tableId: string): Promise<void> {
@@ -1431,8 +1464,10 @@ export class BlackjackMultiGameService {
   }
 
   private async runDealerTurnInternal(tableId: string, roundId: string, deck: number[], dp: number): Promise<void> {
+    // turn_started_at doubles as the "entered dealer_turn at" marker so the timer
+    // watchdog can detect (and recover) a dealer turn whose settle never completed.
     await this.pool.query(
-      `UPDATE blackjack_multi_rounds SET status = 'dealer_turn', acting_seat_position = NULL WHERE id = $1`,
+      `UPDATE blackjack_multi_rounds SET status = 'dealer_turn', acting_seat_position = NULL, turn_started_at = NOW() WHERE id = $1`,
       [roundId],
     );
     await this.pool.query(
