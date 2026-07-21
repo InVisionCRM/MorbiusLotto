@@ -58,6 +58,7 @@ const ARCADE_LABELS: Record<string, string> = {
   firewalk: 'Firewalk',
   heist: 'Heist',
   three_card_poker: 'Three Card Poker',
+  pai_gow_poker: 'Pai Gow Poker',
   greed_dice: 'Greed Dice',
   cipher: 'Cipher',
 };

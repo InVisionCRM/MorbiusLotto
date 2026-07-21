@@ -145,6 +145,7 @@ const OTHER_GAMES: readonly OtherGameNavItem[] = [
   { label: 'Firewalk', href: '/firewalk', icon: 'chicken' },
   { label: 'Heist', href: '/heist', icon: 'mine' },
   { label: 'Three Card Poker', href: '/three-card-poker', icon: 'cards' },
+  { label: 'Pai Gow Poker', href: '/pai-gow-poker', icon: 'cards' },
   { label: 'Greed Dice', href: '/greed-dice', icon: 'dice' },
   { label: 'Cipher', href: '/cipher', icon: 'grid' },
   { label: 'Hi-Lo', href: '/hilo', icon: 'hilo' },
@@ -663,7 +664,6 @@ const NavContent = React.memo(function NavContent(props: NavContentProps) {
           <SidebarButton label="Avatar" icon={<NavIcon icon="fa-user-circle" />} onClick={handleOpenProfileModal} className={NAV_ITEM_CLASS} />
           <SidebarLink link={{ label: 'VIP Club', href: '/vip', icon: <NavIcon icon="fa-crown" /> }} className={NAV_ITEM_CLASS} />
           <SidebarLink link={{ label: 'Refer & Earn', href: '/referrals', icon: <NavIcon icon="fa-users" /> }} className={NAV_ITEM_CLASS} />
-          <SidebarLink link={{ label: 'Claim Morbius', href: '/claim', icon: <NavIcon icon="fa-gift" /> }} className={NAV_ITEM_CLASS} />
         </div>
 
         {/* Other Games */}

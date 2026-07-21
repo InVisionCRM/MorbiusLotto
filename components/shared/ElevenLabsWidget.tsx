@@ -96,7 +96,6 @@ export function ElevenLabsWidget() {
           window.dispatchEvent(new CustomEvent('sophie:open_swap'))
           return 'Swap modal opened.'
         },
-        open_claim: () => { routerRef.current.push('/claim'); return 'Navigating to Claim page.' },
         open_claim_fees: () => { routerRef.current.push('/claim-fees'); return 'Navigating to Claim Fees page.' },
         open_provide_lp: () => { window.open('https://pulsex.com', '_blank'); return 'Opening PulseX to provide liquidity.' },
 
