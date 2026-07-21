@@ -57,6 +57,8 @@ export type PokerChipLedgerReason =
   | 'arcade_heist_payout'
   | 'arcade_three_card_poker_bet'
   | 'arcade_three_card_poker_payout'
+  | 'arcade_pai_gow_poker_bet'
+  | 'arcade_pai_gow_poker_payout'
   | 'arcade_greed_dice_bet'
   | 'arcade_greed_dice_payout'
   | 'arcade_cipher_bet'

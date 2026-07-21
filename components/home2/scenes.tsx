@@ -653,6 +653,36 @@ export function ThreeCardScene() {
   );
 }
 
+export function PaiGowScene() {
+  // Pai Gow: seven cards split into a 5-card high fan (top) and a 2-card low pair (below).
+  const hi = [
+    { x: 40, rot: -22 }, { x: 62, rot: -11 }, { x: 84, rot: 0 }, { x: 106, rot: 11 }, { x: 128, rot: 22 },
+  ];
+  return (
+    <svg viewBox="0 0 200 140">
+      <ellipse cx="100" cy="118" rx="92" ry="22" fill="url(#feltG)" />
+      <path d="M28 120 Q100 102 172 120" stroke="#22d3ee" strokeOpacity=".26" strokeWidth="1.2" fill="none" />
+      {/* 5-card high fan */}
+      {hi.map((c, i) => (
+        <g key={i} transform={`rotate(${c.rot} ${c.x + 17} 60)`} filter="url(#fS2)">
+          <rect x={c.x} y="26" width="34" height="50" rx="5" fill="url(#gCard)" stroke="url(#gGoldEdge)" strokeWidth="1.4" />
+          <rect x={c.x} y="26" width="34" height="50" rx="5" fill="url(#gGloss)" />
+        </g>
+      ))}
+      {/* 2-card low hand */}
+      <g filter="url(#fS)">
+        <rect x="78" y="80" width="30" height="44" rx="5" fill="url(#gCard)" stroke="url(#gGoldEdge)" strokeWidth="1.4" />
+        <rect x="78" y="80" width="30" height="44" rx="5" fill="url(#gGloss)" />
+        <text x="83" y="92" fontSize="8.5" fontWeight="800" fill="#0f172a">A</text><text x="83" y="100" fontSize="7" fill="#0f172a">♠</text>
+        <rect x="98" y="80" width="30" height="44" rx="5" fill="url(#gCard)" stroke="url(#gGoldEdge)" strokeWidth="1.4" />
+        <rect x="98" y="80" width="30" height="44" rx="5" fill="url(#gGloss)" />
+        <text x="103" y="92" fontSize="8.5" fontWeight="800" fill="#dc2626">A</text><text x="103" y="100" fontSize="7" fill="#dc2626">♥</text>
+      </g>
+      <text x="100" y="18" fontSize="8" fontWeight="700" fill="#22d3ee" fillOpacity=".85" textAnchor="middle">HIGH · LOW</text>
+    </svg>
+  );
+}
+
 export function GreedDiceScene() {
   return (
     <svg viewBox="0 0 200 140">
@@ -811,6 +841,7 @@ export const FLOOR_GAMES: FloorGame[] = [
   { key: "firewalk", name: "FIREWALK", cat: "orig", fontClass: "f-titan", nameSize: "13px", blurb: "Every step raises the heat", Scene: FirewalkScene, glow: "rgba(251,146,60,.24)", href: "/firewalk" },
   { key: "heist", name: "HEIST", cat: "orig", fontClass: "f-bowlby", nameSize: "13px", blurb: "Crack the vault", Scene: HeistScene, glow: "rgba(251,191,36,.22)", href: "/heist" },
   { key: "threecard", name: "THREE CARD", cat: "cards", fontClass: "f-lilita", nameSize: "13px", blurb: "Poker at speed", Scene: ThreeCardScene, glow: "rgba(52,211,153,.18)", href: "/three-card-poker" },
+  { key: "paigow", name: "PAI GOW", cat: "cards", fontClass: "f-lilita", nameSize: "14px", blurb: "Two hands · beat both", Scene: PaiGowScene, glow: "rgba(34,211,238,.2)", href: "/pai-gow-poker" },
   { key: "greeddice", name: "GREED DICE", cat: "orig", fontClass: "f-titan", nameSize: "12px", blurb: "Push your luck", Scene: GreedDiceScene, glow: "rgba(251,191,36,.22)", href: "/greed-dice" },
   { key: "cipher", name: "CIPHER", cat: "orig", fontClass: "f-bungee", nameSize: "13px", blurb: "Break the code", Scene: CipherScene, glow: "rgba(52,211,153,.2)", href: "/cipher" },
   { key: "hilo", name: "HI-LO", cat: "orig", fontClass: "f-lilita", nameSize: "14px", blurb: "Higher or lower", Scene: HiLoScene, glow: "rgba(34,211,238,.18)", href: "/hilo" },
