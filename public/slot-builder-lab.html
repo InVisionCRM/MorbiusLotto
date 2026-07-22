@@ -91,13 +91,19 @@ h1.title .glyph{margin-left:.35rem;color:var(--cyan);filter:drop-shadow(0 0 12px
 .hud .v.lines-v{color:var(--cyan)}
 .felt{position:relative;padding:18px 14px 14px;display:flex;flex-direction:column;gap:12px}
 .reels{position:relative;display:grid;gap:var(--grid-gap);--cell:clamp(56px,13.5vw,112px)}
-.reel{position:relative;overflow:hidden;border-radius:var(--cell-radius);background:var(--cell-bg);box-shadow:inset 0 0 0 1px rgba(34,211,238,.12),0 6px 14px -8px rgba(0,0,0,.8)}
+.reel{position:relative;overflow:hidden;height:calc(var(--cell) * var(--rows,3));border-radius:var(--cell-radius);background:var(--cell-bg);box-shadow:inset 0 0 0 1px rgba(34,211,238,.12),0 6px 14px -8px rgba(0,0,0,.8)}
 .rf-sharp .reel,.board-shell.rf-sharp .reel{border-radius:2px}
 .rf-glass .reel{box-shadow:inset 0 0 0 1px rgba(255,255,255,.16),0 6px 14px -8px rgba(0,0,0,.8);background:linear-gradient(180deg,rgba(255,255,255,.05),rgba(6,18,27,.6))}
 .rf-tube .reel{box-shadow:inset 0 0 0 2px rgba(34,211,238,.55),0 0 18px -4px rgba(34,211,238,.5)}
 .strip{display:flex;flex-direction:column;will-change:transform}
-.reel.spinning .strip{animation:reelscroll var(--spinms,700ms) linear infinite;filter:blur(var(--spin-blur,2px))}
-@keyframes reelscroll{from{transform:translateY(calc(var(--cell) * -3))}to{transform:translateY(0)}}
+/* Velocity reel engine (ported from slots-lab): JS drives the strip's
+   translateY through an accel→cruise→decel profile; CSS only supplies the
+   motion blur while spinning and the land bounce / stop flash. */
+.reel.spinning .strip{filter:blur(var(--spin-blur,2px))}
+.reel.landed{animation:bldr-reelland .22s cubic-bezier(.34,1.56,.64,1)}
+@keyframes bldr-reelland{0%{transform:translateY(-6px)}55%{transform:translateY(3px)}100%{transform:translateY(0)}}
+.reel.rflash::before{content:"";position:absolute;inset:0;background:rgba(190,240,255,.22);animation:bldr-reelflash .18s ease-out both;pointer-events:none;z-index:3}
+@keyframes bldr-reelflash{from{opacity:1}to{opacity:0}}
 .sym{position:relative;height:var(--cell);display:grid;place-items:center;user-select:none}
 .sym img{width:var(--sym-size);height:var(--sym-size);object-fit:contain;filter:drop-shadow(0 3px 6px rgba(0,0,0,.6));pointer-events:none}
 /* land animations (class on settled cells — cells are reused, no rebuild flash) */
@@ -322,6 +328,13 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
 .pop-url-row{display:flex;gap:6px}
 .pop-url-row input{flex:1}
 .pop-url-row .sm-btn{padding:8px 11px;font-size:11px}
+/* turbo toggle beside spin */
+.actions-spinrow{display:flex;gap:10px;align-items:stretch}
+.actions-spinrow #spinBtn{flex:1}
+.turbo-btn{flex:none;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;min-width:74px;border-radius:14px;border:1px solid var(--cyan-soft);background:rgba(8,20,31,.7);color:var(--slate-400);cursor:pointer;transition:.15s;font-size:17px}
+.turbo-btn span{font-family:var(--font-disp);font-weight:700;font-size:10px;letter-spacing:.12em}
+.turbo-btn:hover{color:var(--win);border-color:rgba(245,158,11,.45)}
+.turbo-btn.on{color:#180d01;background:linear-gradient(180deg,#ffd370,#F59E0B);border-color:rgba(245,158,11,.8);box-shadow:0 0 18px -4px rgba(245,158,11,.7),inset 0 1px 0 rgba(255,255,255,.45)}
 /* advanced drawer */
 .adv-zone{max-width:840px;margin:22px auto 0}
 .adv-toggle{display:block;width:100%;font-family:var(--font-disp);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.12em;color:var(--slate-400);background:rgba(8,20,31,.7);border:1px solid var(--cyan-soft);border-radius:12px;padding:12px;cursor:pointer;transition:.15s}
@@ -423,7 +436,7 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
         </div>
         <canvas class="fx-canvas" id="fxCanvas"></canvas>
       </div>
-      <div class="actions"><button class="btn btn-glow" id="spinBtn">Spin preview<span class="cash-sub" id="spinSub">bet 140 MORBIUS</span></button></div>
+      <div class="actions actions-spinrow"><button class="btn btn-glow" id="spinBtn">Spin preview<span class="cash-sub" id="spinSub">bet 140 MORBIUS</span></button><button class="turbo-btn" id="turboBtn" aria-pressed="false" title="Turbo — snappy stops">&#9889;<span>TURBO</span></button></div>
 
       <div class="panel" style="margin-top:14px">
         <p class="panel-label">Recent preview spins</p>
@@ -544,6 +557,9 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
         <div class="grid2">
           <div class="ctl"><div class="ctl-lbl"><span>Reel spin blur</span><span class="val" id="sbVal">2.0</span></div><input type="range" id="sbR" min="0" max="6" step="0.5" value="2" /></div>
           <div class="ctl"><div class="ctl-lbl"><span>Cruise speed</span><span class="val" id="csVal">1.0&times;</span></div><input type="range" id="csR" min="5" max="20" value="10" /></div>
+        </div>
+        <div class="grid2">
+          <div class="ctl"><label class="chk"><input type="checkbox" id="turboChk" /> Turbo spin &mdash; snappy stop schedule</label></div>
         </div>
       </div>
 
@@ -924,7 +940,7 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
     return t;
   }
   function baseFx(over){var f={ambient:40}; if(over)deepMerge(f,over); return f;}
-  function baseAnim(over){var a={land:'pop',celebration:'flash',bigWin:10,spinBlur:2,cruise:10}; if(over)deepMerge(a,over); return a;}
+  function baseAnim(over){var a={land:'pop',celebration:'flash',bigWin:10,spinBlur:2,cruise:10,turbo:false}; if(over)deepMerge(a,over); return a;}
   function baseSound(over){var s={pack:'Synth',volume:0.8,muted:false}; if(over)deepMerge(s,over); if(!SND_PROFILES[s.pack])s.pack='Synth'; s.volume=Math.max(0,Math.min(1,+s.volume||0)); return s;}
   function deepMerge(dst,src){for(var k in src){if(src[k]&&typeof src[k]==='object'&&!Array.isArray(src[k])){if(!dst[k])dst[k]={};deepMerge(dst[k],src[k]);}else dst[k]=src[k];}return dst;}
 
@@ -1048,6 +1064,7 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
   function renderBoard(grid, landClass, winCells){
     var def=S.def, byId=MC.indexSyms(def);
     reelsEl.style.gridTemplateColumns='repeat('+def.cols+',1fr)';
+    reelsEl.style.setProperty('--rows', def.rows);
     reelsEl.innerHTML='';
     for(var r=0;r<def.cols;r++){
       var reel=document.createElement('div'); reel.className='reel';
@@ -1084,7 +1101,42 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
   }
 
   /* ═══ SPIN ═══ */
-  function reelSpinCells(){ var h='';for(var i=0;i<S.def.rows+3;i++){var s=S.def.symbols[Math.floor(Math.random()*S.def.symbols.length)];h+='<div class="sym">'+symImg(s)+'</div>';}return h; }
+  /* Velocity reel engine — ported from slots-lab.html ("modelled on the
+     transaction slot machine"). offset(t) = D * profile(t/T): quick accel,
+     long cruise, smooth decel — each reel lands exactly on its drawn stop at
+     its scheduled time (first stop, then one per gap). Turbo swaps the
+     schedule for snappy stops; the Cruise slider scales reel speed. */
+  var SPIN_TIMING={
+    normal:{first:1300,gap:1000,label:'Normal',cruise:17},
+    turbo:{first:420,gap:170,label:'Turbo',cruise:26}
+  };
+  function easeProfile(u){
+    var a=0.1,b=0.72,s=1/(a/2+(b-a)+(1-b)/2);
+    if(u<=0)return 0;
+    if(u>=1)return 1;
+    if(u<=a)return s*u*u/(2*a);
+    if(u<=b)return s*a/2+s*(u-a);
+    return 1-s*(1-u)*(1-u)/(2*(1-b));
+  }
+  function spinCellHtml(sym){
+    return '<div class="sym" data-edit="symbol" data-symid="'+esc(sym.id)+'">'+symImg(sym)+frameHTML(sym)+'</div>';
+  }
+  /* Linear strip: current window on top, weighted filler, final window at the
+     bottom — the result scrolls INTO place, so landing needs no cell swap. */
+  function buildSpinStrip(r, travel, grid, prevGrid, stripPool){
+    var byId=MC.indexSyms(S.def), rows=S.def.rows, html='';
+    for(var row=0;row<rows;row++){
+      var pid=prevGrid&&prevGrid[r]?prevGrid[r][row]:null;
+      html+=spinCellHtml((pid&&byId[pid])||S.def.symbols[Math.floor(Math.random()*S.def.symbols.length)]);
+    }
+    var pool=stripPool[r]||[];
+    for(var i=0;i<travel-rows;i++){
+      var id=pool.length?pool[Math.floor(Math.random()*pool.length)]:S.def.symbols[Math.floor(Math.random()*S.def.symbols.length)].id;
+      html+=spinCellHtml(byId[id]||S.def.symbols[0]);
+    }
+    for(var frow=0;frow<rows;frow++) html+=spinCellHtml(byId[grid[r][frow]]||S.def.symbols[0]);
+    return html;
+  }
   async function ensureCommit(){
     if(S.serverSeed)return;
     S.serverSeed=rndHex(48); S.serverHash=await sha256Hex(S.serverSeed);
@@ -1103,34 +1155,64 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
     var payout=MC.spinPayout(S.def,S.bet,ev.lineUnits,ev.scatter);
     S.balance-=S.bet; updateBalance();
 
-    var t=S.def.theme, a=S.def.anim;
-    // spinning frames
+    var a=S.def.anim, rows=S.def.rows;
+    var prevGrid=S.lastGrid;
+    var tm=SPIN_TIMING[a.turbo?'turbo':'normal'];
+    var first=S.reduced?200:tm.first, gap=S.reduced?100:tm.gap;
+    var cruise=tm.cruise*(a.cruise/10);
+
     reelsEl.style.gridTemplateColumns='repeat('+S.def.cols+',1fr)';
+    reelsEl.style.setProperty('--rows', rows);
     reelsEl.innerHTML='';
-    var reels=[];
+    var reelStates=[];
     for(var r=0;r<S.def.cols;r++){
+      var T=first+r*gap;
+      var travel=Math.max(rows+2, Math.round(cruise*T/1000));
       var reel=document.createElement('div'); reel.className='reel';
-      if(!S.reduced){ reel.classList.add('spinning'); reel.style.setProperty('--spinms',(1400-a.cruise*55)+'ms'); reel.style.setProperty('--spin-blur',a.spinBlur+'px'); }
-      var strip=document.createElement('div'); strip.className='strip'; strip.innerHTML=reelSpinCells();
-      reel.appendChild(strip); reelsEl.appendChild(reel); reels.push(reel);
+      if(!S.reduced){ reel.classList.add('spinning'); reel.style.setProperty('--spin-blur',a.spinBlur+'px'); }
+      var strip=document.createElement('div'); strip.className='strip';
+      strip.innerHTML=buildSpinStrip(r, travel, grid, prevGrid, strips);
+      reel.appendChild(strip); reelsEl.appendChild(reel);
+      reelStates.push({r:r, el:reel, strip:strip, T:T, travel:travel, done:false});
     }
     status('Spinning…');
     playSound('spin-start');                       // audio: reels launch (user-initiated)
     var wildId=null; S.def.symbols.forEach(function(s){if(s.role==='wild')wildId=s.id;});
-    var stagger=S.reduced?0:160, first=S.reduced?0:420;
-    for(var rr=0;rr<S.def.cols;rr++){
-      await wait(rr===0?first:stagger);
-      settleReel(reels[rr], grid, rr);
-      playSound('reel-land-'+Math.min(rr+1,5), 0.85);   // audio: rising per-reel land
-      if(wildId){ var wildHere=false; for(var wrow=0;wrow<S.def.rows;wrow++){ if(grid[rr][wrow]===wildId) wildHere=true; } if(wildHere) playSound('wild-land',0.7); }
-    }
+
+    await new Promise(function(resolve){
+      var cellH=reelStates[0].el.clientHeight/rows;
+      var t0=null;
+      function frame(ts){
+        if(t0===null)t0=ts;
+        var el=ts-t0, allDone=true;
+        reelStates.forEach(function(R){
+          if(R.done)return;
+          var u=el/R.T;
+          if(u>=1){
+            R.done=true;
+            settleReel(R.el, grid, R.r);
+            if(!S.reduced){
+              R.el.classList.add('landed'); R.el.classList.add('rflash');
+              (function(reelEl){setTimeout(function(){reelEl.classList.remove('landed');reelEl.classList.remove('rflash');},260);})(R.el);
+            }
+            playSound('reel-land-'+Math.min(R.r+1,5), 0.85);   // audio: rising per-reel land
+            if(wildId){ var wildHere=false; for(var wrow=0;wrow<rows;wrow++){ if(grid[R.r][wrow]===wildId) wildHere=true; } if(wildHere) playSound('wild-land',0.7); }
+          }else{
+            allDone=false;
+            R.strip.style.transform='translate3d(0,'+(-(R.travel*easeProfile(u))*cellH).toFixed(2)+'px,0)';
+          }
+        });
+        if(allDone)resolve(); else requestAnimationFrame(frame);
+      }
+      requestAnimationFrame(frame);
+    });
     await wait(S.reduced?0:120);
     finishSpin(grid, ev, payout);
   }
   function settleReel(reel, grid, r){
     reel.classList.remove('spinning');
     var byId=MC.indexSyms(S.def);
-    var strip=reel.querySelector('.strip'); strip.innerHTML='';
+    var strip=reel.querySelector('.strip'); strip.innerHTML=''; strip.style.transform='';
     for(var row=0;row<S.def.rows;row++){
       var sym=byId[grid[r][row]]||S.def.symbols[0];
       var cell=document.createElement('div'); cell.className='sym';
@@ -1351,6 +1433,7 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
     $('bwR').value=a.bigWin; $('bwVal').innerHTML=a.bigWin+'&times;';
     $('sbR').value=a.spinBlur; $('sbVal').textContent=a.spinBlur.toFixed(1);
     $('csR').value=a.cruise; $('csVal').innerHTML=(a.cruise/10).toFixed(1)+'&times;';
+    $('turboChk').checked=!!a.turbo; syncTurboBtn();
   }
   function setSeg(id,val){var seg=$(id);if(!seg)return;Array.prototype.forEach.call(seg.querySelectorAll('button'),function(b){b.classList.toggle('on',b.getAttribute('data-v')===val);});}
 
@@ -1469,6 +1552,9 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
   on('bwR','input',function(e){S.def.anim.bigWin=+e.target.value;$('bwVal').innerHTML=e.target.value+'&times;';refreshJSON();});
   on('sbR','input',function(e){S.def.anim.spinBlur=+e.target.value;$('sbVal').textContent=(+e.target.value).toFixed(1);refreshJSON();});
   on('csR','input',function(e){S.def.anim.cruise=+e.target.value;$('csVal').innerHTML=(+e.target.value/10).toFixed(1)+'&times;';refreshJSON();});
+  on('turboChk','change',function(e){S.def.anim.turbo=e.target.checked;syncTurboBtn();refreshJSON();});
+  function syncTurboBtn(){var on=!!S.def.anim.turbo;var b=$('turboBtn');b.classList.toggle('on',on);b.setAttribute('aria-pressed',on?'true':'false');}
+  on('turboBtn','click',function(){S.def.anim.turbo=!S.def.anim.turbo;syncTurboBtn();syncAnimControls();refreshJSON();});
 
   // ── sound ──
   segWire('soundPackSeg',function(v){ S.def.sound.pack=SND_PROFILES[v]?v:'Synth'; syncSoundControls(); refreshJSON(); playSound('button-click',0.7); });
@@ -1688,6 +1774,7 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
     h+=cSeg('btnShape','Shape',[['rounded','Rounded'],['pill','Pill'],['sharp','Sharp']],b.shape);
     h+=cSeg('btnFill','Fill',[['solid','Solid'],['gradient','Gradient'],['outline','Outline']],b.fill);
     h+=cCheck('btnGlow','Glow',b.glow);
+    h+=cCheck('turboTgl','Turbo spin (snappy stops)',S.def.anim.turbo);
     return h;
   }
   function backgroundMenuBody(){
@@ -1736,6 +1823,7 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
     btnShape:function(v){ S.def.theme.button.shape=v; applyTheme(); syncThemeControls(); refreshJSON(); },
     btnFill:function(v){ S.def.theme.button.fill=v; applyTheme(); syncThemeControls(); refreshJSON(); },
     btnGlow:function(v){ S.def.theme.button.glow=!!v; applyTheme(); syncThemeControls(); refreshJSON(); },
+    turboTgl:function(v){ S.def.anim.turbo=!!v; syncTurboBtn(); syncAnimControls(); refreshJSON(); },
     // background
     bgStyle:function(v){ S.def.theme.bg.style=v; applyTheme(); syncThemeControls(); refreshJSON(); },
     bgA:function(v){ S.def.theme.bg.colorA=v; applyTheme(); syncThemeControls(); refreshJSON(); },
