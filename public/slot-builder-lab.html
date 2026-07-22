@@ -313,23 +313,52 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
 .json-msg{font-size:11.5px;font-family:var(--font-mono);margin-top:8px;min-height:16px}
 .json-msg.ok{color:var(--cyan)}.json-msg.err{color:var(--loss)}
 /* ── sound tab ── */
-.snd-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-@media(max-width:520px){.snd-grid{grid-template-columns:1fr}}
-.snd-ev{display:flex;align-items:center;justify-content:space-between;gap:8px;border:1px solid var(--cyan-soft);background:rgba(6,16,25,.55);border-radius:11px;padding:8px 9px 8px 11px;transition:.15s}
-.snd-ev:hover{border-color:var(--cyan-edge)}
-.snd-ev.playing{border-color:var(--cyan);box-shadow:0 0 18px -6px rgba(34,211,238,.6)}
-.snd-ev .snd-meta{min-width:0}
-.snd-ev .snd-lbl{font-family:var(--font-disp);font-weight:600;font-size:12px;color:#eaf6fb;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.snd-ev .snd-tag{font-family:var(--font-mono);font-size:9px;color:var(--slate-500)}
+/* ── sound event tiles: a clean icon grid. Hovering a tile runs the SAME icon
+      animation the tile gets when its sound actually fires in a spin (.playing),
+      so the hover literally previews "what it looks like when this plays". ── */
+.snd-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(118px,1fr));gap:8px}
+.snd-tile{position:relative;display:flex;flex-direction:column;align-items:center;gap:5px;padding:13px 8px 10px;border:1px solid var(--cyan-soft);background:rgba(6,16,25,.55);border-radius:12px;cursor:pointer;transition:.15s;text-align:center;min-width:0;width:100%}
+.snd-tile:hover{border-color:var(--cyan-edge);box-shadow:0 0 16px -8px rgba(34,211,238,.5)}
+.snd-tile.playing{border-color:var(--cyan);box-shadow:0 0 18px -6px rgba(34,211,238,.65)}
+.snd-tile.on{border-color:var(--cyan-edge);background:rgba(34,211,238,.08)}
+.snd-tile .snd-lbl{font-family:var(--font-disp);font-weight:600;font-size:11.5px;color:#eaf6fb;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.snd-tile .snd-tag{font-family:var(--font-mono);font-size:8.5px;color:var(--slate-500);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.snd-ico{width:30px;height:30px;color:var(--cyan);filter:drop-shadow(0 0 6px rgba(34,211,238,.4));pointer-events:none}
+.snd-ico svg{width:100%;height:100%;display:block}
+.snd-tile-play{position:absolute;top:5px;right:5px;width:22px;height:22px;display:flex;align-items:center;justify-content:center;font-size:8px;color:var(--cyan);background:rgba(34,211,238,.12);border:1px solid var(--cyan-soft);border-radius:7px;cursor:pointer;opacity:0;transition:.15s;padding:0}
+.snd-tile:hover .snd-tile-play,.snd-tile.on .snd-tile-play{opacity:1}
+.snd-tile-play:hover{background:rgba(34,211,238,.25);border-color:var(--cyan-edge)}
+/* icon animations — each mimics the character of its sound */
+@keyframes icoDrop{0%{transform:translateY(-5px)}55%{transform:translateY(2px) scaleY(.82)}80%{transform:translateY(-1px)}100%{transform:translateY(0)}}
+@keyframes icoBurst{0%{transform:scale(1)}40%{transform:scale(1.35)}100%{transform:scale(1)}}
+@keyframes icoCoin{0%{transform:scaleX(1)}25%{transform:scaleX(.15)}50%{transform:scaleX(1)}75%{transform:scaleX(.15)}100%{transform:scaleX(1)}}
+@keyframes icoBolt{0%,100%{transform:translateX(0)}20%{transform:translateX(-2.5px)}40%{transform:translateX(2.5px)}60%{transform:translateX(-1.5px)}80%{transform:translateX(1.5px)}}
+@keyframes icoTwinkle{0%,100%{opacity:1;transform:scale(1) rotate(0deg)}50%{opacity:.55;transform:scale(1.25) rotate(22deg)}}
+@keyframes icoPop{0%{transform:scale(1)}35%{transform:scale(.8)}70%{transform:scale(1.28)}100%{transform:scale(1)}}
+@keyframes icoSpin{from{transform:rotate(0)}to{transform:rotate(360deg)}}
+@keyframes icoShake{0%,100%{transform:rotate(0)}15%{transform:rotate(-11deg) scale(1.12)}30%{transform:rotate(9deg) scale(1.18)}45%{transform:rotate(-7deg) scale(1.12)}60%{transform:rotate(5deg)}80%{transform:rotate(-2deg)}}
+@keyframes icoTap{0%{transform:scale(1)}40%{transform:scale(.8)}100%{transform:scale(1)}}
+.snd-tile:hover .ico-reel,.snd-tile.playing .ico-reel{animation:icoDrop .55s ease}
+.snd-tile:hover .ico-burst,.snd-tile.playing .ico-burst{animation:icoBurst .55s ease}
+.snd-tile:hover .ico-coin,.snd-tile.playing .ico-coin{animation:icoCoin .8s ease infinite}
+.snd-tile:hover .ico-bolt,.snd-tile.playing .ico-bolt{animation:icoBolt .45s linear}
+.snd-tile:hover .ico-spark,.snd-tile.playing .ico-spark{animation:icoTwinkle .8s ease infinite}
+.snd-tile:hover .ico-gift,.snd-tile.playing .ico-gift{animation:icoPop .55s ease}
+.snd-tile:hover .ico-spin,.snd-tile.playing .ico-spin{animation:icoSpin .9s linear infinite}
+.snd-tile:hover .ico-gem,.snd-tile.playing .ico-gem{animation:icoShake .7s ease}
+.snd-tile:hover .ico-tap,.snd-tile.playing .ico-tap{animation:icoTap .35s ease}
+.snd-tile:hover .ico-go,.snd-tile.playing .ico-go{animation:icoTap .35s ease}
+.snd-tile .snd-meta{min-width:0;max-width:100%}
+/* ── per-event fx: customize panel ── */
+.snd-ev-wrap{min-width:0}
+.snd-ev-wrap.expanded{grid-column:1 / -1}
+.snd-ev-wrap.expanded .snd-tile{flex-direction:row;justify-content:flex-start;text-align:left;padding:9px 12px;gap:10px;border-color:var(--cyan-edge)}
+.snd-ev-wrap.expanded .snd-tile .snd-ico{width:24px;height:24px}
+.snd-ev-wrap.expanded .snd-tile .snd-meta{display:flex;align-items:baseline;gap:8px;min-width:0}
 .snd-play{flex:none;font-family:var(--font-disp);font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--cyan);background:rgba(34,211,238,.1);border:1px solid var(--cyan-soft);border-radius:8px;padding:7px 12px;cursor:pointer;transition:.15s;display:inline-flex;align-items:center;gap:5px}
 .snd-play:hover{border-color:var(--cyan-edge);background:rgba(34,211,238,.18)}
 .snd-play .tri{font-size:9px}
-/* ── per-event fx: customize panel ── */
-.snd-ev-btns{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end;flex:none}
-.snd-tgl-btn{background:rgba(148,163,184,.08);color:var(--slate-400);border-color:var(--cyan-soft)}
-.snd-tgl-btn.on{color:var(--cyan);border-color:var(--cyan-edge);background:rgba(34,211,238,.14)}
-.snd-ev-wrap.expanded{grid-column:1 / -1}
-.snd-ev-wrap.expanded .snd-ev{border-color:var(--cyan-edge)}
+.snd-auto-btn.on{color:#05202a;background:var(--cyan);border-color:var(--cyan)}
 .snd-cust-panel{display:none;margin-top:10px;padding-top:10px;border-top:1px dashed var(--cyan-soft)}
 .snd-cust-panel.open{display:block}
 .snd-samp-row{margin-bottom:10px}
@@ -1225,7 +1254,7 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
   }
   function baseFx(over){var f={ambient:40}; if(over)deepMerge(f,over); return f;}
   function baseAnim(over){var a={land:'pop',celebration:'flash',bigWin:10,spinBlur:2,cruise:10,turbo:false}; if(over)deepMerge(a,over); return a;}
-  function baseSound(over){var s={pack:'Synth',volume:0.8,muted:false,fx:{}}; if(over)deepMerge(s,over); if(!SND_PROFILES[s.pack])s.pack='Synth'; s.volume=Math.max(0,Math.min(1,+s.volume||0)); if(!s.fx||typeof s.fx!=='object'||Array.isArray(s.fx))s.fx={}; return s;}
+  function baseSound(over){var s={pack:'Synth',volume:0.8,muted:false,autoPreview:false,fx:{}}; if(over)deepMerge(s,over); if(!SND_PROFILES[s.pack])s.pack='Synth'; s.volume=Math.max(0,Math.min(1,+s.volume||0)); s.autoPreview=!!s.autoPreview; if(!s.fx||typeof s.fx!=='object'||Array.isArray(s.fx))s.fx={}; return s;}
   function deepMerge(dst,src){for(var k in src){if(src[k]&&typeof src[k]==='object'&&!Array.isArray(src[k])){if(!dst[k])dst[k]={};deepMerge(dst[k],src[k]);}else dst[k]=src[k];}return dst;}
 
   var PRESETS = {
@@ -1671,6 +1700,36 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
   function renderAll(){ applyTheme(); syncLayoutControls(); renderSymbols(); renderFXGallery(); renderQuickApply(); syncThemeControls(); syncAnimControls(); renderSoundEvents(); syncSoundControls(); renderBoard(S.lastGrid||blankGrid()); renderRecent(); refreshJSON(); updateHud(); }
 
   /* ═══ SOUND TAB ═══ */
+  /* per-event icon whose hover/playing animation mimics the sound's character:
+     reels thud down, wins burst, coins flip, wilds jitter, jackpots shake, etc. */
+  function sndIconType(id){
+    if(id.indexOf('reel-land')===0)return 'reel';
+    if(id.indexOf('win-')===0)return 'burst';
+    if(id.indexOf('jackpot')===0)return 'gem';
+    if(id==='coin-rollup')return 'coin';
+    if(id==='wild-land')return 'bolt';
+    if(id==='scatter-land')return 'spark';
+    if(id==='bonus-trigger')return 'gift';
+    if(id==='freespins-start')return 'spin';
+    if(id==='spin-start')return 'go';
+    return 'tap';
+  }
+  var SND_ICONS={
+    reel:'<rect x="3" y="6" width="5" height="13" rx="1.5"/><rect x="9.5" y="4" width="5" height="13" rx="1.5"/><rect x="16" y="6" width="5" height="13" rx="1.5"/>',
+    burst:'<circle cx="12" cy="12" r="2.6" fill="currentColor" stroke="none"/><path d="M12 2.5v4.2M12 17.3v4.2M2.5 12h4.2M17.3 12h4.2M5.3 5.3l3 3M15.7 15.7l3 3M18.7 5.3l-3 3M8.3 15.7l-3 3"/>',
+    gem:'<path d="M7.2 4.5h9.6L20.5 9 12 19.8 3.5 9l3.7-4.5z"/><path d="M3.5 9h17M9.7 9L12 19l2.3-10M7.2 4.5L9.7 9l2.3-4.5L14.3 9l2.5-4.5"/>',
+    coin:'<circle cx="12" cy="12" r="8.2"/><ellipse cx="12" cy="12" rx="3.4" ry="8.2"/>',
+    bolt:'<path d="M13.2 2.5L5.5 13.2h4.6l-1.8 8.3 8.2-11h-4.6l1.3-8z" fill="currentColor" stroke="none"/>',
+    spark:'<path d="M11 4.5l1.1 3 3 1.1-3 1.1-1.1 3-1.1-3-3-1.1 3-1.1z" fill="currentColor" stroke="none"/><path d="M17.6 13.4l.7 1.9 1.9.7-1.9.7-.7 1.9-.7-1.9-1.9-.7 1.9-.7z" fill="currentColor" stroke="none"/><path d="M6.4 14.4l.6 1.6 1.6.6-1.6.6-.6 1.6-.6-1.6-1.6-.6 1.6-.6z" fill="currentColor" stroke="none"/>',
+    gift:'<rect x="4" y="9.5" width="16" height="10" rx="1.5"/><path d="M4 13h16M12 9.5v10M12 9.5C12 7 10 4.6 8.3 5.3S7.5 9.5 12 9.5zm0 0c0-2.5 2-4.9 3.7-4.2s.8 4.2-3.7 4.2z"/>',
+    spin:'<path d="M19.3 12a7.3 7.3 0 1 1-2.1-5.1"/><path d="M19.6 3.6v3.6H16"/>',
+    go:'<path d="M8 5.2l10.5 6.8L8 18.8z" fill="currentColor" stroke="none"/>',
+    tap:'<circle cx="12" cy="12" r="3.4" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="7.6"/>'
+  };
+  function sndIconSVG(id){
+    var t=sndIconType(id);
+    return '<div class="snd-ico ico-'+t+'"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'+SND_ICONS[t]+'</svg></div>';
+  }
   function renderSoundEvents(){
     var host=$('soundEvents'); if(!host)return;
     stopAllSndWidgets(); // full DOM rebuild below — every panel comes back collapsed, so any
@@ -1679,12 +1738,10 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
     host.innerHTML=SOUND_EVENTS.map(function(ev){
       var id=ev[0];
       return '<div class="snd-ev-wrap" data-snd-wrap="'+id+'">'+
-        '<div class="snd-ev" data-snd="'+id+'">'+
+        '<div class="snd-tile" data-snd="'+id+'" data-snd-toggle="'+id+'" role="button" tabindex="0" aria-expanded="false" title="'+esc(ev[1])+' &mdash; click to customize">'+
+          '<button class="snd-tile-play" data-snd-play="'+id+'" title="Play" aria-label="Play '+esc(ev[1])+'">&#9654;</button>'+
+          sndIconSVG(id)+
           '<div class="snd-meta"><div class="snd-lbl">'+esc(ev[1])+'</div><div class="snd-tag mono">'+id+'</div></div>'+
-          '<div class="snd-ev-btns">'+
-            '<button class="snd-play snd-tgl-btn" data-snd-toggle="'+id+'" aria-expanded="false">Customize <span class="car">&#9662;</span></button>'+
-            '<button class="snd-play" data-snd-play="'+id+'"><span class="tri" aria-hidden="true">&#9654;</span> Play</button>'+
-          '</div>'+
         '</div>'+
         sndPanelHTML(id)+
       '</div>';
@@ -1706,6 +1763,8 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
       '<div class="snd-samp-row">'+
         '<div class="snd-samp-status mono" id="sndstatus-'+id+'">'+statusTxt+'</div>'+
         '<div class="snd-samp-btns">'+
+          '<button class="upl-btn" data-snd-play="'+id+'">&#9654; Play</button>'+
+          '<button class="upl-btn snd-auto-btn'+(S.def.sound.autoPreview?' on':'')+'" data-snd-auto="1" title="Replay this sound automatically after every tweak">&#8635; Auto-play: '+(S.def.sound.autoPreview?'ON':'OFF')+'</button>'+
           '<button class="upl-btn" data-snd-upload="'+id+'">&#8593; Upload</button>'+
           '<button class="upl-btn snd-rec-btn" data-snd-rec="'+id+'">&#9679; Record</button>'+
           '<input type="file" accept="audio/*" hidden data-snd-file="'+id+'" />'+
@@ -1793,8 +1852,22 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
     $('muteChk').checked=!!snd.muted;
   }
   function pulseSndCard(id){
-    var card=document.querySelector('.snd-ev[data-snd="'+id+'"]'); if(!card)return;
-    card.classList.add('playing'); setTimeout(function(){card.classList.remove('playing');},420);
+    var card=document.querySelector('.snd-tile[data-snd="'+id+'"]'); if(!card)return;
+    card.classList.add('playing'); setTimeout(function(){card.classList.remove('playing');},600);
+  }
+  /* ── auto-play while sound-designing: one boolean (S.def.sound.autoPreview).
+        Every tweak (slider, envelope, pad, echo drag) schedules a trailing replay
+        230ms after the LAST change, so drags don't machine-gun the sound. ── */
+  var sndAutoT=null;
+  function sndAutoKick(id){
+    if(!(S.def.sound&&S.def.sound.autoPreview))return;
+    clearTimeout(sndAutoT);
+    sndAutoT=setTimeout(function(){ pulseSndCard(id); playSound(id,0.9); },230);
+  }
+  function syncAutoBtns(){
+    var on=!!(S.def.sound&&S.def.sound.autoPreview);
+    var btns=document.querySelectorAll('[data-snd-auto]');
+    for(var i=0;i<btns.length;i++){ btns[i].classList.toggle('on',on); btns[i].innerHTML='&#8635; Auto-play: '+(on?'ON':'OFF'); }
   }
   function sndWrapEl(id){ return document.querySelector('.snd-ev-wrap[data-snd-wrap="'+id+'"]'); }
   function toggleSndPanel(id){
@@ -1803,7 +1876,9 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
     var tgl=wrap.querySelector('[data-snd-toggle]');
     var open=wrap.classList.toggle('expanded');
     if(panel)panel.classList.toggle('open', open);
-    if(tgl){ tgl.classList.toggle('on', open); tgl.setAttribute('aria-expanded', open?'true':'false'); tgl.innerHTML='Customize <span class="car">'+(open?'&#9652;':'&#9662;')+'</span>'; }
+    // the tile itself is the toggle now — state via class/aria only, NEVER innerHTML
+    // (rewriting it would destroy the icon + play button inside).
+    if(tgl){ tgl.classList.toggle('on', open); tgl.setAttribute('aria-expanded', open?'true':'false'); }
     // widgets only exist/animate while their panel is expanded — start their rAF
     // loops on open, and CANCEL them on close. With up to 19 events, leaving
     // loops running behind collapsed panels would be 19*2 background rAFs for nothing.
@@ -1818,6 +1893,7 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
     else if(field==='reverbDecay') fx.reverbDecay=Math.max(0.2,Math.min(4,raw));
     else if(field==='delayMix') fx.delayMix=Math.max(0,Math.min(1,raw/100));
     refreshJSON();
+    sndAutoKick(id);
   }
   /* ── Spatial Pad: Bitwig tr.Distance-style XY drag. X = pan (-1..1), Y = "distance"
         mapped onto the EXISTING reverbMix field (bottom/near=0/dry, top/far=1/wet). ── */
@@ -1833,6 +1909,7 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
     updatePadDot(id);
     updateSndReads(id);
     refreshJSON();
+    sndAutoKick(id);
     return fx;
   }
   function setSpatialFromClient(id, pad, clientX, clientY){
@@ -1944,6 +2021,7 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
     else if(handle==='d'){ fx.envDecay=clamp(u,fx.envAttack,fx.envEnd); fx.envSustain=v; }
     else fx.envEnd=clamp(u,fx.envDecay,1);
     updateSndReads(id); drawEnvEditor(id); refreshJSON();
+    sndAutoKick(id);
     return fx;
   }
   /* ── Echo Tunnel as a control surface: drag across the ring viz — x = delay
@@ -1955,6 +2033,7 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
     fx.delayTime=+(0.02+x*0.98).toFixed(3);
     fx.delayFeedback=+((1-y)*0.85).toFixed(3);
     updateSndReads(id); refreshJSON();
+    sndAutoKick(id);
     return fx;
   }
   /* ── Echo Tunnel: Ableton-Echo-inspired delay visualizer. Concentric rings spawn
@@ -2378,6 +2457,8 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
   $('soundEvents').addEventListener('click',function(e){
     var play=e.target.closest('[data-snd-play]');
     if(play){ var id=play.getAttribute('data-snd-play'); pulseSndCard(id); playSound(id, 0.95); return; }
+    var aut=e.target.closest('[data-snd-auto]');
+    if(aut){ S.def.sound.autoPreview=!S.def.sound.autoPreview; syncAutoBtns(); refreshJSON(); return; }
     var tgl=e.target.closest('[data-snd-toggle]');
     if(tgl){ toggleSndPanel(tgl.getAttribute('data-snd-toggle')); return; }
     var upl=e.target.closest('[data-snd-upload]');
@@ -2398,6 +2479,29 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
     var f=e.target.closest('[data-snd-file]'); if(!f)return;
     var id=f.getAttribute('data-snd-file'); var file=f.files&&f.files[0]; if(!file)return;
     handleSndUpload(id, file);
+  });
+  // Tiles are keyboard-reachable (role=button + tabindex) — Enter/Space toggles.
+  $('soundEvents').addEventListener('keydown',function(e){
+    if(e.key!=='Enter'&&e.key!==' ')return;
+    var tgl=e.target.closest('[data-snd-toggle]'); if(!tgl||e.target!==tgl)return;
+    e.preventDefault(); toggleSndPanel(tgl.getAttribute('data-snd-toggle'));
+  });
+  // Hover preview: dwell 160ms on a tile plays its sound — the icon's CSS hover
+  // animation is the same one .playing triggers, so hover mimics real playback.
+  // Mouse only (touch taps go through click-to-expand instead).
+  var sndHoverT=null;
+  $('soundEvents').addEventListener('pointerover',function(e){
+    if(e.pointerType==='touch')return;
+    var tile=e.target.closest('.snd-tile'); if(!tile)return;
+    var from=e.relatedTarget; if(from&&tile.contains(from))return; // moving within the tile
+    var id=tile.getAttribute('data-snd');
+    clearTimeout(sndHoverT);
+    sndHoverT=setTimeout(function(){ playSound(id,0.85); },160);
+  });
+  $('soundEvents').addEventListener('pointerout',function(e){
+    var tile=e.target.closest('.snd-tile'); if(!tile)return;
+    var to=e.relatedTarget; if(to&&tile.contains(to))return;
+    clearTimeout(sndHoverT);
   });
   // Direct-manipulation drags (Spatial Pad / Envelope / Echo Tunnel) — one
   // delegated pointerdown; pointer events cover mouse + touch alike.
@@ -3064,6 +3168,7 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
     getLiveTap:function(id){return sndLiveTaps[id]||null;},
     getEchoRafRunning:function(id){return !!sndEchoRaf[id];},
     getGonioRafRunning:function(id){return !!sndGonioRaf[id];},
+    setAutoPreview:function(on){S.def.sound.autoPreview=!!on;syncAutoBtns();refreshJSON();return S.def.sound.autoPreview;},
     // ── added for the compact-layout / envelope-editor pass ──
     envPickHandle:function(id,clientX,clientY){var cv=$('sndenv-'+id);if(!cv)return null;return envPickHandle(id,cv,clientX,clientY);},
     dragEnvHandle:function(id,handle,clientX,clientY){var cv=$('sndenv-'+id);if(!cv)return null;return envDragTo(id,cv,handle,clientX,clientY);},
