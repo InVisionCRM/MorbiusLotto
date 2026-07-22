@@ -256,6 +256,30 @@ h1.title .glyph{margin-left:.35rem;color:var(--cyan);filter:drop-shadow(0 0 12px
 input[type=range]{width:100%;-webkit-appearance:none;appearance:none;height:5px;border-radius:3px;background:rgba(34,211,238,.18);outline:none}
 input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:var(--cyan);box-shadow:0 0 8px rgba(34,211,238,.7);cursor:pointer}
 input[type=range]::-moz-range-thumb{width:16px;height:16px;border:0;border-radius:50%;background:var(--cyan);box-shadow:0 0 8px rgba(34,211,238,.7);cursor:pointer}
+/* ── rotary knobs (replace the last remaining sliders). Drag vertically to turn;
+      a plain tap opens the big-slider overlay instead. ── */
+.knob-row{display:flex;gap:16px;justify-content:center;flex-wrap:wrap}
+.knob-ctl{display:flex;flex-direction:column;align-items:center;gap:1px;min-width:0}
+.knob{width:52px;height:52px;cursor:ns-resize;touch-action:none;color:var(--cyan);border-radius:50%;outline-offset:3px}
+.knob svg{width:100%;height:100%;display:block}
+.knob .knob-track{stroke:rgba(148,163,184,.28)}
+.knob .knob-fill{stroke:var(--cyan);filter:drop-shadow(0 0 4px rgba(34,211,238,.6))}
+.knob .knob-needle{stroke:#eaffff}
+.knob:hover .knob-fill{filter:drop-shadow(0 0 7px rgba(34,211,238,.9))}
+.knob-lbl{font-family:var(--font-disp);font-weight:600;font-size:9px;text-transform:uppercase;letter-spacing:.09em;color:var(--slate-400);text-align:center;white-space:nowrap;max-width:86px;overflow:hidden;text-overflow:ellipsis}
+.knob-val{font-family:var(--font-mono);font-size:10.5px;color:var(--cyan)}
+/* ── big-slider overlay: tap a knob → huge slider on a translucent black fill.
+      Tap/click outside the card (or Esc) closes it. ── */
+.bso{position:fixed;inset:0;z-index:130;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.72);-webkit-backdrop-filter:blur(7px);backdrop-filter:blur(7px)}
+.bso.open{display:flex}
+.bso-card{width:min(480px,92vw);background:rgba(5,14,22,.96);border:1px solid var(--cyan-edge);border-radius:20px;padding:28px 26px 30px;text-align:center;box-shadow:0 30px 80px -20px rgba(0,0,0,.95),0 0 54px -22px rgba(34,211,238,.6)}
+.bso-lbl{font-family:var(--font-disp);font-weight:600;font-size:13px;text-transform:uppercase;letter-spacing:.14em;color:var(--slate-300)}
+.bso-val{font-family:var(--font-mono);font-size:38px;color:var(--cyan);margin:12px 0 22px;text-shadow:0 0 18px rgba(34,211,238,.55)}
+#bsoRange{height:44px;background:transparent}
+#bsoRange::-webkit-slider-runnable-track{height:12px;border-radius:6px;background:rgba(34,211,238,.2)}
+#bsoRange::-webkit-slider-thumb{width:38px;height:38px;margin-top:-13px;box-shadow:0 0 16px rgba(34,211,238,.85),0 0 2px #fff}
+#bsoRange::-moz-range-track{height:12px;border-radius:6px;background:rgba(34,211,238,.2)}
+#bsoRange::-moz-range-thumb{width:38px;height:38px;box-shadow:0 0 16px rgba(34,211,238,.85),0 0 2px #fff}
 select,input[type=text],input[type=number]{width:100%;background:var(--field);border:1px solid var(--cyan-soft);border-radius:9px;color:var(--ink);font-family:var(--font-mono);font-size:12.5px;padding:9px 10px;outline:none}
 select:focus,input:focus{border-color:var(--cyan-edge)}
 input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan-soft);border-radius:8px;background:var(--field);cursor:pointer;vertical-align:middle}
@@ -313,23 +337,52 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
 .json-msg{font-size:11.5px;font-family:var(--font-mono);margin-top:8px;min-height:16px}
 .json-msg.ok{color:var(--cyan)}.json-msg.err{color:var(--loss)}
 /* ── sound tab ── */
-.snd-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-@media(max-width:520px){.snd-grid{grid-template-columns:1fr}}
-.snd-ev{display:flex;align-items:center;justify-content:space-between;gap:8px;border:1px solid var(--cyan-soft);background:rgba(6,16,25,.55);border-radius:11px;padding:8px 9px 8px 11px;transition:.15s}
-.snd-ev:hover{border-color:var(--cyan-edge)}
-.snd-ev.playing{border-color:var(--cyan);box-shadow:0 0 18px -6px rgba(34,211,238,.6)}
-.snd-ev .snd-meta{min-width:0}
-.snd-ev .snd-lbl{font-family:var(--font-disp);font-weight:600;font-size:12px;color:#eaf6fb;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.snd-ev .snd-tag{font-family:var(--font-mono);font-size:9px;color:var(--slate-500)}
+/* ── sound event tiles: a clean icon grid. Hovering a tile runs the SAME icon
+      animation the tile gets when its sound actually fires in a spin (.playing),
+      so the hover literally previews "what it looks like when this plays". ── */
+.snd-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(118px,1fr));gap:8px}
+.snd-tile{position:relative;display:flex;flex-direction:column;align-items:center;gap:5px;padding:13px 8px 10px;border:1px solid var(--cyan-soft);background:rgba(6,16,25,.55);border-radius:12px;cursor:pointer;transition:.15s;text-align:center;min-width:0;width:100%}
+.snd-tile:hover{border-color:var(--cyan-edge);box-shadow:0 0 16px -8px rgba(34,211,238,.5)}
+.snd-tile.playing{border-color:var(--cyan);box-shadow:0 0 18px -6px rgba(34,211,238,.65)}
+.snd-tile.on{border-color:var(--cyan-edge);background:rgba(34,211,238,.08)}
+.snd-tile .snd-lbl{font-family:var(--font-disp);font-weight:600;font-size:11.5px;color:#eaf6fb;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.snd-tile .snd-tag{font-family:var(--font-mono);font-size:8.5px;color:var(--slate-500);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.snd-ico{width:30px;height:30px;color:var(--cyan);filter:drop-shadow(0 0 6px rgba(34,211,238,.4));pointer-events:none}
+.snd-ico svg{width:100%;height:100%;display:block}
+.snd-tile-play{position:absolute;top:5px;right:5px;width:22px;height:22px;display:flex;align-items:center;justify-content:center;font-size:8px;color:var(--cyan);background:rgba(34,211,238,.12);border:1px solid var(--cyan-soft);border-radius:7px;cursor:pointer;opacity:0;transition:.15s;padding:0}
+.snd-tile:hover .snd-tile-play,.snd-tile.on .snd-tile-play{opacity:1}
+.snd-tile-play:hover{background:rgba(34,211,238,.25);border-color:var(--cyan-edge)}
+/* icon animations — each mimics the character of its sound */
+@keyframes icoDrop{0%{transform:translateY(-5px)}55%{transform:translateY(2px) scaleY(.82)}80%{transform:translateY(-1px)}100%{transform:translateY(0)}}
+@keyframes icoBurst{0%{transform:scale(1)}40%{transform:scale(1.35)}100%{transform:scale(1)}}
+@keyframes icoCoin{0%{transform:scaleX(1)}25%{transform:scaleX(.15)}50%{transform:scaleX(1)}75%{transform:scaleX(.15)}100%{transform:scaleX(1)}}
+@keyframes icoBolt{0%,100%{transform:translateX(0)}20%{transform:translateX(-2.5px)}40%{transform:translateX(2.5px)}60%{transform:translateX(-1.5px)}80%{transform:translateX(1.5px)}}
+@keyframes icoTwinkle{0%,100%{opacity:1;transform:scale(1) rotate(0deg)}50%{opacity:.55;transform:scale(1.25) rotate(22deg)}}
+@keyframes icoPop{0%{transform:scale(1)}35%{transform:scale(.8)}70%{transform:scale(1.28)}100%{transform:scale(1)}}
+@keyframes icoSpin{from{transform:rotate(0)}to{transform:rotate(360deg)}}
+@keyframes icoShake{0%,100%{transform:rotate(0)}15%{transform:rotate(-11deg) scale(1.12)}30%{transform:rotate(9deg) scale(1.18)}45%{transform:rotate(-7deg) scale(1.12)}60%{transform:rotate(5deg)}80%{transform:rotate(-2deg)}}
+@keyframes icoTap{0%{transform:scale(1)}40%{transform:scale(.8)}100%{transform:scale(1)}}
+.snd-tile:hover .ico-reel,.snd-tile.playing .ico-reel{animation:icoDrop .55s ease}
+.snd-tile:hover .ico-burst,.snd-tile.playing .ico-burst{animation:icoBurst .55s ease}
+.snd-tile:hover .ico-coin,.snd-tile.playing .ico-coin{animation:icoCoin .8s ease infinite}
+.snd-tile:hover .ico-bolt,.snd-tile.playing .ico-bolt{animation:icoBolt .45s linear}
+.snd-tile:hover .ico-spark,.snd-tile.playing .ico-spark{animation:icoTwinkle .8s ease infinite}
+.snd-tile:hover .ico-gift,.snd-tile.playing .ico-gift{animation:icoPop .55s ease}
+.snd-tile:hover .ico-spin,.snd-tile.playing .ico-spin{animation:icoSpin .9s linear infinite}
+.snd-tile:hover .ico-gem,.snd-tile.playing .ico-gem{animation:icoShake .7s ease}
+.snd-tile:hover .ico-tap,.snd-tile.playing .ico-tap{animation:icoTap .35s ease}
+.snd-tile:hover .ico-go,.snd-tile.playing .ico-go{animation:icoTap .35s ease}
+.snd-tile .snd-meta{min-width:0;max-width:100%}
+/* ── per-event fx: customize panel ── */
+.snd-ev-wrap{min-width:0}
+.snd-ev-wrap.expanded{grid-column:1 / -1}
+.snd-ev-wrap.expanded .snd-tile{flex-direction:row;justify-content:flex-start;text-align:left;padding:9px 12px;gap:10px;border-color:var(--cyan-edge)}
+.snd-ev-wrap.expanded .snd-tile .snd-ico{width:24px;height:24px}
+.snd-ev-wrap.expanded .snd-tile .snd-meta{display:flex;align-items:baseline;gap:8px;min-width:0}
 .snd-play{flex:none;font-family:var(--font-disp);font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--cyan);background:rgba(34,211,238,.1);border:1px solid var(--cyan-soft);border-radius:8px;padding:7px 12px;cursor:pointer;transition:.15s;display:inline-flex;align-items:center;gap:5px}
 .snd-play:hover{border-color:var(--cyan-edge);background:rgba(34,211,238,.18)}
 .snd-play .tri{font-size:9px}
-/* ── per-event fx: customize panel ── */
-.snd-ev-btns{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end;flex:none}
-.snd-tgl-btn{background:rgba(148,163,184,.08);color:var(--slate-400);border-color:var(--cyan-soft)}
-.snd-tgl-btn.on{color:var(--cyan);border-color:var(--cyan-edge);background:rgba(34,211,238,.14)}
-.snd-ev-wrap.expanded{grid-column:1 / -1}
-.snd-ev-wrap.expanded .snd-ev{border-color:var(--cyan-edge)}
+.snd-auto-btn.on{color:#05202a;background:var(--cyan);border-color:var(--cyan)}
 .snd-cust-panel{display:none;margin-top:10px;padding-top:10px;border-top:1px dashed var(--cyan-soft)}
 .snd-cust-panel.open{display:block}
 .snd-samp-row{margin-bottom:10px}
@@ -444,7 +497,9 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
 .turbo-btn:hover{color:var(--win);border-color:rgba(245,158,11,.45)}
 .turbo-btn.on{color:#180d01;background:linear-gradient(180deg,#ffd370,#F59E0B);border-color:rgba(245,158,11,.8);box-shadow:0 0 18px -4px rgba(245,158,11,.7),inset 0 1px 0 rgba(255,255,255,.45)}
 /* advanced drawer */
-.adv-zone{max-width:840px;margin:22px auto 0}
+/* lives directly under the element-chip toolbar now — one editor block, so the
+   simple chips and the advanced drawer are reachable from the same spot. */
+.adv-zone{margin:0 auto 14px}
 .adv-toggle{display:block;width:100%;font-family:var(--font-disp);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.12em;color:var(--slate-400);background:rgba(8,20,31,.7);border:1px solid var(--cyan-soft);border-radius:12px;padding:12px;cursor:pointer;transition:.15s}
 .adv-toggle:hover{color:var(--cyan);border-color:var(--cyan-edge)}
 .adv-toggle::after{content:" \25BE";color:var(--cyan)}
@@ -527,33 +582,6 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
         <button class="el-chip" data-chip="math"><span class="dot"></span>Math / RTP</button>
         <button class="el-chip" data-chip="json"><span class="dot"></span>JSON</button>
       </div>
-    <!-- ── LIVE BOARD ── -->
-    <section>
-      <div class="board-shell" id="boardShell">
-        <div class="hud" data-edit="layout">
-          <div class="cell2"><div class="k">Lines</div><div class="v lines-v" id="hudLines">7</div></div>
-          <div class="cell2"><div class="k">Bet</div><div class="v" id="hudBet">140</div></div>
-          <div class="cell2"><div class="k">Win</div><div class="v win-v idle" id="hudWin">&mdash;</div></div>
-          <div class="cell2"><div class="k">Grid</div><div class="v" id="hudGrid">5&times;3</div></div>
-        </div>
-        <div class="felt" data-edit="background">
-          <div class="reels" id="reels" data-edit="reels"></div>
-          <div class="felt-status" id="status">Click any part of the machine to edit it &mdash; or use the toolbar above. Spin to preview.</div>
-          <div class="felt-flash" id="feltFlash"></div>
-          <div class="cele-ring" id="celeRing"></div>
-        </div>
-        <canvas class="fx-canvas" id="fxCanvas"></canvas>
-      </div>
-      <div class="actions actions-spinrow"><button class="btn btn-glow" id="spinBtn">Spin preview<span class="cash-sub" id="spinSub">bet 140 MORBIUS</span></button><button class="turbo-btn" id="turboBtn" aria-pressed="false" title="Turbo — snappy stops">&#9889;<span>TURBO</span></button></div>
-
-      <div class="panel" style="margin-top:14px">
-        <p class="panel-label">Recent preview spins</p>
-        <div class="recent" id="recent"><span class="hint" style="margin:0">Spin to populate &mdash; each thumbnail shows live border FX.</span></div>
-      </div>
-      <p class="edit-hint">Click a <b style="color:var(--cyan)">symbol</b>, the <b style="color:var(--cyan)">reels</b>, the <b style="color:var(--cyan)">frame</b>, the <b style="color:var(--cyan)">HUD</b> or the <b style="color:var(--cyan)">background</b> &mdash; a menu opens right where you click.</p>
-    </section>
-    </div><!-- /.stage -->
-
     <!-- ── ADVANCED DRAWER (fallback / full controls, Math &middot; Sound &middot; JSON) ── -->
     <div class="adv-zone">
       <button class="adv-toggle" id="advToggle" aria-expanded="false">Advanced editor &mdash; every control, plus Math, Sound &amp; JSON</button>
@@ -684,7 +712,9 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
           <div class="hint" id="soundPackBlurb" style="margin-top:7px"></div>
         </div>
         <div class="grid2" style="align-items:end">
-          <div class="ctl"><div class="ctl-lbl"><span>Master volume</span><span class="val" id="volVal">80%</span></div><input type="range" id="volR" min="0" max="100" value="80" /></div>
+          <div class="ctl"><div class="ctl-lbl"><span>Master volume</span><span class="val" id="volVal">80%</span></div>
+            <div class="knob" id="volKnob" data-knob="master" data-min="0" data-max="100" data-step="1" data-val="80" data-sfx="%" data-lbl="Master volume" role="slider" tabindex="0" aria-label="Master volume" aria-valuemin="0" aria-valuemax="100" aria-valuenow="80"></div>
+          </div>
           <div class="ctl"><div class="ctl-lbl"><span>Output</span></div><label class="chk"><input type="checkbox" id="muteChk" /> Mute all audio</label></div>
         </div>
         <hr style="border:0;border-top:1px solid var(--cyan-soft);margin:16px 0" />
@@ -722,6 +752,34 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
     </section>
       </div><!-- /.adv-wrap -->
     </div><!-- /.adv-zone -->
+    <!-- ── LIVE BOARD ── -->
+    <section>
+      <div class="board-shell" id="boardShell">
+        <div class="hud" data-edit="layout">
+          <div class="cell2"><div class="k">Lines</div><div class="v lines-v" id="hudLines">7</div></div>
+          <div class="cell2"><div class="k">Bet</div><div class="v" id="hudBet">140</div></div>
+          <div class="cell2"><div class="k">Win</div><div class="v win-v idle" id="hudWin">&mdash;</div></div>
+          <div class="cell2"><div class="k">Grid</div><div class="v" id="hudGrid">5&times;3</div></div>
+        </div>
+        <div class="felt" data-edit="background">
+          <div class="reels" id="reels" data-edit="reels"></div>
+          <div class="felt-status" id="status">Click any part of the machine to edit it &mdash; or use the toolbar above. Spin to preview.</div>
+          <div class="felt-flash" id="feltFlash"></div>
+          <div class="cele-ring" id="celeRing"></div>
+        </div>
+        <canvas class="fx-canvas" id="fxCanvas"></canvas>
+      </div>
+      <div class="actions actions-spinrow"><button class="btn btn-glow" id="spinBtn">Spin preview<span class="cash-sub" id="spinSub">bet 140 MORBIUS</span></button><button class="turbo-btn" id="turboBtn" aria-pressed="false" title="Turbo — snappy stops">&#9889;<span>TURBO</span></button></div>
+
+      <div class="panel" style="margin-top:14px">
+        <p class="panel-label">Recent preview spins</p>
+        <div class="recent" id="recent"><span class="hint" style="margin:0">Spin to populate &mdash; each thumbnail shows live border FX.</span></div>
+      </div>
+      <p class="edit-hint">Click a <b style="color:var(--cyan)">symbol</b>, the <b style="color:var(--cyan)">reels</b>, the <b style="color:var(--cyan)">frame</b>, the <b style="color:var(--cyan)">HUD</b> or the <b style="color:var(--cyan)">background</b> &mdash; a menu opens right where you click.</p>
+    </section>
+    </div><!-- /.stage -->
+
+
   </div>
 
   <section class="panel" style="margin-top:16px">
@@ -776,6 +834,15 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
 <div class="popmenu" id="popMenu" role="dialog" aria-label="Element editor">
   <div class="popmenu-head"><h4 id="popTitle">Edit</h4><button class="popmenu-x" data-pop-x aria-label="Close">&#10005;</button></div>
   <div id="popBody"></div>
+</div>
+
+<!-- big-slider overlay: opened by tapping a knob; outside click / Esc closes -->
+<div class="bso" id="bigSliderOv">
+  <div class="bso-card" role="dialog" aria-modal="true" aria-label="Adjust value">
+    <div class="bso-lbl" id="bsoLbl">Value</div>
+    <div class="bso-val" id="bsoVal">&mdash;</div>
+    <input type="range" id="bsoRange" min="0" max="100" step="1" value="0" />
+  </div>
 </div>
 
 <script>
@@ -1225,7 +1292,7 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
   }
   function baseFx(over){var f={ambient:40}; if(over)deepMerge(f,over); return f;}
   function baseAnim(over){var a={land:'pop',celebration:'flash',bigWin:10,spinBlur:2,cruise:10,turbo:false}; if(over)deepMerge(a,over); return a;}
-  function baseSound(over){var s={pack:'Synth',volume:0.8,muted:false,fx:{}}; if(over)deepMerge(s,over); if(!SND_PROFILES[s.pack])s.pack='Synth'; s.volume=Math.max(0,Math.min(1,+s.volume||0)); if(!s.fx||typeof s.fx!=='object'||Array.isArray(s.fx))s.fx={}; return s;}
+  function baseSound(over){var s={pack:'Synth',volume:0.8,muted:false,autoPreview:false,fx:{}}; if(over)deepMerge(s,over); if(!SND_PROFILES[s.pack])s.pack='Synth'; s.volume=Math.max(0,Math.min(1,+s.volume||0)); s.autoPreview=!!s.autoPreview; if(!s.fx||typeof s.fx!=='object'||Array.isArray(s.fx))s.fx={}; return s;}
   function deepMerge(dst,src){for(var k in src){if(src[k]&&typeof src[k]==='object'&&!Array.isArray(src[k])){if(!dst[k])dst[k]={};deepMerge(dst[k],src[k]);}else dst[k]=src[k];}return dst;}
 
   var PRESETS = {
@@ -1671,20 +1738,51 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
   function renderAll(){ applyTheme(); syncLayoutControls(); renderSymbols(); renderFXGallery(); renderQuickApply(); syncThemeControls(); syncAnimControls(); renderSoundEvents(); syncSoundControls(); renderBoard(S.lastGrid||blankGrid()); renderRecent(); refreshJSON(); updateHud(); }
 
   /* ═══ SOUND TAB ═══ */
+  /* per-event icon whose hover/playing animation mimics the sound's character:
+     reels thud down, wins burst, coins flip, wilds jitter, jackpots shake, etc. */
+  function sndIconType(id){
+    if(id.indexOf('reel-land')===0)return 'reel';
+    if(id.indexOf('win-')===0)return 'burst';
+    if(id.indexOf('jackpot')===0)return 'gem';
+    if(id==='coin-rollup')return 'coin';
+    if(id==='wild-land')return 'bolt';
+    if(id==='scatter-land')return 'spark';
+    if(id==='bonus-trigger')return 'gift';
+    if(id==='freespins-start')return 'spin';
+    if(id==='spin-start')return 'go';
+    return 'tap';
+  }
+  var SND_ICONS={
+    reel:'<rect x="3" y="6" width="5" height="13" rx="1.5"/><rect x="9.5" y="4" width="5" height="13" rx="1.5"/><rect x="16" y="6" width="5" height="13" rx="1.5"/>',
+    burst:'<circle cx="12" cy="12" r="2.6" fill="currentColor" stroke="none"/><path d="M12 2.5v4.2M12 17.3v4.2M2.5 12h4.2M17.3 12h4.2M5.3 5.3l3 3M15.7 15.7l3 3M18.7 5.3l-3 3M8.3 15.7l-3 3"/>',
+    gem:'<path d="M7.2 4.5h9.6L20.5 9 12 19.8 3.5 9l3.7-4.5z"/><path d="M3.5 9h17M9.7 9L12 19l2.3-10M7.2 4.5L9.7 9l2.3-4.5L14.3 9l2.5-4.5"/>',
+    coin:'<circle cx="12" cy="12" r="8.2"/><ellipse cx="12" cy="12" rx="3.4" ry="8.2"/>',
+    bolt:'<path d="M13.2 2.5L5.5 13.2h4.6l-1.8 8.3 8.2-11h-4.6l1.3-8z" fill="currentColor" stroke="none"/>',
+    spark:'<path d="M11 4.5l1.1 3 3 1.1-3 1.1-1.1 3-1.1-3-3-1.1 3-1.1z" fill="currentColor" stroke="none"/><path d="M17.6 13.4l.7 1.9 1.9.7-1.9.7-.7 1.9-.7-1.9-1.9-.7 1.9-.7z" fill="currentColor" stroke="none"/><path d="M6.4 14.4l.6 1.6 1.6.6-1.6.6-.6 1.6-.6-1.6-1.6-.6 1.6-.6z" fill="currentColor" stroke="none"/>',
+    gift:'<rect x="4" y="9.5" width="16" height="10" rx="1.5"/><path d="M4 13h16M12 9.5v10M12 9.5C12 7 10 4.6 8.3 5.3S7.5 9.5 12 9.5zm0 0c0-2.5 2-4.9 3.7-4.2s.8 4.2-3.7 4.2z"/>',
+    spin:'<path d="M19.3 12a7.3 7.3 0 1 1-2.1-5.1"/><path d="M19.6 3.6v3.6H16"/>',
+    go:'<path d="M8 5.2l10.5 6.8L8 18.8z" fill="currentColor" stroke="none"/>',
+    tap:'<circle cx="12" cy="12" r="3.4" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="7.6"/>'
+  };
+  function sndIconSVG(id){
+    var t=sndIconType(id);
+    return '<div class="snd-ico ico-'+t+'"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'+SND_ICONS[t]+'</svg></div>';
+  }
   function renderSoundEvents(){
     var host=$('soundEvents'); if(!host)return;
+    // a rebuild replaces every knob element — if the big-slider overlay is bound
+    // to one of them (preset switch / JSON import mid-edit), close it first.
+    if(bigKn&&bigKn.closest&&bigKn.closest('#soundEvents'))closeBigSlider();
     stopAllSndWidgets(); // full DOM rebuild below — every panel comes back collapsed, so any
                          // previously-running Echo Tunnel / Stereograph rAF loops must die here
                          // too, or they'd keep spinning against orphaned/rebuilt canvases forever.
     host.innerHTML=SOUND_EVENTS.map(function(ev){
       var id=ev[0];
       return '<div class="snd-ev-wrap" data-snd-wrap="'+id+'">'+
-        '<div class="snd-ev" data-snd="'+id+'">'+
+        '<div class="snd-tile" data-snd="'+id+'" data-snd-toggle="'+id+'" role="button" tabindex="0" aria-expanded="false" title="'+esc(ev[1])+' &mdash; click to customize">'+
+          '<button class="snd-tile-play" data-snd-play="'+id+'" title="Play" aria-label="Play '+esc(ev[1])+'">&#9654;</button>'+
+          sndIconSVG(id)+
           '<div class="snd-meta"><div class="snd-lbl">'+esc(ev[1])+'</div><div class="snd-tag mono">'+id+'</div></div>'+
-          '<div class="snd-ev-btns">'+
-            '<button class="snd-play snd-tgl-btn" data-snd-toggle="'+id+'" aria-expanded="false">Customize <span class="car">&#9662;</span></button>'+
-            '<button class="snd-play" data-snd-play="'+id+'"><span class="tri" aria-hidden="true">&#9654;</span> Play</button>'+
-          '</div>'+
         '</div>'+
         sndPanelHTML(id)+
       '</div>';
@@ -1706,6 +1804,8 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
       '<div class="snd-samp-row">'+
         '<div class="snd-samp-status mono" id="sndstatus-'+id+'">'+statusTxt+'</div>'+
         '<div class="snd-samp-btns">'+
+          '<button class="upl-btn" data-snd-play="'+id+'">&#9654; Play</button>'+
+          '<button class="upl-btn snd-auto-btn'+(S.def.sound.autoPreview?' on':'')+'" data-snd-auto="1" title="Replay this sound automatically after every tweak">&#8635; Auto-play: '+(S.def.sound.autoPreview?'ON':'OFF')+'</button>'+
           '<button class="upl-btn" data-snd-upload="'+id+'">&#8593; Upload</button>'+
           '<button class="upl-btn snd-rec-btn" data-snd-rec="'+id+'">&#9679; Record</button>'+
           '<input type="file" accept="audio/*" hidden data-snd-file="'+id+'" />'+
@@ -1721,8 +1821,10 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
           '<canvas class="snd-env-cv" id="sndenv-'+id+'" data-snd-env="'+id+'" width="300" height="104"></canvas>'+
           '<div class="snd-mod-read" id="sndenvread-'+id+'">'+envReadText(fx)+'</div>'+
           '<div class="snd-mod-fill"></div>'+
-          sndSlider(id,'volume','Volume',0,200,1,Math.round(fx.volume*100),'%')+
-          sndSlider(id,'pitch','Pitch / speed',50,200,1,Math.round(fx.pitch*100),'%')+
+          '<div class="knob-row">'+
+            sndKnob(id,'volume','Volume',0,200,1,Math.round(fx.volume*100),'%')+
+            sndKnob(id,'pitch','Pitch / speed',50,200,1,Math.round(fx.pitch*100),'%')+
+          '</div>'+
         '</div>'+
         /* Spatial Pad (Bitwig tr.Distance-style XY) — X = pan, Y = reverbMix
            ("distance"). The pad IS the control now; readout replaces the sliders. */
@@ -1736,7 +1838,7 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
           '</div>'+
           '<div class="snd-mod-read" id="sndpadread-'+id+'">'+padReadText(fx)+'</div>'+
           '<div class="snd-mod-fill"></div>'+
-          sndSlider(id,'reverbDecay','Reverb decay',0.2,4,0.1,fx.reverbDecay,'s')+
+          '<div class="knob-row">'+sndKnob(id,'reverbDecay','Reverb decay',0.2,4,0.1,fx.reverbDecay,'s')+'</div>'+
         '</div>'+
         /* Echo Tunnel — the ring viz doubles as the control surface: drag across it
            to set delay time (x) and feedback (y). Mix stays a slider (0 = off). */
@@ -1748,7 +1850,7 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
           '</div>'+
           '<div class="snd-mod-read" id="sndechoread-'+id+'">'+echoReadText(fx)+'</div>'+
           '<div class="snd-mod-fill"></div>'+
-          sndSlider(id,'delayMix','Delay mix',0,100,1,Math.round(fx.delayMix*100),'%')+
+          '<div class="knob-row">'+sndKnob(id,'delayMix','Delay mix',0,100,1,Math.round(fx.delayMix*100),'%')+'</div>'+
         '</div>'+
         /* Stereograph — pure monitor (post-pan L/R scope); nothing to drag here. */
         '<div class="snd-mod">'+
@@ -1777,33 +1879,114 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
     var b=$('sndpadread-'+id); if(b)b.textContent=padReadText(fx);
     var c=$('sndechoread-'+id); if(c)c.textContent=echoReadText(fx);
   }
-  /* Matches the sound tab's own existing markup convention (.ctl / .ctl-lbl +
-     a plain <input type=range>) rather than the click-popover's cSlider(),
-     since this panel lives inside the Sound tab, not a popover. */
-  function sndSlider(id,field,label,min,max,step,val,sfx){
-    return '<div class="ctl"><div class="ctl-lbl"><span>'+label+'</span><span class="val" data-sndvalfor="'+id+':'+field+'">'+val+(sfx||'')+'</span></div>'+
-      '<input type="range" data-snd-id="'+id+'" data-snd-field="'+field+'" data-sfx="'+(sfx||'')+'" min="'+min+'" max="'+max+'" step="'+step+'" value="'+val+'" /></div>';
+  /* ── rotary knobs (the last sliders' replacement). Vertical drag turns the
+        knob; a plain tap (no movement) opens the big-slider overlay. Values
+        route through the same applySndFieldValue path the sliders used. ── */
+  var KNOB_R=15.5, KNOB_CIRC=2*Math.PI*KNOB_R, KNOB_ARC=KNOB_CIRC*0.75;
+  function knobSVG(frac){
+    frac=clamp(frac,0,1);
+    return '<svg viewBox="0 0 40 40" aria-hidden="true">'+
+      '<circle class="knob-track" cx="20" cy="20" r="'+KNOB_R+'" fill="none" stroke-width="3" stroke-linecap="round" stroke-dasharray="'+KNOB_ARC+' '+KNOB_CIRC+'" transform="rotate(135 20 20)"/>'+
+      '<circle class="knob-fill" cx="20" cy="20" r="'+KNOB_R+'" fill="none" stroke-width="3" stroke-linecap="round" stroke-dasharray="'+(KNOB_ARC*frac)+' '+KNOB_CIRC+'" transform="rotate(135 20 20)"/>'+
+      '<g class="knob-rot" transform="rotate('+(135+270*frac)+' 20 20)"><line class="knob-needle" x1="26" y1="20" x2="30.5" y2="20" stroke-width="2.4" stroke-linecap="round"/></g>'+
+    '</svg>';
   }
+  function sndKnob(id,field,label,min,max,step,val,sfx){
+    var frac=(val-min)/(max-min);
+    return '<div class="knob-ctl">'+
+      '<div class="knob" data-knob="fx" data-snd-id="'+id+'" data-snd-field="'+field+'" data-min="'+min+'" data-max="'+max+'" data-step="'+step+'" data-val="'+val+'" data-sfx="'+(sfx||'')+'" data-lbl="'+label+'" role="slider" tabindex="0" aria-label="'+label+'" aria-valuemin="'+min+'" aria-valuemax="'+max+'" aria-valuenow="'+val+'">'+knobSVG(frac)+'</div>'+
+      '<div class="knob-lbl">'+label+'</div>'+
+      '<div class="knob-val" data-sndvalfor="'+id+':'+field+'">'+fmtKnobNum(val,step)+(sfx||'')+'</div>'+
+    '</div>';
+  }
+  function fmtKnobNum(val,step){ return step<1?(+val).toFixed(1):String(Math.round(val)); }
+  function updateKnobVisual(kn,val){
+    var min=+kn.getAttribute('data-min'),max=+kn.getAttribute('data-max');
+    var frac=clamp((val-min)/(max-min||1),0,1);
+    kn.setAttribute('data-val',val); kn.setAttribute('aria-valuenow',val);
+    if(!kn.firstChild){ kn.innerHTML=knobSVG(frac); return; }
+    var fill=kn.querySelector('.knob-fill'), rot=kn.querySelector('.knob-rot');
+    if(fill)fill.setAttribute('stroke-dasharray',(KNOB_ARC*frac)+' '+KNOB_CIRC);
+    if(rot)rot.setAttribute('transform','rotate('+(135+270*frac)+' 20 20)');
+  }
+  /* clamp + quantize + fan out: knob visual, value text, and the sound state
+     (fx field via applySndFieldValue, or the master volume). */
+  function setKnobValue(kn,val){
+    var min=+kn.getAttribute('data-min'),max=+kn.getAttribute('data-max'),step=+kn.getAttribute('data-step')||1;
+    val=clamp(val,min,max); val=+(Math.round(val/step)*step).toFixed(3);
+    if(+kn.getAttribute('data-val')===val)return val;
+    updateKnobVisual(kn,val);
+    var txt=fmtKnobNum(val,step)+(kn.getAttribute('data-sfx')||'');
+    if(kn.getAttribute('data-knob')==='master'){
+      S.def.sound.volume=clamp(val/100,0,1);
+      var vv=$('volVal'); if(vv)vv.textContent=txt;
+      refreshJSON();
+    }else{
+      var id=kn.getAttribute('data-snd-id'), field=kn.getAttribute('data-snd-field');
+      var vf=document.querySelector('[data-sndvalfor="'+id+':'+field+'"]'); if(vf)vf.textContent=txt;
+      applySndFieldValue(id, field, val); // handles clamping into fx units + refreshJSON + auto-play
+    }
+    return val;
+  }
+  /* ── big-slider overlay (mobile-friendly precision input) ── */
+  var bigKn=null;
+  function openBigSlider(kn){
+    bigKn=kn;
+    var lbl=$('bsoLbl'), r=$('bsoRange'), step=+kn.getAttribute('data-step')||1;
+    lbl.textContent=kn.getAttribute('data-lbl')||'Value';
+    r.min=kn.getAttribute('data-min'); r.max=kn.getAttribute('data-max'); r.step=kn.getAttribute('data-step');
+    r.value=kn.getAttribute('data-val');
+    $('bsoVal').textContent=fmtKnobNum(+r.value,step)+(kn.getAttribute('data-sfx')||'');
+    $('bigSliderOv').classList.add('open');
+  }
+  function closeBigSlider(){ $('bigSliderOv').classList.remove('open'); bigKn=null; }
   function syncSoundControls(){
     var snd=S.def.sound; if(!snd)return;
     setSeg('soundPackSeg', snd.pack);
     $('soundPackVal').textContent=snd.pack;
     $('soundPackBlurb').innerHTML='<b class="hl">'+snd.pack+'</b> &mdash; '+(SND_PROFILES[snd.pack]?SND_PROFILES[snd.pack].blurb:'');
-    $('volR').value=Math.round(snd.volume*100); $('volVal').textContent=Math.round(snd.volume*100)+'%';
+    var volPct=Math.round(snd.volume*100);
+    var vk=$('volKnob'); if(vk)updateKnobVisual(vk,volPct);
+    $('volVal').textContent=volPct+'%';
     $('muteChk').checked=!!snd.muted;
   }
   function pulseSndCard(id){
-    var card=document.querySelector('.snd-ev[data-snd="'+id+'"]'); if(!card)return;
-    card.classList.add('playing'); setTimeout(function(){card.classList.remove('playing');},420);
+    var card=document.querySelector('.snd-tile[data-snd="'+id+'"]'); if(!card)return;
+    card.classList.add('playing'); setTimeout(function(){card.classList.remove('playing');},600);
+  }
+  /* ── auto-play while sound-designing: one boolean (S.def.sound.autoPreview).
+        Every tweak (slider, envelope, pad, echo drag) schedules a trailing replay
+        230ms after the LAST change, so drags don't machine-gun the sound. ── */
+  var sndAutoT=null;
+  function sndAutoKick(id){
+    if(!(S.def.sound&&S.def.sound.autoPreview))return;
+    clearTimeout(sndAutoT);
+    sndAutoT=setTimeout(function(){ pulseSndCard(id); playSound(id,0.9); },230);
+  }
+  function syncAutoBtns(){
+    var on=!!(S.def.sound&&S.def.sound.autoPreview);
+    var btns=document.querySelectorAll('[data-snd-auto]');
+    for(var i=0;i<btns.length;i++){ btns[i].classList.toggle('on',on); btns[i].innerHTML='&#8635; Auto-play: '+(on?'ON':'OFF'); }
   }
   function sndWrapEl(id){ return document.querySelector('.snd-ev-wrap[data-snd-wrap="'+id+'"]'); }
   function toggleSndPanel(id){
     var wrap=sndWrapEl(id); if(!wrap)return;
+    // accordion: opening one sound closes any other open one (recursion runs the
+    // full close path — rAF loops stop, aria resets — not just a class flip).
+    if(!wrap.classList.contains('expanded')){
+      var others=document.querySelectorAll('.snd-ev-wrap.expanded');
+      for(var i=0;i<others.length;i++){
+        var oid=others[i].getAttribute('data-snd-wrap');
+        if(oid!==id)toggleSndPanel(oid);
+      }
+    }
     var panel=$('sndpanel-'+id);
     var tgl=wrap.querySelector('[data-snd-toggle]');
     var open=wrap.classList.toggle('expanded');
     if(panel)panel.classList.toggle('open', open);
-    if(tgl){ tgl.classList.toggle('on', open); tgl.setAttribute('aria-expanded', open?'true':'false'); tgl.innerHTML='Customize <span class="car">'+(open?'&#9652;':'&#9662;')+'</span>'; }
+    // the tile itself is the toggle now — state via class/aria only, NEVER innerHTML
+    // (rewriting it would destroy the icon + play button inside).
+    if(tgl){ tgl.classList.toggle('on', open); tgl.setAttribute('aria-expanded', open?'true':'false'); }
     // widgets only exist/animate while their panel is expanded — start their rAF
     // loops on open, and CANCEL them on close. With up to 19 events, leaving
     // loops running behind collapsed panels would be 19*2 background rAFs for nothing.
@@ -1818,6 +2001,7 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
     else if(field==='reverbDecay') fx.reverbDecay=Math.max(0.2,Math.min(4,raw));
     else if(field==='delayMix') fx.delayMix=Math.max(0,Math.min(1,raw/100));
     refreshJSON();
+    sndAutoKick(id);
   }
   /* ── Spatial Pad: Bitwig tr.Distance-style XY drag. X = pan (-1..1), Y = "distance"
         mapped onto the EXISTING reverbMix field (bottom/near=0/dry, top/far=1/wet). ── */
@@ -1833,6 +2017,7 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
     updatePadDot(id);
     updateSndReads(id);
     refreshJSON();
+    sndAutoKick(id);
     return fx;
   }
   function setSpatialFromClient(id, pad, clientX, clientY){
@@ -1944,6 +2129,7 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
     else if(handle==='d'){ fx.envDecay=clamp(u,fx.envAttack,fx.envEnd); fx.envSustain=v; }
     else fx.envEnd=clamp(u,fx.envDecay,1);
     updateSndReads(id); drawEnvEditor(id); refreshJSON();
+    sndAutoKick(id);
     return fx;
   }
   /* ── Echo Tunnel as a control surface: drag across the ring viz — x = delay
@@ -1955,6 +2141,7 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
     fx.delayTime=+(0.02+x*0.98).toFixed(3);
     fx.delayFeedback=+((1-y)*0.85).toFixed(3);
     updateSndReads(id); refreshJSON();
+    sndAutoKick(id);
     return fx;
   }
   /* ── Echo Tunnel: Ableton-Echo-inspired delay visualizer. Concentric rings spawn
@@ -2373,11 +2560,13 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
 
   // ── sound ──
   segWire('soundPackSeg',function(v){ S.def.sound.pack=SND_PROFILES[v]?v:'Synth'; syncSoundControls(); refreshJSON(); sndEnvWave={}; redrawOpenEnvEditors(); playSound('button-click',0.7); });
-  on('volR','input',function(e){ S.def.sound.volume=Math.max(0,Math.min(1,+e.target.value/100)); $('volVal').textContent=Math.round(S.def.sound.volume*100)+'%'; refreshJSON(); });
+  // (master volume is a knob now — see the delegated [data-knob] pointer wiring)
   on('muteChk','change',function(e){ S.def.sound.muted=e.target.checked; refreshJSON(); if(!e.target.checked)playSound('button-click',0.7); });
   $('soundEvents').addEventListener('click',function(e){
     var play=e.target.closest('[data-snd-play]');
     if(play){ var id=play.getAttribute('data-snd-play'); pulseSndCard(id); playSound(id, 0.95); return; }
+    var aut=e.target.closest('[data-snd-auto]');
+    if(aut){ S.def.sound.autoPreview=!S.def.sound.autoPreview; syncAutoBtns(); refreshJSON(); return; }
     var tgl=e.target.closest('[data-snd-toggle]');
     if(tgl){ toggleSndPanel(tgl.getAttribute('data-snd-toggle')); return; }
     var upl=e.target.closest('[data-snd-upload]');
@@ -2387,17 +2576,72 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
     var rst=e.target.closest('[data-snd-reset]');
     if(rst){ resetSndSample(rst.getAttribute('data-snd-reset')); return; }
   });
-  $('soundEvents').addEventListener('input',function(e){
-    var el=e.target.closest('[data-snd-field]'); if(!el)return;
-    var id=el.getAttribute('data-snd-id'), field=el.getAttribute('data-snd-field'), raw=+el.value;
-    var vf=$('soundEvents').querySelector('[data-sndvalfor="'+id+':'+field+'"]');
-    if(vf)vf.textContent=el.value+(el.getAttribute('data-sfx')||'');
-    applySndFieldValue(id, field, raw);
+  /* ── knob interaction (delegated on document — knobs live both in the sound
+        panels and the master-volume control). Vertical drag turns; a plain tap
+        (< 5px of movement) opens the big-slider overlay for precise/mobile input. ── */
+  document.addEventListener('pointerdown',function(e){
+    var kn=e.target.closest('[data-knob]'); if(!kn)return;
+    e.preventDefault();
+    var min=+kn.getAttribute('data-min'), max=+kn.getAttribute('data-max');
+    var startY=e.clientY, startVal=+kn.getAttribute('data-val'), moved=false;
+    try{ kn.setPointerCapture(e.pointerId); }catch(e2){}
+    function move(ev){
+      var dy=startY-ev.clientY;
+      if(Math.abs(dy)>4)moved=true;
+      if(moved) setKnobValue(kn, startVal + dy/140*(max-min)); // full sweep ≈ 140px of drag
+    }
+    function up(){
+      kn.removeEventListener('pointermove',move); kn.removeEventListener('pointerup',up); kn.removeEventListener('pointercancel',cancel);
+      if(!moved) openBigSlider(kn); // tap, not a drag → the big clean slider
+    }
+    function cancel(){ kn.removeEventListener('pointermove',move); kn.removeEventListener('pointerup',up); kn.removeEventListener('pointercancel',cancel); }
+    kn.addEventListener('pointermove',move);
+    kn.addEventListener('pointerup',up);
+    kn.addEventListener('pointercancel',cancel);
   });
+  // keyboard support: knobs are role=slider, arrows nudge by one step
+  document.addEventListener('keydown',function(e){
+    var kn=e.target.closest&&e.target.closest('[data-knob]'); if(!kn||e.target!==kn)return;
+    var step=+kn.getAttribute('data-step')||1, val=+kn.getAttribute('data-val');
+    if(e.key==='ArrowUp'||e.key==='ArrowRight'){ e.preventDefault(); setKnobValue(kn,val+step); }
+    else if(e.key==='ArrowDown'||e.key==='ArrowLeft'){ e.preventDefault(); setKnobValue(kn,val-step); }
+    else if(e.key==='Enter'||e.key===' '){ e.preventDefault(); openBigSlider(kn); }
+  });
+  // big-slider overlay: live-applies to its knob; outside click / Esc closes
+  $('bsoRange').addEventListener('input',function(e){
+    if(!bigKn)return;
+    var v=setKnobValue(bigKn,+e.target.value);
+    $('bsoVal').textContent=fmtKnobNum(v,+bigKn.getAttribute('data-step')||1)+(bigKn.getAttribute('data-sfx')||'');
+  });
+  $('bigSliderOv').addEventListener('pointerdown',function(e){ if(e.target===e.currentTarget)closeBigSlider(); });
+  document.addEventListener('keydown',function(e){ if(e.key==='Escape'&&$('bigSliderOv').classList.contains('open'))closeBigSlider(); });
   $('soundEvents').addEventListener('change',function(e){
     var f=e.target.closest('[data-snd-file]'); if(!f)return;
     var id=f.getAttribute('data-snd-file'); var file=f.files&&f.files[0]; if(!file)return;
     handleSndUpload(id, file);
+  });
+  // Tiles are keyboard-reachable (role=button + tabindex) — Enter/Space toggles.
+  $('soundEvents').addEventListener('keydown',function(e){
+    if(e.key!=='Enter'&&e.key!==' ')return;
+    var tgl=e.target.closest('[data-snd-toggle]'); if(!tgl||e.target!==tgl)return;
+    e.preventDefault(); toggleSndPanel(tgl.getAttribute('data-snd-toggle'));
+  });
+  // Hover preview: dwell 160ms on a tile plays its sound — the icon's CSS hover
+  // animation is the same one .playing triggers, so hover mimics real playback.
+  // Mouse only (touch taps go through click-to-expand instead).
+  var sndHoverT=null;
+  $('soundEvents').addEventListener('pointerover',function(e){
+    if(e.pointerType==='touch')return;
+    var tile=e.target.closest('.snd-tile'); if(!tile)return;
+    var from=e.relatedTarget; if(from&&tile.contains(from))return; // moving within the tile
+    var id=tile.getAttribute('data-snd');
+    clearTimeout(sndHoverT);
+    sndHoverT=setTimeout(function(){ playSound(id,0.85); },160);
+  });
+  $('soundEvents').addEventListener('pointerout',function(e){
+    var tile=e.target.closest('.snd-tile'); if(!tile)return;
+    var to=e.relatedTarget; if(to&&tile.contains(to))return;
+    clearTimeout(sndHoverT);
   });
   // Direct-manipulation drags (Spatial Pad / Envelope / Echo Tunnel) — one
   // delegated pointerdown; pointer events cover mouse + touch alike.
@@ -3064,6 +3308,7 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
     getLiveTap:function(id){return sndLiveTaps[id]||null;},
     getEchoRafRunning:function(id){return !!sndEchoRaf[id];},
     getGonioRafRunning:function(id){return !!sndGonioRaf[id];},
+    setAutoPreview:function(on){S.def.sound.autoPreview=!!on;syncAutoBtns();refreshJSON();return S.def.sound.autoPreview;},
     // ── added for the compact-layout / envelope-editor pass ──
     envPickHandle:function(id,clientX,clientY){var cv=$('sndenv-'+id);if(!cv)return null;return envPickHandle(id,cv,clientX,clientY);},
     dragEnvHandle:function(id,handle,clientX,clientY){var cv=$('sndenv-'+id);if(!cv)return null;return envDragTo(id,cv,handle,clientX,clientY);},
