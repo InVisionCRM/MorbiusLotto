@@ -324,6 +324,21 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
 .snd-play{flex:none;font-family:var(--font-disp);font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--cyan);background:rgba(34,211,238,.1);border:1px solid var(--cyan-soft);border-radius:8px;padding:7px 12px;cursor:pointer;transition:.15s;display:inline-flex;align-items:center;gap:5px}
 .snd-play:hover{border-color:var(--cyan-edge);background:rgba(34,211,238,.18)}
 .snd-play .tri{font-size:9px}
+/* ── per-event fx: customize panel ── */
+.snd-ev-btns{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end;flex:none}
+.snd-tgl-btn{background:rgba(148,163,184,.08);color:var(--slate-400);border-color:var(--cyan-soft)}
+.snd-tgl-btn.on{color:var(--cyan);border-color:var(--cyan-edge);background:rgba(34,211,238,.14)}
+.snd-ev-wrap.expanded{grid-column:1 / -1}
+.snd-ev-wrap.expanded .snd-ev{border-color:var(--cyan-edge)}
+.snd-cust-panel{display:none;margin-top:10px;padding-top:10px;border-top:1px dashed var(--cyan-soft)}
+.snd-cust-panel.open{display:block}
+.snd-samp-row{margin-bottom:10px}
+.snd-samp-status{font-size:11px;color:var(--slate-300);margin-bottom:7px;word-break:break-word}
+.snd-samp-btns{display:flex;gap:7px;flex-wrap:wrap;align-items:center}
+.snd-rec-btn.active{color:#fff;background:var(--loss);border-color:var(--loss);animation:sndrecpulse 1s ease-in-out infinite}
+@keyframes sndrecpulse{0%,100%{opacity:1}50%{opacity:.6}}
+.snd-reset-lnk{background:none;border:0;color:var(--slate-500);font-family:var(--font-mono);font-size:10.5px;cursor:pointer;padding:4px 2px;text-decoration:underline;transition:.15s}
+.snd-reset-lnk:hover{color:var(--cyan)}
 /* ── prominent per-symbol upload ── */
 .sym-art-tools{display:flex;flex-direction:column;gap:6px;flex:1;min-width:0}
 .upl-btn.primary{background:linear-gradient(180deg,rgba(34,211,238,.24),rgba(34,211,238,.08));color:#cdf5fc;font-weight:700;padding:9px 12px;font-size:11px;display:inline-flex;align-items:center;justify-content:center;gap:6px;width:100%}
@@ -902,19 +917,137 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
     if(!_pcmCache[key]) _pcmCache[key] = sndRenderPCM(sndResolve(id, pack), 44100);
     return _pcmCache[key];
   }
+
+  /* ── per-event FX chain: sample override + volume/pitch/gate/reverb/delay.
+        Data model lives at S.def.sound.fx[id] (sparse — only customized events
+        get an entry; missing fields fall back to FX_DEFAULT). Everything here
+        is guarded so a bad/missing value or a decode failure degrades to the
+        plain procedural path or silence — audio must never break gameplay. ── */
+  var FX_DEFAULT = {sample:null, volume:1, pitch:1, gate:1, reverbMix:0, reverbDecay:1.6, delayMix:0, delayTime:0.22, delayFeedback:0.3};
+  function fxFor(id){
+    var raw = S.def && S.def.sound && S.def.sound.fx && S.def.sound.fx[id];
+    var f = {}; for(var k in FX_DEFAULT) f[k] = FX_DEFAULT[k];
+    if(raw) for(var k2 in FX_DEFAULT){ if(raw[k2] != null) f[k2] = raw[k2]; }
+    return f;
+  }
+  function ensureFxEntry(id){
+    if(!S.def.sound.fx) S.def.sound.fx = {};
+    if(!S.def.sound.fx[id]){ var e={}; for(var k in FX_DEFAULT) e[k]=FX_DEFAULT[k]; S.def.sound.fx[id]=e; }
+    return S.def.sound.fx[id];
+  }
+  var _sampleCache = {}; // "id:len" -> AudioBuffer | Promise<AudioBuffer|null>
+  function clearSampleCache(id){ for(var k in _sampleCache){ if(k.indexOf(id+':')===0) delete _sampleCache[k]; } }
+  function getSampleBuffer(id, dataUrl, cb){
+    try{
+      var key = id + ':' + dataUrl.length;
+      var hit = _sampleCache[key];
+      if(hit){ if(hit.then) hit.then(function(b){cb(b);}).catch(function(){cb(null);}); else cb(hit); return; }
+      var c = audioCtx(); if(!c){ cb(null); return; }
+      var p = fetch(dataUrl).then(function(r){ return r.arrayBuffer(); })
+        .then(function(ab){ return c.decodeAudioData(ab); })
+        .then(function(buf){ _sampleCache[key] = buf; return buf; })
+        .catch(function(){ delete _sampleCache[key]; return null; });
+      _sampleCache[key] = p;
+      p.then(function(buf){ cb(buf); });
+    }catch(e){ cb(null); }
+  }
+  var _reverbIRCache = {}; // rounded-decay -> AudioBuffer (impulse response)
+  function buildReverbIR(ctx, decaySeconds){
+    try{
+      var sr = ctx.sampleRate || 44100;
+      var capped = Math.max(0.05, Math.min(4, decaySeconds || 1.6));
+      var key = Math.round(capped * 20);
+      if(_reverbIRCache[key]) return _reverbIRCache[key];
+      var N = Math.max(1, Math.floor(capped * sr));
+      var buf = ctx.createBuffer(1, N, sr);
+      var data = buf.getChannelData(0);
+      for(var i=0;i<N;i++){ var t = i/N; var env = Math.pow(1-t, 2); data[i] = (Math.random()*2-1) * env; }
+      _reverbIRCache[key] = buf;
+      return buf;
+    }catch(e){ return null; }
+  }
+  /* Builds the actual per-play graph: src -> gate -> volume -> dry, plus
+     parallel delay (with feedback) and reverb (convolver) wet sends. Wrapped
+     end-to-end so a node-creation failure just drops the effect, never throws. */
+  function playBufferThroughFx(c, buf, fx, masterVol, mul){
+    try{
+      var src = c.createBufferSource(); src.buffer = buf;
+      var pitch = fx.pitch; if(!(pitch > 0)) pitch = 1;
+      pitch = Math.max(0.5, Math.min(2, pitch));
+      // playbackRate changes pitch AND duration together (no separate time-stretch here) —
+      // that's the accepted tradeoff for this lightweight engine.
+      src.playbackRate.value = pitch;
+      var gate = fx.gate != null ? Math.max(0, Math.min(1, fx.gate)) : 1;
+      var dur = buf.duration * gate; if(dur < 0.02) dur = 0.02;
+      var now = c.currentTime;
+      var gateGain = c.createGain();
+      if(gate < 1){
+        var fadeStart = Math.max(0, dur - 0.015);
+        gateGain.gain.setValueAtTime(1, now);
+        gateGain.gain.setValueAtTime(1, now + fadeStart);
+        gateGain.gain.linearRampToValueAtTime(0.0001, now + dur); // ~15ms fade avoids a hard-cut click
+      } else {
+        gateGain.gain.value = 1;
+      }
+      var volGain = c.createGain();
+      volGain.gain.value = Math.max(0, Math.min(2, fx.volume != null ? fx.volume : 1)) * masterVol * (mul || 1);
+      src.connect(gateGain); gateGain.connect(volGain);
+      volGain.connect(c.destination); // dry send
+
+      var delayMix = Math.max(0, Math.min(1, fx.delayMix || 0));
+      if(delayMix > 0){
+        try{
+          var dTime = Math.max(0.02, Math.min(1.0, fx.delayTime != null ? fx.delayTime : 0.22));
+          var fb = Math.max(0, Math.min(0.85, fx.delayFeedback != null ? fx.delayFeedback : 0.3));
+          fb = Math.min(fb, 0.9); // defense in depth against a malformed imported JSON
+          var delayNode = c.createDelay(2.0); delayNode.delayTime.value = dTime;
+          var fbGain = c.createGain(); fbGain.gain.value = fb;
+          var dWet = c.createGain(); dWet.gain.value = delayMix;
+          volGain.connect(delayNode);
+          delayNode.connect(fbGain); fbGain.connect(delayNode); // feedback loop
+          delayNode.connect(dWet); dWet.connect(c.destination);
+        }catch(e){ /* drop the delay send, keep the dry signal */ }
+      }
+      var reverbMix = Math.max(0, Math.min(1, fx.reverbMix || 0));
+      if(reverbMix > 0){
+        try{
+          var decay = Math.max(0.2, Math.min(4, fx.reverbDecay != null ? fx.reverbDecay : 1.6));
+          var ir = buildReverbIR(c, decay);
+          if(ir){
+            var conv = c.createConvolver(); conv.buffer = ir; conv.normalize = true;
+            var rWet = c.createGain(); rWet.gain.value = reverbMix;
+            volGain.connect(conv); conv.connect(rWet); rWet.connect(c.destination);
+          }
+        }catch(e){ /* drop the reverb send, keep the dry signal */ }
+      }
+      src.start();
+      if(gate < 1) src.stop(now + dur + 0.02);
+    }catch(e){ /* audio is presentation-only; never break the game */ }
+  }
+  function playProcedural(c, id, pack, fx, masterVol, mul){
+    var pcm = pcmFor(id, pack);
+    if(!pcm || !pcm.length) return;
+    var buf = c.createBuffer(1, pcm.length, 44100);
+    if(buf.copyToChannel) buf.copyToChannel(pcm, 0); else buf.getChannelData(0).set(pcm);
+    playBufferThroughFx(c, buf, fx, masterVol, mul);
+  }
   function playSound(id, gainMul){
     try{
       var snd = (S.def && S.def.sound) || null;
       if(!snd || snd.muted) return;
       var c = audioCtx(); if(!c) return;
-      var pcm = pcmFor(id, snd.pack || 'Synth');
-      if(!pcm || !pcm.length) return;
-      var buf = c.createBuffer(1, pcm.length, 44100);
-      if(buf.copyToChannel) buf.copyToChannel(pcm, 0); else buf.getChannelData(0).set(pcm);
-      var src = c.createBufferSource(); src.buffer = buf;
-      var g = c.createGain();
-      g.gain.value = (snd.volume!=null ? snd.volume : 0.8) * (gainMul||1);
-      src.connect(g); g.connect(c.destination); src.start();
+      var fx = fxFor(id);
+      var masterVol = (snd.volume != null ? snd.volume : 0.8);
+      if(fx.sample){
+        getSampleBuffer(id, fx.sample, function(buf){
+          try{
+            if(buf) playBufferThroughFx(c, buf, fx, masterVol, gainMul);
+            else playProcedural(c, id, snd.pack || 'Synth', fx, masterVol, gainMul); // decode failed — fall back
+          }catch(e){ /* never break the game */ }
+        });
+      } else {
+        playProcedural(c, id, snd.pack || 'Synth', fx, masterVol, gainMul);
+      }
     }catch(e){ /* audio is presentation-only; never break the game */ }
   }
   function winTierId(mult){
@@ -1006,7 +1139,7 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
   }
   function baseFx(over){var f={ambient:40}; if(over)deepMerge(f,over); return f;}
   function baseAnim(over){var a={land:'pop',celebration:'flash',bigWin:10,spinBlur:2,cruise:10,turbo:false}; if(over)deepMerge(a,over); return a;}
-  function baseSound(over){var s={pack:'Synth',volume:0.8,muted:false}; if(over)deepMerge(s,over); if(!SND_PROFILES[s.pack])s.pack='Synth'; s.volume=Math.max(0,Math.min(1,+s.volume||0)); return s;}
+  function baseSound(over){var s={pack:'Synth',volume:0.8,muted:false,fx:{}}; if(over)deepMerge(s,over); if(!SND_PROFILES[s.pack])s.pack='Synth'; s.volume=Math.max(0,Math.min(1,+s.volume||0)); if(!s.fx||typeof s.fx!=='object'||Array.isArray(s.fx))s.fx={}; return s;}
   function deepMerge(dst,src){for(var k in src){if(src[k]&&typeof src[k]==='object'&&!Array.isArray(src[k])){if(!dst[k])dst[k]={};deepMerge(dst[k],src[k]);}else dst[k]=src[k];}return dst;}
 
   var PRESETS = {
@@ -1454,11 +1587,60 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
   function renderSoundEvents(){
     var host=$('soundEvents'); if(!host)return;
     host.innerHTML=SOUND_EVENTS.map(function(ev){
-      return '<div class="snd-ev" data-snd="'+ev[0]+'">'+
-        '<div class="snd-meta"><div class="snd-lbl">'+esc(ev[1])+'</div><div class="snd-tag mono">'+ev[0]+'</div></div>'+
-        '<button class="snd-play" data-snd-play="'+ev[0]+'"><span class="tri" aria-hidden="true">&#9654;</span> Play</button>'+
+      var id=ev[0];
+      return '<div class="snd-ev-wrap" data-snd-wrap="'+id+'">'+
+        '<div class="snd-ev" data-snd="'+id+'">'+
+          '<div class="snd-meta"><div class="snd-lbl">'+esc(ev[1])+'</div><div class="snd-tag mono">'+id+'</div></div>'+
+          '<div class="snd-ev-btns">'+
+            '<button class="snd-play snd-tgl-btn" data-snd-toggle="'+id+'" aria-expanded="false">Customize <span class="car">&#9662;</span></button>'+
+            '<button class="snd-play" data-snd-play="'+id+'"><span class="tri" aria-hidden="true">&#9654;</span> Play</button>'+
+          '</div>'+
+        '</div>'+
+        sndPanelHTML(id)+
       '</div>';
     }).join('');
+  }
+  /* One event's collapsed-by-default customize panel: sample controls (upload /
+     record / reset) + the 5 fx sliders. Reads current values through fxFor() so
+     an event with no S.def.sound.fx[id] entry yet still shows sane defaults. */
+  function sndPanelHTML(id){
+    var raw=(S.def.sound.fx||{})[id];
+    var fx=fxFor(id);
+    var hasSample=!!(raw&&raw.sample);
+    var statusTxt=hasSample?('Custom: '+esc(sndLastLabel[id]||'custom sample')):'Default synth';
+    return '<div class="snd-cust-panel" id="sndpanel-'+id+'">'+
+      '<div class="snd-samp-row">'+
+        '<div class="snd-samp-status mono" id="sndstatus-'+id+'">'+statusTxt+'</div>'+
+        '<div class="snd-samp-btns">'+
+          '<button class="upl-btn" data-snd-upload="'+id+'">&#8593; Upload</button>'+
+          '<button class="upl-btn snd-rec-btn" data-snd-rec="'+id+'">&#9679; Record</button>'+
+          '<input type="file" accept="audio/*" hidden data-snd-file="'+id+'" />'+
+          '<button class="snd-reset-lnk" data-snd-reset="'+id+'"'+(hasSample?'':' style="visibility:hidden"')+'>&#8630; Reset to default</button>'+
+        '</div>'+
+        '<p class="hint" style="margin:6px 0 0">Recordings stay in your browser and this config&rsquo;s JSON &mdash; nothing is uploaded anywhere.</p>'+
+      '</div>'+
+      '<div class="grid2">'+
+        sndSlider(id,'volume','Volume',0,200,1,Math.round(fx.volume*100),'%')+
+        sndSlider(id,'pitch','Pitch / speed',50,200,1,Math.round(fx.pitch*100),'%')+
+      '</div>'+
+      sndSlider(id,'gate','Trim / cutoff',0,100,1,Math.round(fx.gate*100),'%')+
+      '<div class="grid2">'+
+        sndSlider(id,'reverbMix','Reverb mix',0,100,1,Math.round(fx.reverbMix*100),'%')+
+        sndSlider(id,'reverbDecay','Reverb decay',0.2,4,0.1,fx.reverbDecay,'s')+
+      '</div>'+
+      '<div class="grid3">'+
+        sndSlider(id,'delayMix','Delay mix',0,100,1,Math.round(fx.delayMix*100),'%')+
+        sndSlider(id,'delayTime','Delay time',20,1000,10,Math.round(fx.delayTime*1000),'ms')+
+        sndSlider(id,'delayFeedback','Delay feedback',0,85,1,Math.round(fx.delayFeedback*100),'%')+
+      '</div>'+
+    '</div>';
+  }
+  /* Matches the sound tab's own existing markup convention (.ctl / .ctl-lbl +
+     a plain <input type=range>) rather than the click-popover's cSlider(),
+     since this panel lives inside the Sound tab, not a popover. */
+  function sndSlider(id,field,label,min,max,step,val,sfx){
+    return '<div class="ctl"><div class="ctl-lbl"><span>'+label+'</span><span class="val" data-sndvalfor="'+id+':'+field+'">'+val+(sfx||'')+'</span></div>'+
+      '<input type="range" data-snd-id="'+id+'" data-snd-field="'+field+'" data-sfx="'+(sfx||'')+'" min="'+min+'" max="'+max+'" step="'+step+'" value="'+val+'" /></div>';
   }
   function syncSoundControls(){
     var snd=S.def.sound; if(!snd)return;
@@ -1471,6 +1653,120 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
   function pulseSndCard(id){
     var card=document.querySelector('.snd-ev[data-snd="'+id+'"]'); if(!card)return;
     card.classList.add('playing'); setTimeout(function(){card.classList.remove('playing');},420);
+  }
+  function sndWrapEl(id){ return document.querySelector('.snd-ev-wrap[data-snd-wrap="'+id+'"]'); }
+  function toggleSndPanel(id){
+    var wrap=sndWrapEl(id); if(!wrap)return;
+    var panel=$('sndpanel-'+id);
+    var tgl=wrap.querySelector('[data-snd-toggle]');
+    var open=wrap.classList.toggle('expanded');
+    if(panel)panel.classList.toggle('open', open);
+    if(tgl){ tgl.classList.toggle('on', open); tgl.setAttribute('aria-expanded', open?'true':'false'); tgl.innerHTML='Customize <span class="car">'+(open?'&#9652;':'&#9662;')+'</span>'; }
+  }
+  function applySndFieldValue(id, field, raw){
+    var fx=ensureFxEntry(id);
+    if(field==='volume') fx.volume=Math.max(0,Math.min(2,raw/100));
+    else if(field==='pitch') fx.pitch=Math.max(0.5,Math.min(2,raw/100));
+    else if(field==='gate') fx.gate=Math.max(0,Math.min(1,raw/100));
+    else if(field==='reverbMix') fx.reverbMix=Math.max(0,Math.min(1,raw/100));
+    else if(field==='reverbDecay') fx.reverbDecay=Math.max(0.2,Math.min(4,raw));
+    else if(field==='delayMix') fx.delayMix=Math.max(0,Math.min(1,raw/100));
+    else if(field==='delayTime') fx.delayTime=Math.max(0.02,Math.min(1.0,raw/1000));
+    else if(field==='delayFeedback') fx.delayFeedback=Math.max(0,Math.min(0.85,raw/100));
+    refreshJSON();
+  }
+  function updateSndStatus(id,text){ var el=$('sndstatus-'+id); if(el)el.textContent=text; }
+  function showSndReset(id,show){ var wrap=sndWrapEl(id); if(!wrap)return; var b=wrap.querySelector('[data-snd-reset]'); if(b)b.style.visibility=show?'':'hidden'; }
+  var sndLastLabel={}; // id -> human label for the status line ("filename.mp3", "recording (0:04)") — display-only, not persisted
+  function setSndSample(id,dataUrl,label){
+    var fx=ensureFxEntry(id);
+    fx.sample=dataUrl; clearSampleCache(id);
+    sndLastLabel[id]=label;
+    updateSndStatus(id,'Custom: '+label); showSndReset(id,true); refreshJSON();
+  }
+  function resetSndSample(id){
+    var fx=S.def.sound.fx&&S.def.sound.fx[id];
+    if(fx)fx.sample=null;
+    clearSampleCache(id); delete sndLastLabel[id];
+    updateSndStatus(id,'Default synth'); showSndReset(id,false); refreshJSON();
+  }
+  function fmtDur(s){ s=Math.max(0,s||0); var m=Math.floor(s/60), sec=Math.floor(s%60); return m+':'+(sec<10?'0':'')+sec; }
+  function probeDuration(dataUrl,cb){
+    try{
+      var c=audioCtx(); if(!c){ cb(null); return; }
+      fetch(dataUrl).then(function(r){return r.arrayBuffer();}).then(function(ab){return c.decodeAudioData(ab);})
+        .then(function(buf){cb(buf.duration);}).catch(function(){cb(null);});
+    }catch(e){ cb(null); }
+  }
+  function handleSndUpload(id,file){
+    var label=file.name||'uploaded file';
+    updateSndStatus(id,'Decoding "'+esc(label)+'"…');
+    var fr=new FileReader();
+    fr.onload=function(){
+      var dataUrl=fr.result;
+      probeDuration(dataUrl,function(dur){ setSndSample(id,dataUrl, label+(dur!=null?' ('+fmtDur(dur)+')':'')); });
+    };
+    fr.onerror=function(){ updateSndStatus(id,'Could not read that file — try again.'); };
+    try{ fr.readAsDataURL(file); }catch(e){ updateSndStatus(id,'Could not read that file — try again.'); }
+  }
+  /* ── recording (single active recording at a time) ── */
+  var sndRec={id:null,recorder:null,stream:null,chunks:[],timer:null,startTs:0,autoStopT:null};
+  function setSndRecordUI(id,active){
+    var wrap=sndWrapEl(id); if(!wrap)return; var b=wrap.querySelector('[data-snd-rec]'); if(!b)return;
+    b.classList.toggle('active',!!active);
+    b.innerHTML=active?'&#9679; Recording… (tap to stop)':'&#9679; Record';
+  }
+  function toggleSndRecord(id){
+    if(sndRec.id===id){ stopSndRecord(); return; }
+    if(sndRec.id) return; // one recording at a time
+    startSndRecord(id);
+  }
+  function startSndRecord(id){
+    try{
+      if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){
+        updateSndStatus(id,'Microphone unavailable or permission denied — try Upload instead'); return;
+      }
+      navigator.mediaDevices.getUserMedia({audio:true}).then(function(stream){
+        try{
+          var mr=new MediaRecorder(stream);
+          sndRec.id=id; sndRec.recorder=mr; sndRec.stream=stream; sndRec.chunks=[]; sndRec.startTs=Date.now();
+          mr.ondataavailable=function(e){ if(e.data&&e.data.size)sndRec.chunks.push(e.data); };
+          mr.onstop=function(){ finishSndRecord(id); };
+          mr.start();
+          setSndRecordUI(id,true);
+          updateSndStatus(id,'Custom: recording (0:00)');
+          sndRec.timer=setInterval(function(){ updateSndStatus(id,'Custom: recording ('+fmtDur((Date.now()-sndRec.startTs)/1000)+')'); },250);
+          sndRec.autoStopT=setTimeout(function(){ if(sndRec.id===id)stopSndRecord(); },6000);
+        }catch(e){
+          updateSndStatus(id,'Microphone unavailable or permission denied — try Upload instead');
+          try{ stream.getTracks().forEach(function(t){t.stop();}); }catch(e2){}
+        }
+      }).catch(function(){
+        updateSndStatus(id,'Microphone unavailable or permission denied — try Upload instead');
+      });
+    }catch(e){
+      updateSndStatus(id,'Microphone unavailable or permission denied — try Upload instead');
+    }
+  }
+  function stopSndRecord(){ if(sndRec.recorder){ try{ sndRec.recorder.stop(); }catch(e){} } }
+  function finishSndRecord(id){
+    var chunks=sndRec.chunks, mimeType=(sndRec.recorder&&sndRec.recorder.mimeType)||'audio/webm';
+    if(sndRec.timer){ clearInterval(sndRec.timer); sndRec.timer=null; }
+    if(sndRec.autoStopT){ clearTimeout(sndRec.autoStopT); sndRec.autoStopT=null; }
+    if(sndRec.stream){ try{ sndRec.stream.getTracks().forEach(function(t){t.stop();}); }catch(e){} }
+    setSndRecordUI(id,false);
+    sndRec.id=null; sndRec.recorder=null; sndRec.stream=null; sndRec.chunks=[];
+    if(!chunks||!chunks.length){ updateSndStatus(id,'Default synth'); return; }
+    try{
+      var blob=new Blob(chunks,{type:mimeType});
+      var fr=new FileReader();
+      fr.onload=function(){
+        var dataUrl=fr.result;
+        probeDuration(dataUrl,function(dur){ setSndSample(id,dataUrl,'recording'+(dur!=null?' ('+fmtDur(dur)+')':'')); });
+      };
+      fr.onerror=function(){ updateSndStatus(id,'Recording failed — try again.'); };
+      fr.readAsDataURL(blob);
+    }catch(e){ updateSndStatus(id,'Recording failed — try again.'); }
   }
   function updateHud(){ hudLines.textContent=S.def.lines.length; hudBet.textContent=fmt(S.bet); hudGrid.textContent=S.def.cols+'×'+S.def.rows; $('spinSub').textContent='bet '+fmt(S.bet)+' MORBIUS'; }
 
@@ -1686,7 +1982,30 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
   segWire('soundPackSeg',function(v){ S.def.sound.pack=SND_PROFILES[v]?v:'Synth'; syncSoundControls(); refreshJSON(); playSound('button-click',0.7); });
   on('volR','input',function(e){ S.def.sound.volume=Math.max(0,Math.min(1,+e.target.value/100)); $('volVal').textContent=Math.round(S.def.sound.volume*100)+'%'; refreshJSON(); });
   on('muteChk','change',function(e){ S.def.sound.muted=e.target.checked; refreshJSON(); if(!e.target.checked)playSound('button-click',0.7); });
-  $('soundEvents').addEventListener('click',function(e){ var b=e.target.closest('[data-snd-play]'); if(!b)return; var id=b.getAttribute('data-snd-play'); pulseSndCard(id); playSound(id, 0.95); });
+  $('soundEvents').addEventListener('click',function(e){
+    var play=e.target.closest('[data-snd-play]');
+    if(play){ var id=play.getAttribute('data-snd-play'); pulseSndCard(id); playSound(id, 0.95); return; }
+    var tgl=e.target.closest('[data-snd-toggle]');
+    if(tgl){ toggleSndPanel(tgl.getAttribute('data-snd-toggle')); return; }
+    var upl=e.target.closest('[data-snd-upload]');
+    if(upl){ var uid=upl.getAttribute('data-snd-upload'); var f=$('soundEvents').querySelector('[data-snd-file="'+uid+'"]'); if(f)f.click(); return; }
+    var rec=e.target.closest('[data-snd-rec]');
+    if(rec){ toggleSndRecord(rec.getAttribute('data-snd-rec')); return; }
+    var rst=e.target.closest('[data-snd-reset]');
+    if(rst){ resetSndSample(rst.getAttribute('data-snd-reset')); return; }
+  });
+  $('soundEvents').addEventListener('input',function(e){
+    var el=e.target.closest('[data-snd-field]'); if(!el)return;
+    var id=el.getAttribute('data-snd-id'), field=el.getAttribute('data-snd-field'), raw=+el.value;
+    var vf=$('soundEvents').querySelector('[data-sndvalfor="'+id+':'+field+'"]');
+    if(vf)vf.textContent=el.value+(el.getAttribute('data-sfx')||'');
+    applySndFieldValue(id, field, raw);
+  });
+  $('soundEvents').addEventListener('change',function(e){
+    var f=e.target.closest('[data-snd-file]'); if(!f)return;
+    var id=f.getAttribute('data-snd-file'); var file=f.files&&f.files[0]; if(!file)return;
+    handleSndUpload(id, file);
+  });
 
   // ── symbols delegation ──
   symList.addEventListener('input',function(e){ symFieldChange(e.target); });
@@ -2321,6 +2640,7 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
     frameElFor:function(id){return $('fxpv-'+id);},
     setSoundPack:function(p){var seg=$('soundPackSeg');S.def.sound.pack=SND_PROFILES[p]?p:'Synth';syncSoundControls();refreshJSON();return S.def.sound.pack;},
     getSound:function(){return S.def.sound;},
+    getSoundFx:function(id){return fxFor(id);},
     playSound:function(id){playSound(id);return true;}
   };
 
