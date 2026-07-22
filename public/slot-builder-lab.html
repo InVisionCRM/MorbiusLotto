@@ -48,7 +48,47 @@ body{
 #bgFx[data-bg="solid"]{background:var(--bgA)}
 #bgFx[data-bg="gradient"]{background:linear-gradient(160deg,var(--bgA),var(--bgB) 90%)}
 #bgFx[data-bg="image"]{background:var(--bg-image) center/cover no-repeat,var(--bgA)}
-#bgFx[data-bg="starfield"],#bgFx[data-bg="particles"]{background:radial-gradient(ellipse 90% 70% at 50% -10%,#0a1a2a,#02060b 70%)}
+#bgFx[data-bg="starfield"],#bgFx[data-bg="particles"],#bgFx[data-bg="bokeh"],#bgFx[data-bg="logorain"]{background:radial-gradient(ellipse 90% 70% at 50% -10%,#0a1a2a,#02060b 70%)}
+/* ── extended background styles ── */
+#bgFx::before,#bgFx::after{content:none;position:absolute;inset:0;pointer-events:none}
+/* aurora — two huge drifting color blobs */
+#bgFx[data-bg="aurora"]{background:#020609}
+#bgFx[data-bg="aurora"]::before{content:"";background:radial-gradient(ellipse 46% 38% at 30% 28%,var(--bgA),transparent 70%);filter:blur(46px) saturate(1.4);opacity:.6;animation:bg-aur1 17s ease-in-out infinite alternate}
+#bgFx[data-bg="aurora"]::after{content:"";background:radial-gradient(ellipse 44% 40% at 72% 66%,var(--bgB),transparent 70%);filter:blur(52px) saturate(1.4);opacity:.55;animation:bg-aur2 23s ease-in-out infinite alternate}
+@keyframes bg-aur1{from{transform:translate(-4%,-3%) scale(1)}to{transform:translate(6%,5%) scale(1.18)}}
+@keyframes bg-aur2{from{transform:translate(4%,3%) scale(1.12)}to{transform:translate(-5%,-5%) scale(.94)}}
+/* nebula — layered slow-breathing clouds */
+#bgFx[data-bg="nebula"]{background:#01050a}
+#bgFx[data-bg="nebula"]::before{content:"";background:radial-gradient(ellipse 60% 45% at 22% 30%,var(--bgA),transparent 65%),radial-gradient(ellipse 50% 55% at 80% 25%,var(--bgB),transparent 68%),radial-gradient(ellipse 70% 50% at 55% 85%,color-mix(in srgb,var(--bgA) 55%,var(--bgB)),transparent 70%);filter:blur(34px) saturate(1.25);opacity:.42;animation:bg-neb 26s ease-in-out infinite alternate}
+@keyframes bg-neb{from{transform:scale(1) rotate(0deg)}to{transform:scale(1.22) rotate(4deg)}}
+/* synthgrid — neon horizon floor */
+#bgFx[data-bg="synthgrid"]{background:linear-gradient(180deg,#02060b 0%,var(--bgA) 58%,#02060b 100%)}
+#bgFx[data-bg="synthgrid"]::before{content:"";top:auto;height:46%;background:repeating-linear-gradient(90deg,color-mix(in srgb,var(--bgB) 75%,#fff) 0 1.5px,transparent 1.5px 64px),repeating-linear-gradient(0deg,color-mix(in srgb,var(--bgB) 75%,#fff) 0 1.5px,transparent 1.5px 46px);transform:perspective(340px) rotateX(58deg) scale(1.6);transform-origin:50% 0;opacity:.34;animation:bg-grid 3.4s linear infinite}
+#bgFx[data-bg="synthgrid"]::after{content:"";top:38%;height:26%;background:radial-gradient(ellipse 60% 100% at 50% 50%,color-mix(in srgb,var(--bgB) 70%,#fff),transparent 70%);filter:blur(26px);opacity:.5}
+@keyframes bg-grid{from{background-position:0 0,0 0}to{background-position:0 0,0 46px}}
+/* sweep — rotating casino spotlight */
+#bgFx[data-bg="sweep"]{background:radial-gradient(ellipse 90% 70% at 50% -10%,var(--bgA),#02060b 72%)}
+#bgFx[data-bg="sweep"]::before{content:"";inset:-30%;background:conic-gradient(from 0deg at 50% 50%,transparent 0deg 290deg,color-mix(in srgb,var(--bgB) 60%,transparent) 320deg,color-mix(in srgb,var(--bgB) 85%,#fff) 338deg,transparent 360deg);filter:blur(22px);opacity:.5;animation:bg-sweep 9s linear infinite}
+@keyframes bg-sweep{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+/* carbon — brushed diagonal weave + travelling sheen */
+#bgFx[data-bg="carbon"]{background:repeating-linear-gradient(135deg,#05090f 0 7px,#080e16 7px 14px),#05090f}
+#bgFx[data-bg="carbon"]::before{content:"";background:linear-gradient(115deg,transparent 42%,color-mix(in srgb,var(--bgB) 30%,transparent) 50%,transparent 58%);animation:bg-sheen 7s ease-in-out infinite}
+@keyframes bg-sheen{0%{transform:translateX(-60%)}55%,100%{transform:translateX(60%)}}
+/* logoglow — the chosen logo, huge + blurred, breathing behind the machine */
+#bgFx[data-bg="logoglow"]{background:radial-gradient(ellipse 90% 70% at 50% -10%,var(--bgA),#02060b 72%)}
+#bgLogoGlow{display:none;position:absolute;inset:0;place-items:center}
+#bgFx[data-bg="logoglow"] #bgLogoGlow{display:grid}
+#bgLogoGlow img{width:calc(min(64vw,64vh) * var(--lg-scale,1));max-width:none;filter:blur(var(--lg-blur,38px)) saturate(1.35);opacity:var(--lg-op,.4)}
+#bgLogoGlow.spin img{animation:bg-logospin 46s linear infinite}
+@keyframes bg-logospin{from{transform:rotate(0deg) scale(1)}50%{transform:rotate(180deg) scale(1.12)}to{transform:rotate(360deg) scale(1)}}
+/* reelmirror — live blurred reflection of the actual reels */
+#bgMirror{display:none;position:absolute;inset:0;place-items:center;overflow:hidden}
+#bgFx[data-bg="reelmirror"] #bgMirror{display:grid}
+#bgMirror .bg-mirror-inner{transform:scale(var(--mir-scale,1.55));filter:blur(var(--mir-blur,26px)) saturate(1.3);opacity:var(--mir-op,.5);will-change:transform}
+#bgMirror.flip .bg-mirror-inner{transform:scale(var(--mir-scale,1.55)) scaleY(-1)}
+#bgMirror .reels{display:grid;gap:var(--grid-gap)}
+#bgMirror *{animation:none!important;pointer-events:none!important}
+@media (prefers-reduced-motion:reduce){#bgFx::before,#bgFx::after,#bgLogoGlow img{animation:none!important}}
 #ambientCanvas{position:fixed;inset:0;z-index:0;pointer-events:none;opacity:0;transition:opacity .5s}
 #ambientCanvas.on{opacity:1}
 .bg-light{position:fixed;inset:0;pointer-events:none;z-index:0;background:radial-gradient(ellipse 75% 55% at 50% -5%,rgba(34,211,238,0.13),transparent 70%)}
@@ -383,7 +423,7 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
 </style>
 </head>
 <body>
-<div id="bgFx" data-bg="gradient"></div>
+<div id="bgFx" data-bg="gradient"><div id="bgMirror"><div class="bg-mirror-inner"></div></div><div id="bgLogoGlow"><img alt="" /></div></div>
 <canvas id="ambientCanvas"></canvas>
 <div class="bg-light"></div>
 <div class="bg-scanlines" id="scanlines"></div>
@@ -492,9 +532,12 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
       <!-- THEME -->
       <div class="tab-panel" id="tab-theme">
         <div class="ctl"><div class="ctl-lbl"><span>Background style</span></div>
-          <div class="seg" id="bgSeg" data-key="bg" style="flex-wrap:wrap">
-            <button data-v="solid">solid</button><button data-v="gradient" class="on">gradient</button><button data-v="image">image</button><button data-v="starfield">starfield</button><button data-v="particles">particles</button>
-          </div></div>
+          <select id="bgStyleSel">
+            <option value="gradient">Gradient</option><option value="solid">Solid</option><option value="image">Image</option>
+            <option value="reelmirror">Reel mirror (live)</option><option value="logoglow">Logo glow</option><option value="logorain">Logo rain</option>
+            <option value="aurora">Aurora</option><option value="nebula">Nebula</option><option value="synthgrid">Synth grid</option><option value="sweep">Spotlight sweep</option>
+            <option value="carbon">Carbon sheen</option><option value="starfield">Starfield</option><option value="particles">Particles</option><option value="bokeh">Bokeh orbs</option>
+          </select></div>
         <div class="grid3" style="align-items:end">
           <div class="ctl"><div class="ctl-lbl"><span>Color A</span></div><input type="color" id="bgAColor" value="#0a1a2a" /></div>
           <div class="ctl"><div class="ctl-lbl"><span>Color B</span></div><input type="color" id="bgBColor" value="#02070b" /></div>
@@ -928,7 +971,9 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
   }
   function baseTheme(over){
     var t={
-      bg:{style:'gradient',colorA:'#0a1a2a',colorB:'#02070b',image:''},
+      bg:{style:'gradient',colorA:'#0a1a2a',colorB:'#02070b',image:'',
+          mirror:{blur:26,opacity:55,scale:155,flip:true},
+          logo:{source:'auto',blur:38,opacity:40,scale:100,spin:true}},
       scanlines:false, vignette:false,
       reelFrame:'none', radius:12, gap:8, symSize:100, cellBg:'deep',
       fonts:{heading:'Chakra Petch',mono:'JetBrains Mono'},
@@ -1030,6 +1075,21 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
     r.setProperty('--bgA', t.bg.colorA);
     r.setProperty('--bgB', t.bg.colorB);
     r.setProperty('--bg-image', t.bg.image?('url("'+t.bg.image+'")'):'none');
+    // extended backgrounds: reel mirror + logo glow
+    var mir=t.bg.mirror||{};
+    r.setProperty('--mir-blur',(mir.blur!=null?mir.blur:26)+'px');
+    r.setProperty('--mir-op',(mir.opacity!=null?mir.opacity:55)/100);
+    r.setProperty('--mir-scale',(mir.scale!=null?mir.scale:155)/100);
+    $('bgMirror').classList.toggle('flip', mir.flip!==false);
+    var lg=t.bg.logo||{};
+    r.setProperty('--lg-blur',(lg.blur!=null?lg.blur:38)+'px');
+    r.setProperty('--lg-op',(lg.opacity!=null?lg.opacity:40)/100);
+    r.setProperty('--lg-scale',(lg.scale!=null?lg.scale:100)/100);
+    $('bgLogoGlow').classList.toggle('spin', lg.spin!==false && !S.reduced);
+    var lgImg=$('bgLogoGlow').querySelector('img');
+    var lgSrc=(t.bg.style==='logoglow')?resolveBgLogoSrc():'';
+    if(lgImg.getAttribute('src')!==lgSrc) lgImg.src=lgSrc||'';
+    syncBgMirror();
     // overlays
     $('scanlines').classList.toggle('on', !!t.scanlines);
     $('vignette').classList.toggle('on', !!t.vignette);
@@ -1038,10 +1098,28 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
     b.classList.add('shape-'+t.button.shape);
     if(t.button.fill!=='solid')b.classList.add('fill-'+t.button.fill);
     if(t.button.glow)b.classList.add('btn-glow');
-    // ambient canvas on/off
-    var wantAmbient = (t.bg.style==='starfield'||t.bg.style==='particles');
+    // ambient canvas on/off (starfield/particles + the new bokeh/logorain modes)
+    var wantAmbient = (t.bg.style==='starfield'||t.bg.style==='particles'||t.bg.style==='bokeh'||t.bg.style==='logorain');
     ambientCanvas.classList.toggle('on', wantAmbient);
-    if(wantAmbient)startAmbient(); else stopAmbient();
+    if(wantAmbient){ if(ambMode!==t.bg.style){stopAmbient();} startAmbient(); }
+    else stopAmbient();
+  }
+  /* Logo source for logo-driven backgrounds: 'auto' = the wild symbol's art
+     (usually the brand/token), 'image' = the uploaded bg image, else a symbol id. */
+  function resolveBgLogoSrc(){
+    var lg=(S.def.theme.bg.logo)||{}, src=lg.source||'auto';
+    if(src==='image') return S.def.theme.bg.image||'';
+    if(src!=='auto'){ var pick=null; S.def.symbols.forEach(function(s){if(s.id===src)pick=s;}); if(pick)return pick.art; }
+    var wild=null; S.def.symbols.forEach(function(s){if(!wild&&s.role==='wild')wild=s;});
+    return (wild||S.def.symbols[0]||{}).art||'';
+  }
+  /* Live reel mirror: clone the real reels into the background layer. Called on
+     render/settle and throttled from the spin rAF; heavy blur hides the coarse
+     update cadence, so a snapshot every few frames reads as continuous motion. */
+  function syncBgMirror(){
+    var inner=$('bgMirror').querySelector('.bg-mirror-inner');
+    if(S.def.theme.bg.style!=='reelmirror'){ if(inner.firstChild)inner.innerHTML=''; return; }
+    inner.innerHTML=reelsEl.outerHTML.replace(/ id="[^"]*"/g,'').replace(/ data-edit="[^"]*"/g,'').replace(/ data-symid="[^"]*"/g,'');
   }
 
   /* ═══ BOARD RENDER ═══ */
@@ -1084,6 +1162,7 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
     var svg=document.createElementNS('http://www.w3.org/2000/svg','svg');
     svg.setAttribute('class','lines-svg'); svg.setAttribute('id','linesSvg');
     reelsEl.appendChild(svg);
+    syncBgMirror();
   }
   function drawWinLines(wins){
     var svg=$('linesSvg'); if(!svg)return; svg.innerHTML='';
@@ -1181,9 +1260,12 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
 
     await new Promise(function(resolve){
       var cellH=reelStates[0].el.clientHeight/rows;
-      var t0=null;
+      var t0=null, fno=0;
+      var mirrorLive=(S.def.theme.bg.style==='reelmirror');
       function frame(ts){
         if(t0===null)t0=ts;
+        fno++;
+        if(mirrorLive && fno%5===0) syncBgMirror();
         var el=ts-t0, allDone=true;
         reelStates.forEach(function(R){
           if(R.done)return;
@@ -1221,6 +1303,7 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
       cell.innerHTML=symImg(sym)+frameHTML(sym);
       strip.appendChild(cell);
     }
+    syncBgMirror();
   }
   function finishSpin(grid, ev, payout){
     S.lastGrid=grid;
@@ -1292,12 +1375,27 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
   }
 
   /* ═══ AMBIENT CANVAS (starfield / particles) ═══ */
-  var ambRaf=null, ambStars=[];
+  var ambRaf=null, ambStars=[], ambMode=null, ambImg=null;
+  /* Soft-orb sprite for the bokeh mode — one tiny offscreen radial gradient,
+     scaled per orb, instead of per-frame canvas blur. */
+  function bokehSprite(color){
+    var c=document.createElement('canvas'); c.width=c.height=64;
+    var g=c.getContext('2d').createRadialGradient(32,32,2,32,32,30);
+    g.addColorStop(0,color); g.addColorStop(1,'rgba(0,0,0,0)');
+    var x=c.getContext('2d'); x.fillStyle=g; x.fillRect(0,0,64,64);
+    return c;
+  }
   function startAmbient(){
     if(ambRaf)return;
     resizeAmb();
-    var n=Math.max(8, S.def.fx.ambient|0), mode=S.def.theme.bg.style;
+    var mode=S.def.theme.bg.style; ambMode=mode;
+    var n=Math.max(8, S.def.fx.ambient|0);
+    if(mode==='bokeh') n=Math.max(6, Math.min(26, Math.round(n/4)+6));
+    if(mode==='logorain') n=Math.max(6, Math.min(34, Math.round(n/3)+6));
     ambStars=[]; for(var i=0;i<n;i++)ambStars.push({x:Math.random(),y:Math.random(),z:Math.random()*0.8+0.2,tw:Math.random()*6.28});
+    var spr1=null,spr2=null;
+    if(mode==='bokeh'){ spr1=bokehSprite(S.def.theme.bg.colorB||'#22D3EE'); spr2=bokehSprite('#22D3EE'); }
+    if(mode==='logorain'){ ambImg=new Image(); ambImg.src=resolveBgLogoSrc(); }
     var ctx=ambientCanvas.getContext('2d');
     var last=performance.now();
     function frame(now){
@@ -1307,6 +1405,14 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
         if(mode==='starfield'){ s.tw+=0.04*dt; s.y+=0.0004*s.z*dt; if(s.y>1)s.y-=1;
           var a=0.4+0.6*Math.abs(Math.sin(s.tw)); ctx.globalAlpha=S.reduced?0.5:a; ctx.fillStyle= i%7===0?'#22D3EE':'#dbeafe';
           var r=s.z*1.6; ctx.beginPath(); ctx.arc(s.x*W,s.y*H,r,0,7); ctx.fill();
+        } else if(mode==='bokeh'){ s.tw+=0.012*dt; s.x+=0.00022*s.z*dt*Math.cos(s.tw*0.7); s.y-=0.00028*s.z*dt; if(s.y<-0.12)s.y=1.12; if(s.x>1.1)s.x=-0.1; if(s.x<-0.1)s.x=1.1;
+          var rr=(18+s.z*54)*(1+0.08*Math.sin(s.tw)); ctx.globalAlpha=0.10+0.16*s.z;
+          ctx.drawImage(i%3===0?spr2:spr1, s.x*W-rr, s.y*H-rr, rr*2, rr*2);
+        } else if(mode==='logorain'){ s.tw+=0.02*dt; s.y+=0.0011*s.z*dt; s.x+=0.0002*dt*Math.sin(s.tw); if(s.y>1.12){s.y=-0.12;s.x=Math.random();}
+          if(ambImg&&ambImg.complete&&ambImg.naturalWidth){
+            var sz=14+s.z*34; ctx.globalAlpha=0.16+0.3*s.z;
+            ctx.save(); ctx.translate(s.x*W,s.y*H); ctx.rotate(Math.sin(s.tw)*0.5); ctx.drawImage(ambImg,-sz/2,-sz/2,sz,sz); ctx.restore();
+          }
         } else { s.x+=0.0006*s.z*dt; s.y+=0.0003*dt; if(s.x>1)s.x-=1; if(s.y>1)s.y-=1;
           ctx.globalAlpha=0.35*s.z; ctx.fillStyle= i%3===0?'#22D3EE':'#38bdf8';
           ctx.beginPath(); ctx.arc(s.x*W,s.y*H,s.z*2.2,0,7); ctx.fill();
@@ -1319,7 +1425,7 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
     window.addEventListener('resize',resizeAmb);
   }
   function resizeAmb(){ambientCanvas.width=window.innerWidth;ambientCanvas.height=window.innerHeight;}
-  function stopAmbient(){if(ambRaf){cancelAnimationFrame(ambRaf);ambRaf=null;}var ctx=ambientCanvas.getContext&&ambientCanvas.getContext('2d');if(ctx)ctx.clearRect(0,0,ambientCanvas.width,ambientCanvas.height);}
+  function stopAmbient(){if(ambRaf){cancelAnimationFrame(ambRaf);ambRaf=null;}ambMode=null;var ctx=ambientCanvas.getContext&&ambientCanvas.getContext('2d');if(ctx)ctx.clearRect(0,0,ambientCanvas.width,ambientCanvas.height);}
 
   /* ═══ TAB RENDERERS ═══ */
   function renderAll(){ applyTheme(); syncLayoutControls(); renderSymbols(); renderFXGallery(); renderQuickApply(); syncThemeControls(); syncAnimControls(); renderSoundEvents(); syncSoundControls(); renderBoard(S.lastGrid||blankGrid()); renderRecent(); refreshJSON(); updateHud(); }
@@ -1416,7 +1522,7 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
   }
   function syncThemeControls(){
     var t=S.def.theme;
-    setSeg('bgSeg', t.bg.style);
+    $('bgStyleSel').value=t.bg.style;
     $('bgAColor').value=t.bg.colorA; $('bgBColor').value=t.bg.colorB;
     $('scanChk').checked=!!t.scanlines; $('vigChk').checked=!!t.vignette;
     $('headFontSel').value=t.fonts.heading; $('monoFontSel').value=t.fonts.mono;
@@ -1526,7 +1632,7 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
   segWire('reelFrameSeg',function(v){S.def.theme.reelFrame=v;applyTheme();refreshJSON();});
 
   // ── theme ──
-  segWire('bgSeg',function(v){S.def.theme.bg.style=v;applyTheme();refreshJSON();});
+  on('bgStyleSel','change',function(e){S.def.theme.bg.style=e.target.value;applyTheme();refreshJSON();});
   on('bgAColor','input',function(e){S.def.theme.bg.colorA=e.target.value;applyTheme();refreshJSON();});
   on('bgBColor','input',function(e){S.def.theme.bg.colorB=e.target.value;applyTheme();refreshJSON();});
   on('bgUplBtn','click',function(){$('bgUpl').click();});
@@ -1777,11 +1883,44 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
     h+=cCheck('turboTgl','Turbo spin (snappy stops)',S.def.anim.turbo);
     return h;
   }
+  var BG_STYLES=[
+    ['gradient','Gradient'],['solid','Solid'],['image','Image'],
+    ['reelmirror','Reel mirror (live)'],['logoglow','Logo glow'],['logorain','Logo rain'],
+    ['aurora','Aurora'],['nebula','Nebula'],['synthgrid','Synth grid'],['sweep','Spotlight sweep'],
+    ['carbon','Carbon sheen'],['starfield','Starfield'],['particles','Particles'],['bokeh','Bokeh orbs']
+  ];
+  function bgLogoSourceOpts(){
+    var o=[['auto','Auto (wild symbol)']];
+    S.def.symbols.forEach(function(s){o.push([s.id, s.name+' ('+s.id+')']);});
+    o.push(['image','Uploaded image']);
+    return o;
+  }
   function backgroundMenuBody(){
     var t=S.def.theme,h='';
-    h+=cSeg('bgStyle','Background type',[['solid','Solid'],['gradient','Gradient'],['image','Image'],['starfield','Starfield'],['particles','Particles']],t.bg.style);
-    h+=cColor('bgA','Color A',t.bg.colorA);
-    h+=cColor('bgB','Color B',t.bg.colorB);
+    h+=cSelect('bgStyle','Background type',BG_STYLES,t.bg.style);
+    var st=t.bg.style;
+    if(st==='reelmirror'){
+      var m=t.bg.mirror||{};
+      h+=cSlider('mirBlur','Mirror blur',0,60,1,(m.blur!=null?m.blur:26),'px');
+      h+=cSlider('mirOp','Mirror opacity',5,95,1,(m.opacity!=null?m.opacity:55),'%');
+      h+=cSlider('mirScale','Mirror scale',110,240,1,(m.scale!=null?m.scale:155),'%');
+      h+=cCheck('mirFlip','Flip vertically (reflection)',m.flip!==false);
+    }
+    if(st==='logoglow'||st==='logorain'){
+      var lg=t.bg.logo||{};
+      h+=cSelect('lgSource','Logo source',bgLogoSourceOpts(),lg.source||'auto');
+      if(st==='logoglow'){
+        h+=cSlider('lgBlur','Logo blur',0,80,1,(lg.blur!=null?lg.blur:38),'px');
+        h+=cSlider('lgScale','Logo scale',40,180,1,(lg.scale!=null?lg.scale:100),'%');
+        h+=cCheck('lgSpin','Slow rotation',lg.spin!==false);
+      }
+      h+=cSlider('lgOp','Logo opacity',5,90,1,(lg.opacity!=null?lg.opacity:40),'%');
+    }
+    if(st!=='reelmirror'&&st!=='carbon'){
+      h+=cColor('bgA','Color A',t.bg.colorA);
+      h+=cColor('bgB','Color B',t.bg.colorB);
+    }
+    if(st==='carbon') h+=cColor('bgB','Sheen color',t.bg.colorB);
     h+='<div class="ctl"><button class="upl-btn primary" data-pk="bgUploadBtn"><span aria-hidden="true">&#8593;</span> Upload image</button><input type="file" accept="image/*" hidden data-pk="bgFile" /></div>';
     h+=cCheck('scan','Scanline overlay',t.scanlines);
     h+=cCheck('vig','Vignette overlay',t.vignette);
@@ -1825,7 +1964,16 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
     btnGlow:function(v){ S.def.theme.button.glow=!!v; applyTheme(); syncThemeControls(); refreshJSON(); },
     turboTgl:function(v){ S.def.anim.turbo=!!v; syncTurboBtn(); syncAnimControls(); refreshJSON(); },
     // background
-    bgStyle:function(v){ S.def.theme.bg.style=v; applyTheme(); syncThemeControls(); refreshJSON(); },
+    bgStyle:function(v){ S.def.theme.bg.style=v; applyTheme(); syncThemeControls(); refreshJSON(); if(popState.type==='background')setPopBody(backgroundMenuBody()); },
+    mirBlur:function(v){ bgMirrorOpt('blur',+v); },
+    mirOp:function(v){ bgMirrorOpt('opacity',+v); },
+    mirScale:function(v){ bgMirrorOpt('scale',+v); },
+    mirFlip:function(v){ bgMirrorOpt('flip',!!v); },
+    lgSource:function(v){ bgLogoOpt('source',v); },
+    lgBlur:function(v){ bgLogoOpt('blur',+v); },
+    lgOp:function(v){ bgLogoOpt('opacity',+v); },
+    lgScale:function(v){ bgLogoOpt('scale',+v); },
+    lgSpin:function(v){ bgLogoOpt('spin',!!v); },
     bgA:function(v){ S.def.theme.bg.colorA=v; applyTheme(); syncThemeControls(); refreshJSON(); },
     bgB:function(v){ S.def.theme.bg.colorB=v; applyTheme(); syncThemeControls(); refreshJSON(); },
     scan:function(v){ S.def.theme.scanlines=!!v; applyTheme(); syncThemeControls(); refreshJSON(); },
@@ -1839,6 +1987,11 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
     bgUploadBtn:function(){ var f=popMenu.querySelector('[data-pk="bgFile"]'); if(f)f.click(); }
   };
   function setPopBody(html){ popBody.innerHTML=html; }
+  function bgMirrorOpt(k,v){ var t=S.def.theme; if(!t.bg.mirror)t.bg.mirror={}; t.bg.mirror[k]=v; applyTheme(); refreshJSON(); }
+  function bgLogoOpt(k,v){ var t=S.def.theme; if(!t.bg.logo)t.bg.logo={}; t.bg.logo[k]=v;
+    // logorain draws from a cached Image — restart the canvas loop on source change
+    if(k==='source'&&t.bg.style==='logorain')stopAmbient();
+    applyTheme(); refreshJSON(); }
   function updatePopSymThumb(){ var th=$('popSymThumb'); if(th){ var s=curSym(); th.innerHTML=symImg(s)+frameHTML(s); } }
   function syncPopReadouts(){ setPopBody(reelsMenuBody()); }
 
