@@ -289,6 +289,16 @@ input[type=range]::-moz-range-thumb{width:16px;height:16px;border:0;border-radiu
 .trim-handle{position:absolute;top:0;bottom:0;width:2px;background:var(--cyan);pointer-events:none;box-shadow:0 0 8px rgba(34,211,238,.7)}
 .trim-handle::after{content:"";position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:14px;height:28px;border-radius:7px;background:rgba(34,211,238,.22);border:1px solid var(--cyan)}
 #trimOv .snd-mod-read{margin:4px 0 0;white-space:normal}
+/* ── sound library modal: shipped clips, self-describing via waveform + length ── */
+.sndlib-list{margin-top:12px;display:flex;flex-direction:column;gap:8px;max-height:62vh;overflow-y:auto;padding-right:2px}
+.sndlib-row{display:flex;align-items:center;gap:10px;border:1px solid var(--cyan-soft);border-radius:12px;padding:8px 10px;background:rgba(6,16,25,.55);transition:.15s}
+.sndlib-row:hover{border-color:var(--cyan-edge)}
+.sndlib-meta{width:118px;flex:none;min-width:0}
+.sndlib-name{font-family:var(--font-disp);font-weight:600;font-size:11.5px;color:#eaf6fb;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sndlib-dur{font-family:var(--font-mono);font-size:9.5px;color:var(--cyan)}
+.sndlib-cv{flex:1;min-width:0;height:44px;border-radius:8px;background:rgba(4,10,16,.9);border:1px solid rgba(34,211,238,.12)}
+.sndlib-btns{flex:none;display:flex;gap:6px}
+@media(max-width:560px){.sndlib-row{flex-wrap:wrap}.sndlib-cv{flex-basis:100%;order:3;height:38px}}
 select,input[type=text],input[type=number]{width:100%;background:var(--field);border:1px solid var(--cyan-soft);border-radius:9px;color:var(--ink);font-family:var(--font-mono);font-size:12.5px;padding:9px 10px;outline:none}
 select:focus,input:focus{border-color:var(--cyan-edge)}
 input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan-soft);border-radius:8px;background:var(--field);cursor:pointer;vertical-align:middle}
@@ -871,6 +881,15 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
       <button class="sm-btn go" id="trimUse">&#10003; Use clip</button>
       <button class="sm-btn" id="trimFull">Keep full</button>
     </div>
+  </div>
+</div>
+
+<!-- sound library: shipped clips with waveform + length; Use routes through the trimmer -->
+<div class="bso" id="sndLibOv">
+  <div class="trim-card" role="dialog" aria-modal="true" aria-label="Sound library">
+    <div class="trim-head"><div class="bso-lbl">Sound library</div><button class="popmenu-x" id="sndLibX" aria-label="Close">&#10005;</button></div>
+    <p class="hint" style="margin:7px 0 0">Every clip shows its waveform and length &mdash; hit &#9654; to hear it. &ldquo;Use&rdquo; opens it in the trimmer so you can cut it before it&rsquo;s assigned.</p>
+    <div class="sndlib-list" id="sndLibList"></div>
   </div>
 </div>
 
@@ -1837,6 +1856,7 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
           '<button class="upl-btn snd-auto-btn'+(S.def.sound.autoPreview?' on':'')+'" data-snd-auto="1" title="Replay this sound automatically after every tweak">&#8635; Auto-play: '+(S.def.sound.autoPreview?'ON':'OFF')+'</button>'+
           '<button class="upl-btn" data-snd-upload="'+id+'">&#8593; Upload</button>'+
           '<button class="upl-btn snd-rec-btn" data-snd-rec="'+id+'">&#9679; Record</button>'+
+          '<button class="upl-btn" data-snd-lib="'+id+'">&#9835; Library</button>'+
           '<input type="file" accept="audio/*" hidden data-snd-file="'+id+'" />'+
           '<button class="snd-reset-lnk" data-snd-reset="'+id+'"'+(hasSample?'':' style="visibility:hidden"')+'>&#8630; Reset to default</button>'+
         '</div>'+
@@ -2417,6 +2437,93 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
       setSndSample(st.id, url, st.label+' · trimmed ('+((s1-s0)/st.buf.sampleRate).toFixed(1)+'s)');
     }catch(e){ setSndSample(st.id, st.dataUrl, st.label); } // bake failed → keep the full original
   }
+  /* ── shipped sound library. Data-driven: to add clips, drop the file in
+        public/sounds/library/ and append an entry here — waveform + duration
+        render themselves, so no manual organizing is ever needed. ── */
+  var SND_LIBRARY=[
+    {name:'Game UI SFX', file:'sounds/library/game-ui-sfx.wav'},
+    {name:'Catchy clip 1', file:'sounds/library/catchy-clip-1.mp3'},
+    {name:'Catchy clip 2', file:'sounds/library/catchy-clip-2.mp3'},
+    {name:'Dark & beautiful', file:'sounds/library/dark-beautiful.mp3'},
+    {name:'Dark & uplifting', file:'sounds/library/dark-uplifting.mp3'}
+  ];
+  var sndLibTarget=null;   // event id the picked clip gets assigned to
+  var _sndLibCache={};     // index -> {buf} | Promise — decoded once, kept for the session
+  var _sndLibSrc=null;     // currently-previewing source node
+  function decodeLibClip(i,cb){
+    var hit=_sndLibCache[i];
+    if(hit&&hit.buf){ cb(hit.buf); return; }
+    if(hit&&hit.then){ hit.then(function(b){cb(b);}); return; }
+    var c=audioCtx(); if(!c){ cb(null); return; }
+    var p=fetch(SND_LIBRARY[i].file).then(function(r){ return r.arrayBuffer(); })
+      .then(function(ab){ return c.decodeAudioData(ab); })
+      .then(function(buf){ _sndLibCache[i]={buf:buf}; return buf; })
+      .catch(function(){ delete _sndLibCache[i]; return null; });
+    _sndLibCache[i]=p;
+    p.then(function(b){ cb(b); });
+  }
+  function drawLibRow(i,buf){
+    var dur=$('sndlibdur-'+i);
+    if(!buf){ if(dur)dur.textContent='could not decode'; return; }
+    if(dur)dur.textContent=buf.duration.toFixed(1)+'s';
+    var cv=$('sndlibcv-'+i); if(!cv)return;
+    var cw=cv.clientWidth; if(cw&&Math.abs(cv.width-cw)>2)cv.width=cw;
+    var ctx=cv.getContext&&cv.getContext('2d'); if(!ctx)return;
+    var W=cv.width,H=cv.height,mid=H/2,half=H/2-3;
+    ctx.clearRect(0,0,W,H);
+    var d=buf.getChannelData(0), COLS=Math.min(Math.floor(W),240), step=d.length/COLS, cwid=W/COLS;
+    ctx.fillStyle='rgba(34,211,238,.7)';
+    for(var k=0;k<COLS;k++){
+      var s0=Math.floor(k*step), s1=Math.min(d.length,Math.floor((k+1)*step)+1), mn=0, mx=0;
+      for(var j=s0;j<s1;j++){ var v=d[j]; if(v>mx)mx=v; if(v<mn)mn=v; }
+      ctx.fillRect(k*cwid, mid-mx*half, Math.max(1,cwid), Math.max(1,(mx-mn)*half));
+    }
+  }
+  function openSndLibrary(id){
+    sndLibTarget=id;
+    var host=$('sndLibList');
+    host.innerHTML=SND_LIBRARY.map(function(clip,i){
+      return '<div class="sndlib-row">'+
+        '<div class="sndlib-meta"><div class="sndlib-name">'+esc(clip.name)+'</div><div class="sndlib-dur" id="sndlibdur-'+i+'">decoding&hellip;</div></div>'+
+        '<canvas class="sndlib-cv" id="sndlibcv-'+i+'" width="300" height="44"></canvas>'+
+        '<div class="sndlib-btns">'+
+          '<button class="upl-btn" data-lib-prev="'+i+'" title="Preview" aria-label="Preview '+esc(clip.name)+'">&#9654;</button>'+
+          '<button class="upl-btn" data-lib-use="'+i+'">Use</button>'+
+        '</div>'+
+      '</div>';
+    }).join('');
+    $('sndLibOv').classList.add('open');
+    SND_LIBRARY.forEach(function(_,i){ decodeLibClip(i,function(buf){ drawLibRow(i,buf); }); });
+  }
+  function closeSndLibrary(){
+    if(_sndLibSrc){ try{ _sndLibSrc.stop(); }catch(e){} _sndLibSrc=null; }
+    $('sndLibOv').classList.remove('open'); sndLibTarget=null;
+  }
+  function previewLibClip(i){
+    decodeLibClip(i,function(buf){
+      var c=audioCtx(); if(!c||!buf)return;
+      try{
+        if(_sndLibSrc){ try{ _sndLibSrc.stop(); }catch(e){} }
+        var src=c.createBufferSource(); src.buffer=buf;
+        var g=c.createGain(); g.gain.value=0.9; src.connect(g); g.connect(c.destination);
+        src.start(); _sndLibSrc=src;
+      }catch(e){}
+    });
+  }
+  /* picked clip → dataUrl (same storage as uploads) → trimmer, targeting the
+     event whose panel opened the library. */
+  function useLibClip(i){
+    var id=sndLibTarget; if(id==null)return;
+    var clip=SND_LIBRARY[i];
+    closeSndLibrary();
+    updateSndStatus(id,'Loading "'+clip.name+'"…');
+    fetch(clip.file).then(function(r){ return r.blob(); }).then(function(blob){
+      var fr=new FileReader();
+      fr.onload=function(){ openTrimEditor(id, fr.result, clip.name); };
+      fr.onerror=function(){ restoreSndStatus(id); };
+      fr.readAsDataURL(blob);
+    }).catch(function(){ restoreSndStatus(id); });
+  }
   /* 16-bit PCM WAV encode of buffer frames [s0,s1) — output feeds the exact same
      dataUrl path as uploads, so caching/JSON/envelope all work unchanged. */
   function audioBufferToWavDataUrl(buf,s0,s1){
@@ -2720,6 +2827,8 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
     if(upl){ var uid=upl.getAttribute('data-snd-upload'); var f=$('soundEvents').querySelector('[data-snd-file="'+uid+'"]'); if(f)f.click(); return; }
     var rec=e.target.closest('[data-snd-rec]');
     if(rec){ toggleSndRecord(rec.getAttribute('data-snd-rec')); return; }
+    var lib=e.target.closest('[data-snd-lib]');
+    if(lib){ openSndLibrary(lib.getAttribute('data-snd-lib')); return; }
     var rst=e.target.closest('[data-snd-reset]');
     if(rst){ resetSndSample(rst.getAttribute('data-snd-reset')); return; }
   });
@@ -2791,6 +2900,16 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
   on('trimX','click',function(){ trimApply('cancel'); });
   $('trimOv').addEventListener('pointerdown',function(e){ if(e.target===e.currentTarget)trimApply('cancel'); });
   document.addEventListener('keydown',function(e){ if(e.key==='Escape'&&$('trimOv').classList.contains('open'))trimApply('cancel'); });
+  // ── sound library wiring ──
+  $('sndLibList').addEventListener('click',function(e){
+    var prev=e.target.closest('[data-lib-prev]');
+    if(prev){ previewLibClip(+prev.getAttribute('data-lib-prev')); return; }
+    var use=e.target.closest('[data-lib-use]');
+    if(use){ useLibClip(+use.getAttribute('data-lib-use')); return; }
+  });
+  on('sndLibX','click',closeSndLibrary);
+  $('sndLibOv').addEventListener('pointerdown',function(e){ if(e.target===e.currentTarget)closeSndLibrary(); });
+  document.addEventListener('keydown',function(e){ if(e.key==='Escape'&&$('sndLibOv').classList.contains('open'))closeSndLibrary(); });
   $('soundEvents').addEventListener('change',function(e){
     var f=e.target.closest('[data-snd-file]'); if(!f)return;
     var id=f.getAttribute('data-snd-file'); var file=f.files&&f.files[0]; if(!file)return;
@@ -3487,6 +3606,11 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
     getGonioRafRunning:function(id){return !!sndGonioRaf[id];},
     setAutoPreview:function(on){S.def.sound.autoPreview=!!on;syncAutoBtns();refreshJSON();return S.def.sound.autoPreview;},
     // ── added for the compact-layout / envelope-editor pass ──
+    // ── added for the sound-library pass ──
+    openSndLibrary:function(id){openSndLibrary(id);return true;},
+    getSndLibrary:function(){return SND_LIBRARY.map(function(c){return {name:c.name,file:c.file};});},
+    useLibClip:function(i){useLibClip(i);return true;},
+    libOpen:function(){return $('sndLibOv').classList.contains('open');},
     // ── added for the clip-trimmer pass ──
     openTrimEditor:function(id,dataUrl,label){openTrimEditor(id,dataUrl,label||'clip');return true;},
     getTrimState:function(){return trimSt?{id:trimSt.id,start:trimSt.start,end:trimSt.end,dur:trimSt.buf.duration,open:$('trimOv').classList.contains('open')}:null;},
