@@ -339,6 +339,21 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
 @keyframes sndrecpulse{0%,100%{opacity:1}50%{opacity:.6}}
 .snd-reset-lnk{background:none;border:0;color:var(--slate-500);font-family:var(--font-mono);font-size:10.5px;cursor:pointer;padding:4px 2px;text-decoration:underline;transition:.15s}
 .snd-reset-lnk:hover{color:var(--cyan)}
+/* ── per-event fx: the 3 real-plugin-inspired widgets (Spatial Pad, Echo
+      Tunnel, Stereograph) — Deep-Sea Neon look, reusing --cyan tokens. ── */
+.snd-widget-cap{font-size:10px;text-transform:uppercase;letter-spacing:.16em;color:var(--slate-500);margin:2px 0 7px;font-family:var(--font-disp);font-weight:600}
+.snd-pad{position:relative;width:100%;max-width:156px;aspect-ratio:1;margin:0 auto 10px;border-radius:16px;border:1px solid var(--cyan-soft);background:radial-gradient(circle at 50% 84%,rgba(34,211,238,.22),rgba(4,10,16,.94) 72%);overflow:hidden;touch-action:none;cursor:grab}
+.snd-pad:active{cursor:grabbing}
+.snd-pad-ring{position:absolute;left:50%;top:50%;border:1px dashed rgba(34,211,238,.22);border-radius:50%;transform:translate(-50%,-50%);pointer-events:none}
+.snd-pad-ring.r1{width:44%;height:44%}
+.snd-pad-ring.r2{width:80%;height:80%;border-color:rgba(34,211,238,.13)}
+.snd-pad-hline{position:absolute;left:0;right:0;top:50%;height:1px;background:rgba(148,163,184,.16);pointer-events:none}
+.snd-pad-vline{position:absolute;top:0;bottom:0;left:50%;width:1px;background:rgba(148,163,184,.16);pointer-events:none}
+.snd-pad-axis{position:absolute;font-family:var(--font-mono);font-size:8px;letter-spacing:.12em;color:var(--slate-500);pointer-events:none}
+.snd-pad-axis.ax-x{left:50%;bottom:4px;transform:translateX(-50%)}
+.snd-pad-axis.ax-y{left:5px;top:50%;transform:translateY(-50%) rotate(-90deg);transform-origin:left center}
+.snd-pad-dot{position:absolute;width:15px;height:15px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#bff7ff,var(--cyan) 60%,#0e7490);box-shadow:0 0 12px rgba(34,211,238,.85),0 0 2px #fff;transform:translate(-50%,-50%);left:50%;top:100%;pointer-events:none}
+.snd-echo-cv,.snd-gonio-cv{display:block;width:100%;max-width:132px;aspect-ratio:1;margin:0 auto 8px;border-radius:14px;border:1px solid var(--cyan-soft);background:rgba(4,10,16,.92)}
 /* ── prominent per-symbol upload ── */
 .sym-art-tools{display:flex;flex-direction:column;gap:6px;flex:1;min-width:0}
 .upl-btn.primary{background:linear-gradient(180deg,rgba(34,211,238,.24),rgba(34,211,238,.08));color:#cdf5fc;font-weight:700;padding:9px 12px;font-size:11px;display:inline-flex;align-items:center;justify-content:center;gap:6px;width:100%}
@@ -923,7 +938,12 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
         get an entry; missing fields fall back to FX_DEFAULT). Everything here
         is guarded so a bad/missing value or a decode failure degrades to the
         plain procedural path or silence — audio must never break gameplay. ── */
-  var FX_DEFAULT = {sample:null, volume:1, pitch:1, gate:1, reverbMix:0, reverbDecay:1.6, delayMix:0, delayTime:0.22, delayFeedback:0.3};
+  var FX_DEFAULT = {sample:null, volume:1, pitch:1, gate:1, pan:0, reverbMix:0, reverbDecay:1.6, delayMix:0, delayTime:0.22, delayFeedback:0.3};
+  /* live-tap registry for the Stereograph goniometer — one entry per event id,
+     overwritten on every fresh play (playBufferThroughFx builds a brand-new
+     one-shot graph per call, so the analyser pair is rebuilt right alongside
+     it). endAt lets the draw loop know when to fall back to its idle anim. */
+  var sndLiveTaps = {};
   function fxFor(id){
     var raw = S.def && S.def.sound && S.def.sound.fx && S.def.sound.fx[id];
     var f = {}; for(var k in FX_DEFAULT) f[k] = FX_DEFAULT[k];
@@ -969,7 +989,7 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
   /* Builds the actual per-play graph: src -> gate -> volume -> dry, plus
      parallel delay (with feedback) and reverb (convolver) wet sends. Wrapped
      end-to-end so a node-creation failure just drops the effect, never throws. */
-  function playBufferThroughFx(c, buf, fx, masterVol, mul){
+  function playBufferThroughFx(c, id, buf, fx, masterVol, mul){
     try{
       var src = c.createBufferSource(); src.buffer = buf;
       var pitch = fx.pitch; if(!(pitch > 0)) pitch = 1;
@@ -992,12 +1012,18 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
       var volGain = c.createGain();
       volGain.gain.value = Math.max(0, Math.min(2, fx.volume != null ? fx.volume : 1)) * masterVol * (mul || 1);
       src.connect(gateGain); gateGain.connect(volGain);
-      volGain.connect(c.destination); // dry send
+
+      // ── shared mix bus: dry + delay-wet + reverb-wet all land here first,
+      //    so a single downstream stereo panner moves the WHOLE processed sound
+      //    (dry + tails together) — the simplest correct mental model for "position". ──
+      var mixBus = c.createGain(); mixBus.gain.value = 1;
+      volGain.connect(mixBus); // dry send
 
       var delayMix = Math.max(0, Math.min(1, fx.delayMix || 0));
+      var dTime, decay; // hoisted so the goniometer tail-estimate below can read them
       if(delayMix > 0){
         try{
-          var dTime = Math.max(0.02, Math.min(1.0, fx.delayTime != null ? fx.delayTime : 0.22));
+          dTime = Math.max(0.02, Math.min(1.0, fx.delayTime != null ? fx.delayTime : 0.22));
           var fb = Math.max(0, Math.min(0.85, fx.delayFeedback != null ? fx.delayFeedback : 0.3));
           fb = Math.min(fb, 0.9); // defense in depth against a malformed imported JSON
           var delayNode = c.createDelay(2.0); delayNode.delayTime.value = dTime;
@@ -1005,21 +1031,48 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
           var dWet = c.createGain(); dWet.gain.value = delayMix;
           volGain.connect(delayNode);
           delayNode.connect(fbGain); fbGain.connect(delayNode); // feedback loop
-          delayNode.connect(dWet); dWet.connect(c.destination);
+          delayNode.connect(dWet); dWet.connect(mixBus);
         }catch(e){ /* drop the delay send, keep the dry signal */ }
       }
       var reverbMix = Math.max(0, Math.min(1, fx.reverbMix || 0));
       if(reverbMix > 0){
         try{
-          var decay = Math.max(0.2, Math.min(4, fx.reverbDecay != null ? fx.reverbDecay : 1.6));
+          decay = Math.max(0.2, Math.min(4, fx.reverbDecay != null ? fx.reverbDecay : 1.6));
           var ir = buildReverbIR(c, decay);
           if(ir){
             var conv = c.createConvolver(); conv.buffer = ir; conv.normalize = true;
             var rWet = c.createGain(); rWet.gain.value = reverbMix;
-            volGain.connect(conv); conv.connect(rWet); rWet.connect(c.destination);
+            volGain.connect(conv); conv.connect(rWet); rWet.connect(mixBus);
           }
         }catch(e){ /* drop the reverb send, keep the dry signal */ }
       }
+
+      // ── stereo pan (Bitwig tr.Distance-style X axis) — clamp defensively here
+      //    too, same pattern as delayFeedback above, in case of a bad imported value. ──
+      var pan = clamp(fx.pan != null ? fx.pan : 0, -1, 1);
+      var panner = c.createStereoPanner ? c.createStereoPanner() : null;
+      if(panner){ panner.pan.value = pan; mixBus.connect(panner); panner.connect(c.destination); }
+      else mixBus.connect(c.destination); // ancient-browser fallback — no panning available
+
+      // ── Stereograph goniometer tap: a parallel monitoring branch off the
+      //    panner's POST-PAN output. It never feeds onward — the draw loop just
+      //    reads getFloatTimeDomainData from these analysers each frame. ──
+      try{
+        if(panner && c.createChannelSplitter){
+          var splitter = c.createChannelSplitter(2);
+          panner.connect(splitter);
+          var analyserL = c.createAnalyser(); analyserL.fftSize = 512;
+          var analyserR = c.createAnalyser(); analyserR.fftSize = 512;
+          splitter.connect(analyserL, 0);
+          splitter.connect(analyserR, 1);
+          var playMs = (dur / pitch) * 1000;
+          var tailMs = 250;
+          if(delayMix > 0) tailMs = Math.max(tailMs, dTime * 1000 * 6); // a handful of repeats
+          if(reverbMix > 0) tailMs = Math.max(tailMs, decay * 1000);
+          sndLiveTaps[id] = { analyserL: analyserL, analyserR: analyserR, endAt: Date.now() + playMs + tailMs };
+        }
+      }catch(e){ /* the goniometer is a monitoring nicety — never let it break audio */ }
+
       src.start();
       if(gate < 1) src.stop(now + dur + 0.02);
     }catch(e){ /* audio is presentation-only; never break the game */ }
@@ -1029,7 +1082,7 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
     if(!pcm || !pcm.length) return;
     var buf = c.createBuffer(1, pcm.length, 44100);
     if(buf.copyToChannel) buf.copyToChannel(pcm, 0); else buf.getChannelData(0).set(pcm);
-    playBufferThroughFx(c, buf, fx, masterVol, mul);
+    playBufferThroughFx(c, id, buf, fx, masterVol, mul);
   }
   function playSound(id, gainMul){
     try{
@@ -1038,10 +1091,11 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
       var c = audioCtx(); if(!c) return;
       var fx = fxFor(id);
       var masterVol = (snd.volume != null ? snd.volume : 0.8);
+      echoPulse(id); // fire a bright pulse ring on the Echo Tunnel, if it's mounted
       if(fx.sample){
         getSampleBuffer(id, fx.sample, function(buf){
           try{
-            if(buf) playBufferThroughFx(c, buf, fx, masterVol, gainMul);
+            if(buf) playBufferThroughFx(c, id, buf, fx, masterVol, gainMul);
             else playProcedural(c, id, snd.pack || 'Synth', fx, masterVol, gainMul); // decode failed — fall back
           }catch(e){ /* never break the game */ }
         });
@@ -1201,6 +1255,7 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
   function fmt(n){return Math.round(n).toLocaleString('en-US');}
   function rndHex(len){var s='';for(var i=0;i<len;i++)s+=Math.floor(Math.random()*16).toString(16);return s;}
   function esc(s){return String(s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
+  function clamp(v,lo,hi){v=+v; if(!(v>=lo))v=lo; if(!(v<=hi))v=hi; return v;}
   async function sha256Hex(msg){try{var b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(msg));return Array.from(new Uint8Array(b)).map(function(x){return x.toString(16).padStart(2,'0');}).join('');}catch(e){return 'sha256-unavailable';}}
 
   /* ═══ THEME APPLY ═══ */
@@ -1586,6 +1641,9 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
   /* ═══ SOUND TAB ═══ */
   function renderSoundEvents(){
     var host=$('soundEvents'); if(!host)return;
+    stopAllSndWidgets(); // full DOM rebuild below — every panel comes back collapsed, so any
+                         // previously-running Echo Tunnel / Stereograph rAF loops must die here
+                         // too, or they'd keep spinning against orphaned/rebuilt canvases forever.
     host.innerHTML=SOUND_EVENTS.map(function(ev){
       var id=ev[0];
       return '<div class="snd-ev-wrap" data-snd-wrap="'+id+'">'+
@@ -1608,6 +1666,7 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
     var fx=fxFor(id);
     var hasSample=!!(raw&&raw.sample);
     var statusTxt=hasSample?('Custom: '+esc(sndLastLabel[id]||'custom sample')):'Default synth';
+    var padLeft=(clamp(fx.pan,-1,1)+1)/2*100, padTop=(1-clamp(fx.reverbMix,0,1))*100;
     return '<div class="snd-cust-panel" id="sndpanel-'+id+'">'+
       '<div class="snd-samp-row">'+
         '<div class="snd-samp-status mono" id="sndstatus-'+id+'">'+statusTxt+'</div>'+
@@ -1619,15 +1678,32 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
         '</div>'+
         '<p class="hint" style="margin:6px 0 0">Recordings stay in your browser and this config&rsquo;s JSON &mdash; nothing is uploaded anywhere.</p>'+
       '</div>'+
+      /* Stereograph — reflects the WHOLE processed signal (post-pan), so it sits
+         at the top of the fx section rather than beside any one control. */
+      '<div class="snd-widget-cap">Stereograph</div>'+
+      '<canvas class="snd-gonio-cv" id="sndgonio-'+id+'" width="140" height="140"></canvas>'+
       '<div class="grid2">'+
         sndSlider(id,'volume','Volume',0,200,1,Math.round(fx.volume*100),'%')+
         sndSlider(id,'pitch','Pitch / speed',50,200,1,Math.round(fx.pitch*100),'%')+
       '</div>'+
       sndSlider(id,'gate','Trim / cutoff',0,100,1,Math.round(fx.gate*100),'%')+
-      '<div class="grid2">'+
-        sndSlider(id,'reverbMix','Reverb mix',0,100,1,Math.round(fx.reverbMix*100),'%')+
-        sndSlider(id,'reverbDecay','Reverb decay',0.2,4,0.1,fx.reverbDecay,'s')+
+      /* Spatial Pad (Bitwig tr.Distance-style XY) — X = pan, Y = reverbMix ("distance").
+         Sliders underneath stay the precise numeric fallback and stay in sync both ways. */
+      '<div class="snd-widget-cap">Spatial</div>'+
+      '<div class="snd-pad" id="sndpad-'+id+'" data-snd-pad="'+id+'">'+
+        '<div class="snd-pad-ring r1"></div><div class="snd-pad-ring r2"></div>'+
+        '<div class="snd-pad-hline"></div><div class="snd-pad-vline"></div>'+
+        '<span class="snd-pad-axis ax-x">PAN</span><span class="snd-pad-axis ax-y">DISTANCE</span>'+
+        '<div class="snd-pad-dot" id="sndpaddot-'+id+'" style="left:'+padLeft+'%;top:'+padTop+'%"></div>'+
       '</div>'+
+      '<div class="grid2">'+
+        sndSlider(id,'pan','Pan',-100,100,1,Math.round(fx.pan*100),'')+
+        sndSlider(id,'reverbMix','Reverb mix',0,100,1,Math.round(fx.reverbMix*100),'%')+
+      '</div>'+
+      sndSlider(id,'reverbDecay','Reverb decay',0.2,4,0.1,fx.reverbDecay,'s')+
+      /* Echo Tunnel — live reactive viz next to the delay controls it reflects. */
+      '<div class="snd-widget-cap">Echo tunnel</div>'+
+      '<canvas class="snd-echo-cv" id="sndecho-'+id+'" width="140" height="140"></canvas>'+
       '<div class="grid3">'+
         sndSlider(id,'delayMix','Delay mix',0,100,1,Math.round(fx.delayMix*100),'%')+
         sndSlider(id,'delayTime','Delay time',20,1000,10,Math.round(fx.delayTime*1000),'ms')+
@@ -1662,18 +1738,158 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
     var open=wrap.classList.toggle('expanded');
     if(panel)panel.classList.toggle('open', open);
     if(tgl){ tgl.classList.toggle('on', open); tgl.setAttribute('aria-expanded', open?'true':'false'); tgl.innerHTML='Customize <span class="car">'+(open?'&#9652;':'&#9662;')+'</span>'; }
+    // widgets only exist/animate while their panel is expanded — start their rAF
+    // loops on open, and CANCEL them on close. With up to 19 events, leaving
+    // loops running behind collapsed panels would be 19*2 background rAFs for nothing.
+    if(open){ updatePadDot(id); startEchoTunnel(id); startGonio(id); }
+    else{ stopEchoTunnel(id); stopGonio(id); }
   }
   function applySndFieldValue(id, field, raw){
     var fx=ensureFxEntry(id);
     if(field==='volume') fx.volume=Math.max(0,Math.min(2,raw/100));
     else if(field==='pitch') fx.pitch=Math.max(0.5,Math.min(2,raw/100));
     else if(field==='gate') fx.gate=Math.max(0,Math.min(1,raw/100));
+    else if(field==='pan') fx.pan=clamp(raw/100,-1,1);
     else if(field==='reverbMix') fx.reverbMix=Math.max(0,Math.min(1,raw/100));
     else if(field==='reverbDecay') fx.reverbDecay=Math.max(0.2,Math.min(4,raw));
     else if(field==='delayMix') fx.delayMix=Math.max(0,Math.min(1,raw/100));
     else if(field==='delayTime') fx.delayTime=Math.max(0.02,Math.min(1.0,raw/1000));
     else if(field==='delayFeedback') fx.delayFeedback=Math.max(0,Math.min(0.85,raw/100));
+    if(field==='pan'||field==='reverbMix') updatePadDot(id); // slider → pad (bidirectional sync)
     refreshJSON();
+  }
+  /* ── Spatial Pad: Bitwig tr.Distance-style XY drag. X = pan (-1..1), Y = "distance"
+        mapped onto the EXISTING reverbMix field (bottom/near=0/dry, top/far=1/wet). ── */
+  function updatePadDot(id){
+    var dot=$('sndpaddot-'+id); if(!dot)return;
+    var fx=fxFor(id);
+    dot.style.left=((clamp(fx.pan,-1,1)+1)/2*100)+'%';
+    dot.style.top=((1-clamp(fx.reverbMix,0,1))*100)+'%';
+  }
+  function syncSndSliderDisplay(id,field,val){
+    var wrap=sndWrapEl(id); if(!wrap)return;
+    var input=wrap.querySelector('input[data-snd-id="'+id+'"][data-snd-field="'+field+'"]');
+    if(input)input.value=val;
+    var vf=wrap.querySelector('[data-sndvalfor="'+id+':'+field+'"]');
+    if(vf)vf.textContent=val+(input?(input.getAttribute('data-sfx')||''):'');
+  }
+  function setSpatial(id, pan, dist){
+    var fx=ensureFxEntry(id);
+    fx.pan=clamp(pan,-1,1); fx.reverbMix=clamp(dist,0,1);
+    updatePadDot(id);
+    syncSndSliderDisplay(id,'pan',Math.round(fx.pan*100));
+    syncSndSliderDisplay(id,'reverbMix',Math.round(fx.reverbMix*100));
+    refreshJSON();
+    return fx;
+  }
+  function setSpatialFromClient(id, pad, clientX, clientY){
+    var r=pad.getBoundingClientRect();
+    if(!r.width||!r.height)return;
+    var x=clamp((clientX-r.left)/r.width,0,1), y=clamp((clientY-r.top)/r.height,0,1);
+    setSpatial(id, x*2-1, 1-y);
+  }
+  /* ── Echo Tunnel: Ableton-Echo-inspired delay visualizer. Concentric rings spawn
+        at center and travel outward — cadence from delayTime, brightness/count from
+        delayFeedback, overall visibility from delayMix. Runs continuously (as a live
+        preview) whenever a panel is expanded, plus one bright pulse ring on Play. ── */
+  var sndEchoRaf={}, sndEchoState={};
+  function echoPulse(id){
+    var st=sndEchoState[id]; if(!st)return; // not mounted (panel never opened) — nothing to animate
+    st.rings.push({born:performance.now(), pulse:true});
+  }
+  function startEchoTunnel(id){
+    if(sndEchoRaf[id])return;
+    if(!sndEchoState[id])sndEchoState[id]={rings:[],lastSpawn:0};
+    function frame(now){
+      var canvas=$('sndecho-'+id);
+      if(!canvas){ sndEchoRaf[id]=null; return; } // panel gone — stop, don't reschedule
+      drawEchoFrame(id,canvas,now);
+      sndEchoRaf[id]=requestAnimationFrame(frame);
+    }
+    sndEchoRaf[id]=requestAnimationFrame(frame);
+  }
+  function stopEchoTunnel(id){ if(sndEchoRaf[id]){ cancelAnimationFrame(sndEchoRaf[id]); sndEchoRaf[id]=null; } }
+  function drawEchoFrame(id,canvas,now){
+    var ctx=canvas.getContext&&canvas.getContext('2d'); if(!ctx)return;
+    var W=canvas.width,H=canvas.height,cx=W/2,cy=H/2,maxR=Math.min(W,H)*0.46;
+    ctx.clearRect(0,0,W,H);
+    var fx=fxFor(id), st=sndEchoState[id]; if(!st)return;
+    var interval=clamp(fx.delayTime*1000,60,1000); // faster delayTime → faster ring cadence
+    if(now-st.lastSpawn>interval){ st.lastSpawn=now; st.rings.push({born:now,pulse:false}); }
+    var lifetime=700+clamp(fx.delayFeedback,0,0.85)*1400; // more feedback → longer-lived → more repeats visible at once
+    var kept=[];
+    for(var i=0;i<st.rings.length;i++){
+      var ring=st.rings[i], t=(now-ring.born)/lifetime;
+      if(t>=1)continue;
+      kept.push(ring);
+      var baseAlpha=clamp(fx.delayMix,0,1)*(1-t)*(0.4+0.6*(clamp(fx.delayFeedback,0,0.85)/0.85));
+      var alpha=ring.pulse?Math.max(baseAlpha,(1-t)*0.95):baseAlpha; // pulse always reads, even at mix=0
+      alpha=clamp(alpha,0,1); if(alpha<=0.01)continue;
+      ctx.beginPath(); ctx.strokeStyle='rgba(34,211,238,'+alpha+')'; ctx.lineWidth=ring.pulse?2.2:1.4;
+      ctx.arc(cx,cy,Math.max(1,t*maxR),0,Math.PI*2); ctx.stroke();
+    }
+    st.rings=kept;
+    ctx.beginPath(); ctx.strokeStyle='rgba(34,211,238,.12)'; ctx.lineWidth=1; ctx.arc(cx,cy,maxR,0,Math.PI*2); ctx.stroke();
+    ctx.beginPath(); ctx.fillStyle='rgba(34,211,238,.55)'; ctx.arc(cx,cy,2.4,0,Math.PI*2); ctx.fill();
+  }
+  /* ── Stereograph: a real L/R Lissajous goniometer/vectorscope. Idle = a calm
+        breathing circle + rotating crosshair sweep (never a dead black box).
+        Active (this event's live tap hasn't expired) = the actual waveform trace,
+        drawn with fading "phosphor persistence" instead of a hard clear. ── */
+  var sndGonioRaf={};
+  function startGonio(id){
+    if(sndGonioRaf[id])return;
+    function frame(now){
+      var canvas=$('sndgonio-'+id);
+      if(!canvas){ sndGonioRaf[id]=null; return; }
+      drawGonioFrame(id,canvas,now);
+      sndGonioRaf[id]=requestAnimationFrame(frame);
+    }
+    sndGonioRaf[id]=requestAnimationFrame(frame);
+  }
+  function stopGonio(id){ if(sndGonioRaf[id]){ cancelAnimationFrame(sndGonioRaf[id]); sndGonioRaf[id]=null; } }
+  function drawGonioFrame(id,canvas,now){
+    var ctx=canvas.getContext&&canvas.getContext('2d'); if(!ctx)return;
+    var W=canvas.width,H=canvas.height,cx=W/2,cy=H/2;
+    ctx.fillStyle='rgba(4,10,16,.22)'; ctx.fillRect(0,0,W,H); // translucent fill = fading trail, not a hard clear
+    var tap=sndLiveTaps[id], active=false;
+    if(tap && Date.now()<tap.endAt){
+      try{
+        var n=tap.analyserL.fftSize;
+        var Ld=new Float32Array(n), Rd=new Float32Array(n);
+        tap.analyserL.getFloatTimeDomainData(Ld);
+        tap.analyserR.getFloatTimeDomainData(Rd);
+        var halfW=(W/2)*0.86, halfH=(H/2)*0.86;
+        var vizGain=2.4; // gentle visual-only gain so typical procedural synth levels read clearly (goniometer plugins commonly auto-scale too) — never touches the audible signal
+        ctx.beginPath();
+        for(var i=0;i<n;i+=6){ // step a subset of samples — plenty smooth, far cheaper than every sample
+          var x=cx+clamp(Ld[i]*vizGain,-1,1)*halfW, y=cy-clamp(Rd[i]*vizGain,-1,1)*halfH;
+          if(i===0)ctx.moveTo(x,y); else ctx.lineTo(x,y);
+        }
+        ctx.strokeStyle='rgba(34,211,238,.88)'; ctx.lineWidth=1.1; ctx.stroke();
+        active=true;
+      }catch(e){ active=false; }
+    }
+    if(!active){
+      var breathe=0.5+0.5*Math.sin(now/900);
+      var r=Math.min(W,H)*0.2*(0.7+0.3*breathe);
+      ctx.beginPath(); ctx.strokeStyle='rgba(34,211,238,'+(0.22+0.22*breathe)+')'; ctx.lineWidth=1.4;
+      ctx.arc(cx,cy,r,0,Math.PI*2); ctx.stroke();
+      var ang=(now/2600)%(Math.PI*2), sweepR=Math.min(W,H)*0.4;
+      ctx.beginPath(); ctx.strokeStyle='rgba(34,211,238,.16)';
+      ctx.moveTo(cx,cy); ctx.lineTo(cx+Math.cos(ang)*sweepR,cy+Math.sin(ang)*sweepR); ctx.stroke();
+    }
+    ctx.strokeStyle='rgba(148,163,184,.14)'; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(cx,2); ctx.lineTo(cx,H-2); ctx.moveTo(2,cy); ctx.lineTo(W-2,cy); ctx.stroke();
+  }
+  /* stop every running per-event widget rAF loop — called before renderSoundEvents()
+     rebuilds the whole list (every panel returns to collapsed, so any loops still
+     running would otherwise leak forever against stale/replaced canvases). */
+  function stopAllSndWidgets(){
+    for(var k in sndEchoRaf){ if(sndEchoRaf[k])cancelAnimationFrame(sndEchoRaf[k]); }
+    sndEchoRaf={}; sndEchoState={};
+    for(var k2 in sndGonioRaf){ if(sndGonioRaf[k2])cancelAnimationFrame(sndGonioRaf[k2]); }
+    sndGonioRaf={};
   }
   function updateSndStatus(id,text){ var el=$('sndstatus-'+id); if(el)el.textContent=text; }
   function showSndReset(id,show){ var wrap=sndWrapEl(id); if(!wrap)return; var b=wrap.querySelector('[data-snd-reset]'); if(b)b.style.visibility=show?'':'hidden'; }
@@ -2005,6 +2221,18 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
     var f=e.target.closest('[data-snd-file]'); if(!f)return;
     var id=f.getAttribute('data-snd-file'); var file=f.files&&f.files[0]; if(!file)return;
     handleSndUpload(id, file);
+  });
+  // Spatial Pad drag — pointer events cover mouse + touch alike.
+  $('soundEvents').addEventListener('pointerdown',function(e){
+    var pad=e.target.closest('[data-snd-pad]'); if(!pad)return;
+    var id=pad.getAttribute('data-snd-pad');
+    try{ pad.setPointerCapture(e.pointerId); }catch(e2){}
+    setSpatialFromClient(id, pad, e.clientX, e.clientY);
+    function move(ev){ setSpatialFromClient(id, pad, ev.clientX, ev.clientY); }
+    function up(){ pad.removeEventListener('pointermove',move); pad.removeEventListener('pointerup',up); pad.removeEventListener('pointercancel',up); }
+    pad.addEventListener('pointermove',move);
+    pad.addEventListener('pointerup',up);
+    pad.addEventListener('pointercancel',up);
   });
 
   // ── symbols delegation ──
@@ -2641,7 +2869,14 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
     setSoundPack:function(p){var seg=$('soundPackSeg');S.def.sound.pack=SND_PROFILES[p]?p:'Synth';syncSoundControls();refreshJSON();return S.def.sound.pack;},
     getSound:function(){return S.def.sound;},
     getSoundFx:function(id){return fxFor(id);},
-    playSound:function(id){playSound(id);return true;}
+    playSound:function(id){playSound(id);return true;},
+    // ── added for the Spatial Pad / Echo Tunnel / Stereograph pass ──
+    toggleSndPanel:function(id){toggleSndPanel(id);return true;},
+    setSpatial:function(id,pan,dist){return setSpatial(id,pan,dist);},
+    dragSpatialPad:function(id,clientX,clientY){var pad=$('sndpad-'+id);if(!pad)return null;setSpatialFromClient(id,pad,clientX,clientY);return fxFor(id);},
+    getLiveTap:function(id){return sndLiveTaps[id]||null;},
+    getEchoRafRunning:function(id){return !!sndEchoRaf[id];},
+    getGonioRafRunning:function(id){return !!sndGonioRaf[id];}
   };
 
   /* ═══ INIT ═══ */
