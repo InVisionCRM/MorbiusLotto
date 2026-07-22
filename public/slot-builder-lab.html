@@ -1605,6 +1605,20 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
     var top=r.top;
     if(top+mh>vh-pad) top=Math.max(pad, vh-mh-pad);
     if(top<pad) top=pad;
+    // Keep the SPIN button clickable — the spin→edit loop is the whole point.
+    // If the menu would cover the actions row, dock it beside the machine
+    // (there's free space at desktop widths), else sit it fully above.
+    var act=document.querySelector('.actions');
+    if(act){
+      var a=act.getBoundingClientRect();
+      if(left<a.right && left+mw>a.left && top<a.bottom && top+mh>a.top){
+        var shell=boardShell.getBoundingClientRect();
+        if(shell.right+12+mw<=vw-pad) left=shell.right+12;
+        else if(shell.left-12-mw>=pad) left=shell.left-mw-12;
+        else if(a.top-mh-10>=pad) top=a.top-mh-10;
+        if(top+mh>vh-pad) top=Math.max(pad, vh-mh-pad);
+      }
+    }
     popMenu.style.left=Math.round(left)+'px'; popMenu.style.top=Math.round(top)+'px';
     popMenu.style.visibility='';
   }
@@ -1819,6 +1833,11 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
     advWrap.scrollIntoView({behavior:'smooth', block:'start'});
   }
   window.addEventListener('resize',function(){ if(popMenu.classList.contains('open'))closeMenu(); });
+  // A fixed-position menu detaches from its anchor once the page scrolls — close it
+  // (standard popover behavior) rather than leave it floating over the wrong spot.
+  window.addEventListener('scroll',function(){ if(popMenu.classList.contains('open'))closeMenu(); },{passive:true});
+  // Switching presets replaces S.def wholesale; an open menu would edit stale state.
+  $('presetSel').addEventListener('change',closeMenu);
 
   /* ═══ PUBLIC TEST API ═══ */
   window.SlotStudio = {
