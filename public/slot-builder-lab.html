@@ -333,6 +333,24 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
 .snd-cust-panel{display:none;margin-top:10px;padding-top:10px;border-top:1px dashed var(--cyan-soft)}
 .snd-cust-panel.open{display:block}
 .snd-samp-row{margin-bottom:10px}
+/* ── compact FX module grid: envelope / spatial / echo / stereograph side by side
+      instead of a tall centered stack. Each module carries its own canvas + the
+      one or two sliders that couldn't become direct-manipulation surfaces. ── */
+.snd-mod-grid{display:grid;gap:10px;grid-template-columns:1fr}
+@media(min-width:640px){.snd-mod-grid{grid-template-columns:1fr 1fr}}
+@media(min-width:1020px){.snd-mod-grid{grid-template-columns:1.7fr 1fr 1fr 1fr}}
+.snd-mod{border:1px solid var(--cyan-soft);border-radius:12px;background:rgba(4,12,19,.5);padding:9px 10px 10px;min-width:0;display:flex;flex-direction:column}
+.snd-mod .snd-widget-cap{margin:0 0 7px}
+.snd-mod .ctl{margin-bottom:7px}
+.snd-mod .ctl:last-child{margin-bottom:0}
+.snd-mod .ctl-lbl{margin-bottom:4px;font-size:10px}
+.snd-mod-read{font-family:var(--font-mono);font-size:9.5px;letter-spacing:.06em;color:var(--slate-400);text-align:center;margin:2px 0 8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.snd-mod-fill{flex:1}
+.snd-env-cv{display:block;width:100%;height:104px;border-radius:10px;border:1px solid var(--cyan-soft);background:rgba(4,10,16,.92);touch-action:none;cursor:crosshair;margin-bottom:6px}
+.snd-echo-wrap{position:relative;width:100%;max-width:150px;margin:0 auto 6px}
+.snd-echo-wrap .snd-pad-axis.ax-x{bottom:6px}
+.snd-echo-wrap .snd-pad-axis.ax-y{left:7px}
+.snd-echo-cv{cursor:crosshair;touch-action:none;margin:0 auto}
 .snd-samp-status{font-size:11px;color:var(--slate-300);margin-bottom:7px;word-break:break-word}
 .snd-samp-btns{display:flex;gap:7px;flex-wrap:wrap;align-items:center}
 .snd-rec-btn.active{color:#fff;background:var(--loss);border-color:var(--loss);animation:sndrecpulse 1s ease-in-out infinite}
@@ -353,7 +371,7 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
 .snd-pad-axis.ax-x{left:50%;bottom:4px;transform:translateX(-50%)}
 .snd-pad-axis.ax-y{left:5px;top:50%;transform:translateY(-50%) rotate(-90deg);transform-origin:left center}
 .snd-pad-dot{position:absolute;width:15px;height:15px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#bff7ff,var(--cyan) 60%,#0e7490);box-shadow:0 0 12px rgba(34,211,238,.85),0 0 2px #fff;transform:translate(-50%,-50%);left:50%;top:100%;pointer-events:none}
-.snd-echo-cv,.snd-gonio-cv{display:block;width:100%;max-width:132px;aspect-ratio:1;margin:0 auto 8px;border-radius:14px;border:1px solid var(--cyan-soft);background:rgba(4,10,16,.92)}
+.snd-echo-cv,.snd-gonio-cv{display:block;width:100%;max-width:150px;aspect-ratio:1;margin:0 auto 8px;border-radius:14px;border:1px solid var(--cyan-soft);background:rgba(4,10,16,.92)}
 /* ── prominent per-symbol upload ── */
 .sym-art-tools{display:flex;flex-direction:column;gap:6px;flex:1;min-width:0}
 .upl-btn.primary{background:linear-gradient(180deg,rgba(34,211,238,.24),rgba(34,211,238,.08));color:#cdf5fc;font-weight:700;padding:9px 12px;font-size:11px;display:inline-flex;align-items:center;justify-content:center;gap:6px;width:100%}
@@ -933,12 +951,12 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
     return _pcmCache[key];
   }
 
-  /* ── per-event FX chain: sample override + volume/pitch/gate/reverb/delay.
+  /* ── per-event FX chain: sample override + volume/pitch/envelope/pan/reverb/delay.
         Data model lives at S.def.sound.fx[id] (sparse — only customized events
         get an entry; missing fields fall back to FX_DEFAULT). Everything here
         is guarded so a bad/missing value or a decode failure degrades to the
         plain procedural path or silence — audio must never break gameplay. ── */
-  var FX_DEFAULT = {sample:null, volume:1, pitch:1, gate:1, pan:0, reverbMix:0, reverbDecay:1.6, delayMix:0, delayTime:0.22, delayFeedback:0.3};
+  var FX_DEFAULT = {sample:null, volume:1, pitch:1, envAttack:0, envDecay:0, envSustain:1, envEnd:1, pan:0, reverbMix:0, reverbDecay:1.6, delayMix:0, delayTime:0.22, delayFeedback:0.3};
   /* live-tap registry for the Stereograph goniometer — one entry per event id,
      overwritten on every fresh play (playBufferThroughFx builds a brand-new
      one-shot graph per call, so the analyser pair is rebuilt right alongside
@@ -948,6 +966,9 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
     var raw = S.def && S.def.sound && S.def.sound.fx && S.def.sound.fx[id];
     var f = {}; for(var k in FX_DEFAULT) f[k] = FX_DEFAULT[k];
     if(raw) for(var k2 in FX_DEFAULT){ if(raw[k2] != null) f[k2] = raw[k2]; }
+    // legacy migration: pre-envelope configs stored a single trim fraction as
+    // `gate` — map it onto the envelope's end handle so old JSON still trims.
+    if(raw && raw.gate != null && raw.envEnd == null) f.envEnd = clamp(raw.gate, 0, 1);
     return f;
   }
   function ensureFxEntry(id){
@@ -986,7 +1007,7 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
       return buf;
     }catch(e){ return null; }
   }
-  /* Builds the actual per-play graph: src -> gate -> volume -> dry, plus
+  /* Builds the actual per-play graph: src -> envelope -> volume -> dry, plus
      parallel delay (with feedback) and reverb (convolver) wet sends. Wrapped
      end-to-end so a node-creation failure just drops the effect, never throws. */
   function playBufferThroughFx(c, id, buf, fx, masterVol, mul){
@@ -997,18 +1018,29 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
       // playbackRate changes pitch AND duration together (no separate time-stretch here) —
       // that's the accepted tradeoff for this lightweight engine.
       src.playbackRate.value = pitch;
-      var gate = fx.gate != null ? Math.max(0, Math.min(1, fx.gate)) : 1;
-      var dur = buf.duration * gate; if(dur < 0.02) dur = 0.02;
+      // ── amplitude envelope (attack ramp → decay to sustain level → held → short
+      //    release at the trim point). The four handles are 0..1 fractions of the
+      //    SAMPLE; playbackRate compresses real time, so schedule in wall-clock by
+      //    dividing by pitch. Clamps keep a hand-edited JSON from going non-monotonic. ──
+      var envAttack = clamp(fx.envAttack != null ? fx.envAttack : 0, 0, 1);
+      var envDecay = clamp(fx.envDecay != null ? fx.envDecay : 0, envAttack, 1);
+      var envSustain = clamp(fx.envSustain != null ? fx.envSustain : 1, 0, 1);
+      var envEnd = clamp(fx.envEnd != null ? fx.envEnd : 1, envDecay, 1);
+      var trimmed = envEnd < 0.999; // envEnd at 1 (untouched) lets the buffer ring out naturally
+      var wallDur = buf.duration / pitch; // seconds the sample actually takes at this rate
+      var dur = wallDur * envEnd; if(dur < 0.02) dur = 0.02;
       var now = c.currentTime;
       var gateGain = c.createGain();
-      if(gate < 1){
-        var fadeStart = Math.max(0, dur - 0.015);
-        gateGain.gain.setValueAtTime(1, now);
-        gateGain.gain.setValueAtTime(1, now + fadeStart);
+      var tA = wallDur * envAttack, tD = wallDur * envDecay;
+      gateGain.gain.setValueAtTime(tA > 0.001 ? 0 : 1, now);
+      if(tA > 0.001) gateGain.gain.linearRampToValueAtTime(1, now + tA);
+      if(tD > tA + 0.001) gateGain.gain.linearRampToValueAtTime(envSustain, now + tD);
+      else if(envSustain < 0.999) gateGain.gain.setValueAtTime(envSustain, now + tA + 0.001);
+      if(trimmed){
+        var fadeStart = Math.max(now + tD, now + dur - 0.015);
+        gateGain.gain.setValueAtTime(envSustain, fadeStart);
         gateGain.gain.linearRampToValueAtTime(0.0001, now + dur); // ~15ms fade avoids a hard-cut click
-      } else {
-        gateGain.gain.value = 1;
-      }
+      } // else: hold at envSustain — the source simply runs out of samples on its own
       var volGain = c.createGain();
       volGain.gain.value = Math.max(0, Math.min(2, fx.volume != null ? fx.volume : 1)) * masterVol * (mul || 1);
       src.connect(gateGain); gateGain.connect(volGain);
@@ -1065,7 +1097,7 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
           var analyserR = c.createAnalyser(); analyserR.fftSize = 512;
           splitter.connect(analyserL, 0);
           splitter.connect(analyserR, 1);
-          var playMs = (dur / pitch) * 1000;
+          var playMs = dur * 1000; // dur is already wall-clock (pitch folded into wallDur above)
           var tailMs = 250;
           if(delayMix > 0) tailMs = Math.max(tailMs, dTime * 1000 * 6); // a handful of repeats
           if(reverbMix > 0) tailMs = Math.max(tailMs, decay * 1000);
@@ -1074,7 +1106,7 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
       }catch(e){ /* the goniometer is a monitoring nicety — never let it break audio */ }
 
       src.start();
-      if(gate < 1) src.stop(now + dur + 0.02);
+      if(trimmed) src.stop(now + dur + 0.02);
     }catch(e){ /* audio is presentation-only; never break the game */ }
   }
   function playProcedural(c, id, pack, fx, masterVol, mul){
@@ -1658,9 +1690,12 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
       '</div>';
     }).join('');
   }
-  /* One event's collapsed-by-default customize panel: sample controls (upload /
-     record / reset) + the 5 fx sliders. Reads current values through fxFor() so
-     an event with no S.def.sound.fx[id] entry yet still shows sane defaults. */
+  /* One event's collapsed-by-default customize panel. Four side-by-side modules
+     (Envelope / Spatial / Echo / Stereograph) — every parameter that CAN be a
+     direct-manipulation surface is one; only the four that can't (volume, pitch,
+     reverb decay, delay mix) remain as compact sliders inside their module.
+     Reads current values through fxFor() so an event with no S.def.sound.fx[id]
+     entry yet still shows sane defaults. */
   function sndPanelHTML(id){
     var raw=(S.def.sound.fx||{})[id];
     var fx=fxFor(id);
@@ -1676,40 +1711,71 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
           '<input type="file" accept="audio/*" hidden data-snd-file="'+id+'" />'+
           '<button class="snd-reset-lnk" data-snd-reset="'+id+'"'+(hasSample?'':' style="visibility:hidden"')+'>&#8630; Reset to default</button>'+
         '</div>'+
-        '<p class="hint" style="margin:6px 0 0">Recordings stay in your browser and this config&rsquo;s JSON &mdash; nothing is uploaded anywhere.</p>'+
+        '<p class="hint" style="margin:5px 0 0">Recordings stay in your browser and this config&rsquo;s JSON &mdash; nothing is uploaded anywhere.</p>'+
       '</div>'+
-      /* Stereograph — reflects the WHOLE processed signal (post-pan), so it sits
-         at the top of the fx section rather than beside any one control. */
-      '<div class="snd-widget-cap">Stereograph</div>'+
-      '<canvas class="snd-gonio-cv" id="sndgonio-'+id+'" width="140" height="140"></canvas>'+
-      '<div class="grid2">'+
-        sndSlider(id,'volume','Volume',0,200,1,Math.round(fx.volume*100),'%')+
-        sndSlider(id,'pitch','Pitch / speed',50,200,1,Math.round(fx.pitch*100),'%')+
-      '</div>'+
-      sndSlider(id,'gate','Trim / cutoff',0,100,1,Math.round(fx.gate*100),'%')+
-      /* Spatial Pad (Bitwig tr.Distance-style XY) — X = pan, Y = reverbMix ("distance").
-         Sliders underneath stay the precise numeric fallback and stay in sync both ways. */
-      '<div class="snd-widget-cap">Spatial</div>'+
-      '<div class="snd-pad" id="sndpad-'+id+'" data-snd-pad="'+id+'">'+
-        '<div class="snd-pad-ring r1"></div><div class="snd-pad-ring r2"></div>'+
-        '<div class="snd-pad-hline"></div><div class="snd-pad-vline"></div>'+
-        '<span class="snd-pad-axis ax-x">PAN</span><span class="snd-pad-axis ax-y">DISTANCE</span>'+
-        '<div class="snd-pad-dot" id="sndpaddot-'+id+'" style="left:'+padLeft+'%;top:'+padTop+'%"></div>'+
-      '</div>'+
-      '<div class="grid2">'+
-        sndSlider(id,'pan','Pan',-100,100,1,Math.round(fx.pan*100),'')+
-        sndSlider(id,'reverbMix','Reverb mix',0,100,1,Math.round(fx.reverbMix*100),'%')+
-      '</div>'+
-      sndSlider(id,'reverbDecay','Reverb decay',0.2,4,0.1,fx.reverbDecay,'s')+
-      /* Echo Tunnel — live reactive viz next to the delay controls it reflects. */
-      '<div class="snd-widget-cap">Echo tunnel</div>'+
-      '<canvas class="snd-echo-cv" id="sndecho-'+id+'" width="140" height="140"></canvas>'+
-      '<div class="grid3">'+
-        sndSlider(id,'delayMix','Delay mix',0,100,1,Math.round(fx.delayMix*100),'%')+
-        sndSlider(id,'delayTime','Delay time',20,1000,10,Math.round(fx.delayTime*1000),'ms')+
-        sndSlider(id,'delayFeedback','Delay feedback',0,85,1,Math.round(fx.delayFeedback*100),'%')+
+      '<div class="snd-mod-grid">'+
+        /* Envelope — waveform + draggable attack/sustain/trim handles (replaces the
+           old Trim/Cutoff slider). Volume & pitch ride along as compact sliders. */
+        '<div class="snd-mod">'+
+          '<div class="snd-widget-cap">Envelope</div>'+
+          '<canvas class="snd-env-cv" id="sndenv-'+id+'" data-snd-env="'+id+'" width="300" height="104"></canvas>'+
+          '<div class="snd-mod-read" id="sndenvread-'+id+'">'+envReadText(fx)+'</div>'+
+          '<div class="snd-mod-fill"></div>'+
+          sndSlider(id,'volume','Volume',0,200,1,Math.round(fx.volume*100),'%')+
+          sndSlider(id,'pitch','Pitch / speed',50,200,1,Math.round(fx.pitch*100),'%')+
+        '</div>'+
+        /* Spatial Pad (Bitwig tr.Distance-style XY) — X = pan, Y = reverbMix
+           ("distance"). The pad IS the control now; readout replaces the sliders. */
+        '<div class="snd-mod">'+
+          '<div class="snd-widget-cap">Spatial</div>'+
+          '<div class="snd-pad" id="sndpad-'+id+'" data-snd-pad="'+id+'">'+
+            '<div class="snd-pad-ring r1"></div><div class="snd-pad-ring r2"></div>'+
+            '<div class="snd-pad-hline"></div><div class="snd-pad-vline"></div>'+
+            '<span class="snd-pad-axis ax-x">PAN</span><span class="snd-pad-axis ax-y">DISTANCE</span>'+
+            '<div class="snd-pad-dot" id="sndpaddot-'+id+'" style="left:'+padLeft+'%;top:'+padTop+'%"></div>'+
+          '</div>'+
+          '<div class="snd-mod-read" id="sndpadread-'+id+'">'+padReadText(fx)+'</div>'+
+          '<div class="snd-mod-fill"></div>'+
+          sndSlider(id,'reverbDecay','Reverb decay',0.2,4,0.1,fx.reverbDecay,'s')+
+        '</div>'+
+        /* Echo Tunnel — the ring viz doubles as the control surface: drag across it
+           to set delay time (x) and feedback (y). Mix stays a slider (0 = off). */
+        '<div class="snd-mod">'+
+          '<div class="snd-widget-cap">Echo tunnel</div>'+
+          '<div class="snd-echo-wrap">'+
+            '<canvas class="snd-echo-cv" id="sndecho-'+id+'" data-snd-echodrag="'+id+'" width="150" height="150"></canvas>'+
+            '<span class="snd-pad-axis ax-x">TIME</span><span class="snd-pad-axis ax-y">FEEDBACK</span>'+
+          '</div>'+
+          '<div class="snd-mod-read" id="sndechoread-'+id+'">'+echoReadText(fx)+'</div>'+
+          '<div class="snd-mod-fill"></div>'+
+          sndSlider(id,'delayMix','Delay mix',0,100,1,Math.round(fx.delayMix*100),'%')+
+        '</div>'+
+        /* Stereograph — pure monitor (post-pan L/R scope); nothing to drag here. */
+        '<div class="snd-mod">'+
+          '<div class="snd-widget-cap">Stereograph</div>'+
+          '<canvas class="snd-gonio-cv" id="sndgonio-'+id+'" width="150" height="150"></canvas>'+
+          '<div class="snd-mod-read">L/R scope &mdash; hit Play</div>'+
+        '</div>'+
       '</div>'+
     '</div>';
+  }
+  /* plain text (no entities) — same strings are injected at render time AND
+     written via textContent on every drag, so they must be markup-free. */
+  function envReadText(fx){
+    return 'ATK '+Math.round(clamp(fx.envAttack,0,1)*100)+'% · SUS '+Math.round(clamp(fx.envSustain,0,1)*100)+'% · END '+Math.round(clamp(fx.envEnd,0,1)*100)+'%';
+  }
+  function padReadText(fx){
+    var p=Math.round(clamp(fx.pan,-1,1)*100);
+    return 'PAN '+(p>0?'+':'')+p+' · REVERB '+Math.round(clamp(fx.reverbMix,0,1)*100)+'%';
+  }
+  function echoReadText(fx){
+    return Math.round(clamp(fx.delayTime,0.02,1)*1000)+'ms · FB '+Math.round(clamp(fx.delayFeedback,0,0.85)*100)+'%';
+  }
+  function updateSndReads(id){
+    var fx=fxFor(id);
+    var a=$('sndenvread-'+id); if(a)a.textContent=envReadText(fx);
+    var b=$('sndpadread-'+id); if(b)b.textContent=padReadText(fx);
+    var c=$('sndechoread-'+id); if(c)c.textContent=echoReadText(fx);
   }
   /* Matches the sound tab's own existing markup convention (.ctl / .ctl-lbl +
      a plain <input type=range>) rather than the click-popover's cSlider(),
@@ -1741,21 +1807,16 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
     // widgets only exist/animate while their panel is expanded — start their rAF
     // loops on open, and CANCEL them on close. With up to 19 events, leaving
     // loops running behind collapsed panels would be 19*2 background rAFs for nothing.
-    if(open){ updatePadDot(id); startEchoTunnel(id); startGonio(id); }
+    // (The envelope editor has no loop — it's drawn once here and again on each drag.)
+    if(open){ updatePadDot(id); updateSndReads(id); drawEnvEditor(id); startEchoTunnel(id); startGonio(id); }
     else{ stopEchoTunnel(id); stopGonio(id); }
   }
   function applySndFieldValue(id, field, raw){
     var fx=ensureFxEntry(id);
     if(field==='volume') fx.volume=Math.max(0,Math.min(2,raw/100));
     else if(field==='pitch') fx.pitch=Math.max(0.5,Math.min(2,raw/100));
-    else if(field==='gate') fx.gate=Math.max(0,Math.min(1,raw/100));
-    else if(field==='pan') fx.pan=clamp(raw/100,-1,1);
-    else if(field==='reverbMix') fx.reverbMix=Math.max(0,Math.min(1,raw/100));
     else if(field==='reverbDecay') fx.reverbDecay=Math.max(0.2,Math.min(4,raw));
     else if(field==='delayMix') fx.delayMix=Math.max(0,Math.min(1,raw/100));
-    else if(field==='delayTime') fx.delayTime=Math.max(0.02,Math.min(1.0,raw/1000));
-    else if(field==='delayFeedback') fx.delayFeedback=Math.max(0,Math.min(0.85,raw/100));
-    if(field==='pan'||field==='reverbMix') updatePadDot(id); // slider → pad (bidirectional sync)
     refreshJSON();
   }
   /* ── Spatial Pad: Bitwig tr.Distance-style XY drag. X = pan (-1..1), Y = "distance"
@@ -1766,19 +1827,11 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
     dot.style.left=((clamp(fx.pan,-1,1)+1)/2*100)+'%';
     dot.style.top=((1-clamp(fx.reverbMix,0,1))*100)+'%';
   }
-  function syncSndSliderDisplay(id,field,val){
-    var wrap=sndWrapEl(id); if(!wrap)return;
-    var input=wrap.querySelector('input[data-snd-id="'+id+'"][data-snd-field="'+field+'"]');
-    if(input)input.value=val;
-    var vf=wrap.querySelector('[data-sndvalfor="'+id+':'+field+'"]');
-    if(vf)vf.textContent=val+(input?(input.getAttribute('data-sfx')||''):'');
-  }
   function setSpatial(id, pan, dist){
     var fx=ensureFxEntry(id);
     fx.pan=clamp(pan,-1,1); fx.reverbMix=clamp(dist,0,1);
     updatePadDot(id);
-    syncSndSliderDisplay(id,'pan',Math.round(fx.pan*100));
-    syncSndSliderDisplay(id,'reverbMix',Math.round(fx.reverbMix*100));
+    updateSndReads(id);
     refreshJSON();
     return fx;
   }
@@ -1787,6 +1840,122 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
     if(!r.width||!r.height)return;
     var x=clamp((clientX-r.left)/r.width,0,1), y=clamp((clientY-r.top)/r.height,0,1);
     setSpatial(id, x*2-1, 1-y);
+  }
+  /* ── Envelope editor: the sample's waveform with three draggable handles —
+        attack peak (horizontal), decay→sustain corner (both axes), trim end
+        (horizontal). Replaces the old Trim/Cutoff slider. Drawn on demand
+        (open / drag / sample change), no rAF loop to manage. ── */
+  var ENV_PAD={l:8,r:8,t:10,b:8};
+  var sndEnvWave={}; // id -> {key, pcm|null} cached waveform backdrop for the editor
+  function envWaveKey(id){
+    var fx=fxFor(id);
+    return fx.sample?('s:'+fx.sample.length):('p:'+((S.def.sound&&S.def.sound.pack)||'Synth'));
+  }
+  /* invokes cb exactly once — synchronously for procedural/cached PCM, async
+     after decode for a not-yet-decoded custom sample. */
+  function envWaveFor(id, cb){
+    var key=envWaveKey(id), hit=sndEnvWave[id];
+    if(hit&&hit.key===key){ cb(hit.pcm); return; }
+    var fx=fxFor(id);
+    if(fx.sample){
+      sndEnvWave[id]={key:key,pcm:null}; // placeholder — prevents double-decode while pending
+      getSampleBuffer(id,fx.sample,function(buf){
+        var pcm=null; try{ pcm=buf?buf.getChannelData(0):null; }catch(e){}
+        sndEnvWave[id]={key:key,pcm:pcm};
+        cb(pcm);
+      });
+    }else{
+      var pcm=null; try{ pcm=pcmFor(id,(S.def.sound&&S.def.sound.pack)||'Synth'); }catch(e){}
+      sndEnvWave[id]={key:key,pcm:pcm};
+      cb(pcm);
+    }
+  }
+  function drawEnvEditor(id){
+    var cv=$('sndenv-'+id); if(!cv)return;
+    var ctx=cv.getContext&&cv.getContext('2d'); if(!ctx)return;
+    renderEnvCanvas(cv,ctx,fxFor(id),sndEnvWave[id]?sndEnvWave[id].pcm:null); // paint now, waveform-less if cold
+    envWaveFor(id,function(pcm){ // repaint once the waveform is warm (sync no-op cost is negligible)
+      var cv2=$('sndenv-'+id); if(!cv2)return;
+      var ctx2=cv2.getContext&&cv2.getContext('2d'); if(!ctx2)return;
+      renderEnvCanvas(cv2,ctx2,fxFor(id),pcm);
+    });
+  }
+  function renderEnvCanvas(cv,ctx,fx,pcm){
+    // match the backing store to the on-screen width so arcs stay circular
+    var cw=cv.clientWidth; if(cw&&Math.abs(cv.width-cw)>2)cv.width=cw;
+    var W=cv.width,H=cv.height,iw=W-ENV_PAD.l-ENV_PAD.r,ih=H-ENV_PAD.t-ENV_PAD.b;
+    function X(u){return ENV_PAD.l+u*iw;} function Y(v){return ENV_PAD.t+(1-v)*ih;}
+    ctx.clearRect(0,0,W,H);
+    if(pcm&&pcm.length){ // bipolar min/max waveform, dim, centered — the editing context
+      ctx.fillStyle='rgba(34,211,238,.15)';
+      var cols=Math.min(Math.floor(iw),240), step=pcm.length/cols, mid=ENV_PAD.t+ih/2, half=ih/2, cw=iw/cols;
+      for(var i=0;i<cols;i++){
+        var s0=Math.floor(i*step), s1=Math.min(pcm.length,Math.floor((i+1)*step)+1), mn=0, mx=0;
+        for(var j=s0;j<s1;j++){ var v=pcm[j]; if(v>mx)mx=v; if(v<mn)mn=v; }
+        ctx.fillRect(ENV_PAD.l+i*cw, mid-mx*half, Math.max(1,cw), Math.max(1,(mx-mn)*half));
+      }
+    }
+    var a=clamp(fx.envAttack,0,1), d=clamp(fx.envDecay,a,1), s=clamp(fx.envSustain,0,1), e=clamp(fx.envEnd,d,1);
+    if(e<0.999){ ctx.fillStyle='rgba(2,6,10,.6)'; ctx.fillRect(X(e),0,W-X(e),H); } // trimmed-off tail
+    var pts=[[X(0),a>0.001?Y(0):Y(1)],[X(a),Y(1)],[X(d),Y(s)],[X(e),Y(s)]];
+    if(e<0.999)pts.push([X(e),Y(0)]);
+    ctx.beginPath(); ctx.moveTo(X(0),Y(0));
+    for(var p=0;p<pts.length;p++)ctx.lineTo(pts[p][0],pts[p][1]);
+    ctx.lineTo(pts[pts.length-1][0],Y(0)); ctx.closePath();
+    ctx.fillStyle='rgba(34,211,238,.10)'; ctx.fill();
+    ctx.beginPath(); ctx.moveTo(pts[0][0],pts[0][1]);
+    for(p=1;p<pts.length;p++)ctx.lineTo(pts[p][0],pts[p][1]);
+    ctx.strokeStyle='rgba(34,211,238,.85)'; ctx.lineWidth=1.6; ctx.stroke();
+    var hs=[[X(a),Y(1)],[X(d),Y(s)],[X(e),Y(s)]];
+    for(p=0;p<hs.length;p++){
+      ctx.beginPath(); ctx.fillStyle='rgba(34,211,238,.95)'; ctx.arc(hs[p][0],hs[p][1],4.5,0,Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.fillStyle='#eaffff'; ctx.arc(hs[p][0],hs[p][1],1.8,0,Math.PI*2); ctx.fill();
+    }
+  }
+  /* nearest handle in backing-store px; ties resolve toward the later entry
+     (d beats a, e beats d) so the default all-in-one-corner state grabs the
+     more useful sustain corner, and a distant tap falls back to nearest-by-x. */
+  function envPickHandle(id,cv,clientX,clientY){
+    var r=cv.getBoundingClientRect(); if(!r.width||!r.height)return 'e';
+    var fx=fxFor(id);
+    var iw=cv.width-ENV_PAD.l-ENV_PAD.r, ih=cv.height-ENV_PAD.t-ENV_PAD.b;
+    var px=(clientX-r.left)*(cv.width/r.width), py=(clientY-r.top)*(cv.height/r.height);
+    var a=clamp(fx.envAttack,0,1), d=clamp(fx.envDecay,a,1), s=clamp(fx.envSustain,0,1), e=clamp(fx.envEnd,d,1);
+    var hs=[['a',ENV_PAD.l+a*iw,ENV_PAD.t],['d',ENV_PAD.l+d*iw,ENV_PAD.t+(1-s)*ih],['e',ENV_PAD.l+e*iw,ENV_PAD.t+(1-s)*ih]];
+    var best='e', bd=Infinity;
+    for(var i=0;i<hs.length;i++){ var dx=hs[i][1]-px, dy=hs[i][2]-py, dist=dx*dx+dy*dy; if(dist<=bd){bd=dist;best=hs[i][0];} }
+    if(bd>30*30){
+      var bx=Infinity;
+      for(i=0;i<hs.length;i++){ var ax=Math.abs(hs[i][1]-px); if(ax<=bx){bx=ax;best=hs[i][0];} }
+    }
+    return best;
+  }
+  function envDragTo(id,cv,handle,clientX,clientY){
+    var r=cv.getBoundingClientRect(); if(!r.width||!r.height)return;
+    var px=(clientX-r.left)*(cv.width/r.width), py=(clientY-r.top)*(cv.height/r.height);
+    var u=clamp((px-ENV_PAD.l)/(cv.width-ENV_PAD.l-ENV_PAD.r),0,1);
+    var v=clamp(1-(py-ENV_PAD.t)/(cv.height-ENV_PAD.t-ENV_PAD.b),0,1);
+    var fx=ensureFxEntry(id);
+    // normalize a legacy imported entry (gate, no env fields) before editing it
+    if(fx.gate!=null){ if(fx.envEnd==null)fx.envEnd=clamp(fx.gate,0,1); delete fx.gate; }
+    if(fx.envAttack==null)fx.envAttack=0; if(fx.envDecay==null)fx.envDecay=0;
+    if(fx.envSustain==null)fx.envSustain=1; if(fx.envEnd==null)fx.envEnd=1;
+    if(handle==='a') fx.envAttack=Math.min(u,fx.envDecay);
+    else if(handle==='d'){ fx.envDecay=clamp(u,fx.envAttack,fx.envEnd); fx.envSustain=v; }
+    else fx.envEnd=clamp(u,fx.envDecay,1);
+    updateSndReads(id); drawEnvEditor(id); refreshJSON();
+    return fx;
+  }
+  /* ── Echo Tunnel as a control surface: drag across the ring viz — x = delay
+        time (20ms..1s), y = feedback (top=max..bottom=none). ── */
+  function setEchoFromClient(id,cv,clientX,clientY){
+    var r=cv.getBoundingClientRect(); if(!r.width||!r.height)return;
+    var x=clamp((clientX-r.left)/r.width,0,1), y=clamp((clientY-r.top)/r.height,0,1);
+    var fx=ensureFxEntry(id);
+    fx.delayTime=+(0.02+x*0.98).toFixed(3);
+    fx.delayFeedback=+((1-y)*0.85).toFixed(3);
+    updateSndReads(id); refreshJSON();
+    return fx;
   }
   /* ── Echo Tunnel: Ableton-Echo-inspired delay visualizer. Concentric rings spawn
         at center and travel outward — cadence from delayTime, brightness/count from
@@ -1891,20 +2060,28 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
     for(var k2 in sndGonioRaf){ if(sndGonioRaf[k2])cancelAnimationFrame(sndGonioRaf[k2]); }
     sndGonioRaf={};
   }
+  /* repaint every expanded panel's envelope editor (sound-pack switches swap the
+     procedural waveform under all of them at once). */
+  function redrawOpenEnvEditors(){
+    var open=document.querySelectorAll('.snd-cust-panel.open');
+    for(var i=0;i<open.length;i++){ drawEnvEditor(open[i].id.slice('sndpanel-'.length)); }
+  }
   function updateSndStatus(id,text){ var el=$('sndstatus-'+id); if(el)el.textContent=text; }
   function showSndReset(id,show){ var wrap=sndWrapEl(id); if(!wrap)return; var b=wrap.querySelector('[data-snd-reset]'); if(b)b.style.visibility=show?'':'hidden'; }
   var sndLastLabel={}; // id -> human label for the status line ("filename.mp3", "recording (0:04)") — display-only, not persisted
   function setSndSample(id,dataUrl,label){
     var fx=ensureFxEntry(id);
-    fx.sample=dataUrl; clearSampleCache(id);
+    fx.sample=dataUrl; clearSampleCache(id); delete sndEnvWave[id];
     sndLastLabel[id]=label;
     updateSndStatus(id,'Custom: '+label); showSndReset(id,true); refreshJSON();
+    drawEnvEditor(id); // envelope backdrop now shows the new sample's waveform
   }
   function resetSndSample(id){
     var fx=S.def.sound.fx&&S.def.sound.fx[id];
     if(fx)fx.sample=null;
-    clearSampleCache(id); delete sndLastLabel[id];
+    clearSampleCache(id); delete sndEnvWave[id]; delete sndLastLabel[id];
     updateSndStatus(id,'Default synth'); showSndReset(id,false); refreshJSON();
+    drawEnvEditor(id); // back to the procedural waveform
   }
   function fmtDur(s){ s=Math.max(0,s||0); var m=Math.floor(s/60), sec=Math.floor(s%60); return m+':'+(sec<10?'0':'')+sec; }
   function probeDuration(dataUrl,cb){
@@ -2195,7 +2372,7 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
   on('turboBtn','click',function(){S.def.anim.turbo=!S.def.anim.turbo;syncTurboBtn();syncAnimControls();refreshJSON();});
 
   // ── sound ──
-  segWire('soundPackSeg',function(v){ S.def.sound.pack=SND_PROFILES[v]?v:'Synth'; syncSoundControls(); refreshJSON(); playSound('button-click',0.7); });
+  segWire('soundPackSeg',function(v){ S.def.sound.pack=SND_PROFILES[v]?v:'Synth'; syncSoundControls(); refreshJSON(); sndEnvWave={}; redrawOpenEnvEditors(); playSound('button-click',0.7); });
   on('volR','input',function(e){ S.def.sound.volume=Math.max(0,Math.min(1,+e.target.value/100)); $('volVal').textContent=Math.round(S.def.sound.volume*100)+'%'; refreshJSON(); });
   on('muteChk','change',function(e){ S.def.sound.muted=e.target.checked; refreshJSON(); if(!e.target.checked)playSound('button-click',0.7); });
   $('soundEvents').addEventListener('click',function(e){
@@ -2222,17 +2399,27 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
     var id=f.getAttribute('data-snd-file'); var file=f.files&&f.files[0]; if(!file)return;
     handleSndUpload(id, file);
   });
-  // Spatial Pad drag — pointer events cover mouse + touch alike.
+  // Direct-manipulation drags (Spatial Pad / Envelope / Echo Tunnel) — one
+  // delegated pointerdown; pointer events cover mouse + touch alike.
   $('soundEvents').addEventListener('pointerdown',function(e){
-    var pad=e.target.closest('[data-snd-pad]'); if(!pad)return;
-    var id=pad.getAttribute('data-snd-pad');
-    try{ pad.setPointerCapture(e.pointerId); }catch(e2){}
-    setSpatialFromClient(id, pad, e.clientX, e.clientY);
-    function move(ev){ setSpatialFromClient(id, pad, ev.clientX, ev.clientY); }
-    function up(){ pad.removeEventListener('pointermove',move); pad.removeEventListener('pointerup',up); pad.removeEventListener('pointercancel',up); }
-    pad.addEventListener('pointermove',move);
-    pad.addEventListener('pointerup',up);
-    pad.addEventListener('pointercancel',up);
+    var pad=e.target.closest('[data-snd-pad]');
+    var env=pad?null:e.target.closest('[data-snd-env]');
+    var ech=(pad||env)?null:e.target.closest('[data-snd-echodrag]');
+    var el=pad||env||ech; if(!el)return;
+    var id=el.getAttribute(pad?'data-snd-pad':(env?'data-snd-env':'data-snd-echodrag'));
+    var envHandle=env?envPickHandle(id,env,e.clientX,e.clientY):null; // lock the grabbed handle for the whole drag
+    try{ el.setPointerCapture(e.pointerId); }catch(e2){}
+    function apply(ev){
+      if(pad) setSpatialFromClient(id, pad, ev.clientX, ev.clientY);
+      else if(env) envDragTo(id, env, envHandle, ev.clientX, ev.clientY);
+      else setEchoFromClient(id, ech, ev.clientX, ev.clientY);
+    }
+    apply(e);
+    function move(ev){ apply(ev); }
+    function up(){ el.removeEventListener('pointermove',move); el.removeEventListener('pointerup',up); el.removeEventListener('pointercancel',up); }
+    el.addEventListener('pointermove',move);
+    el.addEventListener('pointerup',up);
+    el.addEventListener('pointercancel',up);
   });
 
   // ── symbols delegation ──
@@ -2876,7 +3063,11 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
     dragSpatialPad:function(id,clientX,clientY){var pad=$('sndpad-'+id);if(!pad)return null;setSpatialFromClient(id,pad,clientX,clientY);return fxFor(id);},
     getLiveTap:function(id){return sndLiveTaps[id]||null;},
     getEchoRafRunning:function(id){return !!sndEchoRaf[id];},
-    getGonioRafRunning:function(id){return !!sndGonioRaf[id];}
+    getGonioRafRunning:function(id){return !!sndGonioRaf[id];},
+    // ── added for the compact-layout / envelope-editor pass ──
+    envPickHandle:function(id,clientX,clientY){var cv=$('sndenv-'+id);if(!cv)return null;return envPickHandle(id,cv,clientX,clientY);},
+    dragEnvHandle:function(id,handle,clientX,clientY){var cv=$('sndenv-'+id);if(!cv)return null;return envDragTo(id,cv,handle,clientX,clientY);},
+    dragEchoPad:function(id,clientX,clientY){var cv=$('sndecho-'+id);if(!cv)return null;return setEchoFromClient(id,cv,clientX,clientY);}
   };
 
   /* ═══ INIT ═══ */
