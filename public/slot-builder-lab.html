@@ -256,6 +256,30 @@ h1.title .glyph{margin-left:.35rem;color:var(--cyan);filter:drop-shadow(0 0 12px
 input[type=range]{width:100%;-webkit-appearance:none;appearance:none;height:5px;border-radius:3px;background:rgba(34,211,238,.18);outline:none}
 input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:var(--cyan);box-shadow:0 0 8px rgba(34,211,238,.7);cursor:pointer}
 input[type=range]::-moz-range-thumb{width:16px;height:16px;border:0;border-radius:50%;background:var(--cyan);box-shadow:0 0 8px rgba(34,211,238,.7);cursor:pointer}
+/* ── rotary knobs (replace the last remaining sliders). Drag vertically to turn;
+      a plain tap opens the big-slider overlay instead. ── */
+.knob-row{display:flex;gap:16px;justify-content:center;flex-wrap:wrap}
+.knob-ctl{display:flex;flex-direction:column;align-items:center;gap:1px;min-width:0}
+.knob{width:52px;height:52px;cursor:ns-resize;touch-action:none;color:var(--cyan);border-radius:50%;outline-offset:3px}
+.knob svg{width:100%;height:100%;display:block}
+.knob .knob-track{stroke:rgba(148,163,184,.28)}
+.knob .knob-fill{stroke:var(--cyan);filter:drop-shadow(0 0 4px rgba(34,211,238,.6))}
+.knob .knob-needle{stroke:#eaffff}
+.knob:hover .knob-fill{filter:drop-shadow(0 0 7px rgba(34,211,238,.9))}
+.knob-lbl{font-family:var(--font-disp);font-weight:600;font-size:9px;text-transform:uppercase;letter-spacing:.09em;color:var(--slate-400);text-align:center;white-space:nowrap;max-width:86px;overflow:hidden;text-overflow:ellipsis}
+.knob-val{font-family:var(--font-mono);font-size:10.5px;color:var(--cyan)}
+/* ── big-slider overlay: tap a knob → huge slider on a translucent black fill.
+      Tap/click outside the card (or Esc) closes it. ── */
+.bso{position:fixed;inset:0;z-index:130;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.72);-webkit-backdrop-filter:blur(7px);backdrop-filter:blur(7px)}
+.bso.open{display:flex}
+.bso-card{width:min(480px,92vw);background:rgba(5,14,22,.96);border:1px solid var(--cyan-edge);border-radius:20px;padding:28px 26px 30px;text-align:center;box-shadow:0 30px 80px -20px rgba(0,0,0,.95),0 0 54px -22px rgba(34,211,238,.6)}
+.bso-lbl{font-family:var(--font-disp);font-weight:600;font-size:13px;text-transform:uppercase;letter-spacing:.14em;color:var(--slate-300)}
+.bso-val{font-family:var(--font-mono);font-size:38px;color:var(--cyan);margin:12px 0 22px;text-shadow:0 0 18px rgba(34,211,238,.55)}
+#bsoRange{height:44px;background:transparent}
+#bsoRange::-webkit-slider-runnable-track{height:12px;border-radius:6px;background:rgba(34,211,238,.2)}
+#bsoRange::-webkit-slider-thumb{width:38px;height:38px;margin-top:-13px;box-shadow:0 0 16px rgba(34,211,238,.85),0 0 2px #fff}
+#bsoRange::-moz-range-track{height:12px;border-radius:6px;background:rgba(34,211,238,.2)}
+#bsoRange::-moz-range-thumb{width:38px;height:38px;box-shadow:0 0 16px rgba(34,211,238,.85),0 0 2px #fff}
 select,input[type=text],input[type=number]{width:100%;background:var(--field);border:1px solid var(--cyan-soft);border-radius:9px;color:var(--ink);font-family:var(--font-mono);font-size:12.5px;padding:9px 10px;outline:none}
 select:focus,input:focus{border-color:var(--cyan-edge)}
 input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan-soft);border-radius:8px;background:var(--field);cursor:pointer;vertical-align:middle}
@@ -473,7 +497,9 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
 .turbo-btn:hover{color:var(--win);border-color:rgba(245,158,11,.45)}
 .turbo-btn.on{color:#180d01;background:linear-gradient(180deg,#ffd370,#F59E0B);border-color:rgba(245,158,11,.8);box-shadow:0 0 18px -4px rgba(245,158,11,.7),inset 0 1px 0 rgba(255,255,255,.45)}
 /* advanced drawer */
-.adv-zone{max-width:840px;margin:22px auto 0}
+/* lives directly under the element-chip toolbar now — one editor block, so the
+   simple chips and the advanced drawer are reachable from the same spot. */
+.adv-zone{margin:0 auto 14px}
 .adv-toggle{display:block;width:100%;font-family:var(--font-disp);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.12em;color:var(--slate-400);background:rgba(8,20,31,.7);border:1px solid var(--cyan-soft);border-radius:12px;padding:12px;cursor:pointer;transition:.15s}
 .adv-toggle:hover{color:var(--cyan);border-color:var(--cyan-edge)}
 .adv-toggle::after{content:" \25BE";color:var(--cyan)}
@@ -556,33 +582,6 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
         <button class="el-chip" data-chip="math"><span class="dot"></span>Math / RTP</button>
         <button class="el-chip" data-chip="json"><span class="dot"></span>JSON</button>
       </div>
-    <!-- ── LIVE BOARD ── -->
-    <section>
-      <div class="board-shell" id="boardShell">
-        <div class="hud" data-edit="layout">
-          <div class="cell2"><div class="k">Lines</div><div class="v lines-v" id="hudLines">7</div></div>
-          <div class="cell2"><div class="k">Bet</div><div class="v" id="hudBet">140</div></div>
-          <div class="cell2"><div class="k">Win</div><div class="v win-v idle" id="hudWin">&mdash;</div></div>
-          <div class="cell2"><div class="k">Grid</div><div class="v" id="hudGrid">5&times;3</div></div>
-        </div>
-        <div class="felt" data-edit="background">
-          <div class="reels" id="reels" data-edit="reels"></div>
-          <div class="felt-status" id="status">Click any part of the machine to edit it &mdash; or use the toolbar above. Spin to preview.</div>
-          <div class="felt-flash" id="feltFlash"></div>
-          <div class="cele-ring" id="celeRing"></div>
-        </div>
-        <canvas class="fx-canvas" id="fxCanvas"></canvas>
-      </div>
-      <div class="actions actions-spinrow"><button class="btn btn-glow" id="spinBtn">Spin preview<span class="cash-sub" id="spinSub">bet 140 MORBIUS</span></button><button class="turbo-btn" id="turboBtn" aria-pressed="false" title="Turbo — snappy stops">&#9889;<span>TURBO</span></button></div>
-
-      <div class="panel" style="margin-top:14px">
-        <p class="panel-label">Recent preview spins</p>
-        <div class="recent" id="recent"><span class="hint" style="margin:0">Spin to populate &mdash; each thumbnail shows live border FX.</span></div>
-      </div>
-      <p class="edit-hint">Click a <b style="color:var(--cyan)">symbol</b>, the <b style="color:var(--cyan)">reels</b>, the <b style="color:var(--cyan)">frame</b>, the <b style="color:var(--cyan)">HUD</b> or the <b style="color:var(--cyan)">background</b> &mdash; a menu opens right where you click.</p>
-    </section>
-    </div><!-- /.stage -->
-
     <!-- ── ADVANCED DRAWER (fallback / full controls, Math &middot; Sound &middot; JSON) ── -->
     <div class="adv-zone">
       <button class="adv-toggle" id="advToggle" aria-expanded="false">Advanced editor &mdash; every control, plus Math, Sound &amp; JSON</button>
@@ -713,7 +712,9 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
           <div class="hint" id="soundPackBlurb" style="margin-top:7px"></div>
         </div>
         <div class="grid2" style="align-items:end">
-          <div class="ctl"><div class="ctl-lbl"><span>Master volume</span><span class="val" id="volVal">80%</span></div><input type="range" id="volR" min="0" max="100" value="80" /></div>
+          <div class="ctl"><div class="ctl-lbl"><span>Master volume</span><span class="val" id="volVal">80%</span></div>
+            <div class="knob" id="volKnob" data-knob="master" data-min="0" data-max="100" data-step="1" data-val="80" data-sfx="%" data-lbl="Master volume" role="slider" tabindex="0" aria-label="Master volume" aria-valuemin="0" aria-valuemax="100" aria-valuenow="80"></div>
+          </div>
           <div class="ctl"><div class="ctl-lbl"><span>Output</span></div><label class="chk"><input type="checkbox" id="muteChk" /> Mute all audio</label></div>
         </div>
         <hr style="border:0;border-top:1px solid var(--cyan-soft);margin:16px 0" />
@@ -751,6 +752,34 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
     </section>
       </div><!-- /.adv-wrap -->
     </div><!-- /.adv-zone -->
+    <!-- ── LIVE BOARD ── -->
+    <section>
+      <div class="board-shell" id="boardShell">
+        <div class="hud" data-edit="layout">
+          <div class="cell2"><div class="k">Lines</div><div class="v lines-v" id="hudLines">7</div></div>
+          <div class="cell2"><div class="k">Bet</div><div class="v" id="hudBet">140</div></div>
+          <div class="cell2"><div class="k">Win</div><div class="v win-v idle" id="hudWin">&mdash;</div></div>
+          <div class="cell2"><div class="k">Grid</div><div class="v" id="hudGrid">5&times;3</div></div>
+        </div>
+        <div class="felt" data-edit="background">
+          <div class="reels" id="reels" data-edit="reels"></div>
+          <div class="felt-status" id="status">Click any part of the machine to edit it &mdash; or use the toolbar above. Spin to preview.</div>
+          <div class="felt-flash" id="feltFlash"></div>
+          <div class="cele-ring" id="celeRing"></div>
+        </div>
+        <canvas class="fx-canvas" id="fxCanvas"></canvas>
+      </div>
+      <div class="actions actions-spinrow"><button class="btn btn-glow" id="spinBtn">Spin preview<span class="cash-sub" id="spinSub">bet 140 MORBIUS</span></button><button class="turbo-btn" id="turboBtn" aria-pressed="false" title="Turbo — snappy stops">&#9889;<span>TURBO</span></button></div>
+
+      <div class="panel" style="margin-top:14px">
+        <p class="panel-label">Recent preview spins</p>
+        <div class="recent" id="recent"><span class="hint" style="margin:0">Spin to populate &mdash; each thumbnail shows live border FX.</span></div>
+      </div>
+      <p class="edit-hint">Click a <b style="color:var(--cyan)">symbol</b>, the <b style="color:var(--cyan)">reels</b>, the <b style="color:var(--cyan)">frame</b>, the <b style="color:var(--cyan)">HUD</b> or the <b style="color:var(--cyan)">background</b> &mdash; a menu opens right where you click.</p>
+    </section>
+    </div><!-- /.stage -->
+
+
   </div>
 
   <section class="panel" style="margin-top:16px">
@@ -805,6 +834,15 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
 <div class="popmenu" id="popMenu" role="dialog" aria-label="Element editor">
   <div class="popmenu-head"><h4 id="popTitle">Edit</h4><button class="popmenu-x" data-pop-x aria-label="Close">&#10005;</button></div>
   <div id="popBody"></div>
+</div>
+
+<!-- big-slider overlay: opened by tapping a knob; outside click / Esc closes -->
+<div class="bso" id="bigSliderOv">
+  <div class="bso-card" role="dialog" aria-modal="true" aria-label="Adjust value">
+    <div class="bso-lbl" id="bsoLbl">Value</div>
+    <div class="bso-val" id="bsoVal">&mdash;</div>
+    <input type="range" id="bsoRange" min="0" max="100" step="1" value="0" />
+  </div>
 </div>
 
 <script>
@@ -1732,6 +1770,9 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
   }
   function renderSoundEvents(){
     var host=$('soundEvents'); if(!host)return;
+    // a rebuild replaces every knob element — if the big-slider overlay is bound
+    // to one of them (preset switch / JSON import mid-edit), close it first.
+    if(bigKn&&bigKn.closest&&bigKn.closest('#soundEvents'))closeBigSlider();
     stopAllSndWidgets(); // full DOM rebuild below — every panel comes back collapsed, so any
                          // previously-running Echo Tunnel / Stereograph rAF loops must die here
                          // too, or they'd keep spinning against orphaned/rebuilt canvases forever.
@@ -1780,8 +1821,10 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
           '<canvas class="snd-env-cv" id="sndenv-'+id+'" data-snd-env="'+id+'" width="300" height="104"></canvas>'+
           '<div class="snd-mod-read" id="sndenvread-'+id+'">'+envReadText(fx)+'</div>'+
           '<div class="snd-mod-fill"></div>'+
-          sndSlider(id,'volume','Volume',0,200,1,Math.round(fx.volume*100),'%')+
-          sndSlider(id,'pitch','Pitch / speed',50,200,1,Math.round(fx.pitch*100),'%')+
+          '<div class="knob-row">'+
+            sndKnob(id,'volume','Volume',0,200,1,Math.round(fx.volume*100),'%')+
+            sndKnob(id,'pitch','Pitch / speed',50,200,1,Math.round(fx.pitch*100),'%')+
+          '</div>'+
         '</div>'+
         /* Spatial Pad (Bitwig tr.Distance-style XY) — X = pan, Y = reverbMix
            ("distance"). The pad IS the control now; readout replaces the sliders. */
@@ -1795,7 +1838,7 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
           '</div>'+
           '<div class="snd-mod-read" id="sndpadread-'+id+'">'+padReadText(fx)+'</div>'+
           '<div class="snd-mod-fill"></div>'+
-          sndSlider(id,'reverbDecay','Reverb decay',0.2,4,0.1,fx.reverbDecay,'s')+
+          '<div class="knob-row">'+sndKnob(id,'reverbDecay','Reverb decay',0.2,4,0.1,fx.reverbDecay,'s')+'</div>'+
         '</div>'+
         /* Echo Tunnel — the ring viz doubles as the control surface: drag across it
            to set delay time (x) and feedback (y). Mix stays a slider (0 = off). */
@@ -1807,7 +1850,7 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
           '</div>'+
           '<div class="snd-mod-read" id="sndechoread-'+id+'">'+echoReadText(fx)+'</div>'+
           '<div class="snd-mod-fill"></div>'+
-          sndSlider(id,'delayMix','Delay mix',0,100,1,Math.round(fx.delayMix*100),'%')+
+          '<div class="knob-row">'+sndKnob(id,'delayMix','Delay mix',0,100,1,Math.round(fx.delayMix*100),'%')+'</div>'+
         '</div>'+
         /* Stereograph — pure monitor (post-pan L/R scope); nothing to drag here. */
         '<div class="snd-mod">'+
@@ -1836,19 +1879,75 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
     var b=$('sndpadread-'+id); if(b)b.textContent=padReadText(fx);
     var c=$('sndechoread-'+id); if(c)c.textContent=echoReadText(fx);
   }
-  /* Matches the sound tab's own existing markup convention (.ctl / .ctl-lbl +
-     a plain <input type=range>) rather than the click-popover's cSlider(),
-     since this panel lives inside the Sound tab, not a popover. */
-  function sndSlider(id,field,label,min,max,step,val,sfx){
-    return '<div class="ctl"><div class="ctl-lbl"><span>'+label+'</span><span class="val" data-sndvalfor="'+id+':'+field+'">'+val+(sfx||'')+'</span></div>'+
-      '<input type="range" data-snd-id="'+id+'" data-snd-field="'+field+'" data-sfx="'+(sfx||'')+'" min="'+min+'" max="'+max+'" step="'+step+'" value="'+val+'" /></div>';
+  /* ── rotary knobs (the last sliders' replacement). Vertical drag turns the
+        knob; a plain tap (no movement) opens the big-slider overlay. Values
+        route through the same applySndFieldValue path the sliders used. ── */
+  var KNOB_R=15.5, KNOB_CIRC=2*Math.PI*KNOB_R, KNOB_ARC=KNOB_CIRC*0.75;
+  function knobSVG(frac){
+    frac=clamp(frac,0,1);
+    return '<svg viewBox="0 0 40 40" aria-hidden="true">'+
+      '<circle class="knob-track" cx="20" cy="20" r="'+KNOB_R+'" fill="none" stroke-width="3" stroke-linecap="round" stroke-dasharray="'+KNOB_ARC+' '+KNOB_CIRC+'" transform="rotate(135 20 20)"/>'+
+      '<circle class="knob-fill" cx="20" cy="20" r="'+KNOB_R+'" fill="none" stroke-width="3" stroke-linecap="round" stroke-dasharray="'+(KNOB_ARC*frac)+' '+KNOB_CIRC+'" transform="rotate(135 20 20)"/>'+
+      '<g class="knob-rot" transform="rotate('+(135+270*frac)+' 20 20)"><line class="knob-needle" x1="26" y1="20" x2="30.5" y2="20" stroke-width="2.4" stroke-linecap="round"/></g>'+
+    '</svg>';
   }
+  function sndKnob(id,field,label,min,max,step,val,sfx){
+    var frac=(val-min)/(max-min);
+    return '<div class="knob-ctl">'+
+      '<div class="knob" data-knob="fx" data-snd-id="'+id+'" data-snd-field="'+field+'" data-min="'+min+'" data-max="'+max+'" data-step="'+step+'" data-val="'+val+'" data-sfx="'+(sfx||'')+'" data-lbl="'+label+'" role="slider" tabindex="0" aria-label="'+label+'" aria-valuemin="'+min+'" aria-valuemax="'+max+'" aria-valuenow="'+val+'">'+knobSVG(frac)+'</div>'+
+      '<div class="knob-lbl">'+label+'</div>'+
+      '<div class="knob-val" data-sndvalfor="'+id+':'+field+'">'+fmtKnobNum(val,step)+(sfx||'')+'</div>'+
+    '</div>';
+  }
+  function fmtKnobNum(val,step){ return step<1?(+val).toFixed(1):String(Math.round(val)); }
+  function updateKnobVisual(kn,val){
+    var min=+kn.getAttribute('data-min'),max=+kn.getAttribute('data-max');
+    var frac=clamp((val-min)/(max-min||1),0,1);
+    kn.setAttribute('data-val',val); kn.setAttribute('aria-valuenow',val);
+    if(!kn.firstChild){ kn.innerHTML=knobSVG(frac); return; }
+    var fill=kn.querySelector('.knob-fill'), rot=kn.querySelector('.knob-rot');
+    if(fill)fill.setAttribute('stroke-dasharray',(KNOB_ARC*frac)+' '+KNOB_CIRC);
+    if(rot)rot.setAttribute('transform','rotate('+(135+270*frac)+' 20 20)');
+  }
+  /* clamp + quantize + fan out: knob visual, value text, and the sound state
+     (fx field via applySndFieldValue, or the master volume). */
+  function setKnobValue(kn,val){
+    var min=+kn.getAttribute('data-min'),max=+kn.getAttribute('data-max'),step=+kn.getAttribute('data-step')||1;
+    val=clamp(val,min,max); val=+(Math.round(val/step)*step).toFixed(3);
+    if(+kn.getAttribute('data-val')===val)return val;
+    updateKnobVisual(kn,val);
+    var txt=fmtKnobNum(val,step)+(kn.getAttribute('data-sfx')||'');
+    if(kn.getAttribute('data-knob')==='master'){
+      S.def.sound.volume=clamp(val/100,0,1);
+      var vv=$('volVal'); if(vv)vv.textContent=txt;
+      refreshJSON();
+    }else{
+      var id=kn.getAttribute('data-snd-id'), field=kn.getAttribute('data-snd-field');
+      var vf=document.querySelector('[data-sndvalfor="'+id+':'+field+'"]'); if(vf)vf.textContent=txt;
+      applySndFieldValue(id, field, val); // handles clamping into fx units + refreshJSON + auto-play
+    }
+    return val;
+  }
+  /* ── big-slider overlay (mobile-friendly precision input) ── */
+  var bigKn=null;
+  function openBigSlider(kn){
+    bigKn=kn;
+    var lbl=$('bsoLbl'), r=$('bsoRange'), step=+kn.getAttribute('data-step')||1;
+    lbl.textContent=kn.getAttribute('data-lbl')||'Value';
+    r.min=kn.getAttribute('data-min'); r.max=kn.getAttribute('data-max'); r.step=kn.getAttribute('data-step');
+    r.value=kn.getAttribute('data-val');
+    $('bsoVal').textContent=fmtKnobNum(+r.value,step)+(kn.getAttribute('data-sfx')||'');
+    $('bigSliderOv').classList.add('open');
+  }
+  function closeBigSlider(){ $('bigSliderOv').classList.remove('open'); bigKn=null; }
   function syncSoundControls(){
     var snd=S.def.sound; if(!snd)return;
     setSeg('soundPackSeg', snd.pack);
     $('soundPackVal').textContent=snd.pack;
     $('soundPackBlurb').innerHTML='<b class="hl">'+snd.pack+'</b> &mdash; '+(SND_PROFILES[snd.pack]?SND_PROFILES[snd.pack].blurb:'');
-    $('volR').value=Math.round(snd.volume*100); $('volVal').textContent=Math.round(snd.volume*100)+'%';
+    var volPct=Math.round(snd.volume*100);
+    var vk=$('volKnob'); if(vk)updateKnobVisual(vk,volPct);
+    $('volVal').textContent=volPct+'%';
     $('muteChk').checked=!!snd.muted;
   }
   function pulseSndCard(id){
@@ -1872,6 +1971,15 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
   function sndWrapEl(id){ return document.querySelector('.snd-ev-wrap[data-snd-wrap="'+id+'"]'); }
   function toggleSndPanel(id){
     var wrap=sndWrapEl(id); if(!wrap)return;
+    // accordion: opening one sound closes any other open one (recursion runs the
+    // full close path — rAF loops stop, aria resets — not just a class flip).
+    if(!wrap.classList.contains('expanded')){
+      var others=document.querySelectorAll('.snd-ev-wrap.expanded');
+      for(var i=0;i<others.length;i++){
+        var oid=others[i].getAttribute('data-snd-wrap');
+        if(oid!==id)toggleSndPanel(oid);
+      }
+    }
     var panel=$('sndpanel-'+id);
     var tgl=wrap.querySelector('[data-snd-toggle]');
     var open=wrap.classList.toggle('expanded');
@@ -2452,7 +2560,7 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
 
   // ── sound ──
   segWire('soundPackSeg',function(v){ S.def.sound.pack=SND_PROFILES[v]?v:'Synth'; syncSoundControls(); refreshJSON(); sndEnvWave={}; redrawOpenEnvEditors(); playSound('button-click',0.7); });
-  on('volR','input',function(e){ S.def.sound.volume=Math.max(0,Math.min(1,+e.target.value/100)); $('volVal').textContent=Math.round(S.def.sound.volume*100)+'%'; refreshJSON(); });
+  // (master volume is a knob now — see the delegated [data-knob] pointer wiring)
   on('muteChk','change',function(e){ S.def.sound.muted=e.target.checked; refreshJSON(); if(!e.target.checked)playSound('button-click',0.7); });
   $('soundEvents').addEventListener('click',function(e){
     var play=e.target.closest('[data-snd-play]');
@@ -2468,13 +2576,45 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
     var rst=e.target.closest('[data-snd-reset]');
     if(rst){ resetSndSample(rst.getAttribute('data-snd-reset')); return; }
   });
-  $('soundEvents').addEventListener('input',function(e){
-    var el=e.target.closest('[data-snd-field]'); if(!el)return;
-    var id=el.getAttribute('data-snd-id'), field=el.getAttribute('data-snd-field'), raw=+el.value;
-    var vf=$('soundEvents').querySelector('[data-sndvalfor="'+id+':'+field+'"]');
-    if(vf)vf.textContent=el.value+(el.getAttribute('data-sfx')||'');
-    applySndFieldValue(id, field, raw);
+  /* ── knob interaction (delegated on document — knobs live both in the sound
+        panels and the master-volume control). Vertical drag turns; a plain tap
+        (< 5px of movement) opens the big-slider overlay for precise/mobile input. ── */
+  document.addEventListener('pointerdown',function(e){
+    var kn=e.target.closest('[data-knob]'); if(!kn)return;
+    e.preventDefault();
+    var min=+kn.getAttribute('data-min'), max=+kn.getAttribute('data-max');
+    var startY=e.clientY, startVal=+kn.getAttribute('data-val'), moved=false;
+    try{ kn.setPointerCapture(e.pointerId); }catch(e2){}
+    function move(ev){
+      var dy=startY-ev.clientY;
+      if(Math.abs(dy)>4)moved=true;
+      if(moved) setKnobValue(kn, startVal + dy/140*(max-min)); // full sweep ≈ 140px of drag
+    }
+    function up(){
+      kn.removeEventListener('pointermove',move); kn.removeEventListener('pointerup',up); kn.removeEventListener('pointercancel',cancel);
+      if(!moved) openBigSlider(kn); // tap, not a drag → the big clean slider
+    }
+    function cancel(){ kn.removeEventListener('pointermove',move); kn.removeEventListener('pointerup',up); kn.removeEventListener('pointercancel',cancel); }
+    kn.addEventListener('pointermove',move);
+    kn.addEventListener('pointerup',up);
+    kn.addEventListener('pointercancel',cancel);
   });
+  // keyboard support: knobs are role=slider, arrows nudge by one step
+  document.addEventListener('keydown',function(e){
+    var kn=e.target.closest&&e.target.closest('[data-knob]'); if(!kn||e.target!==kn)return;
+    var step=+kn.getAttribute('data-step')||1, val=+kn.getAttribute('data-val');
+    if(e.key==='ArrowUp'||e.key==='ArrowRight'){ e.preventDefault(); setKnobValue(kn,val+step); }
+    else if(e.key==='ArrowDown'||e.key==='ArrowLeft'){ e.preventDefault(); setKnobValue(kn,val-step); }
+    else if(e.key==='Enter'||e.key===' '){ e.preventDefault(); openBigSlider(kn); }
+  });
+  // big-slider overlay: live-applies to its knob; outside click / Esc closes
+  $('bsoRange').addEventListener('input',function(e){
+    if(!bigKn)return;
+    var v=setKnobValue(bigKn,+e.target.value);
+    $('bsoVal').textContent=fmtKnobNum(v,+bigKn.getAttribute('data-step')||1)+(bigKn.getAttribute('data-sfx')||'');
+  });
+  $('bigSliderOv').addEventListener('pointerdown',function(e){ if(e.target===e.currentTarget)closeBigSlider(); });
+  document.addEventListener('keydown',function(e){ if(e.key==='Escape'&&$('bigSliderOv').classList.contains('open'))closeBigSlider(); });
   $('soundEvents').addEventListener('change',function(e){
     var f=e.target.closest('[data-snd-file]'); if(!f)return;
     var id=f.getAttribute('data-snd-file'); var file=f.files&&f.files[0]; if(!file)return;
