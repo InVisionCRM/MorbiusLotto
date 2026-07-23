@@ -35,31 +35,39 @@ html,body{width:100%;height:100%;overflow:hidden;background:#04080d;font-family:
 .hint{font-family:var(--font-mono);font-size:9.5px;letter-spacing:.08em;color:var(--slate-500);background:rgba(6,16,25,.72);border:1px solid var(--cyan-soft);border-radius:9px;padding:6px 12px}
 @media(max-width:640px){.hud-sub{display:none}.hint{font-size:8.5px}}
 /* ── in-world screens (CSS3D DOM) ── */
-.scr3d{width:480px;height:800px;background:#050d14;border-radius:10px;overflow:hidden;display:flex;flex-direction:column;font-family:var(--font-disp);position:relative}
-.scr3d .scr-head{flex:none;padding:16px 18px 10px;text-align:center}
-.scr3d .scr-logo{font-weight:700;font-size:26px;letter-spacing:.16em;text-transform:uppercase;color:var(--glow);text-shadow:0 0 22px var(--glow)}
-.scr3d .scr-tag{font-family:var(--font-mono);font-size:10px;color:var(--slate-500);letter-spacing:.14em;margin-top:2px}
-.scr-board{flex:1;margin:6px 18px;border:1px solid color-mix(in srgb,var(--glow) 35%,transparent);border-radius:14px;background:rgba(2,8,13,.85);overflow:hidden;display:grid;grid-template-columns:repeat(5,1fr);gap:6px;padding:10px;position:relative}
+.scr3d{width:480px;height:516px;background:#050d14;border-radius:8px;overflow:hidden;display:flex;flex-direction:column;font-family:var(--font-disp);position:relative}
+.scr-brand{flex:none;padding:8px 0 2px;text-align:center;font-weight:700;font-size:17px;letter-spacing:.2em;text-transform:uppercase;color:var(--glow);text-shadow:0 0 14px var(--glow)}
+.scr-board{flex:1;margin:4px 14px;border:1px solid color-mix(in srgb,var(--glow) 35%,transparent);border-radius:12px;background:rgba(2,8,13,.85);overflow:hidden;display:grid;grid-template-columns:repeat(5,1fr);gap:6px;padding:8px;position:relative}
 .reelcol{overflow:hidden;border-radius:9px;background:rgba(10,20,30,.8);position:relative}
 .reelstrip{display:flex;flex-direction:column}
 .reelcell{width:100%;display:flex;align-items:center;justify-content:center;flex:none} /* height set by JS: column/3 */
 .reelcell img{width:72%;height:72%;object-fit:contain;filter:drop-shadow(0 0 6px rgba(0,0,0,.7))}
 .reelcell.hit img{animation:hitPulse .55s ease 2}
 @keyframes hitPulse{50%{transform:scale(1.28);filter:drop-shadow(0 0 14px var(--glow))}}
-.scr-msg{flex:none;text-align:center;font-family:var(--font-mono);font-size:13px;letter-spacing:.12em;color:var(--slate-400);padding:8px 0 6px;min-height:30px}
+.scr-msg{flex:none;text-align:center;font-family:var(--font-mono);font-size:12px;letter-spacing:.12em;color:var(--slate-400);padding:4px 0;min-height:22px}
 .scr-msg.win{color:var(--glow);text-shadow:0 0 14px var(--glow)}
-.scr-spin{flex:none;margin:2px 18px 18px;padding:15px;border:0;border-radius:13px;font-family:var(--font-disp);font-weight:700;font-size:17px;letter-spacing:.2em;text-transform:uppercase;color:#04140f;background:var(--glow);box-shadow:0 0 30px -4px var(--glow);cursor:pointer;transition:.12s}
-.scr-spin:active{transform:scale(.97)}
-.scr-spin[disabled]{opacity:.45;cursor:default}
+/* meter strip — the game display's own credit/win/bet bar, like real games */
+.scr-meters{flex:none;display:flex;border-top:1px solid color-mix(in srgb,var(--glow) 30%,transparent);background:rgba(2,7,11,.9)}
+.scr-meter{flex:1;text-align:center;padding:7px 0 9px}
+.scr-meter span{display:block;font-size:9px;font-weight:600;letter-spacing:.18em;color:var(--slate-500)}
+.scr-meter b{font-family:var(--font-mono);font-size:19px;color:var(--glow);text-shadow:0 0 10px var(--glow)}
+/* jackpot takeover overlay — main display's part of the celebration */
+.scr-takeover{position:absolute;inset:0;display:none;flex-direction:column;align-items:center;justify-content:center;background:rgba(2,6,10,.88);z-index:5;text-align:center}
+.scr-takeover.on{display:flex;animation:tkFlash .4s steps(2) infinite}
+@keyframes tkFlash{50%{background:rgba(2,6,10,.72)}}
+.tk-tier{font-weight:700;font-size:34px;letter-spacing:.14em;color:var(--glow);text-shadow:0 0 26px var(--glow)}
+.tk-val{font-family:var(--font-mono);font-size:52px;color:#fff;text-shadow:0 0 22px var(--glow);margin-top:10px}
 /* deck panel */
-.deck3d{width:640px;height:240px;background:linear-gradient(180deg,#08131c,#04090f);border-radius:14px;display:flex;align-items:center;justify-content:space-between;gap:14px;padding:18px 22px;font-family:var(--font-disp)}
+.deck3d{width:640px;height:240px;background:linear-gradient(180deg,#08131c,#04090f);border-radius:14px;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:16px 18px;font-family:var(--font-disp)}
 .deck-cell{text-align:center;min-width:0}
 .deck-k{font-size:11px;font-weight:600;letter-spacing:.16em;text-transform:uppercase;color:var(--slate-500)}
-.deck-v{font-family:var(--font-mono);font-size:26px;color:var(--glow);text-shadow:0 0 14px var(--glow);margin-top:4px;white-space:nowrap}
-.deck-btn{font-family:var(--font-disp);font-weight:700;font-size:15px;color:var(--glow);background:rgba(255,255,255,.04);border:1.5px solid color-mix(in srgb,var(--glow) 55%,transparent);border-radius:11px;padding:12px 16px;cursor:pointer;transition:.12s;letter-spacing:.06em}
+.deck-v{font-family:var(--font-mono);font-size:24px;color:var(--glow);text-shadow:0 0 14px var(--glow);margin-top:4px;white-space:nowrap}
+.deck-btn{font-family:var(--font-disp);font-weight:700;font-size:14px;color:var(--glow);background:rgba(255,255,255,.04);border:1.5px solid color-mix(in srgb,var(--glow) 55%,transparent);border-radius:11px;padding:12px 14px;cursor:pointer;transition:.12s;letter-spacing:.06em}
 .deck-btn:active{transform:scale(.95)}
-.deck-bet{display:flex;gap:8px;align-items:center}
-.deck-bet .deck-btn{font-size:20px;padding:8px 15px}
+.deck-spin{font-size:19px;letter-spacing:.18em;padding:18px 26px;color:#04140f;background:var(--glow);border-color:var(--glow);box-shadow:0 0 26px -4px var(--glow)}
+.deck-spin[disabled]{opacity:.5;cursor:default}
+.deck-bet{display:flex;gap:7px;align-items:center}
+.deck-bet .deck-btn{font-size:18px;padding:8px 13px}
 </style>
 </head>
 <body>
@@ -84,7 +92,8 @@ html,body{width:100%;height:100%;overflow:hidden;background:#04080d;font-family:
       <button class="chip" data-q="high">High</button>
     </div>
     <div class="chip-group">
-      <button class="chip" data-focus="screen">Screen</button>
+      <button class="chip" data-focus="screen">Game</button>
+      <button class="chip" data-focus="jackpots">Jackpots</button>
       <button class="chip" data-focus="deck">Deck</button>
       <button class="chip on" data-focus="overview">Overview</button>
     </div>
@@ -204,14 +213,86 @@ function canvasTex(w,h,draw){
 function redraw(t){ t.userData.draw(t.userData.cv.getContext('2d'), t.userData.cv.width, t.userData.cv.height); t.needsUpdate=true; }
 const cssHex = v => '#'+v.toString(16).padStart(6,'0');
 
-function drawMarquee(ctx,w,h){
-  const g=ctx.createLinearGradient(0,0,0,h);
-  g.addColorStop(0,'#0a141d'); g.addColorStop(1,'#04090e');
-  ctx.fillStyle=g; ctx.fillRect(0,0,w,h);
-  ctx.font='700 92px "Chakra Petch", sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
-  ctx.fillStyle=cssHex(skin().glow); ctx.shadowColor=cssHex(skin().glow); ctx.shadowBlur=42;
-  ctx.fillText(skin().name, w/2, h/2+4);
-  ctx.shadowBlur=0;
+/* one game state, rendered by several displays (deck + game-screen meters) */
+const game = { balance:2500, bet:25, spinning:false, lastWin:0, grid:[] };
+
+/* ═══════════ progressive jackpot system (Dragon/Lightning-Link model) ═══════════
+   GRAND: linked bank progressive — always climbing (other machines feed it too).
+   MAJOR: this machine's own progressive — grows from local bets, capped, reseeds.
+   MINOR/MINI: fixed multiples of the CURRENT bet — they change when bet changes. */
+const jp = {
+  grand: 12480 + Math.floor(Math.random()*4000),
+  major: 620 + Math.floor(Math.random()*220),
+  GRAND_SEED: 10000, MAJOR_SEED: 500, MAJOR_CAP: 1000,
+  minor(){ return game.bet*50; },
+  mini(){ return game.bet*10; },
+  celebrate: null, // {tier, value, t0} while a takeover is running
+};
+function jpContribute(bet){
+  jp.grand += bet*0.02;
+  jp.major = Math.min(jp.MAJOR_CAP, jp.major + bet*0.015);
+}
+function jpAmbient(dt){ jp.grand += dt * (2 + Math.random()*6); } // rest of the linked bank playing
+function jpMaybeHit(){
+  const r=Math.random();
+  if(r<0.004) return 'major';
+  if(r<0.030) return 'mini';
+  return null;
+}
+const TIER_STYLE = {
+  grand:{ label:'GRAND', col:'#ffd76a' },
+  major:{ label:'MAJOR', col:'#ff9d4d' },
+  minor:{ label:'MINOR', col:'#7fd8ff' },
+  mini: { label:'MINI',  col:'#8cf2a8' },
+};
+function fmtMoney(v){ return Math.floor(v).toLocaleString('en-US'); }
+/* upper display: the four-tier ladder over brand art — its own physical monitor */
+function drawLadder(ctx,w,h){
+  const s=skin(), t=performance.now()/1000;
+  const bg=ctx.createLinearGradient(0,0,0,h);
+  bg.addColorStop(0,'#0b0f1c'); bg.addColorStop(0.6,'#070a12'); bg.addColorStop(1,'#04060c');
+  ctx.fillStyle=bg; ctx.fillRect(0,0,w,h);
+  /* brand art wash behind the ladder */
+  const wash=ctx.createRadialGradient(w/2,h*1.15,60, w/2,h*1.15,w*0.8);
+  wash.addColorStop(0,cssHex(s.glow)+'40'); wash.addColorStop(1,'transparent');
+  ctx.fillStyle=wash; ctx.fillRect(0,0,w,h);
+  ctx.font='700 40px "Chakra Petch", sans-serif'; ctx.textAlign='center';
+  ctx.fillStyle=cssHex(s.glow); ctx.globalAlpha=0.85; ctx.fillText(s.name, w/2, h-18); ctx.globalAlpha=1;
+  const rows=[
+    ['grand', jp.grand,      118, 64],
+    ['major', jp.major,       92, 52],
+    ['minor', jp.minor(),     92, 52],
+    ['mini',  jp.mini(),      92, 52],
+  ];
+  let y=26;
+  for(const [tier,val,rh,fs] of rows){
+    const st=TIER_STYLE[tier];
+    const hit = jp.celebrate && jp.celebrate.tier===tier && Math.floor(t*6)%2===0; // flash during takeover
+    /* tier plate */
+    ctx.fillStyle=hit?st.col:'rgba(255,255,255,.045)';
+    ctx.strokeStyle=st.col; ctx.lineWidth=3;
+    roundRect(ctx, 26, y, w-52, rh-10, 14); ctx.fill(); ctx.stroke();
+    /* medallions */
+    for(const mx of [64, w-64]){
+      ctx.beginPath(); ctx.fillStyle=st.col; ctx.arc(mx, y+(rh-10)/2, rh*0.26, 0, Math.PI*2); ctx.fill();
+      ctx.fillStyle='#0a0d14'; ctx.font='700 '+Math.round(rh*0.2)+'px "Chakra Petch", sans-serif';
+      ctx.fillText(st.label[0], mx, y+(rh-10)/2+rh*0.075);
+    }
+    ctx.font='700 '+Math.round(fs*0.52)+'px "Chakra Petch", sans-serif';
+    ctx.fillStyle=hit?'#0a0d14':st.col;
+    ctx.fillText(st.label, w/2, y+fs*0.62);
+    ctx.font='700 '+fs+'px "Space Mono", monospace';
+    ctx.fillStyle=hit?'#0a0d14':'#f4f8fb';
+    ctx.shadowColor=st.col; ctx.shadowBlur=hit?0:16;
+    ctx.fillText(fmtMoney(val), w/2, y+rh-22);
+    ctx.shadowBlur=0;
+    y+=rh;
+  }
+}
+function roundRect(ctx,x,y,w,h,r){
+  ctx.beginPath();
+  ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r);
+  ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath();
 }
 function drawBelly(ctx,w,h){
   const g=ctx.createRadialGradient(w/2,h*0.9,40, w/2,h*0.9,w*0.75);
@@ -226,15 +307,36 @@ function drawBelly(ctx,w,h){
   ctx.font='500 30px "Space Mono", monospace'; ctx.fillStyle=cssHex(skin().glow);
   ctx.fillText('· 96.2% RTP ·', w/2, h*0.78);
 }
-let jackpotVal = 128480 + Math.floor(Math.random()*4000);
+/* topper: pure branding attract loop (its own little monitor); flips to a tier
+   celebration during a jackpot takeover — exactly how the real stacks behave */
 function drawTopper(ctx,w,h){
-  ctx.fillStyle='#04090e'; ctx.fillRect(0,0,w,h);
-  ctx.font='600 40px "Chakra Petch", sans-serif'; ctx.textAlign='center';
-  ctx.fillStyle='#8aa3b8'; ctx.fillText('MEGA JACKPOT', w/2, 52);
-  ctx.font='700 96px "Space Mono", monospace';
-  ctx.fillStyle=cssHex(skin().glow); ctx.shadowColor=cssHex(skin().glow); ctx.shadowBlur=34;
-  ctx.fillText(jackpotVal.toLocaleString('en-US'), w/2, h-56);
-  ctx.shadowBlur=0;
+  const s=skin(), t=performance.now()/1000;
+  ctx.fillStyle='#03060b'; ctx.fillRect(0,0,w,h);
+  if(jp.celebrate){
+    const st=TIER_STYLE[jp.celebrate.tier], on=Math.floor(t*6)%2===0;
+    ctx.fillStyle=on?st.col:'#03060b'; ctx.fillRect(0,0,w,h);
+    ctx.font='700 84px "Chakra Petch", sans-serif'; ctx.textAlign='center';
+    ctx.fillStyle=on?'#0a0d14':st.col;
+    ctx.fillText(st.label+' JACKPOT', w/2, h/2+28);
+    return;
+  }
+  /* animated light rays sweeping behind the logo */
+  ctx.save(); ctx.translate(w/2,h*0.9);
+  for(let i=0;i<9;i++){
+    const a=(i/9)*Math.PI - Math.PI + Math.sin(t*0.6)*0.15;
+    const g=ctx.createLinearGradient(0,0,Math.cos(a)*w,Math.sin(a)*w);
+    g.addColorStop(0,cssHex(s.glow)+'33'); g.addColorStop(1,'transparent');
+    ctx.fillStyle=g;
+    ctx.beginPath(); ctx.moveTo(0,0);
+    ctx.arc(0,0,w, a-0.05, a+0.05); ctx.closePath(); ctx.fill();
+  }
+  ctx.restore();
+  ctx.font='700 92px "Chakra Petch", sans-serif'; ctx.textAlign='center';
+  const pulse=0.75+Math.sin(t*2.2)*0.25;
+  ctx.fillStyle=cssHex(s.glow); ctx.shadowColor=cssHex(s.glow); ctx.shadowBlur=30*pulse;
+  ctx.fillText(s.name, w/2, h/2+10);
+  ctx.font='600 34px "Space Mono", monospace'; ctx.shadowBlur=0; ctx.fillStyle='#8aa3b8';
+  ctx.fillText('GRAND '+fmtMoney(jp.grand), w/2, h-34);
 }
 let trackerT = 0;
 function drawTracker(ctx,w,h){
@@ -268,7 +370,7 @@ const DECK_TILT = -0.21, HOUSING_TILT = -0.065;
 const pulseMeshes = [];   // {mesh, base, amp, rate, phase} — LED attract loop
 const speakerRings = [];  // pulse with audioLevel.mid
 let subRing=null, spinBtnMesh=null, ticketMesh=null, ticketAnim=null;
-let marqueeTex, bellyTex, topperTex, trackerTex;
+let ladderTex, bellyTex, topperTex, trackerTex;
 
 function box(w,h,d,mat,x,y,z,parent){ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat); m.position.set(x,y,z); (parent||cab).add(m); return m; }
 
@@ -277,8 +379,8 @@ function buildCabinet(){
   /* lower body */
   box(1.04,1.10,0.60, M.body, 0,0.57,0);
   box(1.10,0.10,0.66, M.dark, 0,0.05,0.01);                       // kick plate
-  box(0.07,2.30,0.56, M.rail, -0.555,1.17,-0.01);                 // side rails
-  box(0.07,2.30,0.56, M.rail,  0.555,1.17,-0.01);
+  box(0.07,2.72,0.56, M.rail, -0.555,1.38,-0.01);                 // side rails (full display stack)
+  box(0.07,2.72,0.56, M.rail,  0.555,1.38,-0.01);
   /* belly glass */
   bellyTex = canvasTex(768,448,drawBelly);
   const belly = new THREE.Mesh(new THREE.PlaneGeometry(0.84,0.46),
@@ -326,38 +428,48 @@ function buildCabinet(){
   trkScr.position.set(0,0.045,0.052); trk.add(trkScr);
   box(0.10,0.014,0.02, M.ledDim, 0,-0.05,0.052, trk); // card slot
 
-  /* ── monitor housing (tilted back) ── */
-  const hous = new THREE.Group(); hous.position.set(0,1.76,-0.10); hous.rotation.x=HOUSING_TILT; cab.add(hous);
-  box(1.02,1.34,0.26, M.body, 0,0,0, hous);
-  box(0.80,1.30,0.02, M.black, 0,0,0.135, hous); // glass recess behind the DOM screen
-  /* speakers flanking the screen */
-  for(const sx of [-0.455,0.455]){
-    box(0.09,1.26,0.05, M.dark, sx,0,0.14, hous);
+  /* ══ THE DISPLAY STACK — three SEPARATE monitors, each with its own bezel,
+        glass and job (game / jackpot ladder / branding), like real cabinets ══ */
+
+  /* ── display 1: MAIN GAME monitor (reels + meter strip live DOM) ── */
+  const hous = new THREE.Group(); hous.position.set(0,1.63,-0.08); hous.rotation.x=HOUSING_TILT; cab.add(hous);
+  box(1.02,0.98,0.24, M.body, 0,0,0, hous);
+  box(0.86,0.92,0.02, M.black, 0,0,0.125, hous); // glass recess behind the DOM screen
+  /* speakers flank the game monitor */
+  for(const sx of [-0.465,0.465]){
+    box(0.07,0.92,0.05, M.dark, sx,0,0.125, hous);
     for(let i=0;i<3;i++){
-      const ring=new THREE.Mesh(new THREE.RingGeometry(0.018,0.027,24), M.led);
-      ring.position.set(sx, -0.42+i*0.42, 0.166); hous.add(ring);
+      const ring=new THREE.Mesh(new THREE.RingGeometry(0.016,0.024,24), M.led);
+      ring.position.set(sx, -0.32+i*0.32, 0.152); hous.add(ring);
       speakerRings.push(ring);
     }
   }
-  /* marquee */
-  marqueeTex = canvasTex(1024,192,drawMarquee);
-  const marq = new THREE.Mesh(new THREE.PlaneGeometry(0.92,0.17),
-    new THREE.MeshBasicMaterial({ map:marqueeTex, toneMapped:false }));
-  marq.position.set(0,0.77,0.145); hous.add(marq);
-  box(1.02,0.06,0.28, M.rail, 0,0.71,0.005, hous);
 
-  /* ── topper ── */
-  const top = new THREE.Group(); top.position.set(0,2.72,-0.12); cab.add(top);
-  box(0.64,0.36,0.16, M.dark, 0,0,0, top);
+  /* ── display 2: JACKPOT LADDER monitor (canvas "video" panel) ── */
+  const jhous = new THREE.Group(); jhous.position.set(0,2.36,-0.10); jhous.rotation.x=HOUSING_TILT*0.7; cab.add(jhous);
+  box(1.00,0.62,0.22, M.body, 0,0,0, jhous);
+  box(0.86,0.56,0.015, M.black, 0,0,0.112, jhous);
+  ladderTex = canvasTex(768,560,drawLadder);
+  const ladderScr = new THREE.Mesh(new THREE.PlaneGeometry(0.80,0.54),
+    new THREE.MeshBasicMaterial({ map:ladderTex, toneMapped:false }));
+  ladderScr.position.set(0,0,0.122); jhous.add(ladderScr);
+  /* visible gap trim between the two monitors — reads as separate hardware */
+  box(0.98,0.03,0.26, M.rail, 0,2.135,-0.085);
+
+  /* ── display 3: TOPPER monitor on its own stub mount ── */
+  box(0.10,0.14,0.10, M.dark, 0,2.72,-0.14);                     // mount stub
+  const top = new THREE.Group(); top.position.set(0,2.92,-0.12); cab.add(top);
+  box(0.70,0.40,0.10, M.dark, 0,0,0, top);
   topperTex = canvasTex(640,320,drawTopper);
-  const topScr = new THREE.Mesh(new THREE.PlaneGeometry(0.56,0.28),
+  const topScr = new THREE.Mesh(new THREE.PlaneGeometry(0.62,0.32),
     new THREE.MeshBasicMaterial({ map:topperTex, toneMapped:false }));
-  topScr.position.set(0,0,0.085); top.add(topScr);
-  /* topper LED rim + cabinet edge strips */
-  const rim = [ [0,0.19,0.02, 0.64,0.02,0.02], [0,-0.19,0.02, 0.64,0.02,0.02], [-0.33,0,0.02, 0.02,0.40,0.02], [0.33,0,0.02, 0.02,0.40,0.02] ];
+  topScr.position.set(0,0,0.055); top.add(topScr);
+  const rim = [ [0,0.215,0.0, 0.70,0.02,0.02], [0,-0.215,0.0, 0.70,0.02,0.02], [-0.36,0,0.0, 0.02,0.45,0.02], [0.36,0,0.0, 0.02,0.45,0.02] ];
   rim.forEach(([x,y,z,w,h,d],i)=>{ const m=box(w,h,d,M.led,x,y,z,top); pulseMeshes.push({mesh:m, base:2.0, amp:1.1, rate:2.6, phase:i*0.7}); });
+
+  /* cabinet edge LED strips + deck underglow */
   for(const sx of [-0.585,0.585]){
-    const strip=box(0.018,2.28,0.018, M.led, sx,1.18,0.27);
+    const strip=box(0.018,2.70,0.018, M.led, sx,1.38,0.27);
     pulseMeshes.push({mesh:strip, base:1.8, amp:1.0, rate:1.9, phase:sx>0?0:Math.PI});
   }
   const under=box(0.96,0.016,0.016, M.led, 0,0.985,0.40); // deck underglow
@@ -371,20 +483,26 @@ const SYMBOLS = [
   'morbius/MorbiusChip.png','crash/rocket.webp','crash/jupiter.webp',
   'crash/planet.webp','crash/red-planet.webp','vip-badges/diamond.png','vip-badges/gold.png',
 ];
-const game = { balance:2500, bet:25, spinning:false, lastWin:0, grid:[] };
-
+/* the GAME display carries only the game: slim brand strip, reels, message,
+   and the credit/win/bet meter strip — jackpots live on their OWN display above */
 const scrEl = document.createElement('div');
 scrEl.className='scr3d';
 scrEl.innerHTML =
-  '<div class="scr-head"><div class="scr-logo" id="scrLogo">DEEP ABYSS</div><div class="scr-tag">REEL FORGE · LIVE</div></div>'+
+  '<div class="scr-brand" id="scrLogo">DEEP ABYSS</div>'+
   '<div class="scr-board" id="scrBoard"></div>'+
   '<div class="scr-msg" id="scrMsg">PLACE YOUR BET</div>'+
-  '<button class="scr-spin" id="scrSpin">SPIN</button>';
+  '<div class="scr-meters">'+
+    '<div class="scr-meter"><span>CREDIT</span><b id="mCredit">2,500</b></div>'+
+    '<div class="scr-meter"><span>WIN</span><b id="mWin">—</b></div>'+
+    '<div class="scr-meter"><span>BET</span><b id="mBet">25</b></div>'+
+  '</div>'+
+  '<div class="scr-takeover" id="scrTakeover"><div class="tk-tier" id="tkTier">MINI JACKPOT</div><div class="tk-val" id="tkVal">0</div></div>';
 const deckEl = document.createElement('div');
 deckEl.className='deck3d';
 deckEl.innerHTML =
-  '<div class="deck-cell"><div class="deck-k">Balance</div><div class="deck-v" id="deckBal">2,500</div></div>'+
+  '<div class="deck-cell"><div class="deck-k">Credit</div><div class="deck-v" id="deckBal">2,500</div></div>'+
   '<div class="deck-cell"><div class="deck-k">Bet</div><div class="deck-bet"><button class="deck-btn" id="betDn">−</button><div class="deck-v" id="deckBet">25</div><button class="deck-btn" id="betUp">+</button></div></div>'+
+  '<div class="deck-cell"><button class="deck-btn deck-spin" id="deckSpin">SPIN</button></div>'+
   '<div class="deck-cell"><div class="deck-k">Win</div><div class="deck-v" id="deckWin">—</div></div>'+
   '<div class="deck-cell"><button class="deck-btn" id="deckCash">CASH OUT</button></div>';
 /* screens swallow pointer events so orbiting never fights the UI */
@@ -392,8 +510,8 @@ for(const el of [scrEl,deckEl]) for(const ev of ['pointerdown','pointermove','wh
   el.addEventListener(ev, e=>e.stopPropagation());
 
 const scrObj = new CSS3DObject(scrEl);
-scrObj.scale.setScalar(0.72/480);                       // 480px → 0.72m wide
-scrObj.position.set(0,1.76 + 0.03, -0.10 + 0.148);      // just proud of the glass recess
+scrObj.scale.setScalar(0.80/480);                 // 480px → 0.80m wide game monitor
+scrObj.position.set(0,1.63 + 0.005, -0.08 + 0.138); // just proud of display 1's glass
 scrObj.rotation.x = HOUSING_TILT;
 scene.add(scrObj);
 const deckObj = new CSS3DObject(deckEl);
@@ -425,11 +543,12 @@ function cellH(strip){ return (strip.parentElement.clientHeight||264)/ROWS; }
 function sizeCells(strip){ const h=cellH(strip); strip.querySelectorAll('.reelcell').forEach(c=>c.style.height=h+'px'); return h; }
 function renderStrip(strip,syms){ strip.style.transition='none'; strip.style.transform='translateY(0)'; strip.innerHTML=syms.map(cellHTML).join(''); sizeCells(strip); }
 function gameSpin(){
-  if(game.spinning || game.balance<game.bet) return false;
+  if(game.spinning || jp.celebrate || game.balance<game.bet) return false;
   audio(); blip(340,0.06,'square',0.35);
   game.spinning=true; game.balance-=game.bet; game.lastWin=0;
+  jpContribute(game.bet); // every bet feeds GRAND (bank) and MAJOR (this machine)
   syncDeck(); msg('GOOD LUCK','');
-  scrEl.querySelector('#scrSpin').disabled=true;
+  deckEl.querySelector('#deckSpin').disabled=true;
   const strips=boardEl.querySelectorAll('.reelstrip');
   const EXTRA=14;
   strips.forEach((strip,c)=>{
@@ -453,7 +572,7 @@ function gameSpin(){
 }
 function settleSpin(){
   game.spinning=false;
-  scrEl.querySelector('#scrSpin').disabled=false;
+  deckEl.querySelector('#deckSpin').disabled=false;
   const mid=game.grid.map(col=>col[1]);
   let run=1; for(let i=1;i<COLS&&mid[i]===mid[0];i++)run++;
   if(run>=3){
@@ -466,14 +585,48 @@ function settleSpin(){
     winFlash=1;
   } else msg('SPIN AGAIN','');
   syncDeck();
+  const tier=jpMaybeHit();
+  if(tier)jackpotTakeover(tier);
+}
+/* ── jackpot takeover: ALL displays celebrate the same event in sync —
+      topper flashes the tier, the ladder display strobes that tier's plate,
+      the game display overlays a count-up, LEDs flare. ── */
+function jackpotTakeover(tier){
+  const value = tier==='grand'?jp.grand : tier==='major'?jp.major : tier==='minor'?jp.minor() : jp.mini();
+  jp.celebrate={ tier, value, t0:performance.now() };
+  if(tier==='grand')jp.grand=jp.GRAND_SEED;   // progressives reseed on hit
+  if(tier==='major')jp.major=jp.MAJOR_SEED;
+  scrEl.querySelector('#tkTier').textContent=TIER_STYLE[tier].label+' JACKPOT';
+  scrEl.querySelector('#scrTakeover').classList.add('on');
+  deckEl.querySelector('#deckSpin').disabled=true;
+  winFlash=2.2;
+  [523,659,784,1046,784,1046,1318].forEach((f,i)=>blip(f,0.22,'sine',0.55,i*0.14));
+}
+function endTakeover(){
+  const c=jp.celebrate; if(!c)return;
+  game.balance+=Math.floor(c.value); game.lastWin=Math.floor(c.value);
+  jp.celebrate=null;
+  scrEl.querySelector('#scrTakeover').classList.remove('on');
+  deckEl.querySelector('#deckSpin').disabled=false;
+  msg(TIER_STYLE[c.tier].label+' JACKPOT PAID','win');
+  syncDeck();
 }
 function msg(t,cls){ const m=scrEl.querySelector('#scrMsg'); m.textContent=t; m.className='scr-msg '+(cls||''); }
+/* ONE state, TWO displays: the deck readouts and the game display's meter
+   strip render the same credit/bet/win — that's the real interaction model */
 function syncDeck(){
-  deckEl.querySelector('#deckBal').textContent=game.balance.toLocaleString('en-US');
+  const bal=game.balance.toLocaleString('en-US');
+  const win=game.lastWin?('+'+game.lastWin.toLocaleString('en-US')):'—';
+  deckEl.querySelector('#deckBal').textContent=bal;
   deckEl.querySelector('#deckBet').textContent=game.bet;
-  deckEl.querySelector('#deckWin').textContent=game.lastWin?('+'+game.lastWin.toLocaleString('en-US')):'—';
+  deckEl.querySelector('#deckWin').textContent=win;
+  scrEl.querySelector('#mCredit').textContent=bal;
+  scrEl.querySelector('#mBet').textContent=game.bet;
+  scrEl.querySelector('#mWin').textContent=win;
 }
-scrEl.querySelector('#scrSpin').addEventListener('click',gameSpin);
+deckEl.querySelector('#deckSpin').addEventListener('click',gameSpin);
+/* changing the bet also RESIZES the MINI/MINOR tiers on the ladder display —
+   they're fixed multiples of the current bet, exactly like the real games */
 deckEl.querySelector('#betUp').addEventListener('click',()=>{ game.bet=Math.min(500,game.bet+25); blip(520,0.05,'square',0.3); syncDeck(); });
 deckEl.querySelector('#betDn').addEventListener('click',()=>{ game.bet=Math.max(25,game.bet-25); blip(380,0.05,'square',0.3); syncDeck(); });
 deckEl.querySelector('#deckCash').addEventListener('click',cashOut);
@@ -560,15 +713,16 @@ function applySkin(k){
   spillA.color.set(skin().glow); spillB.color.set(skin().warm);
   document.documentElement.style.setProperty('--glow', skin().css);
   scrEl.querySelector('#scrLogo').textContent=skin().name;
-  redraw(marqueeTex); redraw(bellyTex); redraw(topperTex);
+  redraw(ladderTex); redraw(bellyTex); redraw(topperTex);
   rebuildFloor(); // fake reflection clones the cabinet
   document.querySelectorAll('#skinChips .chip').forEach(c=>c.classList.toggle('on',c.dataset.skin===k));
 }
 
 /* ═══════════ camera focus / interaction ═══════════ */
 const FOCI = {
-  overview:{ pos:[2.1,1.75,3.9], tgt:[0,1.32,0] },
-  screen:  { pos:[0,1.82,1.75],  tgt:[0,1.78,-0.1] },
+  overview:{ pos:[2.2,1.9,4.2],  tgt:[0,1.50,0] },
+  screen:  { pos:[0,1.68,1.60],  tgt:[0,1.63,-0.08] },
+  jackpots:{ pos:[0,2.40,1.45],  tgt:[0,2.36,-0.10] },
   deck:    { pos:[0,1.80,1.15],  tgt:[0,1.10,0.18] },
 };
 let camTween=null;
@@ -639,7 +793,18 @@ function tick(){
     spinBtnMesh.material.emissiveIntensity=1.6+Math.sin(t*3.2)*0.5+(game.spinning?0.9:0);
   }
   /* topper jackpot creep (redraw at 3Hz) */
-  if(t-topperAt>0.33){ topperAt=t; jackpotVal+=1+Math.floor(Math.random()*6); redraw(topperTex); trackerT=t; redraw(trackerTex); }
+  /* the display stack lives: ladder + topper redraw ~4Hz (they're "video" panels),
+     the linked GRAND keeps climbing from the rest of the bank */
+  jpAmbient(dt);
+  if(t-topperAt>0.25){ topperAt=t; redraw(topperTex); redraw(ladderTex); trackerT=t; redraw(trackerTex); }
+  /* takeover lifecycle: count-up on the game display, then payout + release */
+  if(jp.celebrate){
+    const ms=performance.now()-jp.celebrate.t0;
+    const k=Math.min(1,ms/2200);
+    scrEl.querySelector('#tkVal').textContent=fmtMoney(jp.celebrate.value*k);
+    winFlash=Math.max(winFlash,1.2);
+    if(ms>5200)endTakeover();
+  }
   /* TITO ticket slide-out (wall-clock) */
   if(ticketAnim){
     const ms=performance.now()-ticketAnim.t0;
@@ -686,7 +851,10 @@ window.CabinetLab = {
   getTarget:()=>controls.target.toArray(),
   cashOut:()=>{cashOut();return true;},
   ticketVisible:()=>!!(ticketMesh&&ticketMesh.visible),
-  jackpot:()=>jackpotVal,
+  jackpot:()=>jp.grand,
+  getJackpots:()=>({grand:jp.grand,major:jp.major,minor:jp.minor(),mini:jp.mini(),celebrating:jp.celebrate?jp.celebrate.tier:null}),
+  triggerJackpot:t=>{ if(!TIER_STYLE[t]||jp.celebrate)return false; jackpotTakeover(t); return true; },
+  displays:()=>({dom:document.querySelectorAll('.scr3d,.deck3d').length, canvas:[ladderTex,topperTex,bellyTex,trackerTex].filter(Boolean).length}),
   meshCount:()=>{let n=0;cab.traverse(o=>{if(o.isMesh)n++;});return n;},
   cssScreens:()=>document.querySelectorAll('.scr3d,.deck3d').length,
   pressSpinRaycast:(x,y)=>{ // simulate a tap at client coords through the same raycast path
