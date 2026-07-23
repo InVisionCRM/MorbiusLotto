@@ -122,6 +122,7 @@ function rng(seed: number) {
 
 const key = (c: number, r: number) => `${c},${r}`;
 const easeOutBack = (t: number) => 1 + 2.70158 * Math.pow(t - 1, 3) + 1.70158 * Math.pow(t - 1, 2);
+const LOCK_COLOR = '#f5b23c';   // amber, matches the slots-lab SHIELD LOCK frame
 
 /* ═══════════════ the engine ═══════════════ */
 
@@ -152,11 +153,10 @@ export class SlotEngine {
   private ctx: CanvasRenderingContext2D | null = null;
   private raf = 0;
   private lastT = 0;
-  private colScroll: number[] = [];
-  private colSpeed: number[] = [];
-  private colStop: number[] = [];     // wall-clock ms when each col stops
-  private colSettle: number[] = [];   // 0..1 bounce-in progress
-  private strip: string[][] = [];     // virtual scroll strips per col
+  private spinStart: number[] = [];   // wall-clock ms each reel began its ride
+  private spinDur: number[] = [];     // ms until this reel decelerates to rest
+  private colSettle: number[] = [];   // 0..1 landing-bounce progress after the ride
+  private strip: string[][] = [];     // scroll strips per col: [result rows…, cruise fillers…]
   private particles: Particle[] = [];
   private shake = 0;
   private floatTexts: { x: number; y: number; text: string; t: number; color: string }[] = [];
@@ -189,9 +189,8 @@ export class SlotEngine {
     this.meta = this.initMeta();
     this.log = [`loaded ${this.mechanicId}`];
     this.applyFeature('init');
-    this.colScroll = this.grid.map(() => 0);
-    this.colSpeed = this.grid.map(() => 0);
-    this.colStop = this.grid.map(() => 0);
+    this.spinStart = this.grid.map(() => 0);
+    this.spinDur = this.grid.map(() => 0);
     this.colSettle = this.grid.map(() => 1);
     this.strip = this.grid.map(() => []);
     this.bump();
@@ -259,7 +258,15 @@ export class SlotEngine {
     const next: Cell[][] = this.rowsPerCol.map((rows, ci) =>
       Array.from({ length: rows }, (_, ri) => {
         const old = this.grid[ci]?.[ri];
-        if (old && old.sticky > 0) { old.sticky--; if (old.sticky === 0) old.badge = ''; return old; }
+        if (old && old.sticky > 0) {
+          if (old.sticky < 900) {                                  // 900+ = permanent hold (hold & win)
+            old.sticky--;
+            if (old.sticky === 0) old.badge = '';
+            else if (old.badge.startsWith('STICKY')) old.badge = `STICKY ${old.sticky}`;  // live countdown
+          }
+          old.win = false; old.offY = 0; old.velY = 0; old.popT = 0;
+          return old;
+        }
         return this.freshCell(this.randomSymbol(), ci, ri);
       }));
     this.grid = next;
@@ -267,15 +274,16 @@ export class SlotEngine {
     if (this.cfg.hitBoost && this.rand() < this.cfg.hitBoost) this.forceWin();
     if (this.cfg.splitReels) this.applySplits();
 
-    /* spin animation state */
-    this.strip = this.grid.map((col, ci) => {
-      const extra = Array.from({ length: 12 + ci * 2 }, () => this.randomSymbol());
-      return [...col.map(c => c.sym), ...extra];
-    });
-    this.colScroll = this.grid.map(() => 0);
-    this.colSpeed = this.grid.map(() => 26 + this.rand() * 6);
+    /* spin animation state — each reel is a strip that scrolls down and
+       decelerates onto its result. Strip = [result rows…, cruise fillers…];
+       the ride lands with the result rows exactly in the window (no snap). */
     const now = performance.now();
-    this.colStop = this.grid.map((_, ci) => now + 700 + ci * 260);
+    this.strip = this.grid.map((col, ci) => {
+      const cruise = Array.from({ length: 16 + ci * 3 }, () => this.randomSymbol());
+      return [...col.map(c => c.sym), ...cruise];
+    });
+    this.spinStart = this.grid.map(() => now);
+    this.spinDur = this.grid.map((_, ci) => 620 + ci * 190);   // staggered stops, snappy for the lab
     this.colSettle = this.grid.map(() => 0);
     this.phase = 'spinning';
     this.pushLog(`spin #${this.spins}`);
@@ -552,7 +560,7 @@ export class SlotEngine {
           const cell = this.freshCell(this.randomSymbol(), this.cols - 1, 0);
           cell.offY = -160; return cell;
         }));
-        this.colScroll.push(0); this.colSpeed.push(0); this.colStop.push(0); this.colSettle.push(1); this.strip.push([]);
+        this.spinStart.push(0); this.spinDur.push(0); this.colSettle.push(1); this.strip.push([]);
         this.pushLog(`+1 reel — now ${this.cols} (infinity)`);
       } else if (!won && this.cols > this.cfg.cols) {
         this.cols = this.cfg.cols;
@@ -712,9 +720,8 @@ export class SlotEngine {
           this.pushLog('near miss — reel 3 respins');
           setTimeout(() => {
             for (let r = 0; r < this.rowsPerCol[2]; r++) this.grid[2][r] = this.freshCell(this.randomSymbol(), 2, r);
-            this.strip[2] = [...this.grid[2].map(cell => cell.sym), ...Array.from({ length: 10 }, () => this.randomSymbol())];
-            this.colStop[2] = performance.now() + 900;
-            this.colSpeed[2] = 28; this.colSettle[2] = 0; this.colScroll[2] = 0;
+            this.strip[2] = [...this.grid[2].map(cell => cell.sym), ...Array.from({ length: 14 }, () => this.randomSymbol())];
+            this.spinStart[2] = performance.now(); this.spinDur[2] = 780; this.colSettle[2] = 0;
             this.phase = 'spinning';
             this.bump();
           }, 700);
@@ -1065,19 +1072,20 @@ export class SlotEngine {
   }
 
   private update(t: number, dt: number) {
-    /* reel spinning / stopping */
+    /* reel spinning / stopping — each reel rides for spinDur ms (staggered),
+       then plays a short landing bounce (colSettle 0→1). */
     if (this.phase === 'spinning') {
       let allDone = true;
       for (let c = 0; c < this.cols; c++) {
         if (this.colSettle[c] >= 1) continue;
-        if (t < this.colStop[c]) {
-          this.colScroll[c] += this.colSpeed[c] * dt * 10;
-          allDone = false;
+        const p = this.spinDur[c] > 0 ? (t - this.spinStart[c]) / this.spinDur[c] : 1;
+        if (p < 1) {
+          allDone = false;               // still riding
         } else if (this.colSettle[c] === 0) {
-          this.colSettle[c] = 0.0001; // start bounce-in
+          this.colSettle[c] = 0.0001;     // ride done — start the bounce
           allDone = false;
         } else {
-          this.colSettle[c] = Math.min(1, this.colSettle[c] + dt * 3.2);
+          this.colSettle[c] = Math.min(1, this.colSettle[c] + dt * 4.5);
           if (this.colSettle[c] < 1) allDone = false;
         }
       }
@@ -1155,40 +1163,59 @@ export class SlotEngine {
     for (let c = 0; c < this.cols; c++) {
       const rows = this.rowsPerCol[c];
       const colTop = g.gy + (g.maxRows - rows) * g.cell / 2; // center shorter megaways reels
+      const cx = g.gx + c * g.cell + g.cell / 2;
       /* frame per reel */
       ctx.strokeStyle = 'rgba(34,211,238,.14)';
       ctx.lineWidth = 1;
       ctx.strokeRect(g.gx + c * g.cell + 2, colTop - 2, g.cell - 4, rows * g.cell + 4);
 
-      const spinning = this.phase === 'spinning' && this.colSettle[c] < 1;
-      if (spinning && this.colSettle[c] === 0) {
-        /* scrolling blur strip */
+      const riding = this.phase === 'spinning' && this.colSettle[c] === 0;
+      if (riding) {
+        /* clean vertical reel scroll: strip decelerates onto the result, with
+           a light motion blur that fades to crisp as it lands. Locked symbols
+           are held stationary on top (drawn after). */
         const strip = this.strip[c];
-        const off = this.colScroll[c] % (strip.length * g.cell);
+        const p = this.spinDur[c] > 0 ? Math.min(1, (t - this.spinStart[c]) / this.spinDur[c]) : 1;
+        const maxScroll = (strip.length - rows) * g.cell;
+        /* constant-speed cruise for the first 60% of the ride, then a smooth
+           brake to a crisp stop — velocity is continuous across the seam. */
+        const A = 0.6, V0 = 2 / (1 + A);
+        let travelled: number, velFrac: number;
+        if (p < A) { travelled = V0 * p; velFrac = 1; }
+        else { const x = (p - A) / (1 - A); travelled = V0 * A + (1 - V0 * A) * (1 - (1 - x) * (1 - x)); velFrac = 1 - x; }
+        const s = maxScroll * (1 - travelled);
+        const blur = 2.3 * velFrac;
         ctx.save();
         ctx.beginPath(); ctx.rect(g.gx + c * g.cell, colTop, g.cell, rows * g.cell); ctx.clip();
-        for (let i = -1; i < rows + 2; i++) {
-          const idx = (Math.floor(off / g.cell) + i + strip.length * 4) % strip.length;
-          const y = colTop + i * g.cell - (off % g.cell);
-          for (let b = 0; b < 3; b++) {
-            ctx.globalAlpha = b === 0 ? 0.9 : 0.25 - b * 0.07;
-            drawSymbol(ctx, strip[idx], g.gx + c * g.cell + g.cell / 2, y + g.cell / 2 - b * 14, g.cell * 0.62, SYM[strip[idx]]?.color ?? '#fff');
-          }
+        if (blur > 0.05) ctx.filter = `blur(${blur.toFixed(2)}px)`;
+        const iStart = Math.max(0, Math.floor(s / g.cell) - 1);
+        const iEnd = Math.min(strip.length - 1, iStart + rows + 2);
+        for (let i = iStart; i <= iEnd; i++) {
+          const y = colTop + i * g.cell - s + g.cell / 2;
+          drawSymbol(ctx, strip[i], cx, y, g.cell * 0.62, SYM[strip[i]]?.color ?? '#fff');
+        }
+        ctx.filter = 'none';
+        /* held (locked) symbols stay put while the reel spins behind them */
+        for (let r = 0; r < rows; r++) {
+          const cell = this.grid[c][r];
+          if (cell.sticky <= 0) continue;
+          const y = colTop + r * g.cell + g.cell / 2;
+          this.drawHeldCell(ctx, cell, cx, y, g.cell, t);
         }
         ctx.restore();
-        ctx.globalAlpha = 1;
         continue;
       }
 
+      const settle = this.colSettle[c] < 1 ? easeOutBack(this.colSettle[c]) : 1;
+      const settleOff = this.colSettle[c] < 1 ? (1 - settle) * -16 : 0;   // subtle landing bounce
       for (let r = 0; r < rows; r++) {
         const cell = this.grid[c][r];
-        const settle = this.colSettle[c] < 1 ? easeOutBack(this.colSettle[c]) : 1;
-        const settleOff = this.colSettle[c] < 1 ? (1 - settle) * -30 : 0;
-        const x = g.gx + c * g.cell + g.cell / 2;
+        const x = cx;
         const y = colTop + r * g.cell + g.cell / 2 + cell.offY + settleOff;
         const size = g.cell * 0.62 * cell.scale * (cell.popT > 0 ? 1 + cell.popT * 0.6 : 1);
         ctx.save();
         ctx.globalAlpha = cell.popT > 0 ? 1 - cell.popT : cell.alpha;
+        if (cell.sticky > 0 && cell.popT <= 0) this.drawLockFrame(ctx, x, y, g.cell, t);
         if (cell.win) {
           const pulse = 0.6 + Math.sin(t / 120) * 0.4;
           ctx.shadowColor = SYM[cell.sym]?.color ?? '#fff';
@@ -1206,9 +1233,8 @@ export class SlotEngine {
           ctx.shadowBlur = 0;
           ctx.font = '700 10px "Chakra Petch", sans-serif';
           ctx.textAlign = 'center';
-          ctx.fillStyle = '#0a0f16';
           const w = ctx.measureText(cell.badge).width + 10;
-          ctx.fillStyle = SYM[cell.sym]?.color ?? '#ffd76a';
+          ctx.fillStyle = cell.sticky > 0 ? LOCK_COLOR : (SYM[cell.sym]?.color ?? '#ffd76a');
           ctx.beginPath(); (ctx as any).roundRect(x - w / 2, y + g.cell * 0.24, w, 14, 4); ctx.fill();
           ctx.fillStyle = '#04080d';
           ctx.fillText(cell.badge, x, y + g.cell * 0.24 + 10.5);
@@ -1260,6 +1286,40 @@ export class SlotEngine {
     /* overlay scenes */
     if (this.overlay) this.drawOverlay(ctx, g, t);
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+
+  /** pulsing amber frame marking a locked/held cell (matches the slots SHIELD LOCK look) */
+  private drawLockFrame(ctx: CanvasRenderingContext2D, cx: number, cy: number, cell: number, t: number) {
+    const pulse = 0.7 + Math.sin(t / 260) * 0.3;
+    ctx.save();
+    ctx.strokeStyle = LOCK_COLOR;
+    ctx.lineWidth = 2.5;
+    ctx.shadowColor = LOCK_COLOR;
+    ctx.shadowBlur = 16 * pulse;
+    ctx.beginPath(); (ctx as any).roundRect(cx - cell / 2 + 4, cy - cell / 2 + 4, cell - 8, cell - 8, 9);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  /** a held symbol drawn stationary and opaque while the reel spins behind it */
+  private drawHeldCell(ctx: CanvasRenderingContext2D, cell: Cell, cx: number, cy: number, size: number, t: number) {
+    ctx.save();
+    /* opaque backing so the spinning strip doesn't bleed through */
+    ctx.fillStyle = 'rgba(8,17,25,0.94)';
+    ctx.beginPath(); (ctx as any).roundRect(cx - size / 2 + 3, cy - size / 2 + 3, size - 6, size - 6, 9); ctx.fill();
+    this.drawLockFrame(ctx, cx, cy, size, t);
+    drawSymbol(ctx, cell.sym, cx, cy, size * 0.62, SYM[cell.sym]?.color ?? '#fff');
+    if (cell.badge) {
+      ctx.shadowBlur = 0;
+      ctx.font = '700 10px "Chakra Petch", sans-serif';
+      ctx.textAlign = 'center';
+      const w = ctx.measureText(cell.badge).width + 10;
+      ctx.fillStyle = LOCK_COLOR;
+      ctx.beginPath(); (ctx as any).roundRect(cx - w / 2, cy + size * 0.24, w, 14, 4); ctx.fill();
+      ctx.fillStyle = '#04080d';
+      ctx.fillText(cell.badge, cx, cy + size * 0.24 + 10.5);
+    }
+    ctx.restore();
   }
 
   private drawOverlay(ctx: CanvasRenderingContext2D, g: { W: number; H: number }, t: number) {
