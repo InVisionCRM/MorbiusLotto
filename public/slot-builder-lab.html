@@ -290,7 +290,16 @@ input[type=range]::-moz-range-thumb{width:16px;height:16px;border:0;border-radiu
 .trim-handle::after{content:"";position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:14px;height:28px;border-radius:7px;background:rgba(34,211,238,.22);border:1px solid var(--cyan)}
 #trimOv .snd-mod-read{margin:4px 0 0;white-space:normal}
 /* ── sound library modal: shipped clips, self-describing via waveform + length ── */
-.sndlib-list{margin-top:12px;display:flex;flex-direction:column;gap:8px;max-height:62vh;overflow-y:auto;padding-right:2px}
+.sndlib-bar{display:flex;gap:7px;margin-top:12px;flex-wrap:wrap;align-items:center}
+#sndLibSearch{flex:1;min-width:130px;background:rgba(4,10,16,.8);border:1px solid var(--cyan-soft);border-radius:9px;color:#eaf6fb;font-family:var(--font-mono);font-size:11px;padding:8px 10px;outline:none}
+#sndLibSearch::placeholder{color:var(--slate-500)}
+#sndLibSearch:focus{border-color:var(--cyan-edge)}
+.sndlib-chip{font-family:var(--font-disp);font-weight:600;font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--slate-400);background:rgba(148,163,184,.07);border:1px solid var(--cyan-soft);border-radius:999px;padding:6px 10px;cursor:pointer;transition:.15s;white-space:nowrap}
+.sndlib-chip:hover{color:var(--cyan);border-color:var(--cyan-edge)}
+.sndlib-chip.on{color:var(--cyan);border-color:var(--cyan-edge);background:rgba(34,211,238,.12)}
+.sndlib-chip .cnt{opacity:.7;font-family:var(--font-mono);font-size:9px}
+.sndlib-empty{font-family:var(--font-mono);font-size:11px;color:var(--slate-500);text-align:center;padding:18px 0}
+.sndlib-list{margin-top:10px;display:flex;flex-direction:column;gap:8px;max-height:56vh;overflow-y:auto;padding-right:2px}
 .sndlib-row{display:flex;align-items:center;gap:10px;border:1px solid var(--cyan-soft);border-radius:12px;padding:8px 10px;background:rgba(6,16,25,.55);transition:.15s}
 .sndlib-row:hover{border-color:var(--cyan-edge)}
 .sndlib-meta{width:118px;flex:none;min-width:0}
@@ -888,7 +897,13 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
 <div class="bso" id="sndLibOv">
   <div class="trim-card" role="dialog" aria-modal="true" aria-label="Sound library">
     <div class="trim-head"><div class="bso-lbl">Sound library</div><button class="popmenu-x" id="sndLibX" aria-label="Close">&#10005;</button></div>
-    <p class="hint" style="margin:7px 0 0">Every clip shows its waveform and length &mdash; hit &#9654; to hear it. &ldquo;Use&rdquo; opens it in the trimmer so you can cut it before it&rsquo;s assigned.</p>
+    <div class="sndlib-bar">
+      <input id="sndLibSearch" type="search" placeholder="Search clips&hellip;" aria-label="Search clips" />
+      <button class="sndlib-chip on" data-lib-filter="all">All <span class="cnt"></span></button>
+      <button class="sndlib-chip" data-lib-filter="short" title="under 1.5s">Short <span class="cnt"></span></button>
+      <button class="sndlib-chip" data-lib-filter="medium" title="1.5s &ndash; 4s">Medium <span class="cnt"></span></button>
+      <button class="sndlib-chip" data-lib-filter="long" title="over 4s">Long <span class="cnt"></span></button>
+    </div>
     <div class="sndlib-list" id="sndLibList"></div>
   </div>
 </div>
@@ -2462,10 +2477,46 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
     _sndLibCache[i]=p;
     p.then(function(b){ cb(b); });
   }
+  /* ── self-organizing view: rows sort shortest-first and filter by search text
+        + auto length buckets (Short <1.5s · Medium 1.5–4s · Long >4s), all
+        derived from the decoded audio — nothing is categorized by hand. ── */
+  var sndLibFilter='all', sndLibQuery='';
+  function libDur(i){ var h=_sndLibCache[i]; return (h&&h.buf)?h.buf.duration:null; }
+  function libBucket(d){ return d==null?null:(d<1.5?'short':(d<=4?'medium':'long')); }
+  function libRefilter(){
+    var list=$('sndLibList'); if(!list)return;
+    var rows=[].slice.call(list.querySelectorAll('.sndlib-row'));
+    if(!rows.length)return;
+    rows.sort(function(a,b){
+      var da=libDur(+a.getAttribute('data-lib-row')), db=libDur(+b.getAttribute('data-lib-row'));
+      if(da==null&&db==null)return 0; if(da==null)return 1; if(db==null)return -1;
+      return da-db;
+    });
+    var q=sndLibQuery.toLowerCase(), counts={all:0,short:0,medium:0,long:0}, visible=0;
+    for(var i=0;i<rows.length;i++){
+      list.appendChild(rows[i]); // re-append in sorted order
+      var idx=+rows[i].getAttribute('data-lib-row');
+      var b=libBucket(libDur(idx));
+      counts.all++; if(b)counts[b]++;
+      var show=(!q||SND_LIBRARY[idx].name.toLowerCase().indexOf(q)>=0)&&(sndLibFilter==='all'||b===sndLibFilter);
+      rows[i].style.display=show?'':'none';
+      if(show)visible++;
+    }
+    var empty=list.querySelector('.sndlib-empty');
+    if(!visible&&!empty){ empty=document.createElement('div'); empty.className='sndlib-empty'; empty.textContent='No clips match'; list.appendChild(empty); }
+    else if(visible&&empty){ empty.parentNode.removeChild(empty); }
+    var chips=document.querySelectorAll('[data-lib-filter]');
+    for(var c=0;c<chips.length;c++){
+      var k=chips[c].getAttribute('data-lib-filter');
+      chips[c].classList.toggle('on',k===sndLibFilter);
+      var cnt=chips[c].querySelector('.cnt'); if(cnt)cnt.textContent=counts[k];
+    }
+  }
   function drawLibRow(i,buf){
     var dur=$('sndlibdur-'+i);
     if(!buf){ if(dur)dur.textContent='could not decode'; return; }
     if(dur)dur.textContent=buf.duration.toFixed(1)+'s';
+    libRefilter(); // this row's duration just arrived — re-sort/re-count
     var cv=$('sndlibcv-'+i); if(!cv)return;
     var cw=cv.clientWidth; if(cw&&Math.abs(cv.width-cw)>2)cv.width=cw;
     var ctx=cv.getContext&&cv.getContext('2d'); if(!ctx)return;
@@ -2481,9 +2532,11 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
   }
   function openSndLibrary(id){
     sndLibTarget=id;
+    sndLibFilter='all'; sndLibQuery='';
+    var q=$('sndLibSearch'); if(q)q.value='';
     var host=$('sndLibList');
     host.innerHTML=SND_LIBRARY.map(function(clip,i){
-      return '<div class="sndlib-row">'+
+      return '<div class="sndlib-row" data-lib-row="'+i+'">'+
         '<div class="sndlib-meta"><div class="sndlib-name">'+esc(clip.name)+'</div><div class="sndlib-dur" id="sndlibdur-'+i+'">decoding&hellip;</div></div>'+
         '<canvas class="sndlib-cv" id="sndlibcv-'+i+'" width="300" height="44"></canvas>'+
         '<div class="sndlib-btns">'+
@@ -2493,6 +2546,7 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
       '</div>';
     }).join('');
     $('sndLibOv').classList.add('open');
+    libRefilter(); // durations may already be cached from a prior open — sort/count now
     SND_LIBRARY.forEach(function(_,i){ decodeLibClip(i,function(buf){ drawLibRow(i,buf); }); });
   }
   function closeSndLibrary(){
@@ -2908,6 +2962,11 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
     if(use){ useLibClip(+use.getAttribute('data-lib-use')); return; }
   });
   on('sndLibX','click',closeSndLibrary);
+  $('sndLibOv').addEventListener('click',function(e){
+    var chip=e.target.closest('[data-lib-filter]');
+    if(chip){ sndLibFilter=chip.getAttribute('data-lib-filter'); libRefilter(); }
+  });
+  on('sndLibSearch','input',function(e){ sndLibQuery=e.target.value||''; libRefilter(); });
   $('sndLibOv').addEventListener('pointerdown',function(e){ if(e.target===e.currentTarget)closeSndLibrary(); });
   document.addEventListener('keydown',function(e){ if(e.key==='Escape'&&$('sndLibOv').classList.contains('open'))closeSndLibrary(); });
   $('soundEvents').addEventListener('change',function(e){
