@@ -1,0 +1,869 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+<title>Cabinet Forge — 3D Slot Machine Lab</title>
+<style>
+:root{
+  --cyan:#22d3ee; --cyan-soft:rgba(34,211,238,.22); --cyan-edge:rgba(34,211,238,.55);
+  --slate-300:#cbd5e1; --slate-400:#94a3b8; --slate-500:#64748b;
+  --font-disp:'Chakra Petch','Segoe UI',sans-serif; --font-mono:'Space Mono',ui-monospace,monospace;
+  --glow:#22d3ee;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100%;overflow:hidden;background:#04080d;font-family:var(--font-disp);
+  -webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent}
+/* WebGL below, CSS3D above (canvas is pointer-events:none; the CSS3D layer is the
+   orbit surface and screens stop propagation) */
+#gl{position:fixed;inset:0;z-index:1;pointer-events:none}
+#gl canvas{display:block}
+#css3d{position:fixed;inset:0;z-index:2}
+/* ── HUD ── */
+.hud{position:fixed;z-index:10;pointer-events:none}
+.hud *{pointer-events:auto}
+#hudTop{top:12px;left:14px;right:14px;display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap}
+.hud-title{font-weight:700;font-size:15px;letter-spacing:.14em;text-transform:uppercase;color:#eaf6fb;text-shadow:0 0 18px rgba(34,211,238,.5)}
+.hud-title span{color:var(--cyan)}
+.hud-sub{font-family:var(--font-mono);font-size:9.5px;color:var(--slate-500);letter-spacing:.08em;margin-top:3px}
+.chip-row{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.chip-group{display:flex;gap:5px;background:rgba(6,16,25,.72);border:1px solid var(--cyan-soft);border-radius:11px;padding:5px;-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
+.chip{font-family:var(--font-disp);font-weight:600;font-size:10px;letter-spacing:.07em;text-transform:uppercase;color:var(--slate-400);background:transparent;border:1px solid transparent;border-radius:8px;padding:6px 10px;cursor:pointer;transition:.15s;white-space:nowrap}
+.chip:hover{color:var(--cyan)}
+.chip.on{color:var(--cyan);border-color:var(--cyan-edge);background:rgba(34,211,238,.12)}
+#hudBottom{bottom:12px;left:0;right:0;display:flex;justify-content:center}
+.hint{font-family:var(--font-mono);font-size:9.5px;letter-spacing:.08em;color:var(--slate-500);background:rgba(6,16,25,.72);border:1px solid var(--cyan-soft);border-radius:9px;padding:6px 12px}
+@media(max-width:640px){.hud-sub{display:none}.hint{font-size:8.5px}}
+/* ── in-world screens (CSS3D DOM) ── */
+.scr3d{width:480px;height:516px;background:#050d14;border-radius:8px;overflow:hidden;display:flex;flex-direction:column;font-family:var(--font-disp);position:relative}
+.scr-brand{flex:none;padding:8px 0 2px;text-align:center;font-weight:700;font-size:17px;letter-spacing:.2em;text-transform:uppercase;color:var(--glow);text-shadow:0 0 14px var(--glow)}
+.scr-board{flex:1;margin:4px 14px;border:1px solid color-mix(in srgb,var(--glow) 35%,transparent);border-radius:12px;background:rgba(2,8,13,.85);overflow:hidden;display:grid;grid-template-columns:repeat(5,1fr);gap:6px;padding:8px;position:relative}
+.reelcol{overflow:hidden;border-radius:9px;background:rgba(10,20,30,.8);position:relative}
+.reelstrip{display:flex;flex-direction:column}
+.reelcell{width:100%;display:flex;align-items:center;justify-content:center;flex:none} /* height set by JS: column/3 */
+.reelcell img{width:72%;height:72%;object-fit:contain;filter:drop-shadow(0 0 6px rgba(0,0,0,.7))}
+.reelcell.hit img{animation:hitPulse .55s ease 2}
+@keyframes hitPulse{50%{transform:scale(1.28);filter:drop-shadow(0 0 14px var(--glow))}}
+.scr-msg{flex:none;text-align:center;font-family:var(--font-mono);font-size:12px;letter-spacing:.12em;color:var(--slate-400);padding:4px 0;min-height:22px}
+.scr-msg.win{color:var(--glow);text-shadow:0 0 14px var(--glow)}
+/* meter strip — the game display's own credit/win/bet bar, like real games */
+.scr-meters{flex:none;display:flex;border-top:1px solid color-mix(in srgb,var(--glow) 30%,transparent);background:rgba(2,7,11,.9)}
+.scr-meter{flex:1;text-align:center;padding:7px 0 9px}
+.scr-meter span{display:block;font-size:9px;font-weight:600;letter-spacing:.18em;color:var(--slate-500)}
+.scr-meter b{font-family:var(--font-mono);font-size:19px;color:var(--glow);text-shadow:0 0 10px var(--glow)}
+/* jackpot takeover overlay — main display's part of the celebration */
+.scr-takeover{position:absolute;inset:0;display:none;flex-direction:column;align-items:center;justify-content:center;background:rgba(2,6,10,.88);z-index:5;text-align:center}
+.scr-takeover.on{display:flex;animation:tkFlash .4s steps(2) infinite}
+@keyframes tkFlash{50%{background:rgba(2,6,10,.72)}}
+.tk-tier{font-weight:700;font-size:34px;letter-spacing:.14em;color:var(--glow);text-shadow:0 0 26px var(--glow)}
+.tk-val{font-family:var(--font-mono);font-size:52px;color:#fff;text-shadow:0 0 22px var(--glow);margin-top:10px}
+/* deck panel */
+.deck3d{width:640px;height:240px;background:linear-gradient(180deg,#08131c,#04090f);border-radius:14px;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:16px 18px;font-family:var(--font-disp)}
+.deck-cell{text-align:center;min-width:0}
+.deck-k{font-size:11px;font-weight:600;letter-spacing:.16em;text-transform:uppercase;color:var(--slate-500)}
+.deck-v{font-family:var(--font-mono);font-size:24px;color:var(--glow);text-shadow:0 0 14px var(--glow);margin-top:4px;white-space:nowrap}
+.deck-btn{font-family:var(--font-disp);font-weight:700;font-size:14px;color:var(--glow);background:rgba(255,255,255,.04);border:1.5px solid color-mix(in srgb,var(--glow) 55%,transparent);border-radius:11px;padding:12px 14px;cursor:pointer;transition:.12s;letter-spacing:.06em}
+.deck-btn:active{transform:scale(.95)}
+.deck-spin{font-size:19px;letter-spacing:.18em;padding:18px 26px;color:#04140f;background:var(--glow);border-color:var(--glow);box-shadow:0 0 26px -4px var(--glow)}
+.deck-spin[disabled]{opacity:.5;cursor:default}
+.deck-bet{display:flex;gap:7px;align-items:center}
+.deck-bet .deck-btn{font-size:18px;padding:8px 13px}
+</style>
+</head>
+<body>
+<div id="gl"></div>
+<div id="css3d"></div>
+
+<div class="hud" id="hudTop">
+  <div>
+    <div class="hud-title">CABINET <span>FORGE</span></div>
+    <div class="hud-sub">3D slot cabinet · drag to orbit · screens are live</div>
+  </div>
+  <div class="chip-row">
+    <div class="chip-group" id="skinChips">
+      <button class="chip on" data-skin="abyss">Abyss</button>
+      <button class="chip" data-skin="vault">Vault</button>
+      <button class="chip" data-skin="neon">Neon</button>
+      <button class="chip" data-skin="emerald">Emerald</button>
+    </div>
+    <div class="chip-group" id="qualityChips">
+      <button class="chip" data-q="low">Low</button>
+      <button class="chip" data-q="medium">Med</button>
+      <button class="chip" data-q="high">High</button>
+    </div>
+    <div class="chip-group">
+      <button class="chip" data-focus="screen">Game</button>
+      <button class="chip" data-focus="jackpots">Jackpots</button>
+      <button class="chip" data-focus="deck">Deck</button>
+      <button class="chip on" data-focus="overview">Overview</button>
+    </div>
+  </div>
+</div>
+<div class="hud" id="hudBottom"><div class="hint">CLICK THE BIG BUTTON (OR THE SCREEN'S) TO SPIN · CASH OUT PRINTS A TICKET · DOUBLE-CLICK RESETS THE VIEW</div></div>
+
+<script type="importmap">
+{"imports":{"three":"./vendor/three/three.module.js","three/addons/":"./vendor/three/addons/"}}
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { CSS3DRenderer, CSS3DObject } from 'three/addons/renderers/CSS3DRenderer.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { Reflector } from 'three/addons/objects/Reflector.js';
+
+/* ═══════════ skins (drive every material, light, LED and screen accent) ═══════════ */
+const SKINS = {
+  abyss:   { body:0x0b1826, rail:0x12293a, dark:0x060d14, glow:0x22d3ee, warm:0x1897b3, css:'#22d3ee', name:'DEEP ABYSS' },
+  vault:   { body:0x201607, rail:0x3a2b10, dark:0x120c04, glow:0xf5c343, warm:0xc98f1e, css:'#f5c343', name:'GOLDEN VAULT' },
+  neon:    { body:0x190b20, rail:0x321440, dark:0x0d0512, glow:0xff3df0, warm:0xb32bb1, css:'#ff3df0', name:'NEON PULSE' },
+  emerald: { body:0x07190f, rail:0x11362a, dark:0x040f09, glow:0x2ee98f, warm:0x1ba368, css:'#2ee98f', name:'EMERALD RUSH' },
+};
+let skinKey = 'abyss';
+const skin = () => SKINS[skinKey];
+
+/* ═══════════ quality tiers ═══════════ */
+const QUALITY = {
+  low:    { px:1,                                bloom:false, floor:'plain' },
+  medium: { px:Math.min(devicePixelRatio,1.5),   bloom:true,  floor:'fake'  },
+  high:   { px:Math.min(devicePixelRatio,2),     bloom:true,  floor:'real'  },
+};
+function autoQuality(){
+  const mobile = /Android|iPhone|iPad|Mobi/i.test(navigator.userAgent);
+  const mem = navigator.deviceMemory || 8;
+  if (!mobile && mem >= 8) return 'high';
+  if (mem >= 4) return 'medium';
+  return 'low';
+}
+let quality = autoQuality();
+
+/* ═══════════ renderers / scene / camera ═══════════ */
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x04080d);
+scene.fog = new THREE.FogExp2(0x04080d, 0.075);
+
+const camera = new THREE.PerspectiveCamera(38, innerWidth/innerHeight, 0.1, 60);
+
+const renderer = new THREE.WebGLRenderer({ antialias:true, powerPreference:'high-performance' });
+renderer.setSize(innerWidth, innerHeight);
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.05;
+document.getElementById('gl').appendChild(renderer.domElement);
+
+const cssRenderer = new CSS3DRenderer();
+cssRenderer.setSize(innerWidth, innerHeight);
+document.getElementById('css3d').appendChild(cssRenderer.domElement);
+
+const pmrem = new THREE.PMREMGenerator(renderer);
+scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.05).texture;
+scene.environmentIntensity = 0.55;
+
+const controls = new OrbitControls(camera, document.getElementById('css3d'));
+controls.enableDamping = true; controls.dampingFactor = 0.07;
+controls.minDistance = 1.6; controls.maxDistance = 7.5;
+controls.minPolarAngle = Math.PI*0.22; controls.maxPolarAngle = Math.PI*0.54;
+controls.minAzimuthAngle = -Math.PI*0.42; controls.maxAzimuthAngle = Math.PI*0.42; // stay in the front hemisphere: DOM screens can never be "behind" geometry
+controls.target.set(0, 1.45, 0);
+
+/* lights — the machine is the light source; these are its spill */
+scene.add(new THREE.HemisphereLight(0x2a3f52, 0x05080c, 0.5));
+const spillA = new THREE.PointLight(skin().glow, 9, 7, 1.8); spillA.position.set(0, 2.4, 1.2); scene.add(spillA);
+const spillB = new THREE.PointLight(skin().warm, 5, 5, 1.8); spillB.position.set(0, 1.0, 1.0); scene.add(spillB);
+
+/* ═══════════ tiny synth (spin/land/win blips) + analyser for the speakers ═══════════ */
+let AC=null, analyser=null, master=null;
+function audio(){ if(AC)return AC; try{
+  AC=new (window.AudioContext||window.webkitAudioContext)();
+  master=AC.createGain(); master.gain.value=0.5;
+  analyser=AC.createAnalyser(); analyser.fftSize=64;
+  master.connect(analyser); analyser.connect(AC.destination);
+}catch(e){} return AC; }
+function blip(f,dur=0.09,type='sine',vol=0.5,when=0){
+  const c=audio(); if(!c)return;
+  try{
+    const o=c.createOscillator(), g=c.createGain(), t=c.currentTime+when;
+    o.type=type; o.frequency.value=f;
+    g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(vol,t+0.008); g.gain.exponentialRampToValueAtTime(0.001,t+dur);
+    o.connect(g); g.connect(master); o.start(t); o.stop(t+dur+0.02);
+  }catch(e){}
+}
+const audioLevel = { mid:0, bass:0 };
+const freqBins = new Uint8Array(32);
+function sampleAudio(){
+  if(!analyser)return;
+  analyser.getByteFrequencyData(freqBins);
+  let bass=0, mid=0;
+  for(let i=0;i<4;i++)bass+=freqBins[i];
+  for(let i=4;i<20;i++)mid+=freqBins[i];
+  audioLevel.bass = Math.max(audioLevel.bass*0.85, bass/(4*255));
+  audioLevel.mid  = Math.max(audioLevel.mid*0.85,  mid/(16*255));
+}
+
+/* ═══════════ canvas-texture helpers (marquee / belly / topper / tracker) ═══════════ */
+function canvasTex(w,h,draw){
+  const cv=document.createElement('canvas'); cv.width=w; cv.height=h;
+  draw(cv.getContext('2d'),w,h);
+  const t=new THREE.CanvasTexture(cv); t.colorSpace=THREE.SRGBColorSpace;
+  t.userData={cv,draw};
+  return t;
+}
+function redraw(t){ t.userData.draw(t.userData.cv.getContext('2d'), t.userData.cv.width, t.userData.cv.height); t.needsUpdate=true; }
+const cssHex = v => '#'+v.toString(16).padStart(6,'0');
+
+/* one game state, rendered by several displays (deck + game-screen meters) */
+const game = { balance:2500, bet:25, spinning:false, lastWin:0, grid:[] };
+
+/* ═══════════ progressive jackpot system (Dragon/Lightning-Link model) ═══════════
+   GRAND: linked bank progressive — always climbing (other machines feed it too).
+   MAJOR: this machine's own progressive — grows from local bets, capped, reseeds.
+   MINOR/MINI: fixed multiples of the CURRENT bet — they change when bet changes. */
+const jp = {
+  grand: 12480 + Math.floor(Math.random()*4000),
+  major: 620 + Math.floor(Math.random()*220),
+  GRAND_SEED: 10000, MAJOR_SEED: 500, MAJOR_CAP: 1000,
+  minor(){ return game.bet*50; },
+  mini(){ return game.bet*10; },
+  celebrate: null, // {tier, value, t0} while a takeover is running
+};
+function jpContribute(bet){
+  jp.grand += bet*0.02;
+  jp.major = Math.min(jp.MAJOR_CAP, jp.major + bet*0.015);
+}
+function jpAmbient(dt){ jp.grand += dt * (2 + Math.random()*6); } // rest of the linked bank playing
+function jpMaybeHit(){
+  const r=Math.random();
+  if(r<0.004) return 'major';
+  if(r<0.030) return 'mini';
+  return null;
+}
+const TIER_STYLE = {
+  grand:{ label:'GRAND', col:'#ffd76a' },
+  major:{ label:'MAJOR', col:'#ff9d4d' },
+  minor:{ label:'MINOR', col:'#7fd8ff' },
+  mini: { label:'MINI',  col:'#8cf2a8' },
+};
+function fmtMoney(v){ return Math.floor(v).toLocaleString('en-US'); }
+/* upper display: the four-tier ladder over brand art — its own physical monitor */
+function drawLadder(ctx,w,h){
+  const s=skin(), t=performance.now()/1000;
+  const bg=ctx.createLinearGradient(0,0,0,h);
+  bg.addColorStop(0,'#0b0f1c'); bg.addColorStop(0.6,'#070a12'); bg.addColorStop(1,'#04060c');
+  ctx.fillStyle=bg; ctx.fillRect(0,0,w,h);
+  /* brand art wash behind the ladder */
+  const wash=ctx.createRadialGradient(w/2,h*1.15,60, w/2,h*1.15,w*0.8);
+  wash.addColorStop(0,cssHex(s.glow)+'40'); wash.addColorStop(1,'transparent');
+  ctx.fillStyle=wash; ctx.fillRect(0,0,w,h);
+  ctx.font='700 40px "Chakra Petch", sans-serif'; ctx.textAlign='center';
+  ctx.fillStyle=cssHex(s.glow); ctx.globalAlpha=0.85; ctx.fillText(s.name, w/2, h-18); ctx.globalAlpha=1;
+  const rows=[
+    ['grand', jp.grand,      118, 64],
+    ['major', jp.major,       92, 52],
+    ['minor', jp.minor(),     92, 52],
+    ['mini',  jp.mini(),      92, 52],
+  ];
+  let y=26;
+  for(const [tier,val,rh,fs] of rows){
+    const st=TIER_STYLE[tier];
+    const hit = jp.celebrate && jp.celebrate.tier===tier && Math.floor(t*6)%2===0; // flash during takeover
+    /* tier plate */
+    ctx.fillStyle=hit?st.col:'rgba(255,255,255,.045)';
+    ctx.strokeStyle=st.col; ctx.lineWidth=3;
+    roundRect(ctx, 26, y, w-52, rh-10, 14); ctx.fill(); ctx.stroke();
+    /* medallions */
+    for(const mx of [64, w-64]){
+      ctx.beginPath(); ctx.fillStyle=st.col; ctx.arc(mx, y+(rh-10)/2, rh*0.26, 0, Math.PI*2); ctx.fill();
+      ctx.fillStyle='#0a0d14'; ctx.font='700 '+Math.round(rh*0.2)+'px "Chakra Petch", sans-serif';
+      ctx.fillText(st.label[0], mx, y+(rh-10)/2+rh*0.075);
+    }
+    ctx.font='700 '+Math.round(fs*0.52)+'px "Chakra Petch", sans-serif';
+    ctx.fillStyle=hit?'#0a0d14':st.col;
+    ctx.fillText(st.label, w/2, y+fs*0.62);
+    ctx.font='700 '+fs+'px "Space Mono", monospace';
+    ctx.fillStyle=hit?'#0a0d14':'#f4f8fb';
+    ctx.shadowColor=st.col; ctx.shadowBlur=hit?0:16;
+    ctx.fillText(fmtMoney(val), w/2, y+rh-22);
+    ctx.shadowBlur=0;
+    y+=rh;
+  }
+}
+function roundRect(ctx,x,y,w,h,r){
+  ctx.beginPath();
+  ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r);
+  ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath();
+}
+function drawBelly(ctx,w,h){
+  const g=ctx.createRadialGradient(w/2,h*0.9,40, w/2,h*0.9,w*0.75);
+  g.addColorStop(0, cssHex(skin().glow)+'55'); g.addColorStop(1,'#04090e');
+  ctx.fillStyle='#04090e'; ctx.fillRect(0,0,w,h);
+  ctx.fillStyle=g; ctx.fillRect(0,0,w,h);
+  ctx.strokeStyle=cssHex(skin().glow); ctx.lineWidth=5; ctx.globalAlpha=0.8;
+  for(let i=0;i<3;i++){ ctx.beginPath(); ctx.arc(w/2, h*0.15, 60+i*46, 0, Math.PI*2); ctx.stroke(); ctx.globalAlpha*=0.5; }
+  ctx.globalAlpha=1;
+  ctx.font='700 54px "Chakra Petch", sans-serif'; ctx.textAlign='center';
+  ctx.fillStyle='#eaf6fb'; ctx.fillText('MORBIUS', w/2, h*0.62);
+  ctx.font='500 30px "Space Mono", monospace'; ctx.fillStyle=cssHex(skin().glow);
+  ctx.fillText('· 96.2% RTP ·', w/2, h*0.78);
+}
+/* topper: pure branding attract loop (its own little monitor); flips to a tier
+   celebration during a jackpot takeover — exactly how the real stacks behave */
+function drawTopper(ctx,w,h){
+  const s=skin(), t=performance.now()/1000;
+  ctx.fillStyle='#03060b'; ctx.fillRect(0,0,w,h);
+  if(jp.celebrate){
+    const st=TIER_STYLE[jp.celebrate.tier], on=Math.floor(t*6)%2===0;
+    ctx.fillStyle=on?st.col:'#03060b'; ctx.fillRect(0,0,w,h);
+    ctx.font='700 84px "Chakra Petch", sans-serif'; ctx.textAlign='center';
+    ctx.fillStyle=on?'#0a0d14':st.col;
+    ctx.fillText(st.label+' JACKPOT', w/2, h/2+28);
+    return;
+  }
+  /* animated light rays sweeping behind the logo */
+  ctx.save(); ctx.translate(w/2,h*0.9);
+  for(let i=0;i<9;i++){
+    const a=(i/9)*Math.PI - Math.PI + Math.sin(t*0.6)*0.15;
+    const g=ctx.createLinearGradient(0,0,Math.cos(a)*w,Math.sin(a)*w);
+    g.addColorStop(0,cssHex(s.glow)+'33'); g.addColorStop(1,'transparent');
+    ctx.fillStyle=g;
+    ctx.beginPath(); ctx.moveTo(0,0);
+    ctx.arc(0,0,w, a-0.05, a+0.05); ctx.closePath(); ctx.fill();
+  }
+  ctx.restore();
+  ctx.font='700 92px "Chakra Petch", sans-serif'; ctx.textAlign='center';
+  const pulse=0.75+Math.sin(t*2.2)*0.25;
+  ctx.fillStyle=cssHex(s.glow); ctx.shadowColor=cssHex(s.glow); ctx.shadowBlur=30*pulse;
+  ctx.fillText(s.name, w/2, h/2+10);
+  ctx.font='600 34px "Space Mono", monospace'; ctx.shadowBlur=0; ctx.fillStyle='#8aa3b8';
+  ctx.fillText('GRAND '+fmtMoney(jp.grand), w/2, h-34);
+}
+let trackerT = 0;
+function drawTracker(ctx,w,h){
+  ctx.fillStyle='#020608'; ctx.fillRect(0,0,w,h);
+  ctx.font='700 44px "Space Mono", monospace'; ctx.textBaseline='middle';
+  ctx.fillStyle=cssHex(skin().glow);
+  const msg='  INSERT PLAYER CARD ··· VIP REWARDS ···', off=(trackerT*60)%(msg.length*27);
+  ctx.fillText(msg+msg, w-off- msg.length*27*2 + w, h/2);
+}
+
+/* ═══════════ materials (rebuilt per skin) ═══════════ */
+const M = {};
+function buildMaterials(){
+  const s=skin();
+  M.body   = new THREE.MeshStandardMaterial({ color:s.body, roughness:0.42, metalness:0.55 });
+  M.rail   = new THREE.MeshStandardMaterial({ color:s.rail, roughness:0.3,  metalness:0.75 });
+  M.dark   = new THREE.MeshStandardMaterial({ color:s.dark, roughness:0.6,  metalness:0.3  });
+  M.black  = new THREE.MeshStandardMaterial({ color:0x02070b, roughness:0.15, metalness:0.4 });
+  M.leather= new THREE.MeshStandardMaterial({ color:0x101820, roughness:0.95, metalness:0.05 });
+  M.led    = new THREE.MeshStandardMaterial({ color:0x000000, emissive:s.glow, emissiveIntensity:2.2, roughness:0.4 });
+  M.ledDim = new THREE.MeshStandardMaterial({ color:0x000000, emissive:s.warm, emissiveIntensity:1.1, roughness:0.4 });
+  M.btnGlow= new THREE.MeshStandardMaterial({ color:0x061014, emissive:s.glow, emissiveIntensity:1.6, roughness:0.25 });
+  M.green  = new THREE.MeshStandardMaterial({ color:0x000000, emissive:0x2ee98f, emissiveIntensity:2.4 });
+  M.white  = new THREE.MeshStandardMaterial({ color:0xf2f6f8, roughness:0.8 });
+}
+buildMaterials();
+
+/* ═══════════ the cabinet factory ═══════════
+   Everything hangs off one group so the future showroom can call this N times. */
+const DECK_TILT = -0.21, HOUSING_TILT = -0.065;
+const pulseMeshes = [];   // {mesh, base, amp, rate, phase} — LED attract loop
+const speakerRings = [];  // pulse with audioLevel.mid
+let subRing=null, spinBtnMesh=null, ticketMesh=null, ticketAnim=null;
+let ladderTex, bellyTex, topperTex, trackerTex;
+
+function box(w,h,d,mat,x,y,z,parent){ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat); m.position.set(x,y,z); (parent||cab).add(m); return m; }
+
+const cab = new THREE.Group();
+function buildCabinet(){
+  /* lower body */
+  box(1.04,1.10,0.60, M.body, 0,0.57,0);
+  box(1.10,0.10,0.66, M.dark, 0,0.05,0.01);                       // kick plate
+  box(0.07,2.72,0.56, M.rail, -0.555,1.38,-0.01);                 // side rails (full display stack)
+  box(0.07,2.72,0.56, M.rail,  0.555,1.38,-0.01);
+  /* belly glass */
+  bellyTex = canvasTex(768,448,drawBelly);
+  const belly = new THREE.Mesh(new THREE.PlaneGeometry(0.84,0.46),
+    new THREE.MeshBasicMaterial({ map:bellyTex, toneMapped:false }));
+  belly.position.set(0,0.665,0.302); cab.add(belly);
+  /* subwoofer */
+  const sub = new THREE.Mesh(new THREE.CircleGeometry(0.145,40), M.black); sub.position.set(0,0.27,0.302); cab.add(sub);
+  subRing = new THREE.Mesh(new THREE.RingGeometry(0.085,0.11,40), M.ledDim); subRing.position.set(0,0.27,0.306); cab.add(subRing);
+
+  /* ── button deck (tilted group) ── */
+  const deck = new THREE.Group(); deck.position.set(0,1.13,0.18); deck.rotation.x=DECK_TILT; cab.add(deck);
+  box(1.00,0.07,0.46, M.rail, 0,0,0, deck);
+  const arm = new THREE.Mesh(new THREE.CapsuleGeometry(0.048,0.94,6,14), M.leather);
+  arm.rotation.z=Math.PI/2; arm.position.set(0,0.015,0.255); deck.add(arm);
+  /* spin button — the raycast target */
+  const btnBase = new THREE.Mesh(new THREE.CylinderGeometry(0.078,0.084,0.028,36), M.dark);
+  btnBase.position.set(0.335,0.048,0.09); deck.add(btnBase);
+  spinBtnMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.062,0.062,0.034,36), M.btnGlow);
+  spinBtnMesh.position.set(0.335,0.070,0.09); deck.add(spinBtnMesh);
+  /* USB / phone shelf on the left */
+  box(0.20,0.02,0.13, M.dark, -0.40,0.045,0.14, deck);
+  const phone = box(0.075,0.006,0.145, M.black, -0.40,0.06,0.135, deck);
+  const phoneScr = new THREE.Mesh(new THREE.PlaneGeometry(0.062,0.125),
+    new THREE.MeshStandardMaterial({ color:0x000000, emissive:0x9adfff, emissiveIntensity:0.85 }));
+  phoneScr.rotation.x=-Math.PI/2; phoneScr.position.set(-0.40,0.0645,0.135); deck.add(phoneScr);
+  const usb = box(0.028,0.008,0.012, M.led, -0.29,0.038,0.20, deck); // glowing USB port
+  pulseMeshes.push({mesh:usb, base:1.6, amp:0.7, rate:2.1, phase:0});
+
+  /* ── bill validator + ticket printer + tracker (right/left pods) ── */
+  const pod = new THREE.Group(); pod.position.set(0.36,1.02,0.28); pod.rotation.x=DECK_TILT*0.6; cab.add(pod);
+  box(0.20,0.24,0.10, M.dark, 0,0,0, pod);
+  const billSlot = box(0.13,0.012,0.02, M.green, 0,0.065,0.052, pod);   // green glowing bill slot
+  pulseMeshes.push({mesh:billSlot, base:2.4, amp:0.8, rate:1.4, phase:1.2});
+  box(0.15,0.010,0.02, M.led, 0,-0.045,0.052, pod);                     // ticket printer slit
+  /* TITO ticket (hidden until cash-out) */
+  ticketMesh = new THREE.Mesh(new THREE.PlaneGeometry(0.11,0.058),
+    new THREE.MeshBasicMaterial({ color:0xf2f6f8, side:THREE.DoubleSide }));
+  ticketMesh.position.set(0,-0.045,0.055); ticketMesh.rotation.x=-0.35; ticketMesh.visible=false; pod.add(ticketMesh);
+  /* player tracking console, left */
+  const trk = new THREE.Group(); trk.position.set(-0.36,1.02,0.28); trk.rotation.x=DECK_TILT*0.6; cab.add(trk);
+  box(0.20,0.24,0.10, M.dark, 0,0,0, trk);
+  trackerTex = canvasTex(512,96,drawTracker);
+  const trkScr = new THREE.Mesh(new THREE.PlaneGeometry(0.16,0.05),
+    new THREE.MeshBasicMaterial({ map:trackerTex, toneMapped:false }));
+  trkScr.position.set(0,0.045,0.052); trk.add(trkScr);
+  box(0.10,0.014,0.02, M.ledDim, 0,-0.05,0.052, trk); // card slot
+
+  /* ══ THE DISPLAY STACK — three SEPARATE monitors, each with its own bezel,
+        glass and job (game / jackpot ladder / branding), like real cabinets ══ */
+
+  /* ── display 1: MAIN GAME monitor (reels + meter strip live DOM) ── */
+  const hous = new THREE.Group(); hous.position.set(0,1.63,-0.08); hous.rotation.x=HOUSING_TILT; cab.add(hous);
+  box(1.02,0.98,0.24, M.body, 0,0,0, hous);
+  box(0.86,0.92,0.02, M.black, 0,0,0.125, hous); // glass recess behind the DOM screen
+  /* speakers flank the game monitor */
+  for(const sx of [-0.465,0.465]){
+    box(0.07,0.92,0.05, M.dark, sx,0,0.125, hous);
+    for(let i=0;i<3;i++){
+      const ring=new THREE.Mesh(new THREE.RingGeometry(0.016,0.024,24), M.led);
+      ring.position.set(sx, -0.32+i*0.32, 0.152); hous.add(ring);
+      speakerRings.push(ring);
+    }
+  }
+
+  /* ── display 2: JACKPOT LADDER monitor (canvas "video" panel) ── */
+  const jhous = new THREE.Group(); jhous.position.set(0,2.36,-0.10); jhous.rotation.x=HOUSING_TILT*0.7; cab.add(jhous);
+  box(1.00,0.62,0.22, M.body, 0,0,0, jhous);
+  box(0.86,0.56,0.015, M.black, 0,0,0.112, jhous);
+  ladderTex = canvasTex(768,560,drawLadder);
+  const ladderScr = new THREE.Mesh(new THREE.PlaneGeometry(0.80,0.54),
+    new THREE.MeshBasicMaterial({ map:ladderTex, toneMapped:false }));
+  ladderScr.position.set(0,0,0.122); jhous.add(ladderScr);
+  /* visible gap trim between the two monitors — reads as separate hardware */
+  box(0.98,0.03,0.26, M.rail, 0,2.135,-0.085);
+
+  /* ── display 3: TOPPER monitor on its own stub mount ── */
+  box(0.10,0.14,0.10, M.dark, 0,2.72,-0.14);                     // mount stub
+  const top = new THREE.Group(); top.position.set(0,2.92,-0.12); cab.add(top);
+  box(0.70,0.40,0.10, M.dark, 0,0,0, top);
+  topperTex = canvasTex(640,320,drawTopper);
+  const topScr = new THREE.Mesh(new THREE.PlaneGeometry(0.62,0.32),
+    new THREE.MeshBasicMaterial({ map:topperTex, toneMapped:false }));
+  topScr.position.set(0,0,0.055); top.add(topScr);
+  const rim = [ [0,0.215,0.0, 0.70,0.02,0.02], [0,-0.215,0.0, 0.70,0.02,0.02], [-0.36,0,0.0, 0.02,0.45,0.02], [0.36,0,0.0, 0.02,0.45,0.02] ];
+  rim.forEach(([x,y,z,w,h,d],i)=>{ const m=box(w,h,d,M.led,x,y,z,top); pulseMeshes.push({mesh:m, base:2.0, amp:1.1, rate:2.6, phase:i*0.7}); });
+
+  /* cabinet edge LED strips + deck underglow */
+  for(const sx of [-0.585,0.585]){
+    const strip=box(0.018,2.70,0.018, M.led, sx,1.38,0.27);
+    pulseMeshes.push({mesh:strip, base:1.8, amp:1.0, rate:1.9, phase:sx>0?0:Math.PI});
+  }
+  const under=box(0.96,0.016,0.016, M.led, 0,0.985,0.40); // deck underglow
+  pulseMeshes.push({mesh:under, base:1.9, amp:0.9, rate:2.2, phase:2});
+}
+buildCabinet();
+scene.add(cab);
+
+/* ═══════════ live DOM screens (CSS3D) ═══════════ */
+const SYMBOLS = [
+  'morbius/MorbiusChip.png','crash/rocket.webp','crash/jupiter.webp',
+  'crash/planet.webp','crash/red-planet.webp','vip-badges/diamond.png','vip-badges/gold.png',
+];
+/* the GAME display carries only the game: slim brand strip, reels, message,
+   and the credit/win/bet meter strip — jackpots live on their OWN display above */
+const scrEl = document.createElement('div');
+scrEl.className='scr3d';
+scrEl.innerHTML =
+  '<div class="scr-brand" id="scrLogo">DEEP ABYSS</div>'+
+  '<div class="scr-board" id="scrBoard"></div>'+
+  '<div class="scr-msg" id="scrMsg">PLACE YOUR BET</div>'+
+  '<div class="scr-meters">'+
+    '<div class="scr-meter"><span>CREDIT</span><b id="mCredit">2,500</b></div>'+
+    '<div class="scr-meter"><span>WIN</span><b id="mWin">—</b></div>'+
+    '<div class="scr-meter"><span>BET</span><b id="mBet">25</b></div>'+
+  '</div>'+
+  '<div class="scr-takeover" id="scrTakeover"><div class="tk-tier" id="tkTier">MINI JACKPOT</div><div class="tk-val" id="tkVal">0</div></div>';
+const deckEl = document.createElement('div');
+deckEl.className='deck3d';
+deckEl.innerHTML =
+  '<div class="deck-cell"><div class="deck-k">Credit</div><div class="deck-v" id="deckBal">2,500</div></div>'+
+  '<div class="deck-cell"><div class="deck-k">Bet</div><div class="deck-bet"><button class="deck-btn" id="betDn">−</button><div class="deck-v" id="deckBet">25</div><button class="deck-btn" id="betUp">+</button></div></div>'+
+  '<div class="deck-cell"><button class="deck-btn deck-spin" id="deckSpin">SPIN</button></div>'+
+  '<div class="deck-cell"><div class="deck-k">Win</div><div class="deck-v" id="deckWin">—</div></div>'+
+  '<div class="deck-cell"><button class="deck-btn" id="deckCash">CASH OUT</button></div>';
+/* screens swallow pointer events so orbiting never fights the UI */
+for(const el of [scrEl,deckEl]) for(const ev of ['pointerdown','pointermove','wheel','dblclick'])
+  el.addEventListener(ev, e=>e.stopPropagation());
+
+const scrObj = new CSS3DObject(scrEl);
+scrObj.scale.setScalar(0.80/480);                 // 480px → 0.80m wide game monitor
+scrObj.position.set(0,1.63 + 0.005, -0.08 + 0.138); // just proud of display 1's glass
+scrObj.rotation.x = HOUSING_TILT;
+scene.add(scrObj);
+const deckObj = new CSS3DObject(deckEl);
+deckObj.scale.setScalar(0.62/640);
+deckObj.position.set(-0.06, 1.172, 0.205);
+// face-up (−π/2), then tipped toward the player by the deck's own tilt
+deckObj.rotation.x = -Math.PI/2 - DECK_TILT;
+scene.add(deckObj);
+
+/* ── mini game ── */
+const COLS=5, ROWS=3;
+const boardEl = scrEl.querySelector('#scrBoard');
+function buildBoard(){
+  boardEl.innerHTML='';
+  game.grid=[];
+  for(let c=0;c<COLS;c++){
+    const col=document.createElement('div'); col.className='reelcol';
+    const strip=document.createElement('div'); strip.className='reelstrip';
+    col.appendChild(strip); boardEl.appendChild(col);
+    const syms=[];
+    for(let r=0;r<ROWS;r++){ syms.push(Math.floor(Math.random()*SYMBOLS.length)); }
+    game.grid.push(syms);
+    renderStrip(strip,syms);
+  }
+}
+function cellHTML(s){ return '<div class="reelcell"><img src="'+SYMBOLS[s]+'" alt=""/></div>'; }
+/* exactly ROWS cells fill the column window, whatever the CSS3D layout resolved to */
+function cellH(strip){ return (strip.parentElement.clientHeight||264)/ROWS; }
+function sizeCells(strip){ const h=cellH(strip); strip.querySelectorAll('.reelcell').forEach(c=>c.style.height=h+'px'); return h; }
+function renderStrip(strip,syms){ strip.style.transition='none'; strip.style.transform='translateY(0)'; strip.innerHTML=syms.map(cellHTML).join(''); sizeCells(strip); }
+function gameSpin(){
+  if(game.spinning || jp.celebrate || game.balance<game.bet) return false;
+  audio(); blip(340,0.06,'square',0.35);
+  game.spinning=true; game.balance-=game.bet; game.lastWin=0;
+  jpContribute(game.bet); // every bet feeds GRAND (bank) and MAJOR (this machine)
+  syncDeck(); msg('GOOD LUCK','');
+  deckEl.querySelector('#deckSpin').disabled=true;
+  const strips=boardEl.querySelectorAll('.reelstrip');
+  const EXTRA=14;
+  strips.forEach((strip,c)=>{
+    const finals=[]; for(let r=0;r<ROWS;r++)finals.push(Math.floor(Math.random()*SYMBOLS.length));
+    game.grid[c]=finals;
+    const cells=[];
+    for(let i=0;i<EXTRA;i++)cells.push(Math.floor(Math.random()*SYMBOLS.length));
+    strip.innerHTML=finals.concat(cells).map(cellHTML).join('');
+    const h=sizeCells(strip);
+    strip.style.transition='none';
+    strip.style.transform='translateY(-'+(EXTRA*h)+'px)';
+    strip.getBoundingClientRect(); // reflow
+    const dur=0.9+c*0.28;
+    strip.style.transition='transform '+dur+'s cubic-bezier(.15,.85,.25,1)';
+    strip.style.transform='translateY(0)';
+    setTimeout(()=>{ blip(430+c*70,0.07,'triangle',0.4); machineNudge(); }, dur*1000);
+  });
+  const total=(0.9+(COLS-1)*0.28)*1000+60;
+  setTimeout(settleSpin,total);
+  return true;
+}
+function settleSpin(){
+  game.spinning=false;
+  deckEl.querySelector('#deckSpin').disabled=false;
+  const mid=game.grid.map(col=>col[1]);
+  let run=1; for(let i=1;i<COLS&&mid[i]===mid[0];i++)run++;
+  if(run>=3){
+    const win=game.bet*run*run;
+    game.balance+=win; game.lastWin=win;
+    msg('WIN +'+win.toLocaleString('en-US'),'win');
+    const cols=boardEl.querySelectorAll('.reelcol');
+    for(let i=0;i<run;i++)cols[i].querySelectorAll('.reelcell')[1].classList.add('hit');
+    [660,830,990,1245].forEach((f,i)=>blip(f,0.16,'sine',0.5,i*0.09));
+    winFlash=1;
+  } else msg('SPIN AGAIN','');
+  syncDeck();
+  const tier=jpMaybeHit();
+  if(tier)jackpotTakeover(tier);
+}
+/* ── jackpot takeover: ALL displays celebrate the same event in sync —
+      topper flashes the tier, the ladder display strobes that tier's plate,
+      the game display overlays a count-up, LEDs flare. ── */
+function jackpotTakeover(tier){
+  const value = tier==='grand'?jp.grand : tier==='major'?jp.major : tier==='minor'?jp.minor() : jp.mini();
+  jp.celebrate={ tier, value, t0:performance.now() };
+  if(tier==='grand')jp.grand=jp.GRAND_SEED;   // progressives reseed on hit
+  if(tier==='major')jp.major=jp.MAJOR_SEED;
+  scrEl.querySelector('#tkTier').textContent=TIER_STYLE[tier].label+' JACKPOT';
+  scrEl.querySelector('#scrTakeover').classList.add('on');
+  deckEl.querySelector('#deckSpin').disabled=true;
+  winFlash=2.2;
+  [523,659,784,1046,784,1046,1318].forEach((f,i)=>blip(f,0.22,'sine',0.55,i*0.14));
+}
+function endTakeover(){
+  const c=jp.celebrate; if(!c)return;
+  game.balance+=Math.floor(c.value); game.lastWin=Math.floor(c.value);
+  jp.celebrate=null;
+  scrEl.querySelector('#scrTakeover').classList.remove('on');
+  deckEl.querySelector('#deckSpin').disabled=false;
+  msg(TIER_STYLE[c.tier].label+' JACKPOT PAID','win');
+  syncDeck();
+}
+function msg(t,cls){ const m=scrEl.querySelector('#scrMsg'); m.textContent=t; m.className='scr-msg '+(cls||''); }
+/* ONE state, TWO displays: the deck readouts and the game display's meter
+   strip render the same credit/bet/win — that's the real interaction model */
+function syncDeck(){
+  const bal=game.balance.toLocaleString('en-US');
+  const win=game.lastWin?('+'+game.lastWin.toLocaleString('en-US')):'—';
+  deckEl.querySelector('#deckBal').textContent=bal;
+  deckEl.querySelector('#deckBet').textContent=game.bet;
+  deckEl.querySelector('#deckWin').textContent=win;
+  scrEl.querySelector('#mCredit').textContent=bal;
+  scrEl.querySelector('#mBet').textContent=game.bet;
+  scrEl.querySelector('#mWin').textContent=win;
+}
+deckEl.querySelector('#deckSpin').addEventListener('click',gameSpin);
+/* changing the bet also RESIZES the MINI/MINOR tiers on the ladder display —
+   they're fixed multiples of the current bet, exactly like the real games */
+deckEl.querySelector('#betUp').addEventListener('click',()=>{ game.bet=Math.min(500,game.bet+25); blip(520,0.05,'square',0.3); syncDeck(); });
+deckEl.querySelector('#betDn').addEventListener('click',()=>{ game.bet=Math.max(25,game.bet-25); blip(380,0.05,'square',0.3); syncDeck(); });
+deckEl.querySelector('#deckCash').addEventListener('click',cashOut);
+function cashOut(){
+  if(ticketAnim)return;
+  [220,220,220,220].forEach((f,i)=>blip(f,0.05,'square',0.35,i*0.07)); // printer buzz
+  ticketMesh.visible=true; ticketAnim={t0:performance.now()}; // wall-clock: frame rate must not stretch it
+  msg('TICKET PRINTED — '+game.balance.toLocaleString('en-US')+' MORBIUS','win');
+}
+buildBoard(); syncDeck();
+
+/* ═══════════ stage: floor / contact shadow / wall / reflection tiers ═══════════ */
+const stage = new THREE.Group(); scene.add(stage);
+let floorMesh=null, reflectorMesh=null, fakeReflection=null;
+function shadowTex(){
+  return canvasTex(256,256,(ctx,w,h)=>{
+    const g=ctx.createRadialGradient(w/2,h/2,10,w/2,h/2,w/2);
+    g.addColorStop(0,'rgba(0,0,0,0.85)'); g.addColorStop(0.55,'rgba(0,0,0,0.5)'); g.addColorStop(1,'rgba(0,0,0,0)');
+    ctx.clearRect(0,0,w,h); ctx.fillStyle=g; ctx.fillRect(0,0,w,h);
+  });
+}
+function buildStage(){
+  /* wall + fog give the void a horizon */
+  const wall=new THREE.Mesh(new THREE.PlaneGeometry(30,10), new THREE.MeshStandardMaterial({color:0x060d14, roughness:0.95}));
+  wall.position.set(0,4,-5.5); stage.add(wall);
+  rebuildFloor();
+  const blob=new THREE.Mesh(new THREE.PlaneGeometry(2.1,1.5), new THREE.MeshBasicMaterial({map:shadowTex(), transparent:true, depthWrite:false}));
+  blob.rotation.x=-Math.PI/2; blob.position.y=0.004; stage.add(blob);
+}
+function rebuildFloor(){
+  if(floorMesh){ stage.remove(floorMesh); floorMesh.geometry.dispose(); }
+  if(reflectorMesh){ stage.remove(reflectorMesh); reflectorMesh.dispose?.(); reflectorMesh=null; }
+  if(fakeReflection){ scene.remove(fakeReflection); fakeReflection=null; }
+  const mode=QUALITY[quality].floor;
+  if(mode==='real'){
+    reflectorMesh=new Reflector(new THREE.PlaneGeometry(24,24),{ textureWidth:1024, textureHeight:1024, color:0x889099 });
+    reflectorMesh.rotation.x=-Math.PI/2; reflectorMesh.position.y=-0.001; stage.add(reflectorMesh);
+    floorMesh=new THREE.Mesh(new THREE.PlaneGeometry(24,24),
+      new THREE.MeshStandardMaterial({ color:0x070f16, roughness:0.35, metalness:0.4, transparent:true, opacity:0.82 }));
+  } else {
+    floorMesh=new THREE.Mesh(new THREE.PlaneGeometry(24,24),
+      new THREE.MeshStandardMaterial({ color:0x0a1219, roughness:0.22, metalness:0.6 }));
+    if(mode==='fake'){
+      fakeReflection=cab.clone(true);
+      fakeReflection.traverse(o=>{ if(o.isMesh){ o.material=o.material.clone(); o.material.transparent=true; o.material.opacity=0.22;
+        if(o.material.emissive) o.material.emissiveIntensity=(o.material.emissiveIntensity||1)*0.6; }});
+      fakeReflection.scale.y=-1; fakeReflection.position.y=0;
+      scene.add(fakeReflection);
+    }
+  }
+  floorMesh.rotation.x=-Math.PI/2; floorMesh.position.y=0; stage.add(floorMesh);
+}
+buildStage();
+
+/* ═══════════ post-processing / quality ═══════════ */
+let composer=null, bloomPass=null;
+function applyQuality(q){
+  quality=q;
+  const Q=QUALITY[q];
+  renderer.setPixelRatio(Q.px);
+  renderer.setSize(innerWidth,innerHeight);
+  if(composer){ composer.dispose?.(); composer=null; bloomPass=null; }
+  if(Q.bloom){
+    composer=new EffectComposer(renderer);
+    composer.setPixelRatio(Q.px);
+    composer.addPass(new RenderPass(scene,camera));
+    bloomPass=new UnrealBloomPass(new THREE.Vector2(innerWidth,innerHeight), 0.55, 0.5, 0.62);
+    composer.addPass(bloomPass);
+    composer.addPass(new OutputPass());
+  }
+  rebuildFloor();
+  document.querySelectorAll('#qualityChips .chip').forEach(c=>c.classList.toggle('on',c.dataset.q===q));
+}
+applyQuality(quality);
+
+/* ═══════════ skins ═══════════ */
+function applySkin(k){
+  skinKey=k;
+  buildMaterials();
+  // procedural rebuild (<5ms) beats chasing shared material refs through the tree
+  pulseMeshes.length=0; speakerRings.length=0;
+  scene.remove(cab); cab.clear();
+  buildCabinet(); scene.add(cab);
+  spillA.color.set(skin().glow); spillB.color.set(skin().warm);
+  document.documentElement.style.setProperty('--glow', skin().css);
+  scrEl.querySelector('#scrLogo').textContent=skin().name;
+  redraw(ladderTex); redraw(bellyTex); redraw(topperTex);
+  rebuildFloor(); // fake reflection clones the cabinet
+  document.querySelectorAll('#skinChips .chip').forEach(c=>c.classList.toggle('on',c.dataset.skin===k));
+}
+
+/* ═══════════ camera focus / interaction ═══════════ */
+const FOCI = {
+  overview:{ pos:[2.2,1.9,4.2],  tgt:[0,1.50,0] },
+  screen:  { pos:[0,1.68,1.60],  tgt:[0,1.63,-0.08] },
+  jackpots:{ pos:[0,2.40,1.45],  tgt:[0,2.36,-0.10] },
+  deck:    { pos:[0,1.80,1.15],  tgt:[0,1.10,0.18] },
+};
+let camTween=null;
+function focus(name){
+  const f=FOCI[name]; if(!f)return;
+  camTween={ start:performance.now(), dur:850, // wall-clock ms — immune to low frame rates
+    p0:camera.position.clone(), p1:new THREE.Vector3(...f.pos),
+    t0:controls.target.clone(), t1:new THREE.Vector3(...f.tgt) };
+  document.querySelectorAll('[data-focus]').forEach(c=>c.classList.toggle('on',c.dataset.focus===name));
+}
+camera.position.set(...FOCI.overview.pos);
+
+const ray=new THREE.Raycaster(), ndc=new THREE.Vector2();
+let downXY=null;
+const surface=document.getElementById('css3d');
+surface.addEventListener('pointerdown',e=>{ downXY=[e.clientX,e.clientY]; });
+surface.addEventListener('pointerup',e=>{
+  if(!downXY)return;
+  const moved=Math.hypot(e.clientX-downXY[0], e.clientY-downXY[1]); downXY=null;
+  if(moved>6)return; // it was an orbit drag
+  ndc.set(e.clientX/innerWidth*2-1, -(e.clientY/innerHeight)*2+1);
+  ray.setFromCamera(ndc,camera);
+  const hits=ray.intersectObjects(cab.children,true);
+  if(!hits.length)return;
+  const obj=hits[0].object;
+  if(obj===spinBtnMesh || obj.parent===spinBtnMesh){ pressSpin(); }
+});
+surface.addEventListener('dblclick',()=>focus('overview'));
+function pressSpin(){
+  if(spinBtnMesh){ spinBtnMesh.userData.press=1; }
+  gameSpin();
+}
+
+/* HUD wiring */
+document.getElementById('skinChips').addEventListener('click',e=>{ const c=e.target.closest('[data-skin]'); if(c)applySkin(c.dataset.skin); });
+document.getElementById('qualityChips').addEventListener('click',e=>{ const c=e.target.closest('[data-q]'); if(c)applyQuality(c.dataset.q); });
+document.getElementById('hudTop').addEventListener('click',e=>{ const c=e.target.closest('[data-focus]'); if(c)focus(c.dataset.focus); });
+
+/* machine "thunk" on reel stops — tiny camera nudge sells physicality */
+let nudge=0, winFlash=0;
+function machineNudge(){ nudge=1; }
+
+/* ═══════════ main loop ═══════════ */
+const clock=new THREE.Clock();
+let topperAt=0, boardSized=false;
+function tick(){
+  requestAnimationFrame(tick);
+  const dt=Math.min(clock.getDelta(),0.05), t=clock.elapsedTime;
+  sampleAudio();
+  // the CSS3D renderer attaches screen DOM on its first render — cell heights
+  // measured before that saw clientHeight 0, so size them once layout is real
+  if(!boardSized && boardEl.clientHeight>0){
+    boardEl.querySelectorAll('.reelstrip').forEach(sizeCells);
+    boardSized=true;
+  }
+
+  /* LED attract loop */
+  for(const p of pulseMeshes) p.mesh.material.emissiveIntensity = p.base + Math.sin(t*p.rate+p.phase)*p.amp*0.5 + winFlash*1.6;
+  winFlash=Math.max(0,winFlash-dt*1.4);
+  /* audio-reactive speakers + sub */
+  for(const r of speakerRings) r.scale.setScalar(1+audioLevel.mid*0.5);
+  if(subRing) subRing.scale.setScalar(1+audioLevel.bass*0.35);
+  /* spin button pulse + press dip */
+  if(spinBtnMesh){
+    const pr=spinBtnMesh.userData.press||0;
+    spinBtnMesh.position.y=0.070 - pr*0.012;
+    spinBtnMesh.userData.press=Math.max(0,pr-dt*6);
+    spinBtnMesh.material.emissiveIntensity=1.6+Math.sin(t*3.2)*0.5+(game.spinning?0.9:0);
+  }
+  /* topper jackpot creep (redraw at 3Hz) */
+  /* the display stack lives: ladder + topper redraw ~4Hz (they're "video" panels),
+     the linked GRAND keeps climbing from the rest of the bank */
+  jpAmbient(dt);
+  if(t-topperAt>0.25){ topperAt=t; redraw(topperTex); redraw(ladderTex); trackerT=t; redraw(trackerTex); }
+  /* takeover lifecycle: count-up on the game display, then payout + release */
+  if(jp.celebrate){
+    const ms=performance.now()-jp.celebrate.t0;
+    const k=Math.min(1,ms/2200);
+    scrEl.querySelector('#tkVal').textContent=fmtMoney(jp.celebrate.value*k);
+    winFlash=Math.max(winFlash,1.2);
+    if(ms>5200)endTakeover();
+  }
+  /* TITO ticket slide-out (wall-clock) */
+  if(ticketAnim){
+    const ms=performance.now()-ticketAnim.t0;
+    const k=Math.min(1,ms/800);
+    ticketMesh.position.z=0.055+k*0.05; ticketMesh.position.y=-0.045-k*0.01;
+    if(ms>4000){ ticketMesh.visible=false; ticketAnim=null; }
+  }
+  /* camera tween (wall-clock; controls paused so damping can't fight the tween) */
+  if(camTween){
+    const k=Math.min(1,(performance.now()-camTween.start)/camTween.dur);
+    const e=k<0.5?4*k*k*k:1-Math.pow(-2*k+2,3)/2;
+    camera.position.lerpVectors(camTween.p0,camTween.p1,e);
+    controls.target.lerpVectors(camTween.t0,camTween.t1,e);
+    if(k>=1)camTween=null;
+  }
+  if(nudge>0){ camera.position.y+=Math.sin(nudge*40)*0.0022*nudge; nudge=Math.max(0,nudge-dt*5); }
+
+  if(!camTween)controls.update();
+  if(composer)composer.render(); else renderer.render(scene,camera);
+  cssRenderer.render(scene,camera);
+}
+tick();
+
+addEventListener('resize',()=>{
+  camera.aspect=innerWidth/innerHeight; camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth,innerHeight);
+  cssRenderer.setSize(innerWidth,innerHeight);
+  composer?.setSize(innerWidth,innerHeight);
+});
+
+/* ═══════════ public test API ═══════════ */
+window.CabinetLab = {
+  ready:true,
+  spin:()=>gameSpin(),
+  getGame:()=>({balance:game.balance,bet:game.bet,spinning:game.spinning,lastWin:game.lastWin,grid:game.grid.map(c=>c.slice())}),
+  setQuality:q=>{ if(QUALITY[q]){applyQuality(q);return quality;} return null; },
+  getQuality:()=>quality,
+  hasBloom:()=>!!composer,
+  floorMode:()=>QUALITY[quality].floor,
+  setSkin:k=>{ if(SKINS[k]){applySkin(k);return skinKey;} return null; },
+  getSkin:()=>skinKey,
+  focus:f=>{focus(f);return true;},
+  getCamera:()=>camera.position.toArray(),
+  getTarget:()=>controls.target.toArray(),
+  cashOut:()=>{cashOut();return true;},
+  ticketVisible:()=>!!(ticketMesh&&ticketMesh.visible),
+  jackpot:()=>jp.grand,
+  getJackpots:()=>({grand:jp.grand,major:jp.major,minor:jp.minor(),mini:jp.mini(),celebrating:jp.celebrate?jp.celebrate.tier:null}),
+  triggerJackpot:t=>{ if(!TIER_STYLE[t]||jp.celebrate)return false; jackpotTakeover(t); return true; },
+  displays:()=>({dom:document.querySelectorAll('.scr3d,.deck3d').length, canvas:[ladderTex,topperTex,bellyTex,trackerTex].filter(Boolean).length}),
+  meshCount:()=>{let n=0;cab.traverse(o=>{if(o.isMesh)n++;});return n;},
+  cssScreens:()=>document.querySelectorAll('.scr3d,.deck3d').length,
+  pressSpinRaycast:(x,y)=>{ // simulate a tap at client coords through the same raycast path
+    ndc.set(x/innerWidth*2-1,-(y/innerHeight)*2+1);
+    ray.setFromCamera(ndc,camera);
+    const hits=ray.intersectObjects(cab.children,true);
+    return hits.length?hits[0].object===spinBtnMesh:false;
+  },
+};
+</script>
+</body>
+</html>
