@@ -2026,27 +2026,31 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
       animateDrops(drops, chain, function(){ ensureLinesSvg(); resolve(); });
     }, S.reduced?0:190);
   }); }
-  /* Respin / Locked-Respin / Hold & Win reveal: symbols that are unchanged
-     between the two boards (the locked / held ones) STAY in place; only cells
-     that actually changed swap to their new symbol and drop in with a light
-     landing. No shatter, no heavy board impact — this is a re-spin, not a
-     cascade. */
+  /* Respin / Locked-Respin / Hold & Win reveal. This is a RE-SPIN, not a
+     cascade: symbols that are unchanged between the two boards (the locked /
+     held ones) STAY in place, and each cell that changed does a quick in-place
+     reel-roll (a few random faces, then snaps to its result). No shatter, no
+     gravity tumble, no bounce, no board impact — so it can never read as the
+     cascade effect on a flow where cascades weren't picked. */
   function respinReveal(prevGrid, nextGrid){ return new Promise(function(resolve){
-    if(S.reduced){ renderBoard(nextGrid); resolve(); return; }
-    var byId=MC.indexSyms(S.def), cols=S.def.cols, rows=S.def.rows, pitch=rowPitch(), drops=[];
+    var byId=MC.indexSyms(S.def), cols=S.def.cols, rows=S.def.rows, syms=S.def.symbols, changed=[];
     for(var c=0;c<cols;c++){ var reel=reelsEl.children[c]; if(!reel||!reel.querySelector)continue; var strip=reel.querySelector('.strip'); if(!strip)continue;
       var cells=strip.querySelectorAll('.sym');
       for(var r=0;r<rows;r++){
         var newId=nextGrid[c][r], oldId=(prevGrid[c]&&prevGrid[c][r]), cell=cells[r]; if(!cell)continue;
         if(newId===oldId) continue;                       // locked / unchanged — leave untouched
-        var sym=byId[newId]||S.def.symbols[0];
-        cell.classList.remove('hit'); cell.innerHTML=symImg(sym)+frameHTML(sym); cell.setAttribute('data-symid',newId);
-        cell.style.transform='translateY('+(-pitch*0.9).toFixed(1)+'px)'; cell.style.willChange='transform';
-        drops.push({el:cell,off:-pitch*0.9,vy:0,done:false,bounced:0});
+        changed.push({el:cell, finalId:newId});
       }
     }
-    if(!drops.length){ ensureLinesSvg(); resolve(); return; }
-    animateDrops(drops, 0, function(){ ensureLinesSvg(); resolve(); });
+    var finalize=function(){ changed.forEach(function(o){ var sym=byId[o.finalId]||syms[0]; o.el.classList.remove('hit'); o.el.style.filter=''; o.el.style.transform=''; o.el.style.willChange=''; o.el.innerHTML=symImg(sym)+frameHTML(sym); o.el.setAttribute('data-symid',o.finalId); if(!S.reduced)landSquash(o.el,0); }); ensureLinesSvg(); resolve(); };
+    if(!changed.length){ ensureLinesSvg(); resolve(); return; }
+    if(S.reduced){ finalize(); return; }
+    changed.forEach(function(o){ o.el.style.willChange='filter,transform'; o.el.style.filter='blur(1.3px) brightness(1.05)'; });
+    var frames=6, i=0;
+    var iv=setInterval(function(){ i++;
+      if(i>=frames){ clearInterval(iv); finalize(); return; }
+      changed.forEach(function(o){ var rs=syms[Math.floor(Math.random()*syms.length)]; o.el.innerHTML=symImg(rs); o.el.style.transform='translateY('+((i%2?-1:1)*3)+'px)'; });
+    }, 45);
   }); }
   function floatBoard(text,color){ var d=document.createElement('div'); d.className='board-float'; d.textContent=text; d.style.color=color||'#22d3ee'; boardShell.appendChild(d); setTimeout(function(){ if(d.parentNode)d.parentNode.removeChild(d); }, 1100); }
   function celebrate(mult){
