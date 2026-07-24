@@ -274,10 +274,12 @@ h1.title .glyph{margin-left:.35rem;color:var(--cyan);filter:drop-shadow(0 0 12px
 .meta-chip.hot .mv{animation:metaPulse 1s ease-in-out infinite}
 @keyframes metaPulse{0%,100%{opacity:1}50%{opacity:.55}}
 /* ── cascade / tumble ── */
-.sym.pop-out{animation:symPopOut .22s ease-in both;pointer-events:none}
-@keyframes symPopOut{0%{transform:scale(1);opacity:1}100%{transform:scale(.18) rotate(9deg);opacity:0}}
-.sym.casc{animation:symCasc .4s cubic-bezier(.3,1.2,.5,1) both}
-@keyframes symCasc{0%{transform:translateY(-125%);opacity:0}55%{opacity:1}100%{transform:translateY(0);opacity:1}}
+.sym.shatter{animation:symShatter .2s ease-in forwards;pointer-events:none;z-index:2}
+@keyframes symShatter{0%{transform:scale(1)}35%{transform:scale(1.12)}100%{transform:scale(.14) rotate(16deg);opacity:0}}
+.sym.land-sq{animation:landSq .2s cubic-bezier(.3,1.1,.5,1)}
+@keyframes landSq{0%{transform:scaleY(var(--sq,.86)) scaleX(calc(1.9 - var(--sq,.86)))}55%{transform:scaleY(1.05) scaleX(.97)}100%{transform:none}}
+.reels.cascade-impact{animation:cascImpact .26s ease-out}
+@keyframes cascImpact{0%{transform:translateY(calc(4px * var(--imp,.5)))}45%{transform:translateY(calc(-2px * var(--imp,.5)))}100%{transform:translateY(0)}}
 .board-float{position:absolute;left:50%;top:36%;z-index:9;pointer-events:none;font-family:var(--board-mono);font-weight:800;font-size:clamp(20px,3.2vw,34px);text-shadow:0 0 14px currentColor,0 2px 6px rgba(0,0,0,.6);animation:boardFloat 1.1s cubic-bezier(.2,1,.3,1) both}
 @keyframes boardFloat{0%{opacity:0;transform:translate(-50%,10px) scale(.6)}25%{opacity:1;transform:translate(-50%,-6px) scale(1.1)}100%{opacity:0;transform:translate(-50%,-54px) scale(1)}}
 /* ── mechanic option cards (Grid / Win Flow) with live cyan-block examples ── */
@@ -643,7 +645,7 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
   .sym[class*="land-"]{animation:none!important}
   .board-shell.cele-shake,.felt-flash.go,.cele-ring.go,.lines-svg polyline.march{animation:none!important}
   .bigwin-ov .bw-rays,.bw-word.pop,.board-shell.bw-punch{animation:none!important}
-  .sym.pop-out,.sym.casc,.board-float,.board-shell.layered .felt::before{animation:none!important}
+  .sym.shatter,.sym.land-sq,.reels.cascade-impact,.board-float,.board-shell.layered .felt::before{animation:none!important}
   #ambientCanvas{opacity:.4}
 }
 </style>
@@ -1916,7 +1918,7 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
       } else {
         await wait(S.reduced?30:260);             // respin with no win — brief beat
       }
-      await popAndDrop(wc, steps[i+1].grid);
+      await popAndDrop(wc, steps[i+1].grid, i);
     }
     if(res.slam>1){                                // win-multiplier slam
       floatBoard('×'+res.slam+'!', '#e879f9');
@@ -1957,11 +1959,68 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
   function ensureLinesSvg(){ if($('linesSvg'))return; var svg=document.createElementNS('http://www.w3.org/2000/svg','svg'); svg.setAttribute('class','lines-svg'); svg.setAttribute('id','linesSvg'); reelsEl.appendChild(svg); }
   function clearLinesSvg(){ var s=$('linesSvg'); if(s)s.innerHTML=''; }
   function highlightCells(wc){ for(var r=0;r<S.def.cols;r++){ var reel=reelsEl.children[r]; if(!reel||!reel.querySelectorAll)continue; var cells=reel.querySelectorAll('.sym'); for(var row=0;row<cells.length;row++){ cells[row].classList.toggle('hit', !!wc[r+','+row]); } } }
-  function popAndDrop(wc, nextGrid){ return new Promise(function(resolve){
-    for(var r=0;r<S.def.cols;r++){ var reel=reelsEl.children[r]; if(!reel||!reel.querySelectorAll)continue; var cells=reel.querySelectorAll('.sym'); for(var row=0;row<cells.length;row++){ if(wc[r+','+row]){ cells[row].classList.remove('hit'); cells[row].classList.add('pop-out'); } } }
-    setTimeout(function(){ renderCascadeBoard(nextGrid); setTimeout(resolve, S.reduced?0:520); }, S.reduced?0:230);
+  /* Real tumble: winners SHATTER (pop + particle burst), survivors FALL by
+     exactly the gap they open, fresh symbols DROP from above — each cell driven
+     by gravity + a weighted bounce + landing squash. Gravity, restitution and
+     the board impact all scale up with the cascade chain, so deeper chains feel
+     heavier. Matches the MechanicsLab canvas cascade. */
+  function rowPitch(){ var reel=reelsEl.children[0]; if(!reel)return 80; var cells=reel.querySelectorAll('.sym'); if(cells.length>1){ var p=Math.abs(cells[1].offsetTop-cells[0].offsetTop); if(p>2)return p; } return (cells[0]&&cells[0].offsetHeight)||80; }
+  function shatterParticles(points){
+    var rect=boardShell.getBoundingClientRect(); fxCanvas.width=rect.width; fxCanvas.height=rect.height; var ctx=fxCanvas.getContext('2d');
+    var parts=[], cols=['#22d3ee','#f5c343','#ffffff','#e879f9'];
+    points.forEach(function(p){ for(var i=0;i<11;i++){ var a=Math.random()*6.283, sp=1+Math.random()*5.5; parts.push({x:p.x,y:p.y,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp-2.2,life:1,c:cols[i%cols.length],sz:2+Math.random()*3.2,rot:Math.random()*6.283,vr:(Math.random()-.5)*0.5}); } });
+    var t0=performance.now();
+    (function frame(now){ var dt=Math.min(40,now-t0); t0=now; ctx.clearRect(0,0,rect.width,rect.height); var alive=false;
+      parts.forEach(function(p){ p.vy+=0.38; p.x+=p.vx; p.y+=p.vy; p.rot+=p.vr; p.life-=0.022; if(p.life>0){ alive=true; ctx.save(); ctx.globalAlpha=Math.max(0,p.life); ctx.translate(p.x,p.y); ctx.rotate(p.rot); ctx.fillStyle=p.c; ctx.fillRect(-p.sz/2,-p.sz/2,p.sz,p.sz); ctx.restore(); } });
+      if(alive)requestAnimationFrame(frame); else ctx.clearRect(0,0,rect.width,rect.height);
+    })(t0);
+  }
+  function shatterWinners(wc){
+    var bs=boardShell.getBoundingClientRect(), burst=[];
+    for(var c=0;c<S.def.cols;c++){ var reel=reelsEl.children[c]; if(!reel||!reel.querySelectorAll)continue; var cells=reel.querySelectorAll('.sym');
+      for(var r=0;r<cells.length;r++){ if(wc[c+','+r]){ var el=cells[r]; el.classList.remove('hit'); el.classList.add('shatter');
+        if(!S.reduced){ var cr=el.getBoundingClientRect(); burst.push({x:cr.left+cr.width/2-bs.left, y:cr.top+cr.height/2-bs.top}); } } } }
+    if(burst.length && !S.reduced) shatterParticles(burst);
+  }
+  function landSquash(el, chain){ el.style.setProperty('--sq',(0.86 - Math.min(0.18, chain*0.035)).toFixed(2)); el.classList.remove('land-sq'); void el.offsetWidth; el.classList.add('land-sq'); }
+  function boardImpact(chain){ if(S.reduced)return; reelsEl.style.setProperty('--imp',(Math.min(1,0.32+chain*0.24)).toFixed(2)); reelsEl.classList.remove('cascade-impact'); void reelsEl.offsetWidth; reelsEl.classList.add('cascade-impact'); if(chain>=1)playSound('reel-land-'+Math.min(chain+2,5),0.55); }
+  function animateDrops(drops, chain, done){
+    if(S.reduced || !drops.length){ drops.forEach(function(d){ d.el.style.transform=''; d.el.style.willChange=''; }); done(); return; }
+    var grav=3000*(1+chain*0.42), rest=0.24+Math.min(0.14,chain*0.035), last=performance.now();
+    function frame(now){ var dt=Math.min(0.032,(now-last)/1000); last=now; var moving=false;
+      for(var i=0;i<drops.length;i++){ var d=drops[i]; if(d.done)continue;
+        d.vy+=grav*dt; d.off+=d.vy*dt;
+        if(d.off>=0){
+          if(Math.abs(d.vy)>360 && d.bounced<1){ d.off=0; d.vy=-Math.abs(d.vy)*rest; d.bounced++; }
+          else { d.off=0; d.vy=0; d.done=true; d.el.style.transform=''; d.el.style.willChange=''; landSquash(d.el,chain); }
+        }
+        if(!d.done){ moving=true; d.el.style.transform='translateY('+d.off.toFixed(1)+'px)'; }
+      }
+      if(moving) requestAnimationFrame(frame); else { boardImpact(chain); done(); }
+    }
+    requestAnimationFrame(frame);
+  }
+  function popAndDrop(wc, nextGrid, chain){ return new Promise(function(resolve){
+    chain=chain||0;
+    var cols=S.def.cols, rows=S.def.rows, pitch=rowPitch();
+    shatterWinners(wc);                                   // winners crash out first
+    setTimeout(function(){
+      var byId=MC.indexSyms(S.def), drops=[];
+      for(var c=0;c<cols;c++){ var reel=reelsEl.children[c]; if(!reel||!reel.querySelector)continue; var strip=reel.querySelector('.strip'); if(!strip)continue;
+        var survOld=[]; for(var r=0;r<rows;r++){ if(!wc[c+','+r]) survOld.push(r); }
+        var need=rows-survOld.length;
+        strip.innerHTML='';
+        for(var nr=0;nr<rows;nr++){
+          var id=nextGrid[c][nr], sym=byId[id]||S.def.symbols[0];
+          var cell=document.createElement('div'); cell.className='sym'; cell.setAttribute('data-edit','symbol'); cell.setAttribute('data-symid',id);
+          cell.innerHTML=symImg(sym)+frameHTML(sym); strip.appendChild(cell);
+          var off = nr<need ? -((need-nr)*pitch + pitch*0.7) : -(nr-survOld[nr-need])*pitch;
+          if(off<-0.5){ cell.style.transform='translateY('+off.toFixed(1)+'px)'; cell.style.willChange='transform'; drops.push({el:cell,off:off,vy:0,done:false,bounced:0}); }
+        }
+      }
+      animateDrops(drops, chain, function(){ ensureLinesSvg(); resolve(); });
+    }, S.reduced?0:190);
   }); }
-  function renderCascadeBoard(grid){ renderBoard(grid); if(S.reduced)return; for(var r=0;r<S.def.cols;r++){ var reel=reelsEl.children[r]; if(!reel||!reel.querySelectorAll)continue; var cells=reel.querySelectorAll('.sym'); for(var row=0;row<cells.length;row++){ cells[row].classList.add('casc'); cells[row].style.animationDelay=(row*36+r*24)+'ms'; } } }
   function floatBoard(text,color){ var d=document.createElement('div'); d.className='board-float'; d.textContent=text; d.style.color=color||'#22d3ee'; boardShell.appendChild(d); setTimeout(function(){ if(d.parentNode)d.parentNode.removeChild(d); }, 1100); }
   function celebrate(mult){
     var c=S.def.anim.celebration; if(c==='none'||S.reduced)return;
