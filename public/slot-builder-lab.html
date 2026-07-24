@@ -320,6 +320,13 @@ h1.title .glyph{margin-left:.35rem;color:var(--cyan);filter:drop-shadow(0 0 12px
 .tab-btn{flex:1 1 auto;font-family:var(--font-disp);font-weight:600;font-size:11.5px;text-transform:uppercase;letter-spacing:.1em;color:var(--slate-500);background:none;border:0;border-radius:7px;padding:9px 8px;cursor:pointer;transition:.15s;white-space:nowrap}
 .tab-btn:hover{color:var(--slate-300)}
 .tab-btn.active{background:rgba(34,211,238,.15);color:var(--cyan);box-shadow:inset 0 0 0 1px rgba(34,211,238,.5)}
+/* grouped tab bar — 14 tabs organised into scannable Build / Style / Ship
+   bands instead of one overwhelming flat row. */
+.tabs-list.deck{flex-direction:column;gap:8px;background:none;border:0;padding:0}
+.tab-group{display:flex;align-items:center;gap:10px;background:rgba(8,20,31,.6);border:1px solid rgba(34,211,238,.12);border-radius:11px;padding:8px 10px}
+.tg-label{flex:none;width:46px;font-family:var(--font-disp);font-weight:700;font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--slate-500)}
+.tg-btns{display:flex;flex-wrap:wrap;gap:4px;flex:1 1 auto}
+.el-toolbar-lbl{font-family:var(--font-disp);font-weight:700;font-size:10px;text-transform:uppercase;letter-spacing:.14em;color:var(--slate-500);align-self:center;margin-right:2px}
 .tab-panel{display:none}
 .tab-panel.active{display:block}
 .ctl{margin-bottom:14px}
@@ -599,16 +606,15 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
 .turbo-btn span{font-family:var(--font-disp);font-weight:700;font-size:10px;letter-spacing:.12em}
 .turbo-btn:hover{color:var(--win);border-color:rgba(245,158,11,.45)}
 .turbo-btn.on{color:#180d01;background:linear-gradient(180deg,#ffd370,#F59E0B);border-color:rgba(245,158,11,.8);box-shadow:0 0 18px -4px rgba(245,158,11,.7),inset 0 1px 0 rgba(255,255,255,.45)}
-/* advanced drawer */
-/* lives directly under the element-chip toolbar now — one editor block, so the
-   simple chips and the advanced drawer are reachable from the same spot. */
+/* control deck — the full editor is always visible now. The quick-edit chip
+   toolbar and the complete tabbed editor share one surface; there's no hidden
+   "advanced" drawer to expand anymore. */
 .adv-zone{margin:0 auto 14px}
-.adv-toggle{display:block;width:100%;font-family:var(--font-disp);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.12em;color:var(--slate-400);background:rgba(8,20,31,.7);border:1px solid var(--cyan-soft);border-radius:12px;padding:12px;cursor:pointer;transition:.15s}
-.adv-toggle:hover{color:var(--cyan);border-color:var(--cyan-edge)}
-.adv-toggle::after{content:" \25BE";color:var(--cyan)}
-.adv-toggle[aria-expanded="true"]::after{content:" \25B4"}
-.adv-wrap{display:none;margin-top:14px}
+.adv-wrap{display:none}
 .adv-wrap.open{display:block}
+.deck-head{display:flex;align-items:baseline;gap:10px;margin-bottom:12px;flex-wrap:wrap}
+.deck-title{font-family:var(--font-disp);font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:.16em;color:var(--cyan)}
+.deck-sub{font-size:11px;color:var(--slate-500)}
 /* modal */
 .overlay{position:fixed;inset:0;z-index:50;display:none;align-items:center;justify-content:center;padding:16px;background:rgba(2,6,10,.72);backdrop-filter:blur(3px)}
 .overlay.open{display:flex}
@@ -678,36 +684,52 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
   <div class="studio">
     <div class="stage">
       <div class="el-toolbar" id="elToolbar">
+        <span class="el-toolbar-lbl">Quick edit</span>
         <button class="el-chip" data-chip="symbols"><span class="dot"></span>Symbols</button>
         <button class="el-chip" data-chip="reels"><span class="dot"></span>Reels</button>
         <button class="el-chip" data-chip="frame"><span class="dot"></span>Frame</button>
         <button class="el-chip" data-chip="background"><span class="dot"></span>Background</button>
         <button class="el-chip" data-chip="button"><span class="dot"></span>Spin button</button>
-        <button class="el-chip" data-chip="sound"><span class="dot"></span>Sound</button>
-        <button class="el-chip" data-chip="math"><span class="dot"></span>Math / RTP</button>
-        <button class="el-chip" data-chip="json"><span class="dot"></span>JSON</button>
       </div>
-    <!-- ── ADVANCED DRAWER (fallback / full controls, Math &middot; Sound &middot; JSON) ── -->
+    <!-- ── CONTROL DECK — the full editor, always visible (no hidden drawer) ── -->
     <div class="adv-zone">
-      <button class="adv-toggle" id="advToggle" aria-expanded="false">Advanced editor &mdash; every control, plus Math, Sound &amp; JSON</button>
-      <div class="adv-wrap" id="advWrap">
+      <div class="adv-wrap open" id="advWrap">
     <!-- ── STUDIO PANEL ── -->
     <section class="panel">
-      <div class="tabs-list" id="tabs">
-        <button class="tab-btn active" data-tab="layout">Layout</button>
-        <button class="tab-btn" data-tab="grid">Grid</button>
-        <button class="tab-btn" data-tab="flow">Win Flow</button>
-        <button class="tab-btn" data-tab="wildfx">Symbol FX</button>
-        <button class="tab-btn" data-tab="bonus">Bonus</button>
-        <button class="tab-btn" data-tab="meta">Meta</button>
-        <button class="tab-btn" data-tab="symbols">Symbols</button>
-        <button class="tab-btn" data-tab="theme">Theme</button>
-        <button class="tab-btn" data-tab="fx">FX</button>
-        <button class="tab-btn" data-tab="anim">Animations</button>
-        <button class="tab-btn" data-tab="sound">Sound</button>
-        <button class="tab-btn" data-tab="math">Math</button>
-        <button class="tab-btn" data-tab="machines">Save &amp; Share</button>
-        <button class="tab-btn" data-tab="json">JSON</button>
+      <div class="deck-head">
+        <span class="deck-title">Control deck</span>
+        <span class="deck-sub">every setting &mdash; pick a group, then a tab</span>
+      </div>
+      <div class="tabs-list deck" id="tabs">
+        <div class="tab-group">
+          <span class="tg-label">Build</span>
+          <div class="tg-btns">
+            <button class="tab-btn active" data-tab="layout">Layout</button>
+            <button class="tab-btn" data-tab="grid">Grid</button>
+            <button class="tab-btn" data-tab="flow">Win Flow</button>
+            <button class="tab-btn" data-tab="wildfx">Symbol FX</button>
+            <button class="tab-btn" data-tab="bonus">Bonus</button>
+            <button class="tab-btn" data-tab="meta">Meta</button>
+          </div>
+        </div>
+        <div class="tab-group">
+          <span class="tg-label">Style</span>
+          <div class="tg-btns">
+            <button class="tab-btn" data-tab="symbols">Symbols</button>
+            <button class="tab-btn" data-tab="theme">Theme</button>
+            <button class="tab-btn" data-tab="fx">FX</button>
+            <button class="tab-btn" data-tab="anim">Animations</button>
+            <button class="tab-btn" data-tab="sound">Sound</button>
+          </div>
+        </div>
+        <div class="tab-group">
+          <span class="tg-label">Ship</span>
+          <div class="tg-btns">
+            <button class="tab-btn" data-tab="math">Math</button>
+            <button class="tab-btn" data-tab="machines">Save &amp; Share</button>
+            <button class="tab-btn" data-tab="json">JSON</button>
+          </div>
+        </div>
       </div>
 
       <!-- LAYOUT -->
@@ -4435,17 +4457,14 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
     else if(k==='json') openAdvanced('json');
   });
 
-  /* ── advanced drawer ── */
-  var advWrap=$('advWrap'), advToggle=$('advToggle');
-  advToggle.addEventListener('click',function(){
-    var open=advWrap.classList.toggle('open');
-    advToggle.setAttribute('aria-expanded', open?'true':'false');
-  });
+  /* ── control deck (always open) — no drawer to expand; the quick-edit chips
+     and the full tabbed editor share one surface. openAdvanced just selects the
+     right tab and scrolls it into view. ── */
   function openAdvanced(tab){
     closeMenu();
-    advWrap.classList.add('open'); advToggle.setAttribute('aria-expanded','true');
-    var btn=document.querySelector('#tabs .tab-btn[data-tab="'+tab+'"]'); if(btn)btn.click();
-    advWrap.scrollIntoView({behavior:'smooth', block:'start'});
+    var btn=document.querySelector('#tabs .tab-btn[data-tab="'+tab+'"]'); if(!btn)return;
+    btn.click();
+    btn.scrollIntoView({behavior:'smooth', block:'nearest'});
   }
   window.addEventListener('resize',function(){ if(popMenu.classList.contains('open'))closeMenu(); });
   // A fixed-position menu detaches from its anchor once the page scrolls — close it
