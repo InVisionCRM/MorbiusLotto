@@ -289,6 +289,20 @@ h1.title .glyph{margin-left:.35rem;color:var(--cyan);filter:drop-shadow(0 0 12px
 .mech-ex{width:80px;height:56px;border-radius:8px;background:radial-gradient(ellipse at 50% 28%,rgba(10,26,40,.92),rgba(3,9,14,.96));border:1px solid rgba(34,211,238,.12)}
 .mech-nm{font-family:var(--heading-font);font-weight:700;font-size:13px;letter-spacing:.02em}
 .mech-dsc{font-size:10.5px;color:var(--slate-400);font-family:var(--font-mono);line-height:1.2}
+/* ── save & share (my machines) ── */
+.txt-in{background:var(--field);border:1px solid var(--cyan-soft);border-radius:10px;color:var(--ink);padding:9px 12px;font-family:var(--font-disp);font-size:13px}
+.txt-in:focus{outline:none;border-color:var(--cyan-edge)}
+.mach-list{display:flex;flex-direction:column;gap:7px;margin-top:8px}
+.mach-row{display:flex;align-items:center;gap:8px;background:linear-gradient(180deg,rgba(34,211,238,.05),rgba(8,20,31,.55));border:1px solid var(--cyan-soft);border-radius:11px;padding:8px 10px}
+.mach-row .mn{flex:1;min-width:0}
+.mach-row .mn b{display:block;font-family:var(--heading-font);font-weight:600;font-size:13px;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mach-row .mn span{font-size:10px;color:var(--slate-500);font-family:var(--font-mono)}
+.mach-row .ma{display:flex;gap:5px;flex-shrink:0}
+.mach-btn{border:1px solid var(--cyan-soft);background:rgba(34,211,238,.06);color:var(--slate-300);border-radius:8px;padding:6px 10px;font-size:11px;font-family:var(--font-disp);font-weight:600;cursor:pointer;transition:.14s}
+.mach-btn:hover{border-color:var(--cyan-edge);color:var(--ink)}
+.mach-btn.go{background:var(--cyan);color:#04141b;border-color:var(--cyan)}
+.mach-btn.del:hover{border-color:var(--loss);color:var(--loss)}
+.mach-empty{font-size:12px;color:var(--slate-500);font-family:var(--font-mono);padding:10px 2px}
 /* actions */
 .actions{margin-top:14px}
 .btn{border:0;border-radius:var(--btn-radius);padding:16px 18px;font-family:var(--heading-font);font-weight:700;font-size:16px;letter-spacing:.05em;text-transform:uppercase;cursor:pointer;transition:.15s;color:#04141b;width:100%;background:linear-gradient(180deg,#3ee0f5,#22D3EE 60%,#0fb6d4)}
@@ -690,6 +704,7 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
         <button class="tab-btn" data-tab="anim">Animations</button>
         <button class="tab-btn" data-tab="sound">Sound</button>
         <button class="tab-btn" data-tab="math">Math</button>
+        <button class="tab-btn" data-tab="machines">Save &amp; Share</button>
         <button class="tab-btn" data-tab="json">JSON</button>
       </div>
 
@@ -908,6 +923,29 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
       </div>
 
       <!-- JSON -->
+      <!-- SAVE & SHARE (my machines library + publish link) -->
+      <div class="tab-panel" id="tab-machines">
+        <p class="hint" style="margin-top:0"><b style="color:var(--cyan)">Save your machines</b> and publish them as a share link. Everything (symbols, theme, math, mechanics, bonuses, meta) is captured — saved in this browser, and a link anyone can open to load the exact machine.</p>
+        <div class="ctl">
+          <div class="ctl-lbl"><span>Machine name</span></div>
+          <div class="btn-row" style="gap:8px">
+            <input type="text" id="machName" class="txt-in" placeholder="My Slot" maxlength="48" style="flex:1;min-width:160px" />
+            <button class="sm-btn go" id="machSave">Save machine</button>
+          </div>
+        </div>
+        <div class="btn-row" style="margin:4px 0 10px">
+          <button class="sm-btn" id="machPublish">Publish &mdash; copy share link</button>
+          <button class="sm-btn" id="machDownload">Download .json</button>
+        </div>
+        <div class="json-msg" id="machMsg"></div>
+        <div id="machShareWrap" style="display:none;margin:8px 0">
+          <div class="ctl-lbl"><span>Share link</span></div>
+          <input type="text" id="machShareUrl" class="txt-in" readonly style="width:100%;font-family:var(--font-mono);font-size:11px" />
+        </div>
+        <div class="ctl-lbl" style="margin-top:14px"><span>Saved machines</span><span class="val" id="machCount">0</span></div>
+        <div id="machList" class="mach-list"></div>
+      </div>
+
       <div class="tab-panel" id="tab-json">
         <p class="hint" style="margin-top:0">The complete slot definition. Uploaded symbol art is embedded as a data: URL and round-trips here (in production a moderated CDN pipeline replaces inline data URLs &mdash; see FAQ).</p>
         <textarea class="json-ta" id="jsonTA" spellcheck="false"></textarea>
@@ -3286,18 +3324,61 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
       theme:d.theme,fx:d.fx,anim:d.anim,sound:d.sound};
   }
   function refreshJSON(){ jsonTA.value=JSON.stringify(cleanDef(),null,2); }
-  function importJSON(){
-    try{
-      var raw=JSON.parse(jsonTA.value);
-      if(!raw.symbols||!raw.cols)throw new Error('missing symbols/cols');
-      raw.cols=Math.max(3,Math.min(7,raw.cols|0)); raw.rows=Math.max(3,Math.min(7,raw.rows|0));
-      if(!raw.lines||!raw.lines.length)raw.lines=genLines(raw.cols,raw.rows);
-      raw.theme=baseTheme(raw.theme); raw.fx=baseFx(raw.fx); raw.anim=baseAnim(raw.anim); raw.sound=baseSound(raw.sound); raw.win=baseWin(raw.win); raw.grid=baseGrid(raw.grid); raw.flow=baseFlow(raw.flow); raw.feature=raw.feature||'none'; raw.bonus=baseBonus(raw.bonus); raw.meta=raw.meta||'none';
-      raw.symbols.forEach(function(s){if(!s.frame)s.frame={effect:'none',color:'#22d3ee',speed:1};if(s.role!=='scatter')s.pays=padPays(s.pays,raw.cols);if(s.sizePct==null)s.sizePct=88;if(!s.fit)s.fit='contain';});
-      S.def=raw; renderAll(); jmsg('Imported and applied.','ok');
-    }catch(e){ jmsg('Invalid JSON: '+e.message,'err'); }
+  /* apply a raw slot definition (from JSON import, a saved machine, or a share
+     link), re-basing every sub-object so old / partial defs load cleanly. */
+  function applyDef(raw){
+    if(!raw||!raw.symbols||!raw.cols)throw new Error('missing symbols/cols');
+    raw.cols=Math.max(3,Math.min(7,raw.cols|0)); raw.rows=Math.max(3,Math.min(7,raw.rows|0));
+    if(!raw.lines||!raw.lines.length)raw.lines=genLines(raw.cols,raw.rows);
+    raw.theme=baseTheme(raw.theme); raw.fx=baseFx(raw.fx); raw.anim=baseAnim(raw.anim); raw.sound=baseSound(raw.sound); raw.win=baseWin(raw.win); raw.grid=baseGrid(raw.grid); raw.flow=baseFlow(raw.flow); raw.feature=raw.feature||'none'; raw.bonus=baseBonus(raw.bonus); raw.meta=raw.meta||'none';
+    raw.symbols.forEach(function(s){if(!s.frame)s.frame={effect:'none',color:'#22d3ee',speed:1};if(s.role!=='scatter')s.pays=padPays(s.pays,raw.cols);if(s.sizePct==null)s.sizePct=88;if(!s.fit)s.fit='contain';});
+    S.def=raw; S.lastGrid=null; S.recent=[]; S.featureState={}; initMetaState(); renderAll();
   }
+  function importJSON(){ try{ applyDef(JSON.parse(jsonTA.value)); jmsg('Imported and applied.','ok'); }catch(e){ jmsg('Invalid JSON: '+e.message,'err'); } }
   function jmsg(t,c){jsonMsg.textContent=t;jsonMsg.className='json-msg '+(c||'');}
+
+  /* ═══ SAVE & SHARE — a local "My Machines" library (localStorage) plus a
+     Publish link that URL-encodes the whole slot definition so anyone who
+     opens it lands in Reel Forge with that exact machine. Self-contained. ═══ */
+  var MACH_KEY='reelforge_machines_v1';
+  function machMsg(t,c){ var el=$('machMsg'); if(el){ el.textContent=t; el.className='json-msg '+(c||''); } }
+  function machLoadAll(){ try{ return JSON.parse(localStorage.getItem(MACH_KEY)||'[]'); }catch(e){ return []; } }
+  function machSaveAll(list){ try{ localStorage.setItem(MACH_KEY, JSON.stringify(list)); return true; }catch(e){ machMsg('Could not save — browser storage is full or blocked.','err'); return false; } }
+  function defToCode(def){ return btoa(unescape(encodeURIComponent(JSON.stringify(def)))); }   // unicode-safe base64
+  function codeToDef(code){ return JSON.parse(decodeURIComponent(escape(atob(code)))); }
+  function machRelTime(ts){ var s=Math.max(0,Math.round((Date.now()-ts)/1000)); if(s<60)return 'just now'; var m=Math.round(s/60); if(m<60)return m+'m ago'; var h=Math.round(m/60); if(h<24)return h+'h ago'; return Math.round(h/24)+'d ago'; }
+  function saveMachine(){
+    var name=(($('machName')&&$('machName').value)||'').trim() || (S.def.name||'Machine');
+    var list=machLoadAll();
+    var id='m'+Date.now().toString(36)+Math.floor(Math.random()*46656).toString(36);
+    list.unshift({ id:id, name:name.slice(0,48), def:cleanDef(), savedAt:Date.now() });
+    if(list.length>60) list=list.slice(0,60);
+    if(machSaveAll(list)){ renderMachines(); machMsg('Saved "'+esc(name)+'".','ok'); if($('machName'))$('machName').value=''; }
+  }
+  function deleteMachine(id){ machSaveAll(machLoadAll().filter(function(m){return m.id!==id;})); renderMachines(); machMsg('Deleted.',''); }
+  function renameMachine(id){ var list=machLoadAll(),m=null; list.forEach(function(x){if(x.id===id)m=x;}); if(!m)return; var n=window.prompt('Rename machine',m.name); if(n==null)return; m.name=(n.trim()||m.name).slice(0,48); machSaveAll(list); renderMachines(); }
+  function openMachine(id){ var list=machLoadAll(),m=null; list.forEach(function(x){if(x.id===id)m=x;}); if(!m)return; try{ applyDef(JSON.parse(JSON.stringify(m.def))); status('Loaded "'+esc(m.name)+'"'); machMsg('Loaded "'+esc(m.name)+'" into the builder.','ok'); }catch(e){ machMsg('Could not load this machine: '+e.message,'err'); } }
+  function copyToClip(text){ try{ if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(text); return true; } }catch(e){} try{ var ta=document.createElement('textarea'); ta.value=text; ta.style.position='fixed'; ta.style.opacity='0'; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta); return true; }catch(e){ return false; } }
+  function publishMachine(){
+    var url=location.origin+location.pathname+'#m='+defToCode(cleanDef());
+    if($('machShareUrl')){ $('machShareUrl').value=url; } if($('machShareWrap')){ $('machShareWrap').style.display='block'; }
+    var kb=Math.round(url.length/1024*10)/10;
+    var copied=copyToClip(url);
+    if(url.length>60000) machMsg('Link is '+kb+' KB — very large (uploaded symbol art is embedded). '+(copied?'Copied, but some apps may truncate it; use Download .json for big machines.':'Select the link below to copy.'),'err');
+    else machMsg((copied?'Share link copied to clipboard':'Share link ready below')+' ('+kb+' KB).','ok');
+  }
+  function renderMachines(){
+    var wrap=$('machList'); if(!wrap)return; var list=machLoadAll();
+    if($('machCount'))$('machCount').textContent=list.length;
+    if(!list.length){ wrap.innerHTML='<div class="mach-empty">No saved machines yet — name one above and hit Save.</div>'; return; }
+    wrap.innerHTML=list.map(function(m){
+      var g=(m.def&&m.def.cols)+'×'+(m.def&&m.def.rows), mode=(m.def&&m.def.win&&m.def.win.mode)||'lines';
+      return '<div class="mach-row" data-id="'+m.id+'"><div class="mn"><b>'+esc(m.name)+'</b><span>'+g+' · '+esc(mode)+' · '+machRelTime(m.savedAt)+'</span></div>'+
+        '<div class="ma"><button class="mach-btn go" data-act="open">Load</button><button class="mach-btn" data-act="share">Share</button><button class="mach-btn" data-act="rename">Rename</button><button class="mach-btn del" data-act="del">Delete</button></div></div>';
+    }).join('');
+  }
+  function shareSavedMachine(id){ var list=machLoadAll(),m=null; list.forEach(function(x){if(x.id===id)m=x;}); if(!m)return; var url=location.origin+location.pathname+'#m='+defToCode(m.def); if($('machShareUrl'))$('machShareUrl').value=url; if($('machShareWrap'))$('machShareWrap').style.display='block'; var copied=copyToClip(url); machMsg((copied?'Share link for "'+esc(m.name)+'" copied':'Share link ready below')+' ('+Math.round(url.length/1024*10)/10+' KB).','ok'); }
+  function loadFromShareHash(){ var h=location.hash||''; var mm=/[#&]m=([^&]+)/.exec(h); if(!mm)return false; try{ var def=codeToDef(mm[1]); applyDef(def); status('Loaded shared machine — edit or Save it to your library.'); return true; }catch(e){ return false; } }
 
   /* ═══ SIMULATOR (Web Worker running identical evalSpin) ═══ */
   var simWorker=null;
@@ -3614,6 +3695,14 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
   on('jsonExport','click',function(){refreshJSON();jmsg('Refreshed from current build.','ok');});
   on('jsonCopy','click',function(){ jsonTA.select(); try{document.execCommand('copy');}catch(e){} navigator.clipboard&&navigator.clipboard.writeText(jsonTA.value); jmsg('Copied to clipboard.','ok'); });
   on('jsonDownload','click',function(){ var blob=new Blob([jsonTA.value],{type:'application/json'}); var a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=(S.def.name||'slot').replace(/\s+/g,'-').toLowerCase()+'.json'; a.click(); jmsg('Downloaded.','ok'); });
+  /* save & share wiring */
+  on('machSave','click',saveMachine);
+  on('machPublish','click',publishMachine);
+  on('machName','keydown',function(e){ if(e.key==='Enter')saveMachine(); });
+  on('machDownload','click',function(){ var blob=new Blob([JSON.stringify(cleanDef(),null,2)],{type:'application/json'}); var a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=(S.def.name||'slot').replace(/\s+/g,'-').toLowerCase()+'.json'; a.click(); machMsg('Downloaded .json.','ok'); });
+  on('machShareUrl','click',function(e){ e.target.select(); });
+  on('machList','click',function(e){ var btn=e.target.closest&&e.target.closest('.mach-btn'); if(!btn)return; var row=btn.closest('.mach-row'); if(!row)return; var id=row.getAttribute('data-id'), act=btn.getAttribute('data-act');
+    if(act==='open')openMachine(id); else if(act==='del')deleteMachine(id); else if(act==='rename')renameMachine(id); else if(act==='share')shareSavedMachine(id); });
 
   // ── art picker ──
   function openArtPicker(i){
@@ -4204,6 +4293,13 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
     endBonus:function(){ if(typeof endBonus==='function')endBonus(); S.inFreeSpins=false; return true; },
     bonusClickAt:function(fx,fy){ bonusClick(fx,fy); return bonus?bonus.round:null; },
     setMeta:function(id){setMeta(id);return S.def.meta;},
+    saveMachine:function(name){ if(name!=null&&$('machName'))$('machName').value=name; saveMachine(); return machLoadAll().length; },
+    listMachines:function(){ return machLoadAll().map(function(m){return {id:m.id,name:m.name,cols:m.def&&m.def.cols};}); },
+    openMachine:function(id){ openMachine(id); return S.def.name; },
+    deleteMachine:function(id){ deleteMachine(id); return machLoadAll().length; },
+    shareCode:function(){ return defToCode(cleanDef()); },
+    loadShareCode:function(code){ try{ applyDef(codeToDef(code)); return true; }catch(e){ return false; } },
+    clearMachines:function(){ try{ localStorage.removeItem(MACH_KEY); }catch(e){} renderMachines(); return true; },
     metaTick:function(win){metaTick(win==null?S.bet*2:win);return S.metaState;},
     mc:function(){return MC;},
     frameElFor:function(id){return $('fxpv-'+id);},
@@ -4239,6 +4335,8 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
   S.def=PRESETS['Deep Abyss']();
   initMetaState();
   renderAll();
+  loadFromShareHash();   // if opened via a published #m= link, load that machine
+  renderMachines();
   initMechExamples();
   updateBalance();
   window.addEventListener('resize',function(){ if(S.lastGrid)drawWinLines([]); });
