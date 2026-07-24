@@ -554,6 +554,15 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
 .rmini .rp.up{color:var(--win)}.rmini .rp.no{color:var(--slate-500)}
 /* ── element toolbar (primary editor entry) ── */
 .stage{max-width:720px;margin:0 auto}
+/* side-by-side studio: controls on the left, the live machine pinned on the
+   right so you can watch the board change as you click options. Collapses back
+   to a single stacked column on narrower screens. */
+.stage-split{max-width:720px}
+@media(min-width:1000px){
+  .stage-split{max-width:1200px;display:grid;grid-template-columns:minmax(0,1fr) minmax(360px,440px);gap:22px}
+  .col-preview .preview-sticky{position:sticky;top:12px}
+  .col-preview .reels{--cell:clamp(48px,7vw,88px)}
+}
 .el-toolbar{position:sticky;top:8px;z-index:30;display:flex;flex-wrap:wrap;gap:7px;justify-content:center;background:rgba(6,16,25,.85);-webkit-backdrop-filter:blur(9px);backdrop-filter:blur(9px);border:1px solid var(--cyan-soft);border-radius:14px;padding:8px;margin-bottom:14px;box-shadow:0 14px 34px -22px rgba(0,0,0,.95)}
 .el-chip{display:inline-flex;align-items:center;gap:7px;height:34px;padding:0 12px;border-radius:10px;border:1px solid var(--cyan-soft);background:rgba(8,20,31,.7);color:var(--slate-300);cursor:pointer;transition:.15s;font-family:var(--font-disp);font-weight:600;font-size:11.5px;letter-spacing:.05em;text-transform:uppercase;white-space:nowrap}
 .el-chip:hover{color:var(--cyan);border-color:var(--cyan-edge);background:rgba(34,211,238,.1)}
@@ -682,7 +691,8 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
   </div>
 
   <div class="studio">
-    <div class="stage">
+    <div class="stage stage-split">
+      <div class="col-controls">
       <div class="el-toolbar" id="elToolbar">
         <span class="el-toolbar-lbl">Quick edit</span>
         <button class="el-chip" data-chip="symbols"><span class="dot"></span>Symbols</button>
@@ -984,7 +994,9 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
     </section>
       </div><!-- /.adv-wrap -->
     </div><!-- /.adv-zone -->
-    <!-- ── LIVE BOARD ── -->
+      </div><!-- /.col-controls -->
+    <!-- ── LIVE BOARD (side-by-side, pinned preview) ── -->
+    <div class="col-preview"><div class="preview-sticky">
     <section>
       <div class="board-shell" id="boardShell">
         <div class="hud" data-edit="layout">
@@ -1017,6 +1029,7 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
       </div>
       <p class="edit-hint">Click a <b style="color:var(--cyan)">symbol</b>, the <b style="color:var(--cyan)">reels</b>, the <b style="color:var(--cyan)">frame</b>, the <b style="color:var(--cyan)">HUD</b> or the <b style="color:var(--cyan)">background</b> &mdash; a menu opens right where you click.</p>
     </section>
+    </div></div><!-- /.preview-sticky /.col-preview -->
     </div><!-- /.stage -->
 
 
