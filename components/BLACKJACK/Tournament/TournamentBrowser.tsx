@@ -87,7 +87,7 @@ interface TournamentBrowserProps {
 // Fund Tournament Escrow Modal (anyone can fund)
 // ============================
 const ESCROW_ZERO = '0x0000000000000000000000000000000000000000';
-const PULSECHAIN = { id: 369, name: 'PulseChain', nativeCurrency: { name: 'Pulse', symbol: 'PLS', decimals: 18 }, rpcUrls: { default: { http: ['https://rpc.pulsechain.com'] } } };
+const PULSECHAIN = { id: 369, name: 'PulseChain', nativeCurrency: { name: 'Pulse', symbol: 'PLS', decimals: 18 }, rpcUrls: { default: { http: ['https://rpc-pulsechain.g4mm4.io', 'https://rpc.pulsechainstats.com'] } } };
 
 /** For custom-token tournaments: use escrow total when funded, else prize_pool from DB. */
 function getEffectivePrizeAmount(t: TournamentListItem): string {

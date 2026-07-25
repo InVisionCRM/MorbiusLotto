@@ -11,14 +11,14 @@ export const pulsechain = defineChain({
   rpcUrls: {
     default: {
       http: [
-        'https://rpc.pulsechain.com',
-        'https://rpc-pulsechain.g4mm4.io', // Fallback RPC
+        'https://rpc-pulsechain.g4mm4.io', // g4mm4 ("gamma") — primary
+        'https://rpc.pulsechainstats.com', // backup (rpc.pulsechain.com dropped — unreliable)
       ],
     },
     public: {
       http: [
-        'https://rpc.pulsechain.com',
-        'https://rpc-pulsechain.g4mm4.io', // Fallback RPC
+        'https://rpc-pulsechain.g4mm4.io', // g4mm4 ("gamma") — primary
+        'https://rpc.pulsechainstats.com', // backup (rpc.pulsechain.com dropped — unreliable)
       ],
     },
   },
