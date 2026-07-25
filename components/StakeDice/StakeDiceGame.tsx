@@ -73,7 +73,6 @@ export function StakeDiceGame() {
 
   const [bet, setBet] = useState<number>(10)
   const [targetX100, setTargetX100] = useState<number>(5000)
-  const [clientSeed, setClientSeed] = useState('')
 
   const [lastRoll, setLastRoll] = useState<DicePlayResult | null>(null)
   const [recent, setRecent] = useState<RecentRoll[]>([])
@@ -222,7 +221,6 @@ export function StakeDiceGame() {
       const res = await playDice({
         bet: stake,
         targetX100: target,
-        clientSeed: clientSeed.trim() || undefined,
       })
       if (!mounted.current) return false
       const profit = res.payout - res.bet
@@ -269,7 +267,7 @@ export function StakeDiceGame() {
     } finally {
       inFlight.current -= 1
     }
-  }, [info, bet, targetX100, clientSeed, clampBet, clampTarget, reportWin])
+  }, [info, bet, targetX100, clampBet, clampTarget, reportWin])
 
   // Fixed-cadence auto loop — fire each roll WITHOUT awaiting the round-trip
   // (same scheduler as plinko2). Errors stop the run.
@@ -735,8 +733,6 @@ export function StakeDiceGame() {
           setFairnessOpen(false)
           setVerifyTarget(null)
         }}
-        clientSeed={clientSeed}
-        onClientSeedChange={setClientSeed}
         requestVerifyId={verifyTarget}
       />
 

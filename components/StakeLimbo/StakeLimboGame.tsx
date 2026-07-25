@@ -71,7 +71,6 @@ export function StakeLimboGame() {
 
   const [bet, setBet] = useState<number>(10)
   const [targetX100, setTargetX100] = useState<number>(200)
-  const [clientSeed, setClientSeed] = useState('')
 
   const [lastRound, setLastRound] = useState<LimboPlayResult | null>(null)
   const [recent, setRecent] = useState<RecentRound[]>([])
@@ -217,7 +216,6 @@ export function StakeLimboGame() {
       const res = await playLimbo({
         bet: stake,
         targetX100: target,
-        clientSeed: clientSeed.trim() || undefined,
       })
       if (!mounted.current) return false
       const profit = res.payout - res.bet
@@ -263,7 +261,7 @@ export function StakeLimboGame() {
     } finally {
       inFlight.current -= 1
     }
-  }, [info, bet, targetX100, clientSeed, clampBet, clampTarget, reportWin])
+  }, [info, bet, targetX100, clampBet, clampTarget, reportWin])
 
   // Fixed-cadence auto loop — fire each round WITHOUT awaiting the round-trip
   // (same scheduler as plinko2/dice2). Errors stop the run.
@@ -705,8 +703,6 @@ export function StakeLimboGame() {
           setFairnessOpen(false)
           setVerifyTarget(null)
         }}
-        clientSeed={clientSeed}
-        onClientSeedChange={setClientSeed}
         requestVerifyId={verifyTarget}
       />
 

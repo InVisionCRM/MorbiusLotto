@@ -34,7 +34,9 @@ interface VerifyPayload {
   payouts: number[];
   totalPayout: number;
   serverSeedHash: string;
-  serverSeed: string;
+  // null until the spin's seed pair has been rotated (revealed).
+  serverSeed: string | null;
+  seedRevealed?: boolean;
   clientSeed: string;
   nonce: number;
   createdAt: string;
@@ -84,7 +86,7 @@ function Field({ label, value, mono = true }: { label: string; value: string; mo
   );
 }
 
-function CheckBadge({ state }: { state: CheckState }) {
+function CheckBadge({ state, label }: { state: CheckState; label?: string }) {
   const map: Record<CheckState, { label: string; color: string; bg: string }> = {
     pending:   { label: 'Checking…', color: '#94a3b8', bg: 'rgba(148,163,184,0.12)' },
     verified:  { label: '✓ Verified', color: '#4ade80', bg: 'rgba(74,222,128,0.12)' },
@@ -94,7 +96,7 @@ function CheckBadge({ state }: { state: CheckState }) {
   const s = map[state];
   return (
     <span style={{ padding: '3px 10px', borderRadius: 8, fontSize: 11, fontWeight: 700, color: s.color, background: s.bg }}>
-      {s.label}
+      {label ?? s.label}
     </span>
   );
 }
@@ -127,14 +129,18 @@ export default function VerifyRoulettePage() {
       setResultCheck('no-crypto');
       return;
     }
+    // Both checks need the revealed seed; until it's rotated the spin shows
+    // only its commitment and the badges stay in the "not yet revealed" state.
+    if (!data.serverSeed) return;
+    const seed = data.serverSeed;
     (async () => {
       // 1. Verify seed commitment
-      const computed = await sha256Hex(data.serverSeed);
+      const computed = await sha256Hex(seed);
       setHashCheck(computed === data.serverSeedHash ? 'verified' : 'mismatch');
 
       // 2. Derive result
       const message = `${data.clientSeed}:${data.nonce}:0`;
-      const hmacBuf = await hmacSha256Buf(data.serverSeed, message);
+      const hmacBuf = await hmacSha256Buf(seed, message);
       if (!hmacBuf) { setResultCheck('no-crypto'); return; }
       const r = bytesToFloat(hmacBuf);
       const computed2 = Math.floor(r * 37);
@@ -217,7 +223,7 @@ export default function VerifyRoulettePage() {
               <div style={{ marginBottom: 14 }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
                   <span style={{ fontSize: 12, color: '#94a3b8' }}>Seed commitment</span>
-                  <CheckBadge state={hashCheck} />
+                  <CheckBadge state={hashCheck} label={data.serverSeed ? undefined : 'Seed not yet revealed'} />
                 </div>
                 <div style={{ fontSize: 11, color: '#475569' }}>sha256(serverSeed) must equal serverSeedHash</div>
               </div>
@@ -225,7 +231,7 @@ export default function VerifyRoulettePage() {
               <div style={{ marginBottom: 16 }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
                   <span style={{ fontSize: 12, color: '#94a3b8' }}>Result derivation</span>
-                  <CheckBadge state={resultCheck} />
+                  <CheckBadge state={resultCheck} label={data.serverSeed ? undefined : 'Seed not yet revealed'} />
                 </div>
                 <div style={{ fontSize: 11, color: '#475569' }}>
                   r = bytesToFloat(HMAC-SHA256(serverSeed, &quot;{data.clientSeed}:{data.nonce}:0&quot;)[0..3])<br />
@@ -235,7 +241,13 @@ export default function VerifyRoulettePage() {
               </div>
 
               <Field label="Server seed hash (committed before spin)" value={data.serverSeedHash} />
-              <Field label="Server seed (revealed after spin)" value={data.serverSeed} />
+              {data.serverSeed ? (
+                <Field label="Server seed (revealed after rotation)" value={data.serverSeed} />
+              ) : (
+                <div style={{ marginBottom: 12, fontSize: 12, lineHeight: 1.5, color: '#fbbf24' }}>
+                  Server seed still committed — rotate your seed in-game to reveal it and verify.
+                </div>
+              )}
               <Field label="Client seed" value={data.clientSeed} />
               <Field label="Nonce" value={String(data.nonce)} mono={false} />
             </div>

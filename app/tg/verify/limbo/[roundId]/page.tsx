@@ -33,7 +33,9 @@ interface VerifyPayload {
   won: boolean;
   payout: number;
   serverSeedHash: string;
-  serverSeed: string;
+  // null until the round's seed pair has been rotated (revealed).
+  serverSeed: string | null;
+  seedRevealed?: boolean;
   clientSeed: string;
   nonce: number;
   houseEdgeBp: number;
@@ -265,12 +267,14 @@ export default function TgVerifyLimboRoundPage() {
     };
   }, [roundId]);
 
-  // Step 1 — independent SHA-256(serverSeed) check.
+  // Step 1 — independent SHA-256(serverSeed) check. Only possible once the seed
+  // has been revealed (rotated); until then the round shows only its commitment.
   useEffect(() => {
-    if (!payload) return;
+    if (!payload || !payload.serverSeed) return;
+    const seed = payload.serverSeed;
     let cancelled = false;
     (async () => {
-      const h = await sha256Hex(payload.serverSeed);
+      const h = await sha256Hex(seed);
       if (cancelled) return;
       if (h == null) {
         setHashState('no-crypto');
@@ -286,13 +290,14 @@ export default function TgVerifyLimboRoundPage() {
     };
   }, [payload]);
 
-  // Step 2 — independent crash-point re-derivation.
+  // Step 2 — independent crash-point re-derivation (needs the revealed seed).
   useEffect(() => {
-    if (!payload) return;
+    if (!payload || !payload.serverSeed) return;
+    const seed = payload.serverSeed;
     let cancelled = false;
     (async () => {
       const d = await deriveCrashX100(
-        payload.serverSeed,
+        seed,
         payload.clientSeed,
         payload.nonce,
         payload.houseEdgeBp,
@@ -443,7 +448,9 @@ export default function TgVerifyLimboRoundPage() {
                         ? 'Hash mismatch'
                         : hashState === 'no-crypto'
                           ? 'Crypto API unavailable'
-                          : 'Hashing…'
+                          : payload.serverSeed
+                            ? 'Hashing…'
+                            : 'Seed not yet revealed'
                   }
                 />
               </div>
@@ -451,7 +458,13 @@ export default function TgVerifyLimboRoundPage() {
                 label="server seed hash (committed before round)"
                 value={payload.serverSeedHash}
               />
-              <HashRow label="server seed (revealed after round)" value={payload.serverSeed} />
+              {payload.serverSeed ? (
+                <HashRow label="server seed (revealed after rotation)" value={payload.serverSeed} />
+              ) : (
+                <p className="text-[12px] leading-snug text-amber-300/80">
+                  Server seed still committed — rotate your seed in-game to reveal it and verify.
+                </p>
+              )}
               {localHash && (
                 <HashRow label="your browser computed sha256(serverSeed)" value={localHash} />
               )}
@@ -481,7 +494,9 @@ export default function TgVerifyLimboRoundPage() {
                         ? 'Crash-point mismatch'
                         : crashState === 'no-crypto'
                           ? 'Crypto API unavailable'
-                          : 'Re-deriving…'
+                          : payload.serverSeed
+                            ? 'Re-deriving…'
+                            : 'Seed not yet revealed'
                   }
                 />
               </div>

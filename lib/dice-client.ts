@@ -32,6 +32,9 @@ export interface DicePlayResult {
   won: boolean;
   payout: number;
   serverSeedHash: string;
+  /** Sequential nonce this roll consumed under the active seed commitment.
+   *  Optional: present on a live /play response, omitted on a synthetic replay. */
+  nonce?: number;
   chipBalance: string;
 }
 
@@ -68,7 +71,9 @@ export interface DiceVerifyResult {
   won: boolean;
   payout: number;
   serverSeedHash: string;
-  serverSeed: string;
+  /** null until the round's seed pair has been rotated (revealed). */
+  serverSeed: string | null;
+  seedRevealed: boolean;
   clientSeed: string;
   nonce: number;
   houseEdgeBp: number;
@@ -105,8 +110,9 @@ export async function fetchDiceInfo(): Promise<DiceInfo> {
 export async function playDice(args: {
   bet: number;
   targetX100: number;
-  clientSeed?: string;
 }): Promise<DicePlayResult> {
+  // Client seed is managed on the persistent seed pair (see arcade-seed-client),
+  // not passed per-bet — the server derives the roll from the pre-committed seed.
   return apiFetchJson<DicePlayResult>('/api/arcade/dice/play', {
     method: 'POST',
     body: JSON.stringify(args),

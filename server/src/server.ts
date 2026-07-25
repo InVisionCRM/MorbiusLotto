@@ -12,6 +12,7 @@ import { AuthService } from './services/auth.service';
 import { registerAuthRoutes } from './routes/auth.routes';
 import { registerTelegramRoutes } from './routes/telegram.routes';
 import { registerVideoPokerRoutes } from './routes/video-poker.routes';
+import { registerArcadeSeedRoutes } from './routes/arcade-seed.routes';
 import { registerArcadeLimboRoutes } from './routes/arcade-limbo.routes';
 import { registerArcadeMinesRoutes } from './routes/arcade-mines.routes';
 import { registerArcadeHiLoRoutes } from './routes/arcade-hilo.routes';
@@ -473,6 +474,7 @@ async function initializeServices() {
       pokerTournamentService,
     });
     registerVideoPokerRoutes({ app, dbService, authService });
+    registerArcadeSeedRoutes({ app, dbService, authService });
     registerArcadeLimboRoutes({ app, dbService, authService });
     registerArcadeMinesRoutes({ app, dbService, authService });
     registerArcadeTowersRoutes({ app, dbService, authService });
