@@ -23,12 +23,22 @@ const js = ts.transpileModule(src, {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
 }).outputText;
 
+// Hook tests set these to simulate the two on-chain reads independently.
+let reservesRead = { data: undefined, error: null, isLoading: false };
+let token0Read = { data: undefined, error: null, isLoading: false };
 const stubs = {
   react: { useMemo: (f) => f(), useState: (v) => [v, () => {}], useEffect: () => {} },
-  wagmi: { useReadContract: () => ({ data: undefined, error: null, isLoading: false }) },
+  wagmi: {
+    useReadContract: (cfg) => {
+      if (cfg && cfg.functionName === 'getReserves') return reservesRead;
+      if (cfg && cfg.functionName === 'token0') return token0Read;
+      return { data: undefined, error: null, isLoading: false };
+    },
+  },
   '@/lib/contracts': {
     WPLS_TOKEN_ADDRESS: '0xA1077a294dDE1B09bB078844df40758a5D0f9a27',
     WPLS_MORBIUS_PAIR: '0xpair',
+    MORBIUS_TOKEN_ADDRESS: '0xB7d4eB5fDfE3d4d3B5C16a44A49948c6EC77c6F1',
   },
 };
 const mod = { exports: {} };
@@ -36,9 +46,9 @@ new Function('exports', 'require', 'module', js)(mod.exports, (name) => {
   if (stubs[name]) return stubs[name];
   throw new Error('unexpected import: ' + name);
 }, mod);
-const { selectPlsQuote, getAmountInV2 } = mod.exports;
-if (typeof selectPlsQuote !== 'function' || typeof getAmountInV2 !== 'function') {
-  console.error('FAIL: selectPlsQuote/getAmountInV2 not exported'); process.exit(1);
+const { selectPlsQuote, getAmountInV2, usePlsQuote } = mod.exports;
+if (typeof selectPlsQuote !== 'function' || typeof getAmountInV2 !== 'function' || typeof usePlsQuote !== 'function') {
+  console.error('FAIL: selectPlsQuote/getAmountInV2/usePlsQuote not exported'); process.exit(1);
 }
 
 const WPLS = '0xA1077a294dDE1B09bB078844df40758a5D0f9a27';
@@ -119,6 +129,27 @@ t('empty pool (zero MORBIUS reserve) is not quotable and does not divide by zero
 t('amountOut exceeding the pool reserve is not quotable', () => {
   const r = selectPlsQuote({ ...base, morbiusCost: 2000000n * E18, reserves: [2000000n * E18, 1000000n * E18, 0], token0: WPLS });
   eq(r.hasQuote, false, 'hasQuote');
+});
+
+console.log('usePlsQuote — resilient to a failed token0 read (regression)');
+
+t('quotes from reserves even when the token0 read never resolves (sorted-token0 fallback)', () => {
+  const rIn = 2000000n * E18, rOut = 1000000n * E18;
+  reservesRead = { data: [rIn, rOut, 0], error: null, isLoading: false }; // WPLS is token0 in this pair
+  token0Read = { data: undefined, error: new Error('rpc blip'), isLoading: false }; // token0 failed & won't recover
+  const r = usePlsQuote({ morbiusCost: 10000n * E18 });
+  eq(r.hasQuote, true, 'hasQuote'); // <- previously false forever, stranding the deposit CTA
+  eq(r.plsValue, refAmountIn(10000n * E18, rIn, rOut), 'plsValue');
+  reservesRead = { data: undefined, error: null, isLoading: false };
+  token0Read = { data: undefined, error: null, isLoading: false };
+});
+
+t('still reports loading (not "unavailable") while reserves are genuinely in flight', () => {
+  reservesRead = { data: undefined, error: null, isLoading: true };
+  token0Read = { data: undefined, error: null, isLoading: false };
+  const r = usePlsQuote({ morbiusCost: 10000n * E18 });
+  eq(r.hasQuote, false, 'hasQuote'); eq(r.isLoading, true, 'isLoading');
+  reservesRead = { data: undefined, error: null, isLoading: false };
 });
 
 console.log(`\n${pass} passed, ${fail} failed`);

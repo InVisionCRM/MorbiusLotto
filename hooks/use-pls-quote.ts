@@ -4,7 +4,18 @@ import type { Address } from 'viem'
 import {
   WPLS_TOKEN_ADDRESS,
   WPLS_MORBIUS_PAIR,
+  MORBIUS_TOKEN_ADDRESS,
 } from '@/lib/contracts'
+
+// A UniswapV2 pair sorts its two tokens on creation, so token0 is deterministically
+// the lower address. We still read token0 on-chain, but fall back to this constant so
+// a single failed token0 read can never permanently block the quote: the reserves read
+// self-heals on its 10s poll, whereas token0 (staleTime: Infinity) has no recovery, and
+// without orientation the quote stays "unavailable" forever even while reserves succeed.
+const SORTED_TOKEN0 =
+  WPLS_TOKEN_ADDRESS.toLowerCase() < MORBIUS_TOKEN_ADDRESS.toLowerCase()
+    ? WPLS_TOKEN_ADDRESS
+    : MORBIUS_TOKEN_ADDRESS
 
 const PAIR_ABI = [
   {
@@ -117,7 +128,7 @@ export function usePlsQuote({
     address: WPLS_MORBIUS_PAIR as Address,
     abi: PAIR_ABI,
     functionName: 'token0',
-    query: { enabled, staleTime: Infinity },
+    query: { enabled, staleTime: Infinity, retry: 5, retryDelay: 1500 },
   })
 
   // placeholderData keeps the previous reserves while a refetch is in flight so
@@ -142,7 +153,9 @@ export function usePlsQuote({
   const result = useMemo(() => {
     const sel = selectPlsQuote({
       reserves: reserves as readonly [bigint, bigint, number] | undefined,
-      token0: token0 as string | undefined,
+      // Fall back to the deterministic sorted token0 so a failed token0 read never
+      // strands the quote — reserves alone are then enough to price the deposit.
+      token0: (token0 as string | undefined) ?? SORTED_TOKEN0,
       morbiusCost,
       wplsAddress: WPLS_TOKEN_ADDRESS,
     })
