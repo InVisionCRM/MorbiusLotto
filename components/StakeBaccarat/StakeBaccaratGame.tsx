@@ -132,7 +132,6 @@ export function StakeBaccaratGame() {
   const [history, setHistory] = useState<BaccaratHistoryHand[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
 
-  const [clientSeed, setClientSeed] = useState('');
   const [fairnessOpen, setFairnessOpen] = useState(false);
   const [verifyTarget, setVerifyTarget] = useState<string | null>(null);
   const [exchangeOpen, setExchangeOpen] = useState(false);
@@ -404,7 +403,6 @@ export function StakeBaccaratGame() {
     try {
       const res = await playBaccarat({
         bets: nonZeroBets(bets),
-        clientSeed: clientSeed.trim() || undefined,
       });
       startReveal(res);
     } catch (e) {
@@ -419,7 +417,7 @@ export function StakeBaccaratGame() {
         setError(serverDetail(msg) ?? 'Could not complete the hand. Try again.');
       }
     }
-  }, [busy, info, totalBet, bets, clientSeed, startReveal]);
+  }, [busy, info, totalBet, bets, startReveal]);
 
   // ── Replay a past hand: stage the confirm overlay, then re-run the exact same
   // card deal (no server call, no balance/history/session change). ──
@@ -727,8 +725,6 @@ export function StakeBaccaratGame() {
           setFairnessOpen(false);
           setVerifyTarget(null);
         }}
-        clientSeed={clientSeed}
-        onClientSeedChange={setClientSeed}
         requestVerifyId={verifyTarget}
       />
 

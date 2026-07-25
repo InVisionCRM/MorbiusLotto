@@ -21,6 +21,7 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
+import { ArcadeSeedControls } from '@/components/shared/ArcadeSeedControls'
 import {
   verifyCascade,
   formatMultiplierX100,
@@ -31,8 +32,6 @@ import {
 interface CascadeFairnessModalProps {
   open: boolean
   onClose: () => void
-  clientSeed: string
-  onClientSeedChange: (seed: string) => void
   /** When set (and the modal is open), the id is filled in and verified immediately. */
   requestVerifyId: string | null
 }
@@ -66,18 +65,9 @@ async function sha256Hex(input: string): Promise<string> {
     .join('')
 }
 
-/** 16 random bytes → 32-char hex, generated locally with WebCrypto. */
-function randomClientSeed(): string {
-  const bytes = new Uint8Array(16)
-  crypto.getRandomValues(bytes)
-  return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('')
-}
-
 export function CascadeFairnessModal({
   open,
   onClose,
-  clientSeed,
-  onClientSeedChange,
   requestVerifyId,
 }: CascadeFairnessModalProps) {
   const [verifyId, setVerifyId] = useState('')
@@ -96,7 +86,8 @@ export function CascadeFairnessModal({
     try {
       const r = await verifyCascade(trimmed)
       setResult(r)
-      setHashMatches((await sha256Hex(r.serverSeed)) === r.serverSeedHash)
+      // Seed only revealed after rotation; until then we can't check the hash.
+      setHashMatches(r.serverSeed ? (await sha256Hex(r.serverSeed)) === r.serverSeedHash : null)
     } catch {
       setError('No round found with that ID.')
     } finally {
@@ -127,36 +118,15 @@ export function CascadeFairnessModal({
         </DialogHeader>
 
         <div className="space-y-5">
-          {/* Client seed */}
-          <section className="space-y-2">
-            <h3 className="text-sm font-semibold text-slate-200">Your client seed</h3>
-            <p className="text-xs text-slate-500">
-              Mixed into every drop. Change it any time — the next round uses the new value.
-            </p>
-            <div className="flex gap-2">
-              <Input
-                value={clientSeed}
-                onChange={(e) => onClientSeedChange(e.target.value.slice(0, 128))}
-                placeholder="Leave blank for a random seed each drop"
-                className="arc-mono border-cyan-950 bg-[#081420] text-xs"
-              />
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => onClientSeedChange(randomClientSeed())}
-                className="shrink-0 border-cyan-950 bg-transparent text-cyan-300 hover:bg-cyan-500/10"
-              >
-                New seed
-              </Button>
-            </div>
-          </section>
+          {/* Persistent commitment + client-seed controls */}
+          <ArcadeSeedControls open={open} />
 
           {/* Verify */}
           <section className="space-y-2">
             <h3 className="text-sm font-semibold text-slate-200">Verify a drop</h3>
             <p className="text-xs text-slate-500">
-              Every gem is drawn from a server seed committed (hashed) before your bet — the seed is
-              revealed once the round settles, and the entire cascade re-derives from it.
+              Every gem is drawn from a server seed committed (hashed) before your bet. Rotate your
+              seed above to reveal it, then the entire cascade re-derives from it.
             </p>
             <div className="flex gap-2">
               <Input
@@ -186,14 +156,22 @@ export function CascadeFairnessModal({
                     label="Server seed matches its committed hash (checked locally)"
                   />
                 )}
-                <Check
-                  ok={totalMatches}
-                  label="Cascade re-runs from the seed to the same multiplier"
-                />
+                {result.seedRevealed && (
+                  <Check
+                    ok={totalMatches}
+                    label="Cascade re-runs from the seed to the same multiplier"
+                  />
+                )}
                 <Check
                   ok={result.payout === Math.floor((result.bet * result.multiplierX100) / 100)}
                   label="Payout reconciles with floor(bet × multiplier)"
                 />
+                {!result.seedRevealed && (
+                  <p className="text-xs text-amber-300/80">
+                    Server seed still committed — rotate your seed above to reveal it and re-run the
+                    cascade.
+                  </p>
+                )}
               </div>
 
               {/* Chain breakdown (re-derived) */}
@@ -243,7 +221,10 @@ export function CascadeFairnessModal({
 
               <div className="grid grid-cols-1 gap-2">
                 <Field label="Server seed hash (committed)" value={result.serverSeedHash} />
-                <Field label="Server seed (revealed)" value={result.serverSeed} />
+                <Field
+                  label="Server seed (revealed)"
+                  value={result.serverSeed ?? 'Hidden until you rotate your seed'}
+                />
                 <Field label="Client seed" value={result.clientSeed} />
                 <Field label="Nonce" value={String(result.nonce)} />
                 <Field label="Recipe" value={result.recipe} />

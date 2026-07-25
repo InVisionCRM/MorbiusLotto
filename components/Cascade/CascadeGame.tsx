@@ -124,7 +124,6 @@ export function CascadeGame() {
 
   const [bet, setBet] = useState<number>(500)
   const [volatility, setVolatility] = useState<CascadeVolatility>('calm')
-  const [clientSeed, setClientSeed] = useState('')
 
   // Board + HUD are driven by the replay, not by React state per-frame for the
   // tiles (we set the whole tile array each frame).
@@ -391,7 +390,6 @@ export function CascadeGame() {
       const res = await playCascade({
         bet: stake,
         volatility,
-        clientSeed: clientSeed.trim() || undefined,
       })
       if (!mounted.current) return 'stop'
       // Resolve once the replay's finish() runs (full cascade animation done).
@@ -415,7 +413,7 @@ export function CascadeGame() {
       }
       return 'stop'
     }
-  }, [busy, info, bet, balance, clampBet, volatility, clientSeed, replay, clearTimers, setHud])
+  }, [busy, info, bet, balance, clampBet, volatility, replay, clearTimers, setHud])
 
   const stopAuto = useCallback(() => {
     autoActiveRef.current = false
@@ -924,8 +922,6 @@ export function CascadeGame() {
           setFairnessOpen(false)
           setVerifyTarget(null)
         }}
-        clientSeed={clientSeed}
-        onClientSeedChange={setClientSeed}
         requestVerifyId={verifyTarget}
       />
 

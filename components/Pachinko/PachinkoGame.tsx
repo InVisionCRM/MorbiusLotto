@@ -107,7 +107,6 @@ export function PachinkoGame() {
 
   const [risk, setRisk] = useState<PachinkoRisk>('low')
   const [bet, setBet] = useState<number>(500)
-  const [clientSeed, setClientSeed] = useState('')
 
   const [phase, setPhase] = useState<Phase>('idle')
   const [busy, setBusy] = useState(false)
@@ -396,7 +395,6 @@ export function PachinkoGame() {
         playPachinko({
           bet: stake,
           risk: useRisk,
-          clientSeed: clientSeed.trim() || undefined,
         })
           .then((res) => {
             if (!mounted.current) {
@@ -490,7 +488,7 @@ export function PachinkoGame() {
           })
       })
     },
-    [busy, replaying, info, bet, balance, clampBet, risk, clientSeed, animateDrop, draw, reportWin],
+    [busy, replaying, info, bet, balance, clampBet, risk, animateDrop, draw, reportWin],
   )
 
   const stopAuto = useCallback(() => {
@@ -1002,8 +1000,6 @@ export function PachinkoGame() {
           setFairnessOpen(false)
           setVerifyTarget(null)
         }}
-        clientSeed={clientSeed}
-        onClientSeedChange={setClientSeed}
         requestVerifyId={verifyTarget}
       />
 

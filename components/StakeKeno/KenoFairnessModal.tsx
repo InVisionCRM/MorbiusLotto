@@ -3,11 +3,12 @@
 /**
  * KenoFairnessModal — provably-fair panel.
  *
- * Two jobs:
- *   1. Let the player set their own client seed (used for the next round's draw).
- *   2. Verify any past round by id — fetches /api/keno/verify/:id, re-derives the
- *      10 drawn numbers from the published seeds, and shows whether the server's
- *      committed hash, draw, and payout all reconcile.
+ * Keno's server seed is now a PERSISTENT per-wallet commitment (see
+ * ArcadeSeedControls): its hash is published before you bet and revealed only
+ * when you rotate. This modal shows that commitment + client seed controls, and
+ * verifies any past round by id — fetching /api/keno/verify/:id and re-deriving
+ * the 10 drawn numbers from the published seeds. Until the round's seed has been
+ * rotated-revealed the round shows only its commitment.
  *
  * `requestVerifyId` lets callers (the "Verify last round" link, history rows)
  * open the modal already pointed at a round — it auto-runs once per change.
@@ -22,13 +23,12 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
+import { ArcadeSeedControls } from '@/components/shared/ArcadeSeedControls'
 import { verifyKeno, formatMultiplier, type KenoVerifyResult } from '@/lib/keno-client'
 
 interface KenoFairnessModalProps {
   open: boolean
   onClose: () => void
-  clientSeed: string
-  onClientSeedChange: (seed: string) => void
   /** When set (and the modal is open), the id is filled in and verified immediately. */
   requestVerifyId: string | null
 }
@@ -53,18 +53,9 @@ function Check({ ok, label }: { ok: boolean; label: string }) {
   )
 }
 
-/** 16 random bytes → 32-char hex, generated locally with WebCrypto. */
-function randomClientSeed(): string {
-  const bytes = new Uint8Array(16)
-  crypto.getRandomValues(bytes)
-  return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('')
-}
-
 export function KenoFairnessModal({
   open,
   onClose,
-  clientSeed,
-  onClientSeedChange,
   requestVerifyId,
 }: KenoFairnessModalProps) {
   const [verifyId, setVerifyId] = useState('')
@@ -105,36 +96,16 @@ export function KenoFairnessModal({
         </DialogHeader>
 
         <div className="space-y-5">
-          {/* Client seed */}
-          <section className="space-y-2">
-            <h3 className="text-sm font-semibold text-slate-200">Your client seed</h3>
-            <p className="text-xs text-slate-500">
-              Mixed into every draw. Change it any time — the next round uses the new value.
-            </p>
-            <div className="flex gap-2">
-              <Input
-                value={clientSeed}
-                onChange={(e) => onClientSeedChange(e.target.value.slice(0, 128))}
-                placeholder="Leave blank for a random seed each round"
-                className="arc-mono border-cyan-950 bg-[#081420] text-xs"
-              />
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => onClientSeedChange(randomClientSeed())}
-                className="shrink-0 border-cyan-950 bg-transparent text-cyan-300 hover:bg-cyan-500/10"
-              >
-                New seed
-              </Button>
-            </div>
-          </section>
+          {/* Persistent commitment + client-seed controls */}
+          <ArcadeSeedControls open={open} />
 
           {/* Verify */}
           <section className="space-y-2">
             <h3 className="text-sm font-semibold text-slate-200">Verify a round</h3>
             <p className="text-xs text-slate-500">
-              Each round commits a hashed server seed up front and reveals it after. We
-              re-derive the draw from the published seeds so you can confirm nothing moved.
+              Every draw is fixed by the server-seed hash above, committed before you bet.
+              Rotate your seed to reveal it, then we re-derive the draw from the published
+              seeds so you can confirm nothing moved.
             </p>
             <div className="flex gap-2">
               <Input
@@ -158,13 +129,26 @@ export function KenoFairnessModal({
           {result && (
             <section className="arc-panel space-y-3 rounded-lg p-3">
               <div className="space-y-1.5">
-                <Check ok={result.verification.hashMatches} label="Server seed matches its committed hash" />
-                <Check ok={result.verification.drawMatches} label="Drawn numbers re-derive exactly" />
-                <Check ok={result.verification.payoutMatches} label="Hits & payout reconcile" />
+                {result.serverSeed && (
+                  <>
+                    <Check ok={result.verification.hashMatches} label="Server seed matches its committed hash" />
+                    <Check ok={result.verification.drawMatches} label="Drawn numbers re-derive exactly" />
+                    <Check ok={result.verification.payoutMatches} label="Hits & payout reconcile" />
+                  </>
+                )}
+                {!result.seedRevealed && (
+                  <p className="text-xs text-amber-300/80">
+                    Server seed still committed — rotate your seed above to reveal it and
+                    confirm the draw.
+                  </p>
+                )}
               </div>
               <div className="grid grid-cols-1 gap-2">
-                <Field label="Server seed" value={result.serverSeed} />
-                <Field label="Server seed hash" value={result.serverSeedHash} />
+                <Field
+                  label="Server seed (revealed)"
+                  value={result.serverSeed ?? 'Hidden until you rotate your seed'}
+                />
+                <Field label="Server seed hash (committed)" value={result.serverSeedHash} />
                 <Field label="Client seed" value={result.clientSeed} />
                 <Field label="Nonce" value={String(result.nonce)} />
               </div>

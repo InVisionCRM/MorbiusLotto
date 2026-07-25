@@ -59,9 +59,10 @@ export interface KenoPlayResult {
   payout: number;
   won: boolean;
   serverSeedHash: string;
-  serverSeed: string;
   clientSeed: string;
-  nonce: number;
+  /** Sequential nonce this draw consumed under the active seed commitment.
+   *  Optional: present on a live /play response, omitted on a synthetic replay. */
+  nonce?: number;
   chipBalance: string;
 }
 
@@ -103,8 +104,9 @@ export async function playKeno(args: {
   picks: number[];
   risk: KenoRisk;
   bet: number;
-  clientSeed?: string;
 }): Promise<KenoPlayResult> {
+  // Client seed is managed on the persistent seed pair (see ArcadeSeedControls),
+  // not passed per-bet — the server derives the draw from the pre-committed seed.
   return apiFetchJson<KenoPlayResult>('/api/keno/play', {
     method: 'POST',
     body: JSON.stringify(args),
@@ -166,7 +168,9 @@ export interface KenoVerifyResult {
   hits: number;
   multiplierX100: number;
   payout: number;
-  serverSeed: string;
+  /** null until the round's seed pair has been rotated (revealed). */
+  serverSeed: string | null;
+  seedRevealed: boolean;
   serverSeedHash: string;
   clientSeed: string;
   nonce: number;
@@ -176,9 +180,9 @@ export interface KenoVerifyResult {
     drawMatches: boolean;
     payoutMatches: boolean;
     recomputedDrawn: number[];
-    recomputedHits: number;
-    recomputedMultiplierX100: number;
-    recomputedPayout: number;
+    recomputedHits: number | null;
+    recomputedMultiplierX100: number | null;
+    recomputedPayout: number | null;
   };
   recipe: string;
 }

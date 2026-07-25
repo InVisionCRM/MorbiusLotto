@@ -26,6 +26,7 @@ import { requireAuth } from '../middleware/require-auth';
 import { logger } from '../utils/logger';
 import { applyPokerChipDelta } from '../services/poker-chip-wallet';
 import { ProvablyFairService } from '../services/provably-fair.service';
+import { consumeSeedForBet, revealedSeedForRound } from '../services/arcade-seed.service';
 import {
   resolvePlinko,
   isPlinkoRisk,
@@ -83,7 +84,7 @@ export function registerPlinkoChipRoutes({
 
   // ---------------------------------------------------------------------------
   // POST /api/plinko/play — auth. One ball: charge, draw the path, settle in
-  // one txn. Body: { risk: 'low'|'medium'|'high', bet: number, clientSeed?: string }
+  // one txn. Body: { risk: 'low'|'medium'|'high', bet: number }
   // ---------------------------------------------------------------------------
   app.post('/api/plinko/play', requireAuth(authService), async (req: Request, res: Response) => {
     const addr = req.user!.address.toLowerCase();
@@ -101,21 +102,15 @@ export function registerPlinkoChipRoutes({
         });
       }
 
-      // --- provably-fair draw (fresh server seed per ball, like Keno/Dice) ---
-      const serverSeed = pf.generateServerSeed();
-      const serverSeedHash = pf.createServerSeedHash(serverSeed);
-      const clientSeed =
-        typeof req.body?.clientSeed === 'string' && req.body.clientSeed.trim()
-          ? req.body.clientSeed.trim().slice(0, 128)
-          : crypto.randomBytes(16).toString('hex');
-      const nonce = 0;
-
-      const path = pf.drawPlinkoPath(serverSeed, clientSeed, nonce);
-      const result = resolvePlinko(risk, bet, path);
-
-      // --- atomic settle ---
+      // --- atomic settle: charge, then derive the path from the wallet's
+      // pre-committed active seed, settle, all in one txn. ---
       const roundId = crypto.randomUUID();
       let chipBalance = 0n;
+      let path: number[] = [];
+      let result!: ReturnType<typeof resolvePlinko>;
+      let serverSeedHash = '';
+      let clientSeed = '';
+      let nonce = 0;
       await dbService.withTransaction(async (client) => {
         chipBalance = await applyPokerChipDelta(
           client,
@@ -124,6 +119,20 @@ export function registerPlinkoChipRoutes({
           'plinko_bet',
           { type: 'plinko_round', id: roundId },
         );
+
+        // Consume the wallet's PRE-COMMITTED active seed at the next nonce. Its
+        // hash was published before this bet (GET /api/arcade/seed/active) and
+        // the plaintext stays hidden until the player rotates — so the path was
+        // provably fixed in advance, not chosen at settle time. Same
+        // drawPlinkoPath derivation as before; only the seed provenance and the
+        // (now sequential) nonce changed.
+        const seed = await consumeSeedForBet(client, addr);
+        serverSeedHash = seed.serverSeedHash;
+        clientSeed = seed.clientSeed;
+        nonce = seed.nonce;
+        path = pf.drawPlinkoPath(seed.serverSeed, seed.clientSeed, seed.nonce);
+        result = resolvePlinko(risk, bet, path);
+
         if (result.payout > 0) {
           chipBalance = await applyPokerChipDelta(
             client,
@@ -133,11 +142,13 @@ export function registerPlinkoChipRoutes({
             { type: 'plinko_round', id: roundId },
           );
         }
+        // server_seed stays NULL on the round — the plaintext lives only in the
+        // seed pair's pending row and is revealed via rotation, not per-round.
         await client.query(
           `INSERT INTO plinko_rounds
              (id, wallet_address, bet, risk, path, bucket, multiplier_x100,
-              payout, server_seed, server_seed_hash, client_seed, nonce)
-           VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, $8, $9, $10, $11, $12)`,
+              payout, server_seed, server_seed_hash, client_seed, nonce, seed_pair_id)
+           VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, $8, NULL, $9, $10, $11, $12)`,
           [
             roundId,
             addr,
@@ -147,10 +158,10 @@ export function registerPlinkoChipRoutes({
             result.bucket,
             result.multiplierX100,
             result.payout,
-            serverSeed,
             serverSeedHash,
             clientSeed,
             nonce,
+            seed.seedPairId,
           ],
         );
       });
@@ -166,7 +177,6 @@ export function registerPlinkoChipRoutes({
         payout: result.payout,
         won: result.payout > bet,
         serverSeedHash,
-        serverSeed,
         clientSeed,
         nonce,
         chipBalance: chipBalance.toString(),
@@ -294,7 +304,8 @@ export function registerPlinkoChipRoutes({
     try {
       const r = await pool.query(
         `SELECT id, wallet_address, bet, risk, path, bucket, multiplier_x100,
-                payout, server_seed, server_seed_hash, client_seed, nonce, created_at
+                payout, server_seed, server_seed_hash, client_seed, nonce, created_at,
+                seed_pair_id
            FROM plinko_rounds WHERE id = $1`,
         [req.params.id],
       );
@@ -303,11 +314,32 @@ export function registerPlinkoChipRoutes({
       }
       const row = r.rows[0];
 
-      const recomputedPath = pf.drawPlinkoPath(row.server_seed, row.client_seed, Number(row.nonce));
-      const recomputed = resolvePlinko(row.risk, Number(row.bet), recomputedPath);
-      const hashMatches = pf.createServerSeedHash(row.server_seed) === row.server_seed_hash;
-      const pathMatches = JSON.stringify(recomputedPath) === JSON.stringify(row.path);
+      // Plaintext server seed is revealed ONLY once the pair has been rotated —
+      // until then the round exposes just the pre-published commitment. Legacy
+      // rows that stored the plaintext inline stay verifiable as before.
+      const reveal = await revealedSeedForRound(
+        pool,
+        row.seed_pair_id ?? null,
+        row.server_seed ?? null,
+      );
+      const revealedSeed = reveal.serverSeed;
+
+      // Independent re-derivation is only possible once the seed is revealed;
+      // otherwise the checks stay false and the UI shows "rotate to reveal".
+      const recomputedPath = revealedSeed
+        ? pf.drawPlinkoPath(revealedSeed, row.client_seed, Number(row.nonce))
+        : [];
+      const recomputed = revealedSeed
+        ? resolvePlinko(row.risk, Number(row.bet), recomputedPath)
+        : null;
+      const hashMatches = revealedSeed
+        ? pf.createServerSeedHash(revealedSeed) === row.server_seed_hash
+        : false;
+      const pathMatches = revealedSeed
+        ? JSON.stringify(recomputedPath) === JSON.stringify(row.path)
+        : false;
       const payoutMatches =
+        recomputed != null &&
         recomputed.bucket === row.bucket &&
         recomputed.multiplierX100 === Number(row.multiplier_x100) &&
         recomputed.payout === Number(row.payout);
@@ -322,7 +354,8 @@ export function registerPlinkoChipRoutes({
         bucket: row.bucket,
         multiplierX100: Number(row.multiplier_x100),
         payout: Number(row.payout),
-        serverSeed: row.server_seed,
+        serverSeed: reveal.serverSeed,
+        seedRevealed: reveal.revealed,
         serverSeedHash: row.server_seed_hash,
         clientSeed: row.client_seed,
         nonce: Number(row.nonce),
@@ -332,11 +365,13 @@ export function registerPlinkoChipRoutes({
           pathMatches,
           payoutMatches,
           recomputedPath,
-          recomputedBucket: recomputed.bucket,
-          recomputedMultiplierX100: recomputed.multiplierX100,
-          recomputedPayout: recomputed.payout,
+          recomputedBucket: recomputed?.bucket ?? null,
+          recomputedMultiplierX100: recomputed?.multiplierX100 ?? null,
+          recomputedPayout: recomputed?.payout ?? null,
         },
-        recipe: PLINKO_RECIPE,
+        recipe:
+          PLINKO_RECIPE +
+          ' The serverSeedHash was committed before the bet; rotate your seed to reveal serverSeed and confirm sha256(serverSeed) === serverSeedHash.',
       });
     } catch (e) {
       logger.error('plinko-chips.verify failed', { id: req.params.id, error: (e as Error).message });

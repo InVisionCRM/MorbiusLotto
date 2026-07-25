@@ -109,7 +109,6 @@ export function StakePlinkoGame() {
 
   const [risk, setRisk] = useState<PlinkoRisk>('low')
   const [bet, setBet] = useState<number>(10)
-  const [clientSeed, setClientSeed] = useState('')
 
   const [lastDrop, setLastDrop] = useState<BoardDrop | null>(null)
   const [recent, setRecent] = useState<RecentChip[]>([])
@@ -253,7 +252,6 @@ export function StakePlinkoGame() {
       const res = await playPlinko({
         risk,
         bet: stake,
-        clientSeed: clientSeed.trim() || undefined,
       })
       if (!mounted.current) return false
       // NB: the balance is deliberately NOT updated here. The bet is already
@@ -308,7 +306,7 @@ export function StakePlinkoGame() {
     } finally {
       inFlight.current -= 1
     }
-  }, [bet, risk, clientSeed, clampBet, armReconcile])
+  }, [bet, risk, clampBet, armReconcile])
 
   // Fixed-cadence scheduler: fire each ball WITHOUT awaiting the server
   // round-trip (the old loop serialized RTT + interval, ~1.5s/ball). Balls
@@ -776,8 +774,6 @@ export function StakePlinkoGame() {
           setFairnessOpen(false)
           setVerifyTarget(null)
         }}
-        clientSeed={clientSeed}
-        onClientSeedChange={setClientSeed}
         requestVerifyId={verifyTarget}
       />
 

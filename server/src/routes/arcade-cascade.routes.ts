@@ -36,6 +36,7 @@ import {
   CASCADE_ROWS,
   type CascadeVolatility,
 } from '../services/arcade-cascade';
+import { consumeSeedForBet, revealedSeedForRound } from '../services/arcade-seed.service';
 import type { DatabaseService } from '../services/database.service';
 import type { AuthService } from '../services/auth.service';
 
@@ -164,24 +165,14 @@ export function registerArcadeCascadeRoutes({
           .json({ ok: false, error: 'Volatility must be calm, standard or frenzy.' });
       }
 
-      const serverSeed = pf.generateServerSeed();
-      const serverSeedHash = pf.createServerSeedHash(serverSeed);
-      const clientSeed =
-        typeof req.body?.clientSeed === 'string' && req.body.clientSeed.trim()
-          ? req.body.clientSeed.trim().slice(0, 128)
-          : crypto.randomBytes(16).toString('hex');
-      const nonce = 0;
-
-      const result = resolveCascade(
-        volatility,
-        cascadeFloatStream(serverSeed, clientSeed, nonce),
-      );
-      const totalMultiplierX100 = result.totalMultiplierX100;
-      const payout = cascadePayout(bet, totalMultiplierX100);
-      const won = payout > 0;
-
       const roundId = crypto.randomUUID();
       let chipBalance = 0n;
+      let result!: ReturnType<typeof resolveCascade>;
+      let serverSeedHash = '';
+      let nonce = 0;
+      let totalMultiplierX100 = 0;
+      let payout = 0;
+      let won = false;
       await dbService.withTransaction(async (client) => {
         // Charges the bet (throws if the wallet can't cover it).
         chipBalance = await applyPokerChipDelta(
@@ -191,6 +182,24 @@ export function registerArcadeCascadeRoutes({
           'arcade_cascade_bet',
           { type: 'arcade_cascade', id: roundId },
         );
+
+        // Consume the wallet's PRE-COMMITTED active seed at the next nonce. Its
+        // hash was published before this bet (GET /api/arcade/seed/active) and
+        // the plaintext stays hidden until the player rotates — so the whole
+        // cascade was provably fixed in advance, not chosen at settle time. The
+        // SAME deterministic derivation as before; only the seed provenance and
+        // the (now sequential) nonce changed.
+        const seed = await consumeSeedForBet(client, wallet);
+        serverSeedHash = seed.serverSeedHash;
+        nonce = seed.nonce;
+        result = resolveCascade(
+          volatility,
+          cascadeFloatStream(seed.serverSeed, seed.clientSeed, seed.nonce),
+        );
+        totalMultiplierX100 = result.totalMultiplierX100;
+        payout = cascadePayout(bet, totalMultiplierX100);
+        won = payout > 0;
+
         if (payout > 0) {
           chipBalance = await applyPokerChipDelta(
             client,
@@ -200,11 +209,14 @@ export function registerArcadeCascadeRoutes({
             { type: 'arcade_cascade', id: roundId },
           );
         }
+        // server_seed stays NULL on the round — the plaintext lives only in the
+        // seed pair's pending row and is revealed via rotation, not per-round.
         await client.query(
           `INSERT INTO arcade_cascade_rounds
              (id, wallet_address, bet, volatility, multiplier_x100, clusters,
-              chain_log, won, payout, server_seed, server_seed_hash, client_seed, nonce)
-           VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8, $9, $10, $11, $12, $13)`,
+              chain_log, won, payout, server_seed, server_seed_hash, client_seed, nonce,
+              seed_pair_id)
+           VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8, $9, NULL, $10, $11, $12, $13)`,
           [
             roundId,
             wallet.toLowerCase(),
@@ -215,10 +227,10 @@ export function registerArcadeCascadeRoutes({
             JSON.stringify(result.chainLog),
             won,
             payout,
-            serverSeed,
             serverSeedHash,
-            clientSeed,
+            seed.clientSeed,
             nonce,
+            seed.seedPairId,
           ],
         );
       });
@@ -238,7 +250,6 @@ export function registerArcadeCascadeRoutes({
         won,
         payout,
         serverSeedHash,
-        clientSeed,
         nonce,
         chipBalance: chipBalance.toString(),
       });
@@ -264,7 +275,7 @@ export function registerArcadeCascadeRoutes({
       const limit = Math.max(1, Math.min(100, parseInt(String(req.query.limit ?? '25'), 10) || 25));
       const r = await pool.query(
         `SELECT id, bet, volatility, multiplier_x100, clusters, won, payout,
-                server_seed, client_seed, nonce, created_at
+                server_seed, server_seed_hash, client_seed, nonce, created_at, seed_pair_id
            FROM arcade_cascade_rounds
           WHERE wallet_address = $1
           ORDER BY created_at DESC
@@ -273,29 +284,39 @@ export function registerArcadeCascadeRoutes({
       );
       return res.json({
         ok: true,
-        rounds: r.rows.map((row) => {
-          const volatility = row.volatility as CascadeVolatility;
-          // The board isn't stored — re-derive the settled grid from the
-          // published seeds (same engine as verify) so the client can re-show
-          // the final board for a replay without another round.
-          const finalBoard = isCascadeVolatility(volatility)
-            ? resolveCascade(
-                volatility,
-                cascadeFloatStream(row.server_seed, row.client_seed, Number(row.nonce)),
-              ).finalBoard
-            : null;
-          return {
-            roundId: row.id,
-            bet: Number(row.bet),
-            volatility,
-            multiplierX100: Number(row.multiplier_x100),
-            clusters: Number(row.clusters),
-            won: !!row.won,
-            payout: Number(row.payout),
-            finalBoard,
-            createdAt: row.created_at,
-          };
-        }),
+        rounds: await Promise.all(
+          r.rows.map(async (row) => {
+            const volatility = row.volatility as CascadeVolatility;
+            // The board isn't stored — re-derive the settled grid from the
+            // published seeds (same engine as verify) so the client can re-show
+            // the final board for a replay without another round. The server
+            // seed is committed until the player rotates, so the board is only
+            // re-derivable (non-null) once the seed pair has been revealed.
+            const reveal = await revealedSeedForRound(
+              pool,
+              row.seed_pair_id ?? null,
+              row.server_seed ?? null,
+            );
+            const finalBoard =
+              reveal.serverSeed && isCascadeVolatility(volatility)
+                ? resolveCascade(
+                    volatility,
+                    cascadeFloatStream(reveal.serverSeed, row.client_seed, Number(row.nonce)),
+                  ).finalBoard
+                : null;
+            return {
+              roundId: row.id,
+              bet: Number(row.bet),
+              volatility,
+              multiplierX100: Number(row.multiplier_x100),
+              clusters: Number(row.clusters),
+              won: !!row.won,
+              payout: Number(row.payout),
+              finalBoard,
+              createdAt: row.created_at,
+            };
+          }),
+        ),
       });
     } catch (err) {
       logger.error('[arcade-cascade] history failed', { error: (err as Error)?.message });
@@ -382,7 +403,7 @@ export function registerArcadeCascadeRoutes({
     try {
       const r = await pool.query(
         `SELECT id, bet, volatility, multiplier_x100, clusters, chain_log, won, payout,
-                server_seed, server_seed_hash, client_seed, nonce, created_at
+                server_seed, server_seed_hash, client_seed, nonce, created_at, seed_pair_id
            FROM arcade_cascade_rounds WHERE id = $1`,
         [req.params.id],
       );
@@ -392,10 +413,23 @@ export function registerArcadeCascadeRoutes({
       const row = r.rows[0];
       const volatility = row.volatility as CascadeVolatility;
 
-      // Re-derive the whole cascade from the published seeds.
-      const recomputed = isCascadeVolatility(volatility)
-        ? resolveCascade(volatility, cascadeFloatStream(row.server_seed, row.client_seed, Number(row.nonce)))
-        : null;
+      // Plaintext server seed is revealed ONLY once the pair has been rotated —
+      // until then the round exposes just the pre-published commitment, and the
+      // cascade cannot be re-derived yet.
+      const reveal = await revealedSeedForRound(
+        pool,
+        row.seed_pair_id ?? null,
+        row.server_seed ?? null,
+      );
+
+      // Re-derive the whole cascade from the revealed seeds (null until reveal).
+      const recomputed =
+        reveal.serverSeed && isCascadeVolatility(volatility)
+          ? resolveCascade(
+              volatility,
+              cascadeFloatStream(reveal.serverSeed, row.client_seed, Number(row.nonce)),
+            )
+          : null;
 
       return res.json({
         ok: true,
@@ -413,7 +447,8 @@ export function registerArcadeCascadeRoutes({
         won: !!row.won,
         payout: Number(row.payout),
         serverSeedHash: row.server_seed_hash,
-        serverSeed: row.server_seed,
+        serverSeed: reveal.serverSeed,
+        seedRevealed: reveal.revealed,
         clientSeed: row.client_seed,
         nonce: Number(row.nonce),
         createdAt: row.created_at,
@@ -423,7 +458,8 @@ export function registerArcadeCascadeRoutes({
           'connected matching gems; each pays round(pay[gem] × (1 + sizeBonus × (size - threshold)) × payScale); ' +
           'sum × combo[chain] / 100 is that link\'s win ×100; pop winners, drop survivors, refill empty slots ' +
           'column-by-column bottom-up (one draw each, in column order). Stop when no clusters form. ' +
-          'multiplierX100 = sum of every link\'s win; payout = floor(bet × multiplierX100 / 100).',
+          'multiplierX100 = sum of every link\'s win; payout = floor(bet × multiplierX100 / 100). ' +
+          'The serverSeedHash was committed before the bet; rotate your seed to reveal serverSeed and confirm sha256(serverSeed) === serverSeedHash.',
       });
     } catch (err) {
       logger.error('[arcade-cascade] verify failed', { error: (err as Error)?.message });

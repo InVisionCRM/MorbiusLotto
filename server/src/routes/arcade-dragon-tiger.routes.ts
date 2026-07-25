@@ -39,6 +39,7 @@ import {
   DT_HOUSE_EDGE_TIE_BP,
   type DragonTigerBets,
 } from '../services/arcade-dragon-tiger';
+import { consumeSeedForBet, revealedSeedForRound } from '../services/arcade-seed.service';
 import type { DatabaseService } from '../services/database.service';
 import type { AuthService } from '../services/auth.service';
 
@@ -142,24 +143,14 @@ export function registerArcadeDragonTigerRoutes({
       }
       const totalBet = v.total;
 
-      const serverSeed = pf.generateServerSeed();
-      const serverSeedHash = pf.createServerSeedHash(serverSeed);
-      const clientSeed =
-        typeof req.body?.clientSeed === 'string' && req.body.clientSeed.trim()
-          ? req.body.clientSeed.trim().slice(0, 128)
-          : crypto.randomBytes(16).toString('hex');
-      const nonce = 0;
-
-      // Same Fisher-Yates shuffle used by Baccarat / Video Poker / Blackjack —
-      // the deck is the full provably-fair commitment for this round.
-      const deck = pf.fisherYatesShuffle(serverSeed, clientSeed, nonce);
-      const round = dealDragonTiger(deck);
-      const payouts = resolvePayouts(bets, round);
-      const totalPayout = sumPayouts(payouts);
-      const won = totalPayout > totalBet;
-
       const roundId = crypto.randomUUID();
       let chipBalance = 0n;
+      let round!: ReturnType<typeof dealDragonTiger>;
+      let payouts!: ReturnType<typeof resolvePayouts>;
+      let totalPayout = 0;
+      let won = false;
+      let serverSeedHash = '';
+      let nonce = 0;
       await dbService.withTransaction(async (client) => {
         // Charge the total wager — throws if the wallet can't cover it.
         chipBalance = await applyPokerChipDelta(
@@ -169,6 +160,22 @@ export function registerArcadeDragonTigerRoutes({
           'arcade_dragon_tiger_bet',
           { type: 'arcade_dragon_tiger', id: roundId },
         );
+
+        // Consume the wallet's PRE-COMMITTED active seed at the next nonce. Its
+        // hash was published before this bet (GET /api/arcade/seed/active) and
+        // the plaintext stays hidden until the player rotates — so the deck was
+        // provably fixed in advance, not chosen at settle time. Same Fisher-Yates
+        // shuffle used by Baccarat / Video Poker / Blackjack; only the seed
+        // provenance and the (now sequential) nonce changed.
+        const seed = await consumeSeedForBet(client, wallet);
+        serverSeedHash = seed.serverSeedHash;
+        nonce = seed.nonce;
+        const deck = pf.fisherYatesShuffle(seed.serverSeed, seed.clientSeed, seed.nonce);
+        round = dealDragonTiger(deck);
+        payouts = resolvePayouts(bets, round);
+        totalPayout = sumPayouts(payouts);
+        won = totalPayout > totalBet;
+
         if (totalPayout > 0) {
           chipBalance = await applyPokerChipDelta(
             client,
@@ -178,12 +185,14 @@ export function registerArcadeDragonTigerRoutes({
             { type: 'arcade_dragon_tiger', id: roundId },
           );
         }
+        // server_seed stays NULL on the round — the plaintext lives only in the
+        // seed pair's pending row and is revealed via rotation, not per-round.
         await client.query(
           `INSERT INTO arcade_dragon_tiger_rounds
              (id, wallet_address, bets, total_bet, dragon_card, tiger_card, result,
               payouts, total_payout, won, server_seed, server_seed_hash, client_seed,
-              nonce, house_edge_bp)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`,
+              nonce, house_edge_bp, seed_pair_id)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NULL, $11, $12, $13, $14, $15)`,
           [
             roundId,
             wallet.toLowerCase(),
@@ -195,11 +204,11 @@ export function registerArcadeDragonTigerRoutes({
             JSON.stringify(payouts),
             totalPayout,
             won,
-            serverSeed,
             serverSeedHash,
-            clientSeed,
+            seed.clientSeed,
             nonce,
             DT_HOUSE_EDGE_SIDE_BP,
+            seed.seedPairId,
           ],
         );
       });
@@ -218,6 +227,7 @@ export function registerArcadeDragonTigerRoutes({
         totalPayout,
         won,
         serverSeedHash,
+        nonce,
         chipBalance: chipBalance.toString(),
       });
     } catch (err) {
@@ -349,7 +359,7 @@ export function registerArcadeDragonTigerRoutes({
       const r = await pool.query(
         `SELECT id, bets, total_bet, dragon_card, tiger_card, result,
                 payouts, total_payout, won, server_seed, server_seed_hash,
-                client_seed, nonce, created_at
+                client_seed, nonce, created_at, seed_pair_id
            FROM arcade_dragon_tiger_rounds WHERE id = $1`,
         [req.params.id],
       );
@@ -357,6 +367,13 @@ export function registerArcadeDragonTigerRoutes({
         return res.status(404).json({ ok: false, error: 'Round not found.' });
       }
       const row = r.rows[0];
+      // Plaintext server seed is revealed ONLY once the pair has been rotated —
+      // until then the round exposes just the pre-published commitment.
+      const reveal = await revealedSeedForRound(
+        pool,
+        row.seed_pair_id ?? null,
+        row.server_seed ?? null,
+      );
       return res.json({
         ok: true,
         roundId: row.id,
@@ -369,7 +386,8 @@ export function registerArcadeDragonTigerRoutes({
         totalPayout: Number(row.total_payout),
         won: !!row.won,
         serverSeedHash: row.server_seed_hash,
-        serverSeed: row.server_seed,
+        serverSeed: reveal.serverSeed,
+        seedRevealed: reveal.revealed,
         clientSeed: row.client_seed,
         nonce: Number(row.nonce),
         createdAt: row.created_at,
@@ -379,7 +397,8 @@ export function registerArcadeDragonTigerRoutes({
           'rank0 = cardIndex % 13 (0 = Ace LOW .. 12 = King); suit = floor(cardIndex / 13). ' +
           'Higher rank0 wins (Dragon vs Tiger); equal rank0 = tie. ' +
           'Payouts ×100 (gross): Dragon/Tiger win = 200, Tie win = 1200; ' +
-          'on a tie, Dragon & Tiger bets return 50 (half the stake).',
+          'on a tie, Dragon & Tiger bets return 50 (half the stake). ' +
+          'The serverSeedHash was committed before the bet; rotate your seed to reveal serverSeed and confirm sha256(serverSeed) === serverSeedHash.',
       });
     } catch (err) {
       logger.error('[arcade-dragon-tiger] verify failed', { error: (err as Error)?.message });

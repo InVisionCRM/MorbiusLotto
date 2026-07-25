@@ -30,7 +30,9 @@ import {
   AB_PAY_BAHAR,
   AB_HOUSE_EDGE_BP,
   type AndarBaharSide,
+  type AndarBaharResult,
 } from '../services/arcade-andar-bahar';
+import { consumeSeedForBet, revealedSeedForRound } from '../services/arcade-seed.service';
 import type { DatabaseService } from '../services/database.service';
 import type { AuthService } from '../services/auth.service';
 
@@ -110,21 +112,11 @@ export function registerArcadeAndarBaharRoutes({
         return res.status(400).json({ ok: false, error: validation.error });
       }
 
-      const serverSeed = pf.generateServerSeed();
-      const serverSeedHash = pf.createServerSeedHash(serverSeed);
-      const clientSeed =
-        typeof req.body?.clientSeed === 'string' && req.body.clientSeed.trim()
-          ? req.body.clientSeed.trim().slice(0, 128)
-          : crypto.randomBytes(16).toString('hex');
-      const nonce = 0;
-
-      // Same primitive as Baccarat: a Fisher-Yates 52-card shuffle so the verifier
-      // re-uses identical code. Only rank0 (idx % 13) decides the match.
-      const deck = pf.fisherYatesShuffle(serverSeed, clientSeed, nonce);
-      const result = resolveAndarBahar(deck, side as AndarBaharSide, bet);
-
       const roundId = crypto.randomUUID();
       let chipBalance = 0n;
+      let result!: AndarBaharResult;
+      let serverSeedHash = '';
+      let nonce = 0;
       await dbService.withTransaction(async (client) => {
         // Charges the bet (throws if the wallet can't cover it).
         chipBalance = await applyPokerChipDelta(
@@ -134,6 +126,21 @@ export function registerArcadeAndarBaharRoutes({
           'arcade_andar_bahar_bet',
           { type: 'arcade_andar_bahar', id: roundId },
         );
+
+        // Consume the wallet's PRE-COMMITTED active seed at the next nonce. Its
+        // hash was published before this bet (GET /api/arcade/seed/active) and
+        // the plaintext stays hidden until the player rotates — so the deal was
+        // provably fixed in advance, not chosen at settle time. Same Fisher-Yates
+        // 52-card shuffle primitive as before; only the seed provenance and the
+        // (now sequential) nonce changed.
+        const seed = await consumeSeedForBet(client, wallet);
+        serverSeedHash = seed.serverSeedHash;
+        nonce = seed.nonce;
+        // Same primitive as Baccarat: a Fisher-Yates 52-card shuffle so the verifier
+        // re-uses identical code. Only rank0 (idx % 13) decides the match.
+        const deck = pf.fisherYatesShuffle(seed.serverSeed, seed.clientSeed, seed.nonce);
+        result = resolveAndarBahar(deck, side as AndarBaharSide, bet);
+
         if (result.payout > 0) {
           chipBalance = await applyPokerChipDelta(
             client,
@@ -143,12 +150,14 @@ export function registerArcadeAndarBaharRoutes({
             { type: 'arcade_andar_bahar', id: roundId },
           );
         }
+        // server_seed stays NULL on the round — the plaintext lives only in the
+        // seed pair's pending row and is revealed via rotation, not per-round.
         await client.query(
           `INSERT INTO arcade_andar_bahar_rounds
              (id, wallet_address, side, bet, joker_card, andar_cards, bahar_cards,
               winning_side, match_index, won, payout, server_seed, server_seed_hash,
-              client_seed, nonce)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`,
+              client_seed, nonce, seed_pair_id)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NULL, $12, $13, $14, $15)`,
           [
             roundId,
             wallet.toLowerCase(),
@@ -161,10 +170,10 @@ export function registerArcadeAndarBaharRoutes({
             result.matchIndex,
             result.won,
             result.payout,
-            serverSeed,
             serverSeedHash,
-            clientSeed,
+            seed.clientSeed,
             nonce,
+            seed.seedPairId,
           ],
         );
       });
@@ -182,6 +191,7 @@ export function registerArcadeAndarBaharRoutes({
         won: result.won,
         payout: result.payout,
         serverSeedHash,
+        nonce,
         chipBalance: chipBalance.toString(),
       });
     } catch (err) {
@@ -314,7 +324,7 @@ export function registerArcadeAndarBaharRoutes({
       const r = await pool.query(
         `SELECT id, side, bet, joker_card, andar_cards, bahar_cards, winning_side,
                 match_index, won, payout, server_seed, server_seed_hash, client_seed,
-                nonce, created_at
+                nonce, created_at, seed_pair_id
            FROM arcade_andar_bahar_rounds WHERE id = $1`,
         [req.params.id],
       );
@@ -322,10 +332,23 @@ export function registerArcadeAndarBaharRoutes({
         return res.status(404).json({ ok: false, error: 'Round not found.' });
       }
       const row = r.rows[0];
-      // Re-derive the deal from the published seeds so the verifier can confirm
-      // the stored joker / piles / winner weren't tampered with server-side.
-      const deck = pf.fisherYatesShuffle(row.server_seed, row.client_seed, Number(row.nonce));
-      const recomputed = resolveAndarBahar(deck, row.side as AndarBaharSide, Number(row.bet));
+      // Plaintext server seed is revealed ONLY once the pair has been rotated —
+      // until then the round exposes just the pre-published commitment.
+      const reveal = await revealedSeedForRound(
+        pool,
+        row.seed_pair_id ?? null,
+        row.server_seed ?? null,
+      );
+      // Re-derive the deal from the REVEALED seed so the verifier can confirm the
+      // stored joker / piles / winner weren't tampered with server-side. Only
+      // possible once the seed has been revealed; until then echo the stored deal.
+      const recomputed = reveal.serverSeed
+        ? resolveAndarBahar(
+            pf.fisherYatesShuffle(reveal.serverSeed, row.client_seed, Number(row.nonce)),
+            row.side as AndarBaharSide,
+            Number(row.bet),
+          )
+        : null;
       return res.json({
         ok: true,
         roundId: row.id,
@@ -338,14 +361,18 @@ export function registerArcadeAndarBaharRoutes({
         matchIndex: Number(row.match_index),
         won: row.won,
         payout: Number(row.payout),
-        // Recomputed deal (from the published seeds) for an independent check.
-        recomputedJoker: recomputed.joker,
-        recomputedAndarCards: recomputed.andarCards,
-        recomputedBaharCards: recomputed.baharCards,
-        recomputedWinningSide: recomputed.winningSide,
-        recomputedPayout: recomputed.payout,
+        // Recomputed deal (from the revealed seed) for an independent check —
+        // falls back to the stored deal while the seed is still committed.
+        recomputedJoker: recomputed ? recomputed.joker : Number(row.joker_card),
+        recomputedAndarCards: recomputed ? recomputed.andarCards : (row.andar_cards as number[]),
+        recomputedBaharCards: recomputed ? recomputed.baharCards : (row.bahar_cards as number[]),
+        recomputedWinningSide: recomputed
+          ? recomputed.winningSide
+          : (row.winning_side as AndarBaharSide),
+        recomputedPayout: recomputed ? recomputed.payout : Number(row.payout),
         serverSeedHash: row.server_seed_hash,
-        serverSeed: row.server_seed,
+        serverSeed: reveal.serverSeed,
+        seedRevealed: reveal.revealed,
         clientSeed: row.client_seed,
         nonce: Number(row.nonce),
         houseEdgeBp: AB_HOUSE_EDGE_BP,
@@ -355,7 +382,8 @@ export function registerArcadeAndarBaharRoutes({
           'joker = deck[0]; jokerRank = deck[0] % 13. ' +
           'Deal deck[1], deck[2], … alternately to Andar (first) then Bahar until a ' +
           'card with rank (idx % 13) === jokerRank; that pile wins. ' +
-          'Andar pays 1.90× total, Bahar pays 2.00× total on a win.',
+          'Andar pays 1.90× total, Bahar pays 2.00× total on a win. ' +
+          'The serverSeedHash was committed before the bet; rotate your seed to reveal serverSeed and confirm sha256(serverSeed) === serverSeedHash.',
       });
     } catch (err) {
       logger.error('[arcade-andar-bahar] verify failed', { error: (err as Error)?.message });

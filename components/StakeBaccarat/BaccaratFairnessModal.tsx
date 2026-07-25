@@ -12,6 +12,7 @@ import { useEffect, useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { ArcadeSeedControls } from '@/components/shared/ArcadeSeedControls';
 import {
   verifyBaccarat,
   dealBaccaratFromDeck,
@@ -27,8 +28,6 @@ import {
 interface BaccaratFairnessModalProps {
   open: boolean;
   onClose: () => void;
-  clientSeed: string;
-  onClientSeedChange: (seed: string) => void;
   requestVerifyId: string | null;
 }
 
@@ -78,17 +77,9 @@ async function sha256Hex(input: string): Promise<string> {
     .join('');
 }
 
-function randomClientSeed(): string {
-  const bytes = new Uint8Array(16);
-  crypto.getRandomValues(bytes);
-  return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
-}
-
 export function BaccaratFairnessModal({
   open,
   onClose,
-  clientSeed,
-  onClientSeedChange,
   requestVerifyId,
 }: BaccaratFairnessModalProps) {
   const [verifyId, setVerifyId] = useState('');
@@ -111,7 +102,8 @@ export function BaccaratFairnessModal({
     try {
       const r = await verifyBaccarat(trimmed);
       setResult(r);
-      setHashMatches((await sha256Hex(r.serverSeed)) === r.serverSeedHash);
+      // Seed only revealed after rotation; until then we can't check the hash.
+      setHashMatches(r.serverSeed ? (await sha256Hex(r.serverSeed)) === r.serverSeedHash : null);
       const hand = dealBaccaratFromDeck(r.deck);
       setDealMatches(
         hand.result === r.result &&
@@ -143,34 +135,14 @@ export function BaccaratFairnessModal({
         </DialogHeader>
 
         <div className="space-y-5">
-          <section className="space-y-2">
-            <h3 className="text-sm font-semibold text-slate-200">Your client seed</h3>
-            <p className="text-xs text-slate-500">
-              Mixed into every shuffle. Change it any time — the next hand uses the new value.
-            </p>
-            <div className="flex gap-2">
-              <Input
-                value={clientSeed}
-                onChange={(e) => onClientSeedChange(e.target.value.slice(0, 128))}
-                placeholder="Leave blank for a random seed each hand"
-                className="border-cyan-950 bg-[#081420] font-mono text-xs"
-              />
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => onClientSeedChange(randomClientSeed())}
-                className="shrink-0 border-cyan-950 bg-transparent text-cyan-300 hover:bg-cyan-500/10"
-              >
-                New seed
-              </Button>
-            </div>
-          </section>
+          {/* Persistent commitment + client-seed controls */}
+          <ArcadeSeedControls open={open} />
 
           <section className="space-y-2">
             <h3 className="text-sm font-semibold text-slate-200">Verify a hand</h3>
             <p className="text-xs text-slate-500">
               The 52-card deck is shuffled from a server seed committed (hashed) before your bets
-              were accepted — verify it was never moved.
+              were accepted — rotate your seed above to reveal it, then verify it was never moved.
             </p>
             <div className="flex gap-2">
               <Input
@@ -203,6 +175,12 @@ export function BaccaratFairnessModal({
                 {payoutMatches !== null && (
                   <Check ok={payoutMatches} label="Every payout reconciles with the public payout table" />
                 )}
+                {!result.seedRevealed && (
+                  <p className="text-xs text-amber-300/80">
+                    Server seed still committed — rotate your seed above to reveal it and
+                    confirm the hash.
+                  </p>
+                )}
               </div>
 
               <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500">
@@ -218,7 +196,10 @@ export function BaccaratFairnessModal({
 
               <div className="grid grid-cols-1 gap-2">
                 <Field label="Server seed hash (committed)" value={result.serverSeedHash} />
-                <Field label="Server seed (revealed)" value={result.serverSeed} />
+                <Field
+                  label="Server seed (revealed)"
+                  value={result.serverSeed ?? 'Hidden until you rotate your seed'}
+                />
                 <Field label="Client seed" value={result.clientSeed} />
                 <Field label="Nonce" value={String(result.nonce)} />
                 <Field label="Recipe" value={result.recipe} />

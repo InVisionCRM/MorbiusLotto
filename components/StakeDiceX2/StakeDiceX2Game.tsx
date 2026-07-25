@@ -83,7 +83,6 @@ export function StakeDiceX2Game() {
   // Default band: 25.00 – 75.00 (a 50-wide, even-odds window).
   const [lowX100, setLowX100] = useState<number>(2500)
   const [highX100, setHighX100] = useState<number>(7500)
-  const [clientSeed, setClientSeed] = useState('')
 
   const [lastRoll, setLastRoll] = useState<DiceX2PlayResult | null>(null)
   const [recent, setRecent] = useState<RecentRoll[]>([])
@@ -277,7 +276,6 @@ export function StakeDiceX2Game() {
         bet: stake,
         lowX100: low,
         highX100: high,
-        clientSeed: clientSeed.trim() || undefined,
       })
       if (!mounted.current) return false
       const profit = res.payout - res.bet
@@ -325,7 +323,7 @@ export function StakeDiceX2Game() {
     } finally {
       inFlight.current -= 1
     }
-  }, [info, bet, lowX100, highX100, clientSeed, clampBet, reportWin])
+  }, [info, bet, lowX100, highX100, clampBet, reportWin])
 
   // Fixed-cadence auto loop — fire each roll WITHOUT awaiting the round-trip
   // (same scheduler as dice2). Errors stop the run.
@@ -816,8 +814,6 @@ export function StakeDiceX2Game() {
           setFairnessOpen(false)
           setVerifyTarget(null)
         }}
-        clientSeed={clientSeed}
-        onClientSeedChange={setClientSeed}
         requestVerifyId={verifyTarget}
       />
 

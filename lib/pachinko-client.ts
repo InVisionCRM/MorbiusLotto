@@ -55,6 +55,9 @@ export interface PachinkoPlayResult {
   won: boolean;
   payout: number;
   serverSeedHash: string;
+  /** Sequential nonce this drop consumed under the active seed commitment.
+   *  Optional: present on a live /play response, omitted on a synthetic replay. */
+  nonce?: number;
   chipBalance: string;
 }
 
@@ -100,7 +103,9 @@ export interface PachinkoVerifyResult {
   won: boolean;
   payout: number;
   serverSeedHash: string;
-  serverSeed: string;
+  /** null until the round's seed pair has been rotated (revealed). */
+  serverSeed: string | null;
+  seedRevealed: boolean;
   clientSeed: string;
   nonce: number;
   createdAt: string;
@@ -131,8 +136,9 @@ export async function fetchPachinkoInfo(): Promise<PachinkoInfo> {
 export async function playPachinko(args: {
   bet: number;
   risk: PachinkoRisk;
-  clientSeed?: string;
 }): Promise<PachinkoPlayResult> {
+  // Client seed is managed on the persistent seed pair (see arcade-seed-client),
+  // not passed per-bet — the server derives the pocket from the pre-committed seed.
   return apiFetchJson<PachinkoPlayResult>('/api/arcade/pachinko/play', {
     method: 'POST',
     body: JSON.stringify(args),

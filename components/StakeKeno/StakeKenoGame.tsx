@@ -96,7 +96,6 @@ export function StakeKenoGame() {
   const [selected, setSelected] = useState<Set<number>>(new Set())
   const [risk, setRisk] = useState<KenoRisk>('classic')
   const [bet, setBet] = useState<number>(10)
-  const [clientSeed, setClientSeed] = useState('')
 
   const [revealed, setRevealed] = useState<Set<number> | null>(null)
   const [result, setResult] = useState<KenoPlayResult | null>(null)
@@ -351,7 +350,6 @@ export function StakeKenoGame() {
               picks: [...selected],
               risk,
               bet: stake,
-              clientSeed: clientSeed.trim() || undefined,
             })
           } catch (e) {
             setPhase('idle')
@@ -437,7 +435,7 @@ export function StakeKenoGame() {
           }
         })()
       }),
-    [picksCount, selected, risk, bet, clientSeed, clampBet, clearReveal, refetchRecent, reportWin],
+    [picksCount, selected, risk, bet, clampBet, clearReveal, refetchRecent, reportWin],
   )
 
   const placeBet = useCallback(async () => {
@@ -800,8 +798,6 @@ export function StakeKenoGame() {
           setFairnessOpen(false)
           setVerifyTarget(null)
         }}
-        clientSeed={clientSeed}
-        onClientSeedChange={setClientSeed}
         requestVerifyId={verifyTarget}
       />
 

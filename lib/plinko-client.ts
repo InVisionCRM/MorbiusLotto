@@ -61,9 +61,10 @@ export interface PlinkoPlayResult {
   payout: number;
   won: boolean;
   serverSeedHash: string;
-  serverSeed: string;
   clientSeed: string;
-  nonce: number;
+  /** Sequential nonce this ball consumed under the active seed commitment.
+   *  Optional: present on a live /play response, omitted on a synthetic replay. */
+  nonce?: number;
   chipBalance: string;
 }
 
@@ -98,8 +99,9 @@ export async function fetchPlinkoMultipliers(): Promise<PlinkoMultipliers> {
 export async function playPlinko(args: {
   risk: PlinkoRisk;
   bet: number;
-  clientSeed?: string;
 }): Promise<PlinkoPlayResult> {
+  // Client seed is managed on the persistent seed pair (see arcade-seed-client),
+  // not passed per-bet — the server derives the path from the pre-committed seed.
   return apiFetchJson<PlinkoPlayResult>('/api/plinko/play', {
     method: 'POST',
     body: JSON.stringify(args),
@@ -120,7 +122,9 @@ export interface PlinkoVerifyResult {
   bucket: number;
   multiplierX100: number;
   payout: number;
-  serverSeed: string;
+  /** null until the round's seed pair has been rotated (revealed). */
+  serverSeed: string | null;
+  seedRevealed: boolean;
   serverSeedHash: string;
   clientSeed: string;
   nonce: number;
@@ -130,9 +134,9 @@ export interface PlinkoVerifyResult {
     pathMatches: boolean;
     payoutMatches: boolean;
     recomputedPath: number[];
-    recomputedBucket: number;
-    recomputedMultiplierX100: number;
-    recomputedPayout: number;
+    recomputedBucket: number | null;
+    recomputedMultiplierX100: number | null;
+    recomputedPayout: number | null;
   };
   recipe: string;
 }

@@ -22,6 +22,7 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
+import { ArcadeSeedControls } from '@/components/shared/ArcadeSeedControls'
 import {
   verifyDragonTiger,
   cardRank,
@@ -35,8 +36,6 @@ import {
 interface DragonTigerFairnessModalProps {
   open: boolean
   onClose: () => void
-  clientSeed: string
-  onClientSeedChange: (seed: string) => void
   /** When set (and the modal is open), the id is filled in and verified immediately. */
   requestVerifyId: string | null
 }
@@ -82,13 +81,6 @@ async function sha256Hex(input: string): Promise<string> {
   return Array.from(new Uint8Array(digest))
     .map((b) => b.toString(16).padStart(2, '0'))
     .join('')
-}
-
-/** 16 random bytes → 32-char hex, generated locally with WebCrypto. */
-function randomClientSeed(): string {
-  const bytes = new Uint8Array(16)
-  crypto.getRandomValues(bytes)
-  return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('')
 }
 
 /** HMAC-SHA256(serverSeed, message) → bytes — mirrors pfService.hmacByteStream's HMAC. */
@@ -153,8 +145,6 @@ async function reDeriveDeck(
 export function DragonTigerFairnessModal({
   open,
   onClose,
-  clientSeed,
-  onClientSeedChange,
   requestVerifyId,
 }: DragonTigerFairnessModalProps) {
   const [verifyId, setVerifyId] = useState('')
@@ -175,12 +165,15 @@ export function DragonTigerFairnessModal({
     try {
       const r = await verifyDragonTiger(trimmed)
       setResult(r)
-      setHashMatches((await sha256Hex(r.serverSeed)) === r.serverSeedHash)
-      try {
-        const deck = await reDeriveDeck(r.serverSeed, r.clientSeed, r.nonce)
-        setCardsMatch(deck[0] === r.dragonCard && deck[1] === r.tigerCard)
-      } catch {
-        setCardsMatch(null)
+      // Seed only revealed after rotation; until then we can't check the hash or deck.
+      if (r.serverSeed) {
+        setHashMatches((await sha256Hex(r.serverSeed)) === r.serverSeedHash)
+        try {
+          const deck = await reDeriveDeck(r.serverSeed, r.clientSeed, r.nonce)
+          setCardsMatch(deck[0] === r.dragonCard && deck[1] === r.tigerCard)
+        } catch {
+          setCardsMatch(null)
+        }
       }
     } catch {
       setError('No round found with that ID.')
@@ -216,36 +209,15 @@ export function DragonTigerFairnessModal({
         </DialogHeader>
 
         <div className="space-y-5">
-          {/* Client seed */}
-          <section className="space-y-2">
-            <h3 className="text-sm font-semibold text-slate-200">Your client seed</h3>
-            <p className="text-xs text-slate-500">
-              Mixed into every shuffle. Change it any time — the next round uses the new value.
-            </p>
-            <div className="flex gap-2">
-              <Input
-                value={clientSeed}
-                onChange={(e) => onClientSeedChange(e.target.value.slice(0, 128))}
-                placeholder="Leave blank for a random seed each round"
-                className="arc-mono border-cyan-950 bg-[#081420] text-xs"
-              />
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => onClientSeedChange(randomClientSeed())}
-                className="shrink-0 border-cyan-950 bg-transparent text-cyan-300 hover:bg-cyan-500/10"
-              >
-                New seed
-              </Button>
-            </div>
-          </section>
+          {/* Persistent commitment + client-seed controls */}
+          <ArcadeSeedControls open={open} />
 
           {/* Verify */}
           <section className="space-y-2">
             <h3 className="text-sm font-semibold text-slate-200">Verify a round</h3>
             <p className="text-xs text-slate-500">
-              The deck is sealed from a server seed committed (hashed) before your bet — revealed
-              once the round settles, so you can re-shuffle it yourself.
+              The deck is sealed from the server-seed hash above, committed before your bet.
+              Rotate your seed to reveal it, then re-shuffle any past round here yourself.
             </p>
             <div className="flex gap-2">
               <Input
@@ -279,6 +251,12 @@ export function DragonTigerFairnessModal({
                   <Check ok={cardsMatch} label="Both cards re-derive from the shuffled deck" />
                 )}
                 <Check ok={resultMatches} label="Higher card (ace low) decides the result" />
+                {!result.seedRevealed && (
+                  <p className="text-xs text-amber-300/80">
+                    Server seed still committed — rotate your seed above to reveal it and
+                    confirm the deck.
+                  </p>
+                )}
               </div>
 
               {/* The deal, re-derived */}
@@ -304,7 +282,10 @@ export function DragonTigerFairnessModal({
 
               <div className="grid grid-cols-1 gap-2">
                 <Field label="Server seed hash (committed)" value={result.serverSeedHash} />
-                <Field label="Server seed (revealed)" value={result.serverSeed} />
+                <Field
+                  label="Server seed (revealed)"
+                  value={result.serverSeed ?? 'Hidden until you rotate your seed'}
+                />
                 <Field label="Client seed" value={result.clientSeed} />
                 <Field label="Nonce" value={String(result.nonce)} />
                 <Field label="Recipe" value={result.recipe} />
