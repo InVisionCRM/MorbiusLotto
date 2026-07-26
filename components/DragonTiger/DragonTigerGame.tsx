@@ -114,7 +114,6 @@ export function DragonTigerGame() {
 
   const [bet, setBet] = useState<number>(500)
   const [pick, setPick] = useState<Pick>('dragon')
-  const [clientSeed, setClientSeed] = useState('')
 
   const [mode, setMode] = useState<'manual' | 'auto'>('manual')
   const [autoCount, setAutoCount] = useState<number>(25)
@@ -377,7 +376,7 @@ export function DragonTigerGame() {
     }
 
     try {
-      const res = await playDragonTiger({ bets, clientSeed: clientSeed.trim() || undefined })
+      const res = await playDragonTiger({ bets })
       if (!mounted.current) return false
       setLastRound(res)
       // Resolve when settle() runs at the end of the paced reveal.
@@ -403,7 +402,7 @@ export function DragonTigerGame() {
       }
       return false
     }
-  }, [busy, replaying, info, bet, pick, clientSeed, clampBet, runReveal])
+  }, [busy, replaying, info, bet, pick, clampBet, runReveal])
 
   const deal = useCallback(() => {
     void playRound()
@@ -882,8 +881,6 @@ export function DragonTigerGame() {
           setFairnessOpen(false)
           setVerifyTarget(null)
         }}
-        clientSeed={clientSeed}
-        onClientSeedChange={setClientSeed}
         requestVerifyId={verifyTarget}
       />
 

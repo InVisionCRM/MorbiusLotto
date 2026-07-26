@@ -97,7 +97,6 @@ export function StakeRouletteGame() {
   const [historyLoading, setHistoryLoading] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
 
-  const [clientSeed, setClientSeed] = useState('');
   const [fairnessOpen, setFairnessOpen] = useState(false);
   const [rulesOpen, setRulesOpen] = useState(false);
   const [verifyTarget, setVerifyTarget] = useState<string | null>(null);
@@ -256,7 +255,6 @@ export function StakeRouletteGame() {
     try {
       const res = await spinRoulette2({
         bets: Object.values(bets),
-        clientSeed: clientSeed.trim() || undefined,
       });
       pendingRef.current = res;
       roulette2Audio.playSpinStart();
@@ -275,7 +273,7 @@ export function StakeRouletteGame() {
         setError(serverDetail(msg) ?? 'Could not complete the spin. Try again.');
       }
     }
-  }, [spinning, zoneCount, info, bets, clientSeed]);
+  }, [spinning, zoneCount, info, bets]);
 
   const onLanded = useCallback(() => {
     // Replay landing: just play the sound and unlock — no settlement.
@@ -658,8 +656,6 @@ export function StakeRouletteGame() {
           setFairnessOpen(false);
           setVerifyTarget(null);
         }}
-        clientSeed={clientSeed}
-        onClientSeedChange={setClientSeed}
         requestVerifyId={verifyTarget}
       />
 

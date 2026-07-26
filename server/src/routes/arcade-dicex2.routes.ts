@@ -27,7 +27,9 @@ import {
   DICEX2_MIN_WIDTH_X100,
   DICEX2_MAX_WIDTH_X100,
   DICEX2_SCALE_MAX_X100,
+  type DiceX2Result,
 } from '../services/arcade-dicex2';
+import { consumeSeedForBet, revealedSeedForRound } from '../services/arcade-seed.service';
 import type { DatabaseService } from '../services/database.service';
 import type { AuthService } from '../services/auth.service';
 
@@ -130,22 +132,11 @@ export function registerArcadeDiceX2Routes({
         });
       }
 
-      const serverSeed = pf.generateServerSeed();
-      const serverSeedHash = pf.createServerSeedHash(serverSeed);
-      const clientSeed =
-        typeof req.body?.clientSeed === 'string' && req.body.clientSeed.trim()
-          ? req.body.clientSeed.trim().slice(0, 128)
-          : crypto.randomBytes(16).toString('hex');
-      const nonce = 0;
-
-      // Same primitive as Dice/Limbo: one 4-byte slice of the HMAC stream at
-      // cursor 0 → float in [0,1), so the verifier re-uses identical code.
-      const bytes = pf.hmacByteStream(serverSeed, clientSeed, nonce, 0);
-      const r = pf.bytesToFloat(bytes);
-      const result = resolveDiceX2(lowX100, highX100, bet, r);
-
       const roundId = crypto.randomUUID();
       let chipBalance = 0n;
+      let result!: DiceX2Result;
+      let serverSeedHash = '';
+      let nonce = 0;
       await dbService.withTransaction(async (client) => {
         // Charges the bet (throws if the wallet can't cover it).
         chipBalance = await applyPokerChipDelta(
@@ -155,6 +146,19 @@ export function registerArcadeDiceX2Routes({
           'arcade_dicex2_bet',
           { type: 'arcade_dicex2', id: roundId },
         );
+
+        // Consume the wallet's PRE-COMMITTED active seed at the next nonce. Its
+        // hash was published before this bet (GET /api/arcade/seed/active) and
+        // the plaintext stays hidden until the player rotates — so the roll was
+        // provably fixed in advance, not chosen at settle time. Same single
+        // 4-byte cursor-0 HMAC primitive as before; only the seed provenance
+        // and the (now sequential) nonce changed.
+        const seed = await consumeSeedForBet(client, wallet);
+        serverSeedHash = seed.serverSeedHash;
+        nonce = seed.nonce;
+        const r = pf.bytesToFloat(pf.hmacByteStream(seed.serverSeed, seed.clientSeed, seed.nonce, 0));
+        result = resolveDiceX2(lowX100, highX100, bet, r);
+
         if (result.payout > 0) {
           chipBalance = await applyPokerChipDelta(
             client,
@@ -164,12 +168,14 @@ export function registerArcadeDiceX2Routes({
             { type: 'arcade_dicex2', id: roundId },
           );
         }
+        // server_seed stays NULL on the round — the plaintext lives only in the
+        // seed pair's pending row and is revealed via rotation, not per-round.
         await client.query(
           `INSERT INTO arcade_dicex2_rounds
              (id, wallet_address, bet, low_x100, high_x100, roll_x100, multiplier_x100,
               won, payout, server_seed, server_seed_hash, client_seed, nonce,
-              house_edge_bp)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
+              house_edge_bp, seed_pair_id)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NULL, $9, $10, $11, $12, $13)`,
           [
             roundId,
             wallet.toLowerCase(),
@@ -180,11 +186,11 @@ export function registerArcadeDiceX2Routes({
             result.multiplierX100,
             result.won,
             result.payout,
-            serverSeed,
             serverSeedHash,
-            clientSeed,
+            seed.clientSeed,
             nonce,
             DICEX2_HOUSE_EDGE_BP,
+            seed.seedPairId,
           ],
         );
       });
@@ -201,6 +207,7 @@ export function registerArcadeDiceX2Routes({
         won: result.won,
         payout: result.payout,
         serverSeedHash,
+        nonce,
         chipBalance: chipBalance.toString(),
       });
     } catch (err) {
@@ -329,7 +336,7 @@ export function registerArcadeDiceX2Routes({
       const r = await pool.query(
         `SELECT id, bet, low_x100, high_x100, roll_x100, multiplier_x100, won, payout,
                 server_seed, server_seed_hash, client_seed, nonce, house_edge_bp,
-                created_at
+                created_at, seed_pair_id
            FROM arcade_dicex2_rounds WHERE id = $1`,
         [req.params.id],
       );
@@ -341,6 +348,13 @@ export function registerArcadeDiceX2Routes({
       // we'd recompute if `multiplier_x100` were ever missing.
       const widthX100 = Number(row.high_x100) - Number(row.low_x100);
       const recomputedMultiplier = multiplierX100ForWidth(widthX100, Number(row.house_edge_bp));
+      // Plaintext server seed is revealed ONLY once the pair has been rotated —
+      // until then the round exposes just the pre-published commitment.
+      const reveal = await revealedSeedForRound(
+        pool,
+        row.seed_pair_id ?? null,
+        row.server_seed ?? null,
+      );
       return res.json({
         ok: true,
         roundId: row.id,
@@ -354,7 +368,8 @@ export function registerArcadeDiceX2Routes({
         won: row.won,
         payout: Number(row.payout),
         serverSeedHash: row.server_seed_hash,
-        serverSeed: row.server_seed,
+        serverSeed: reveal.serverSeed,
+        seedRevealed: reveal.revealed,
         clientSeed: row.client_seed,
         nonce: Number(row.nonce),
         houseEdgeBp: Number(row.house_edge_bp),
@@ -364,7 +379,8 @@ export function registerArcadeDiceX2Routes({
           'rollX100 = floor(r * 10000). ' +
           'widthX100 = highX100 - lowX100. ' +
           'multiplierX100 = floor((10000 - houseEdgeBp) * 100 / widthX100). ' +
-          'Player wins when lowX100 <= rollX100 < highX100, paid bet * multiplierX100 / 100.',
+          'Player wins when lowX100 <= rollX100 < highX100, paid bet * multiplierX100 / 100. ' +
+          'The serverSeedHash was committed before the bet; rotate your seed to reveal serverSeed and confirm sha256(serverSeed) === serverSeedHash.',
       });
     } catch (err) {
       logger.error('[arcade-dicex2] verify failed', { error: (err as Error)?.message });

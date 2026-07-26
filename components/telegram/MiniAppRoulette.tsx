@@ -75,7 +75,6 @@ interface SpinResult {
   bets: RouletteBet[];
   chipBalance: string;
   serverSeedHash: string;
-  serverSeed: string;
 }
 
 interface RouletteInfo {

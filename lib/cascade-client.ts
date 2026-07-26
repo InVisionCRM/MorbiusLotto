@@ -74,8 +74,8 @@ export interface CascadePlayResult {
   won: boolean;
   payout: number;
   serverSeedHash: string;
-  clientSeed: string;
-  nonce: number;
+  /** Sequential nonce this drop consumed under the active seed commitment. */
+  nonce?: number;
   chipBalance: string;
 }
 
@@ -118,7 +118,9 @@ export interface CascadeVerifyResult {
   won: boolean;
   payout: number;
   serverSeedHash: string;
-  serverSeed: string;
+  /** null until the round's seed pair has been rotated (revealed). */
+  serverSeed: string | null;
+  seedRevealed: boolean;
   clientSeed: string;
   nonce: number;
   createdAt: string;
@@ -149,8 +151,9 @@ export async function fetchCascadeInfo(): Promise<CascadeInfo> {
 export async function playCascade(args: {
   bet: number;
   volatility: CascadeVolatility;
-  clientSeed?: string;
 }): Promise<CascadePlayResult> {
+  // Client seed is managed on the persistent seed pair (see arcade-seed-client),
+  // not passed per-bet — the server derives the cascade from the pre-committed seed.
   return apiFetchJson<CascadePlayResult>('/api/arcade/cascade/play', {
     method: 'POST',
     body: JSON.stringify(args),

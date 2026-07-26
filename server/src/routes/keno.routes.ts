@@ -13,8 +13,10 @@
  * draw, payout credit, row insert) runs in a single DB transaction, so a round
  * is atomic — never half-settled, never paid twice. Chips move through the
  * shared player_poker_chips wallet (poker_chip_ledger reasons keno_bet /
- * keno_payout). The committed server seed is revealed in the same row at play
- * time (instant-settle game), which is what makes each round verifiable.
+ * keno_payout). The server seed is a PERSISTENT per-wallet commitment (shared
+ * arcade-seed.service): its hash is published before the bet and the plaintext
+ * is revealed only when the player rotates, which is what makes each round
+ * verifiable — the draw could not be chosen after the fact.
  */
 
 import crypto from 'crypto';
@@ -37,7 +39,9 @@ import {
   KENO_MAX_PICKS,
   KENO_MIN_BET,
   KENO_MAX_BET,
+  type KenoResult,
 } from '../services/keno';
+import { consumeSeedForBet, revealedSeedForRound } from '../services/arcade-seed.service';
 
 interface RegisterKenoRoutesOptions {
   app: Express;
@@ -52,7 +56,9 @@ const KENO_RECIPE =
   'drawn = ProvablyFairService.drawKenoNumbers(serverSeed, clientSeed, nonce): ' +
   'partial Fisher-Yates over tiles 1..40 using HMAC-SHA256 byte stream ' +
   '(message = `${clientSeed}:${nonce}:${roundIndex}`), taking the top 10 slots in draw order. ' +
-  'hits = |picks ∩ drawn|. payout = floor(bet × multiplierX100(risk, picks.length, hits) / 100).';
+  'hits = |picks ∩ drawn|. payout = floor(bet × multiplierX100(risk, picks.length, hits) / 100). ' +
+  'The serverSeedHash was committed before the bet; rotate your seed to reveal serverSeed and ' +
+  'confirm sha256(serverSeed) === serverSeedHash.';
 
 export function registerKenoRoutes({ app, dbService, authService }: RegisterKenoRoutesOptions): void {
   const pool = dbService.getPool();
@@ -98,8 +104,9 @@ export function registerKenoRoutes({ app, dbService, authService }: RegisterKeno
 
   // ---------------------------------------------------------------------------
   // POST /api/keno/play — auth. Charge the bet, draw 10, settle in one txn.
-  // Body: { picks: number[], risk: 'classic'|'low'|'medium'|'high',
-  //         bet: number, clientSeed?: string }
+  // The draw is derived from the wallet's PERSISTENT pre-committed seed pair
+  // (consumeSeedForBet) — the client seed lives on that pair, not per-bet.
+  // Body: { picks: number[], risk: 'classic'|'low'|'medium'|'high', bet: number }
   // ---------------------------------------------------------------------------
   app.post('/api/keno/play', requireAuth(authService), async (req: Request, res: Response) => {
     const addr = req.user!.address.toLowerCase();
@@ -124,22 +131,16 @@ export function registerKenoRoutes({ app, dbService, authService }: RegisterKeno
           .json({ ok: false, error: `bet must be between ${KENO_MIN_BET} and ${KENO_MAX_BET} chips` });
       }
 
-      // --- provably-fair draw (fresh server seed per round, like Dice) ---
-      const serverSeed = pf.generateServerSeed();
-      const serverSeedHash = pf.createServerSeedHash(serverSeed);
-      const clientSeed =
-        typeof req.body?.clientSeed === 'string' && req.body.clientSeed.trim()
-          ? req.body.clientSeed.trim().slice(0, 128)
-          : crypto.randomBytes(16).toString('hex');
-      const nonce = 0;
-
-      const drawn = pf.drawKenoNumbers(serverSeed, clientSeed, nonce);
-      const result = resolveKeno(picks, drawn, risk, bet);
-
-      // --- atomic settle ---
+      // --- atomic settle (bet debit, provably-fair draw, payout, insert) ---
       const roundId = crypto.randomUUID();
       let chipBalance = 0n;
+      let drawn: number[] = [];
+      let result!: KenoResult;
+      let serverSeedHash = '';
+      let clientSeed = '';
+      let nonce = 0;
       await dbService.withTransaction(async (client) => {
+        // Charge the bet first (throws if the wallet can't cover it).
         chipBalance = await applyPokerChipDelta(
           client,
           addr,
@@ -147,6 +148,20 @@ export function registerKenoRoutes({ app, dbService, authService }: RegisterKeno
           'keno_bet',
           { type: 'keno_round', id: roundId },
         );
+
+        // Consume the wallet's PRE-COMMITTED active seed at the next nonce. Its
+        // hash was published before this bet (GET /api/arcade/seed/active) and
+        // the plaintext stays hidden until the player rotates — so the draw was
+        // provably fixed in advance, not chosen at settle time. Same
+        // drawKenoNumbers derivation as before; only the seed provenance and the
+        // (now sequential) nonce changed.
+        const seed = await consumeSeedForBet(client, addr);
+        serverSeedHash = seed.serverSeedHash;
+        clientSeed = seed.clientSeed;
+        nonce = seed.nonce;
+        drawn = pf.drawKenoNumbers(seed.serverSeed, seed.clientSeed, seed.nonce);
+        result = resolveKeno(picks, drawn, risk, bet);
+
         if (result.payout > 0) {
           chipBalance = await applyPokerChipDelta(
             client,
@@ -156,11 +171,13 @@ export function registerKenoRoutes({ app, dbService, authService }: RegisterKeno
             { type: 'keno_round', id: roundId },
           );
         }
+        // server_seed stays NULL on the round — the plaintext lives only in the
+        // seed pair's pending row and is revealed via rotation, not per-round.
         await client.query(
           `INSERT INTO keno_rounds
              (id, wallet_address, bet, risk, picks, drawn, hits, multiplier_x100,
-              payout, server_seed, server_seed_hash, client_seed, nonce)
-           VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb, $7, $8, $9, $10, $11, $12, $13)`,
+              payout, server_seed, server_seed_hash, client_seed, nonce, seed_pair_id)
+           VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb, $7, $8, $9, NULL, $10, $11, $12, $13)`,
           [
             roundId,
             addr,
@@ -171,10 +188,10 @@ export function registerKenoRoutes({ app, dbService, authService }: RegisterKeno
             result.hits,
             result.multiplierX100,
             result.payout,
-            serverSeed,
             serverSeedHash,
             clientSeed,
             nonce,
+            seed.seedPairId,
           ],
         );
       });
@@ -191,7 +208,6 @@ export function registerKenoRoutes({ app, dbService, authService }: RegisterKeno
         payout: result.payout,
         won: result.payout > 0,
         serverSeedHash,
-        serverSeed,
         clientSeed,
         nonce,
         chipBalance: chipBalance.toString(),
@@ -300,7 +316,8 @@ export function registerKenoRoutes({ app, dbService, authService }: RegisterKeno
     try {
       const r = await pool.query(
         `SELECT id, wallet_address, bet, risk, picks, drawn, hits, multiplier_x100,
-                payout, server_seed, server_seed_hash, client_seed, nonce, created_at
+                payout, server_seed, server_seed_hash, client_seed, nonce, created_at,
+                seed_pair_id
            FROM keno_rounds WHERE id = $1`,
         [req.params.id],
       );
@@ -309,12 +326,30 @@ export function registerKenoRoutes({ app, dbService, authService }: RegisterKeno
       }
       const row = r.rows[0];
 
-      // Re-derive the draw and re-score from the published seeds.
-      const recomputedDrawn = pf.drawKenoNumbers(row.server_seed, row.client_seed, Number(row.nonce));
-      const recomputed = resolveKeno(row.picks, recomputedDrawn, row.risk, Number(row.bet));
-      const hashMatches = pf.createServerSeedHash(row.server_seed) === row.server_seed_hash;
-      const drawMatches = JSON.stringify(recomputedDrawn) === JSON.stringify(row.drawn);
+      // Plaintext server seed is revealed ONLY once the pair has been rotated —
+      // until then the round exposes just the pre-published commitment.
+      const reveal = await revealedSeedForRound(
+        pool,
+        row.seed_pair_id ?? null,
+        row.server_seed ?? null,
+      );
+
+      // Re-derive the draw and re-score from the seeds — only possible once the
+      // server seed has been revealed. Until then, checks are reported false.
+      const recomputedDrawn = reveal.serverSeed
+        ? pf.drawKenoNumbers(reveal.serverSeed, row.client_seed, Number(row.nonce))
+        : [];
+      const recomputed = reveal.serverSeed
+        ? resolveKeno(row.picks, recomputedDrawn, row.risk, Number(row.bet))
+        : null;
+      const hashMatches = reveal.serverSeed
+        ? pf.createServerSeedHash(reveal.serverSeed) === row.server_seed_hash
+        : false;
+      const drawMatches = reveal.serverSeed
+        ? JSON.stringify(recomputedDrawn) === JSON.stringify(row.drawn)
+        : false;
       const payoutMatches =
+        recomputed != null &&
         recomputed.hits === row.hits &&
         recomputed.multiplierX100 === Number(row.multiplier_x100) &&
         recomputed.payout === Number(row.payout);
@@ -330,7 +365,8 @@ export function registerKenoRoutes({ app, dbService, authService }: RegisterKeno
         hits: row.hits,
         multiplierX100: Number(row.multiplier_x100),
         payout: Number(row.payout),
-        serverSeed: row.server_seed,
+        serverSeed: reveal.serverSeed,
+        seedRevealed: reveal.revealed,
         serverSeedHash: row.server_seed_hash,
         clientSeed: row.client_seed,
         nonce: Number(row.nonce),
@@ -340,9 +376,9 @@ export function registerKenoRoutes({ app, dbService, authService }: RegisterKeno
           drawMatches,
           payoutMatches,
           recomputedDrawn,
-          recomputedHits: recomputed.hits,
-          recomputedMultiplierX100: recomputed.multiplierX100,
-          recomputedPayout: recomputed.payout,
+          recomputedHits: recomputed?.hits ?? null,
+          recomputedMultiplierX100: recomputed?.multiplierX100 ?? null,
+          recomputedPayout: recomputed?.payout ?? null,
         },
         recipe: KENO_RECIPE,
       });

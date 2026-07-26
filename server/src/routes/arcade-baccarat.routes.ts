@@ -35,6 +35,7 @@ import {
   BACC_PAY_PAIR,
   type BaccaratBets,
 } from '../services/arcade-baccarat';
+import { consumeSeedForBet, revealedSeedForRound } from '../services/arcade-seed.service';
 import type { DatabaseService } from '../services/database.service';
 import type { AuthService } from '../services/auth.service';
 
@@ -136,23 +137,13 @@ export function registerArcadeBaccaratRoutes({
       }
       const totalBet = v.total;
 
-      const serverSeed = pf.generateServerSeed();
-      const serverSeedHash = pf.createServerSeedHash(serverSeed);
-      const clientSeed =
-        typeof req.body?.clientSeed === 'string' && req.body.clientSeed.trim()
-          ? req.body.clientSeed.trim().slice(0, 128)
-          : crypto.randomBytes(16).toString('hex');
-      const nonce = 0;
-
-      // Same Fisher-Yates shuffle used by Video Poker / Blackjack — the deck is
-      // the full provably-fair commitment for this hand.
-      const deck = pf.fisherYatesShuffle(serverSeed, clientSeed, nonce);
-      const hand = dealBaccarat(deck);
-      const payouts = resolvePayouts(bets, hand);
-      const totalPayout = sumPayouts(payouts);
-
       const handId = crypto.randomUUID();
       let chipBalance = 0n;
+      let hand!: ReturnType<typeof dealBaccarat>;
+      let payouts!: ReturnType<typeof resolvePayouts>;
+      let totalPayout = 0;
+      let serverSeedHash = '';
+      let nonce = 0;
       await dbService.withTransaction(async (client) => {
         // Charge the total wager — throws if the wallet can't cover it.
         chipBalance = await applyPokerChipDelta(
@@ -162,6 +153,21 @@ export function registerArcadeBaccaratRoutes({
           'arcade_baccarat_bet',
           { type: 'arcade_baccarat', id: handId },
         );
+
+        // Consume the wallet's PRE-COMMITTED active seed at the next nonce. Its
+        // hash was published before this bet (GET /api/arcade/seed/active) and
+        // the plaintext stays hidden until the player rotates — so the deal was
+        // provably fixed in advance, not chosen at settle time. Same Fisher-Yates
+        // shuffle used by Video Poker / Blackjack; only the seed provenance and
+        // the (now sequential) nonce changed.
+        const seed = await consumeSeedForBet(client, wallet);
+        serverSeedHash = seed.serverSeedHash;
+        nonce = seed.nonce;
+        const deck = pf.fisherYatesShuffle(seed.serverSeed, seed.clientSeed, seed.nonce);
+        hand = dealBaccarat(deck);
+        payouts = resolvePayouts(bets, hand);
+        totalPayout = sumPayouts(payouts);
+
         if (totalPayout > 0) {
           chipBalance = await applyPokerChipDelta(
             client,
@@ -171,12 +177,15 @@ export function registerArcadeBaccaratRoutes({
             { type: 'arcade_baccarat', id: handId },
           );
         }
+        // server_seed stays NULL on the hand — the plaintext lives only in the
+        // seed pair's pending row and is revealed via rotation, not per-hand.
         await client.query(
           `INSERT INTO arcade_baccarat_hands
              (id, wallet_address, bets, total_bet, deck, player_cards, banker_cards,
               player_total, banker_total, result, player_pair, banker_pair,
-              payouts, total_payout, server_seed, server_seed_hash, client_seed, nonce)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)`,
+              payouts, total_payout, server_seed, server_seed_hash, client_seed, nonce,
+              seed_pair_id)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, NULL, $15, $16, $17, $18)`,
           [
             handId,
             wallet.toLowerCase(),
@@ -192,10 +201,10 @@ export function registerArcadeBaccaratRoutes({
             hand.bankerPair,
             JSON.stringify(payouts),
             totalPayout,
-            serverSeed,
             serverSeedHash,
-            clientSeed,
+            seed.clientSeed,
             nonce,
+            seed.seedPairId,
           ],
         );
       });
@@ -215,6 +224,7 @@ export function registerArcadeBaccaratRoutes({
         payouts,
         totalPayout,
         serverSeedHash,
+        nonce,
         chipBalance: chipBalance.toString(),
       });
     } catch (err) {
@@ -352,7 +362,7 @@ export function registerArcadeBaccaratRoutes({
         `SELECT id, bets, total_bet, deck, player_cards, banker_cards,
                 player_total, banker_total, result, player_pair, banker_pair,
                 payouts, total_payout, server_seed, server_seed_hash,
-                client_seed, nonce, created_at
+                client_seed, nonce, created_at, seed_pair_id
            FROM arcade_baccarat_hands WHERE id = $1`,
         [req.params.id],
       );
@@ -360,6 +370,13 @@ export function registerArcadeBaccaratRoutes({
         return res.status(404).json({ ok: false, error: 'Hand not found.' });
       }
       const row = r.rows[0];
+      // Plaintext server seed is revealed ONLY once the pair has been rotated —
+      // until then the hand exposes just the pre-published commitment.
+      const reveal = await revealedSeedForRound(
+        pool,
+        row.seed_pair_id ?? null,
+        row.server_seed ?? null,
+      );
       return res.json({
         ok: true,
         handId: row.id,
@@ -376,7 +393,8 @@ export function registerArcadeBaccaratRoutes({
         payouts: row.payouts,
         totalPayout: Number(row.total_payout),
         serverSeedHash: row.server_seed_hash,
-        serverSeed: row.server_seed,
+        serverSeed: reveal.serverSeed,
+        seedRevealed: reveal.revealed,
         clientSeed: row.client_seed,
         nonce: Number(row.nonce),
         createdAt: row.created_at,
@@ -385,7 +403,8 @@ export function registerArcadeBaccaratRoutes({
           'Deal P1 = deck[0], B1 = deck[1], P2 = deck[2], B2 = deck[3], ' +
           'P3 = deck[4] (if player drew), B3 = deck[5] (if banker drew). ' +
           'Card value: A = 1, 2-9 = face, 10/J/Q/K = 0. Hand value = sum mod 10. ' +
-          'Standard punto-banco third-card rules apply.',
+          'Standard punto-banco third-card rules apply. ' +
+          'The serverSeedHash was committed before the bet; rotate your seed to reveal serverSeed and confirm sha256(serverSeed) === serverSeedHash.',
       });
     } catch (err) {
       logger.error('[arcade-baccarat] verify failed', { error: (err as Error)?.message });

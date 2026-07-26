@@ -109,7 +109,6 @@ export function AndarBaharGame() {
 
   const [side, setSide] = useState<AndarBaharSide>('andar')
   const [bet, setBet] = useState<number>(500)
-  const [clientSeed, setClientSeed] = useState('')
 
   const [mode, setMode] = useState<'manual' | 'auto'>('manual')
   const [autoCount, setAutoCount] = useState<number>(25)
@@ -348,7 +347,6 @@ export function AndarBaharGame() {
       const res = await playAndarBahar({
         side,
         bet: stake,
-        clientSeed: clientSeed.trim() || undefined,
       })
       if (!mounted.current) return 'stop'
       setBalance(BigInt(res.chipBalance))
@@ -394,7 +392,7 @@ export function AndarBaharGame() {
       setFeltMsg('Pick a side and deal')
       return 'stop'
     }
-  }, [busy, replaying, info, bet, side, clientSeed, clampBet, replayDeal])
+  }, [busy, replaying, info, bet, side, clampBet, replayDeal])
 
   // ── Replay a past round: stage the confirm overlay, then re-run the exact
   // same alternating deal (no server call, no balance/history change). ──
@@ -875,8 +873,6 @@ export function AndarBaharGame() {
           setFairnessOpen(false)
           setVerifyTarget(null)
         }}
-        clientSeed={clientSeed}
-        onClientSeedChange={setClientSeed}
         requestVerifyId={verifyTarget}
       />
 

@@ -51,6 +51,9 @@ export interface BaccaratPlayResult {
   payouts: BaccaratBets;
   totalPayout: number;
   serverSeedHash: string;
+  /** Sequential nonce this hand consumed under the active seed commitment.
+   *  Optional: present on a live /play response, omitted on a synthetic replay. */
+  nonce?: number;
   chipBalance: string;
 }
 
@@ -106,7 +109,9 @@ export interface BaccaratVerifyResult {
   payouts: BaccaratBets;
   totalPayout: number;
   serverSeedHash: string;
-  serverSeed: string;
+  /** null until the hand's seed pair has been rotated (revealed). */
+  serverSeed: string | null;
+  seedRevealed: boolean;
   clientSeed: string;
   nonce: number;
   createdAt: string;
@@ -320,8 +325,9 @@ export async function fetchBaccaratInfo(): Promise<BaccaratInfo> {
 
 export async function playBaccarat(args: {
   bets: Partial<BaccaratBets>;
-  clientSeed?: string;
 }): Promise<BaccaratPlayResult> {
+  // Client seed is managed on the persistent seed pair (see arcade-seed-client),
+  // not passed per-bet — the server derives the deck from the pre-committed seed.
   return apiFetchJson<BaccaratPlayResult>('/api/arcade/baccarat/play', {
     method: 'POST',
     body: JSON.stringify(args),

@@ -35,6 +35,7 @@ import {
   isPachinkoRisk,
   type PachinkoRisk,
 } from '../services/arcade-pachinko';
+import { consumeSeedForBet, revealedSeedForRound } from '../services/arcade-seed.service';
 import type { DatabaseService } from '../services/database.service';
 import type { AuthService } from '../services/auth.service';
 
@@ -135,26 +136,11 @@ export function registerArcadePachinkoRoutes({
         return res.status(400).json({ ok: false, error: 'Risk must be low, medium or high.' });
       }
 
-      const serverSeed = pf.generateServerSeed();
-      const serverSeedHash = pf.createServerSeedHash(serverSeed);
-      const clientSeed =
-        typeof req.body?.clientSeed === 'string' && req.body.clientSeed.trim()
-          ? req.body.clientSeed.trim().slice(0, 128)
-          : crypto.randomBytes(16).toString('hex');
-      const nonce = 0;
-
-      // Pocket (cursor 0) + cosmetic path (cursors 4..) from the shared HMAC
-      // float stream — identical primitive to Plinko/Chicken, so the verifier
-      // re-uses the same code.
-      const result = resolvePachinko(
-        risk,
-        bet,
-        (cursor) => pf.hmacByteStream(serverSeed, clientSeed, nonce, cursor),
-        (b) => pf.bytesToFloat(b),
-      );
-
       const roundId = crypto.randomUUID();
       let chipBalance = 0n;
+      let result!: ReturnType<typeof resolvePachinko>;
+      let serverSeedHash = '';
+      let nonce = 0;
       await dbService.withTransaction(async (client) => {
         // Charges the bet (throws if the wallet can't cover it).
         chipBalance = await applyPokerChipDelta(
@@ -164,6 +150,23 @@ export function registerArcadePachinkoRoutes({
           'arcade_pachinko_bet',
           { type: 'arcade_pachinko', id: roundId },
         );
+
+        // Consume the wallet's PRE-COMMITTED active seed at the next nonce. Its
+        // hash was published before this bet (GET /api/arcade/seed/active) and
+        // the plaintext stays hidden until the player rotates — so the pocket was
+        // provably fixed in advance, not chosen at settle time. Same shared HMAC
+        // float stream (pocket cursor 0 + cosmetic path cursors 4..) as before;
+        // only the seed provenance and the (now sequential) nonce changed.
+        const seed = await consumeSeedForBet(client, wallet);
+        serverSeedHash = seed.serverSeedHash;
+        nonce = seed.nonce;
+        result = resolvePachinko(
+          risk,
+          bet,
+          (cursor) => pf.hmacByteStream(seed.serverSeed, seed.clientSeed, seed.nonce, cursor),
+          (b) => pf.bytesToFloat(b),
+        );
+
         if (result.payout > 0) {
           chipBalance = await applyPokerChipDelta(
             client,
@@ -173,11 +176,14 @@ export function registerArcadePachinkoRoutes({
             { type: 'arcade_pachinko', id: roundId },
           );
         }
+        // server_seed stays NULL on the round — the plaintext lives only in the
+        // seed pair's pending row and is revealed via rotation, not per-round.
         await client.query(
           `INSERT INTO arcade_pachinko_rounds
              (id, wallet_address, bet, risk, pocket, path, multiplier_x100,
-              won, payout, server_seed, server_seed_hash, client_seed, nonce)
-           VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9, $10, $11, $12, $13)`,
+              won, payout, server_seed, server_seed_hash, client_seed, nonce,
+              seed_pair_id)
+           VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9, NULL, $10, $11, $12, $13)`,
           [
             roundId,
             wallet.toLowerCase(),
@@ -188,10 +194,10 @@ export function registerArcadePachinkoRoutes({
             result.multiplierX100,
             result.won,
             result.payout,
-            serverSeed,
             serverSeedHash,
-            clientSeed,
+            seed.clientSeed,
             nonce,
+            seed.seedPairId,
           ],
         );
       });
@@ -207,6 +213,7 @@ export function registerArcadePachinkoRoutes({
         won: result.won,
         payout: result.payout,
         serverSeedHash,
+        nonce,
         chipBalance: chipBalance.toString(),
       });
     } catch (err) {
@@ -334,7 +341,8 @@ export function registerArcadePachinkoRoutes({
     try {
       const r = await pool.query(
         `SELECT id, bet, risk, pocket, path, multiplier_x100, won, payout,
-                server_seed, server_seed_hash, client_seed, nonce, created_at
+                server_seed, server_seed_hash, client_seed, nonce, created_at,
+                seed_pair_id
            FROM arcade_pachinko_rounds WHERE id = $1`,
         [req.params.id],
       );
@@ -345,10 +353,22 @@ export function registerArcadePachinkoRoutes({
       const risk = row.risk as PachinkoRisk;
       const cfg = PACHINKO_RISKS[risk];
       const total = cfg.weights.reduce((a, b) => a + b, 0);
-      // Re-derive the pocket from the published seeds (independent of the stored
-      // value) so the verifier surfaces the recomputed pocket too.
-      const f0 = pf.bytesToFloat(pf.hmacByteStream(row.server_seed, row.client_seed, Number(row.nonce), 0));
-      const recomputedPocket = derivePachinkoPocket(risk, f0);
+      // Plaintext server seed is revealed ONLY once the pair has been rotated —
+      // until then the round exposes just the pre-published commitment.
+      const reveal = await revealedSeedForRound(
+        pool,
+        row.seed_pair_id ?? null,
+        row.server_seed ?? null,
+      );
+      // Re-derive the pocket from the revealed seed (independent of the stored
+      // value) so the verifier surfaces the recomputed pocket too. Falls back to
+      // the stored pocket while the seed is still committed (not yet revealed).
+      const recomputedPocket = reveal.serverSeed
+        ? derivePachinkoPocket(
+            risk,
+            pf.bytesToFloat(pf.hmacByteStream(reveal.serverSeed, row.client_seed, Number(row.nonce), 0)),
+          )
+        : Number(row.pocket);
       return res.json({
         ok: true,
         roundId: row.id,
@@ -367,7 +387,8 @@ export function registerArcadePachinkoRoutes({
         won: !!row.won,
         payout: Number(row.payout),
         serverSeedHash: row.server_seed_hash,
-        serverSeed: row.server_seed,
+        serverSeed: reveal.serverSeed,
+        seedRevealed: reveal.revealed,
         clientSeed: row.client_seed,
         nonce: Number(row.nonce),
         createdAt: row.created_at,
@@ -379,7 +400,8 @@ export function registerArcadePachinkoRoutes({
           'payout = floor(bet × multiplierX100 / 100). ' +
           `Cosmetic bounce: for row R in [0..${PACHINKO_ROWS - 1}], ` +
           'step R = bytesToFloat(hmacByteStream(serverSeed, clientSeed, nonce, (R+1)×4)) < 0.5 ? 0 : 1 — ' +
-          'a reveal animation only; it does not pick the pocket.',
+          'a reveal animation only; it does not pick the pocket. ' +
+          'The serverSeedHash was committed before the bet; rotate your seed to reveal serverSeed and confirm sha256(serverSeed) === serverSeedHash.',
       });
     } catch (err) {
       logger.error('[arcade-pachinko] verify failed', { error: (err as Error)?.message });

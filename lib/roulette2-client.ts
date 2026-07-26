@@ -128,7 +128,8 @@ export interface Roulette2SpinResult {
   payouts: number[];
   totalPayout: number;
   serverSeedHash: string;
-  serverSeed: string;
+  /** Sequential nonce this spin consumed under the active seed commitment. */
+  nonce: number;
   chipBalance: string;
 }
 
@@ -166,7 +167,9 @@ export interface Roulette2VerifyResult {
   payouts: number[];
   totalPayout: number;
   serverSeedHash: string;
-  serverSeed: string;
+  /** null until the spin's seed pair has been rotated (revealed). */
+  serverSeed: string | null;
+  seedRevealed: boolean;
   clientSeed: string;
   nonce: number;
   createdAt: string;
@@ -185,8 +188,9 @@ export async function fetchRoulette2Info(): Promise<Roulette2Info> {
 
 export async function spinRoulette2(args: {
   bets: Roulette2Bet[];
-  clientSeed?: string;
 }): Promise<Roulette2SpinResult> {
+  // Client seed is managed on the persistent seed pair (see arcade-seed-client),
+  // not passed per-spin — the server derives the pocket from the pre-committed seed.
   return apiFetchJson<Roulette2SpinResult>('/api/arcade/roulette/spin', {
     method: 'POST',
     body: JSON.stringify(args),

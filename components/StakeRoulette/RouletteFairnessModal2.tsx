@@ -13,6 +13,7 @@ import { useEffect, useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { ArcadeSeedControls } from '@/components/shared/ArcadeSeedControls';
 import {
   verifyRoulette2,
   roulette2BetPayout,
@@ -23,8 +24,6 @@ import {
 interface RouletteFairnessModal2Props {
   open: boolean;
   onClose: () => void;
-  clientSeed: string;
-  onClientSeedChange: (seed: string) => void;
   requestVerifyId: string | null;
 }
 
@@ -75,17 +74,9 @@ async function recomputePocket(
   return Math.floor((uint32 / 2 ** 32) * 37);
 }
 
-function randomClientSeed(): string {
-  const bytes = new Uint8Array(16);
-  crypto.getRandomValues(bytes);
-  return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
-}
-
 export function RouletteFairnessModal2({
   open,
   onClose,
-  clientSeed,
-  onClientSeedChange,
   requestVerifyId,
 }: RouletteFairnessModal2Props) {
   const [verifyId, setVerifyId] = useState('');
@@ -108,8 +99,11 @@ export function RouletteFairnessModal2({
     try {
       const r = await verifyRoulette2(trimmed);
       setResult(r);
-      setHashMatches((await sha256Hex(r.serverSeed)) === r.serverSeedHash);
-      setPocketMatches((await recomputePocket(r.serverSeed, r.clientSeed, r.nonce)) === r.result);
+      // Seed only revealed after rotation; skip the seed-dependent checks until then.
+      if (r.serverSeed) {
+        setHashMatches((await sha256Hex(r.serverSeed)) === r.serverSeedHash);
+        setPocketMatches((await recomputePocket(r.serverSeed, r.clientSeed, r.nonce)) === r.result);
+      }
       const expected = r.bets.reduce((sum, b) => sum + roulette2BetPayout(b, r.result), 0);
       setPayoutMatches(expected === r.totalPayout);
     } catch {
@@ -136,34 +130,14 @@ export function RouletteFairnessModal2({
         </DialogHeader>
 
         <div className="space-y-5">
-          <section className="space-y-2">
-            <h3 className="text-sm font-semibold text-slate-200">Your client seed</h3>
-            <p className="text-xs text-slate-500">
-              Mixed into every spin. Change it any time — the next spin uses the new value.
-            </p>
-            <div className="flex gap-2">
-              <Input
-                value={clientSeed}
-                onChange={(e) => onClientSeedChange(e.target.value.slice(0, 128))}
-                placeholder="Leave blank for a random seed each spin"
-                className="border-cyan-950 bg-[#081420] font-mono text-xs"
-              />
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => onClientSeedChange(randomClientSeed())}
-                className="shrink-0 border-cyan-950 bg-transparent text-cyan-400 hover:bg-cyan-500/10"
-              >
-                New seed
-              </Button>
-            </div>
-          </section>
+          {/* Persistent commitment + client-seed controls */}
+          <ArcadeSeedControls open={open} />
 
           <section className="space-y-2">
             <h3 className="text-sm font-semibold text-slate-200">Verify a spin</h3>
             <p className="text-xs text-slate-500">
-              The pocket is derived from a server seed committed (hashed) before your bets were
-              accepted — verify it was never moved.
+              The pocket is derived from the server seed committed (hashed) above before your
+              bets were accepted. Rotate your seed to reveal it, then verify any past spin here.
             </p>
             <div className="flex gap-2">
               <Input
@@ -196,11 +170,20 @@ export function RouletteFairnessModal2({
                 {payoutMatches !== null && (
                   <Check ok={payoutMatches} label="Every payout reconciles with the public payout table" />
                 )}
+                {!result.seedRevealed && (
+                  <p className="text-xs text-amber-300/80">
+                    Server seed still committed — rotate your seed above to reveal it and
+                    re-derive the pocket.
+                  </p>
+                )}
               </div>
 
               <div className="grid grid-cols-1 gap-2">
                 <Field label="Server seed hash (committed)" value={result.serverSeedHash} />
-                <Field label="Server seed (revealed)" value={result.serverSeed} />
+                <Field
+                  label="Server seed (revealed)"
+                  value={result.serverSeed ?? 'Hidden until you rotate your seed'}
+                />
                 <Field label="Client seed" value={result.clientSeed} />
                 <Field label="Nonce" value={String(result.nonce)} />
                 <Field label="Recipe" value={result.recipe} />

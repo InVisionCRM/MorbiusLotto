@@ -42,6 +42,9 @@ export interface AndarBaharPlayResult {
   won: boolean;
   payout: number;
   serverSeedHash: string;
+  /** Sequential nonce this deal consumed under the active seed commitment.
+   *  Optional: present on a live /play response, omitted on a synthetic replay. */
+  nonce?: number;
   chipBalance: string;
 }
 
@@ -97,7 +100,9 @@ export interface AndarBaharVerifyResult {
   recomputedWinningSide: AndarBaharSide;
   recomputedPayout: number;
   serverSeedHash: string;
-  serverSeed: string;
+  /** null until the round's seed pair has been rotated (revealed). */
+  serverSeed: string | null;
+  seedRevealed: boolean;
   clientSeed: string;
   nonce: number;
   houseEdgeBp: number;
@@ -157,8 +162,9 @@ export async function fetchAndarBaharInfo(): Promise<AndarBaharInfo> {
 export async function playAndarBahar(args: {
   side: AndarBaharSide;
   bet: number;
-  clientSeed?: string;
 }): Promise<AndarBaharPlayResult> {
+  // Client seed is managed on the persistent seed pair (see arcade-seed-client),
+  // not passed per-bet — the server derives the deal from the pre-committed seed.
   return apiFetchJson<AndarBaharPlayResult>('/api/arcade/andar-bahar/play', {
     method: 'POST',
     body: JSON.stringify(args),

@@ -35,7 +35,9 @@ interface VerifyPayload {
   won: boolean;
   payout: number;
   serverSeedHash: string;
-  serverSeed: string;
+  // null until the round's seed pair has been rotated (revealed).
+  serverSeed: string | null;
+  seedRevealed?: boolean;
   clientSeed: string;
   nonce: number;
   houseEdgeBp: number;
@@ -266,12 +268,14 @@ export default function TgVerifyDiceRoundPage() {
     };
   }, [roundId]);
 
-  // Step 1 — independent SHA-256(serverSeed) check.
+  // Step 1 — independent SHA-256(serverSeed) check. Only possible once the seed
+  // has been revealed (rotated); until then the round shows only its commitment.
   useEffect(() => {
-    if (!payload) return;
+    if (!payload || !payload.serverSeed) return;
+    const seed = payload.serverSeed;
     let cancelled = false;
     (async () => {
-      const h = await sha256Hex(payload.serverSeed);
+      const h = await sha256Hex(seed);
       if (cancelled) return;
       if (h == null) {
         setHashState('no-crypto');
@@ -287,12 +291,13 @@ export default function TgVerifyDiceRoundPage() {
     };
   }, [payload]);
 
-  // Step 2 — independent roll re-derivation.
+  // Step 2 — independent roll re-derivation (needs the revealed seed).
   useEffect(() => {
-    if (!payload) return;
+    if (!payload || !payload.serverSeed) return;
+    const seed = payload.serverSeed;
     let cancelled = false;
     (async () => {
-      const d = await deriveRollX100(payload.serverSeed, payload.clientSeed, payload.nonce);
+      const d = await deriveRollX100(seed, payload.clientSeed, payload.nonce);
       if (cancelled) return;
       if (!d) {
         setRollState('no-crypto');
@@ -443,7 +448,9 @@ export default function TgVerifyDiceRoundPage() {
                         ? 'Hash mismatch'
                         : hashState === 'no-crypto'
                           ? 'Crypto API unavailable'
-                          : 'Hashing…'
+                          : payload.serverSeed
+                            ? 'Hashing…'
+                            : 'Seed not yet revealed'
                   }
                 />
               </div>
@@ -451,7 +458,13 @@ export default function TgVerifyDiceRoundPage() {
                 label="server seed hash (committed before round)"
                 value={payload.serverSeedHash}
               />
-              <HashRow label="server seed (revealed after round)" value={payload.serverSeed} />
+              {payload.serverSeed ? (
+                <HashRow label="server seed (revealed after rotation)" value={payload.serverSeed} />
+              ) : (
+                <p className="text-[12px] leading-snug text-amber-300/80">
+                  Server seed still committed — rotate your seed in-game to reveal it and verify.
+                </p>
+              )}
               {localHash && (
                 <HashRow label="your browser computed sha256(serverSeed)" value={localHash} />
               )}

@@ -30,6 +30,7 @@ import {
   ROULETTE_MAX_ZONES,
   type RouletteBet,
 } from '../services/arcade-roulette';
+import { consumeSeedForBet, revealedSeedForRound } from '../services/arcade-seed.service';
 import type { DatabaseService } from '../services/database.service';
 import type { AuthService } from '../services/auth.service';
 
@@ -125,22 +126,13 @@ export function registerArcadeRouletteRoutes({
       if (!v.ok) return res.status(400).json({ ok: false, error: v.error });
       const totalBet = v.total;
 
-      const serverSeed = pf.generateServerSeed();
-      const serverSeedHash = pf.createServerSeedHash(serverSeed);
-      const clientSeed =
-        typeof req.body?.clientSeed === 'string' && req.body.clientSeed.trim()
-          ? req.body.clientSeed.trim().slice(0, 128)
-          : crypto.randomBytes(16).toString('hex');
-      const nonce = 0;
-
-      const bytes = pf.hmacByteStream(serverSeed, clientSeed, nonce, 0);
-      const r = pf.bytesToFloat(bytes);
-      const result = rouletteResultFromFloat(r);
-      const payouts = resolveRoulettePayouts(bets, result);
-      const totalPayout = sumRoulettePayouts(payouts);
-
       const spinId = crypto.randomUUID();
       let chipBalance = 0n;
+      let result = 0;
+      let payouts: number[] = [];
+      let totalPayout = 0;
+      let serverSeedHash = '';
+      let nonce = 0;
 
       await dbService.withTransaction(async (client) => {
         chipBalance = await applyPokerChipDelta(
@@ -150,6 +142,18 @@ export function registerArcadeRouletteRoutes({
           'arcade_roulette_bet',
           { type: 'arcade_roulette', id: spinId },
         );
+
+        // Consume the wallet's PRE-COMMITTED active seed at the next nonce. The
+        // pocket was fixed by a hash published before the spin (and hidden until
+        // rotation) — no longer minted-and-revealed inside this one request.
+        const seed = await consumeSeedForBet(client, wallet);
+        serverSeedHash = seed.serverSeedHash;
+        nonce = seed.nonce;
+        const r = pf.bytesToFloat(pf.hmacByteStream(seed.serverSeed, seed.clientSeed, seed.nonce, 0));
+        result = rouletteResultFromFloat(r);
+        payouts = resolveRoulettePayouts(bets, result);
+        totalPayout = sumRoulettePayouts(payouts);
+
         if (totalPayout > 0) {
           chipBalance = await applyPokerChipDelta(
             client,
@@ -159,11 +163,12 @@ export function registerArcadeRouletteRoutes({
             { type: 'arcade_roulette', id: spinId },
           );
         }
+        // server_seed stays NULL — revealed via seed-pair rotation, not per-spin.
         await client.query(
           `INSERT INTO arcade_roulette_spins
              (id, wallet_address, bets, total_bet, result, payouts, total_payout,
-              server_seed, server_seed_hash, client_seed, nonce)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+              server_seed, server_seed_hash, client_seed, nonce, seed_pair_id)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, NULL, $8, $9, $10, $11)`,
           [
             spinId,
             wallet.toLowerCase(),
@@ -172,10 +177,10 @@ export function registerArcadeRouletteRoutes({
             result,
             JSON.stringify(payouts),
             totalPayout,
-            serverSeed,
             serverSeedHash,
-            clientSeed,
+            seed.clientSeed,
             nonce,
+            seed.seedPairId,
           ],
         );
       });
@@ -189,7 +194,7 @@ export function registerArcadeRouletteRoutes({
         payouts,
         totalPayout,
         serverSeedHash,
-        serverSeed,
+        nonce,
         chipBalance: chipBalance.toString(),
       });
     } catch (err) {
@@ -308,12 +313,18 @@ export function registerArcadeRouletteRoutes({
     try {
       const r = await pool.query(
         `SELECT id, wallet_address, bets, total_bet, result, payouts, total_payout,
-                server_seed, server_seed_hash, client_seed, nonce, created_at
+                server_seed, server_seed_hash, client_seed, nonce, created_at, seed_pair_id
            FROM arcade_roulette_spins WHERE id = $1`,
         [req.params.id],
       );
       if (r.rows.length === 0) return res.status(404).json({ ok: false, error: 'Spin not found.' });
       const row = r.rows[0];
+      // Reveal the plaintext seed only once its pair has been rotated.
+      const reveal = await revealedSeedForRound(
+        pool,
+        row.seed_pair_id ?? null,
+        row.server_seed ?? null,
+      );
       return res.json({
         ok: true,
         spinId: row.id,
@@ -323,14 +334,15 @@ export function registerArcadeRouletteRoutes({
         payouts: row.payouts,
         totalPayout: Number(row.total_payout),
         serverSeedHash: row.server_seed_hash,
-        serverSeed: row.server_seed,
+        serverSeed: reveal.serverSeed,
+        seedRevealed: reveal.revealed,
         clientSeed: row.client_seed,
         nonce: Number(row.nonce),
         createdAt: row.created_at,
         recipe:
           'r = bytesToFloat(hmacByteStream(serverSeed, clientSeed, nonce, 0)[0..3]). ' +
           'result = Math.floor(r * 37) — pocket 0 = zero, 1-36 = number. ' +
-          'sha256(serverSeed) must equal serverSeedHash.',
+          'The serverSeedHash was committed before the spin; rotate your seed to reveal serverSeed, then sha256(serverSeed) must equal serverSeedHash.',
       });
     } catch (err) {
       logger.error('[arcade-roulette] verify failed', { error: (err as Error)?.message });
