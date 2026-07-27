@@ -175,7 +175,7 @@ export function registerArcadeDiceX2Routes({
              (id, wallet_address, bet, low_x100, high_x100, roll_x100, multiplier_x100,
               won, payout, server_seed, server_seed_hash, client_seed, nonce,
               house_edge_bp, seed_pair_id)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NULL, $9, $10, $11, $12, $13)`,
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NULL, $10, $11, $12, $13, $14)`,
           [
             roundId,
             wallet.toLowerCase(),
