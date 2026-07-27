@@ -18,12 +18,28 @@ interface RegisterActivityRoutesOptions {
 }
 
 export function registerActivityRoutes({ app, gameActivityService }: RegisterActivityRoutesOptions): void {
-  app.get('/api/activity/games', async (_req: Request, res: Response) => {
+  const WINDOWS = new Set(['24h', '7d', '30d', 'all']);
+
+  app.get('/api/activity/games', async (req: Request, res: Response) => {
     try {
-      const result = await gameActivityService.getGameSummaries();
+      const w = String(req.query.window ?? 'all');
+      const win = WINDOWS.has(w) ? (w as '24h' | '7d' | '30d' | 'all') : 'all';
+      const result = await gameActivityService.getGameSummaries(win);
       sendJson(res, result);
     } catch (error) {
       logger.error('[activity] games summary failed', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
+  // Cross-game latest plays — powers the dashboard "latest plays" feed.
+  app.get('/api/activity/plays', async (req: Request, res: Response) => {
+    try {
+      const limit = Math.min(200, parseInt(String(req.query.limit ?? '40'), 10) || 40);
+      const plays = await gameActivityService.getRecentPlays(limit);
+      sendJson(res, { plays });
+    } catch (error) {
+      logger.error('[activity] recent plays failed', error);
       res.status(500).json({ error: 'Internal server error' });
     }
   });

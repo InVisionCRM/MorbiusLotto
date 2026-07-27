@@ -51,6 +51,26 @@ export interface GamePlay {
   at: string;
 }
 
+/** A play in the cross-game feed — carries which game it belongs to. */
+export interface RecentPlay extends GamePlay {
+  gameKey: string;
+  gameLabel: string;
+}
+
+/** Windows the dashboard can slice by. `undefined`/`all` = no time filter. */
+export type StatsWindow = '24h' | '7d' | '30d' | 'all';
+const WINDOW_INTERVALS: Record<Exclude<StatsWindow, 'all'>, string> = {
+  '24h': '24 hours',
+  '7d': '7 days',
+  '30d': '30 days',
+};
+
+/** Safe `AND created_at > NOW() - INTERVAL '…'` fragment (interval is whitelisted). */
+function windowClause(win?: string): string {
+  const iv = win && win !== 'all' ? WINDOW_INTERVALS[win as Exclude<StatsWindow, 'all'>] : undefined;
+  return iv ? `AND created_at > NOW() - INTERVAL '${iv}'` : '';
+}
+
 function resultOf(wager: bigint, payout: bigint): PlayResult {
   const net = payout - wager;
   return net > 0n ? 'win' : net < 0n ? 'loss' : 'push';
@@ -63,7 +83,8 @@ export class GameActivityService {
   // Summaries — all-time totals per game
   // ──────────────────────────────────────────────────────────────────
 
-  async getGameSummaries(): Promise<GameSummariesResult> {
+  async getGameSummaries(win?: StatsWindow): Promise<GameSummariesResult> {
+    const wc = windowClause(win);
     const byKey = new Map<
       string,
       { key: string; label: string; w: bigint; won: bigint; plays: number; players: number }
@@ -89,7 +110,7 @@ export class GameActivityService {
                 COUNT(*)::text AS n,
                 COUNT(DISTINCT wallet_address)::text AS players
          FROM poker_chip_ledger
-         WHERE reason LIKE '%\\_bet' OR reason LIKE '%\\_payout'
+         WHERE (reason LIKE '%\\_bet' OR reason LIKE '%\\_payout') ${wc}
          GROUP BY reason`,
       );
       for (const r of rows) {
@@ -114,7 +135,7 @@ export class GameActivityService {
     try {
       const { rows } = await this.pool.query<{ players: string }>(
         `SELECT COUNT(DISTINCT wallet_address)::text AS players
-         FROM poker_chip_ledger WHERE reason LIKE '%\\_bet'`,
+         FROM poker_chip_ledger WHERE reason LIKE '%\\_bet' ${wc}`,
       );
       totalPlayers = Number(rows[0]?.players ?? '0');
     } catch (err) {
@@ -172,6 +193,50 @@ export class GameActivityService {
       [reasons, bet, payout, lim],
     );
     return rows.map((r) => this.toPlay(r));
+  }
+
+  // ──────────────────────────────────────────────────────────────────
+  // Cross-game feed — the most recent plays across every game (for the
+  // dashboard "latest plays" column). Each play carries its game so the UI
+  // can label it and link the player through to their per-player dashboard.
+  // ──────────────────────────────────────────────────────────────────
+
+  async getRecentPlays(limit: number): Promise<RecentPlay[]> {
+    const lim = Math.max(1, Math.min(200, Math.floor(limit) || 40));
+    // Over-fetch so filtering out non-game plays (poker/lottery) still leaves
+    // a full page; the excess is sliced off after classification.
+    const over = Math.min(400, lim + 60);
+    const { rows } = await this.pool.query<{
+      wallet: string; wager: string; payout: string; at: string;
+      bet_reason: string | null; display_name: string | null;
+    }>(
+      `WITH g AS (
+         SELECT ref_type, ref_id, wallet_address AS wallet,
+                COALESCE(SUM(CASE WHEN reason LIKE '%\\_bet' THEN -delta ELSE 0 END),0)::text AS wager,
+                COALESCE(SUM(CASE WHEN reason LIKE '%\\_payout' THEN delta ELSE 0 END),0)::text AS payout,
+                MAX(created_at) AS at,
+                MAX(CASE WHEN reason LIKE '%\\_bet' THEN reason END) AS bet_reason
+         FROM poker_chip_ledger
+         WHERE (reason LIKE '%\\_bet' OR reason LIKE '%\\_payout') AND ref_id IS NOT NULL
+         GROUP BY ref_type, ref_id, wallet_address
+         ORDER BY MAX(created_at) DESC
+         LIMIT $1
+       )
+       SELECT g.wallet, g.wager, g.payout, g.at, g.bet_reason, d.display_name
+       FROM g LEFT JOIN chat_display_names d ON LOWER(d.wallet_address) = LOWER(g.wallet)
+       ORDER BY g.at DESC`,
+      [over],
+    );
+
+    const out: RecentPlay[] = [];
+    for (const r of rows) {
+      if (!r.bet_reason) continue;
+      const cls = classifyReason(r.bet_reason);
+      if (NON_GAME_KEYS.has(cls.gameKey)) continue;
+      out.push({ ...this.toPlay(r), gameKey: cls.gameKey, gameLabel: cls.gameLabel });
+      if (out.length >= lim) break;
+    }
+    return out;
   }
 
   private toPlay(r: {
