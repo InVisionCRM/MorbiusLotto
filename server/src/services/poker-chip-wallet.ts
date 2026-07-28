@@ -78,6 +78,8 @@ export type PokerChipLedgerReason =
   | 'lp_holder_reward'  // LP holder epoch credit (1.5% slice → chips)
   | 'vip_rakeback'      // VIP loyalty: % of NET LOSS (bets − payouts) since last claim (owner decision 2026-07-02)
   | 'vip_tier_bonus'    // VIP loyalty: one-time chip bonus on reaching a new tier
+  | 'admin_credit'      // manual admin balance top-up from the /activity dashboard
+  | 'admin_debit'       // manual admin balance clawback (negative) from the /activity dashboard
   | 'vip_weekly_bonus'  // LEGACY (feature removed 2026-07-02): weekly cashback — historical rows only, no new accrual
   | 'vip_monthly_bonus' // LEGACY (feature removed 2026-07-02): monthly cashback — historical rows only, no new accrual
   | 'referral_welcome'  // referral: one-time welcome bonus credited to a referee on binding
@@ -94,7 +96,7 @@ export function getPlatformFeeWalletLower(): string {
 
 /**
  * The Weekly Drop settlement hook (WEEKLY_DROP_SPEC.md — "Settlement hook: on
- * every settled bet, add 0.5% of wager to the open draw's pot and accrue entry
+ * every settled bet, add 0.25% of wager to the open draw's pot and accrue entry
  * progress at that game's rate").
  *
  * applyPokerChipDelta is the single choke point every game wager passes
@@ -228,7 +230,7 @@ export async function applyPokerChipDelta(
     [addr, delta.toString(), after.toString(), reason, ref?.type ?? null, refId],
   );
   // Weekly Drop raffle accrual (WEEKLY_DROP_SPEC.md): every settled wager
-  // (`*_bet` debit) funds 0.5% of the pot + entry progress. Fail-safe by
+  // (`*_bet` debit) funds 0.25% of the pot + entry progress. Fail-safe by
   // design — the hook SAVEPOINTs its own work and errors never reach the
   // game settlement this delta belongs to.
   if (delta < 0n && reason.endsWith('_bet')) {

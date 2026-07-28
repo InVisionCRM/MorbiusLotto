@@ -67,6 +67,7 @@ import { ReferralService } from './services/referral.service';
 import { registerReferralRoutes } from './routes/referral.routes';
 import { GameActivityService } from './services/game-activity.service';
 import { registerActivityRoutes } from './routes/activity.routes';
+import { registerAdminOpsRoutes } from './routes/admin-ops.routes';
 import { CosmeticsService } from './services/cosmetics.service';
 import { isAdminWallet } from './lib/cosmetics-catalog';
 import { resolveDisplayNameForProfileUpsert } from './lib/resolve-profile-display-name';
@@ -446,7 +447,7 @@ async function initializeServices() {
     const vipService = new VipService(dbService.getPool(), referralService);
     const gameActivityService = new GameActivityService(dbService.getPool());
 
-    // The Weekly Drop raffle (WEEKLY_DROP_SPEC.md): 0.5% of every settled bet
+    // The Weekly Drop raffle (WEEKLY_DROP_SPEC.md): 0.25% of every settled bet
     // funds a weekly pot, drawn Sunday 20:00 UTC. The wager hook plugs the
     // accrual into applyPokerChipDelta (the single settlement choke point);
     // start() ensures an open draw exists and polls for the due close.
@@ -506,6 +507,7 @@ async function initializeServices() {
     registerReferralRoutes({ app, referralService, authService });
     registerDropRoutes({ app, weeklyDropService, authService });
     registerActivityRoutes({ app, gameActivityService });
+    registerAdminOpsRoutes({ app, dbService, authService });
 
     // Public config (whitelisted keys only; used for ad creatives, etc.)
     const PUBLIC_CONFIG_KEYS = ['ad_creative_url', 'ad_creative_hero_url', 'ad_creative_loading_url'];

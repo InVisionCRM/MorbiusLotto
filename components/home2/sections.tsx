@@ -817,7 +817,7 @@ export function WeeklyDrop({
       )}
 
       <p className="how">
-        <b>0.5% of every bet on every game</b> feeds the pot — guaranteed <b>25,000 MORBIUS minimum</b> each week.
+        <b>0.25% of every bet on every game</b> feeds the pot — guaranteed <b>25,000 MORBIUS minimum</b> each week.
         Entries reset every draw, winners are paid straight to their balance, and every draw is{' '}
         <b>commit-reveal verifiable</b>. Winners wear the aura for a week.
       </p>

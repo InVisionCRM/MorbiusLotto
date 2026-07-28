@@ -7,7 +7,7 @@
  * Model:
  *   - One draw is 'open' at any time. Every settled bet (a negative `*_bet`
  *     delta in poker_chip_ledger — the same definition VipService uses for
- *     wager volume) funds 0.5% of the wager into the open draw's pot and
+ *     wager volume) funds 0.25% of the wager into the open draw's pot and
  *     accrues raffle-entry progress at that game's rate.
  *   - Public math: 1 entry per 1,000 MORBIUS wagered. Internally each game has
  *     an edge-proportional weight (DROP_ENTRY_RATES) so thin-edge games can't
@@ -40,8 +40,8 @@ import { applyPokerChipDelta } from './poker-chip-wallet';
 // Tunables
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** Pot funding: 0.5% (50 bps) of every settled wager, all games. */
-export const DROP_POT_BPS = 50n;
+/** Pot funding: 0.25% (25 bps) of every settled wager, all games. */
+export const DROP_POT_BPS = 25n;
 
 /** Public entry math: 1 entry per 1,000 chips of (effective) wager. */
 export const CHIPS_PER_ENTRY = 1000n;
@@ -62,7 +62,7 @@ export const DROP_TZ = 'America/New_York';
  * game key (the `*_bet` reason minus its `_bet` suffix, e.g. 'arcade_dice').
  *
  * Edge-weighting (WEEKLY_DROP_SPEC.md "Entries"): the raffle pot is funded by
- * a flat 0.5% of turnover but partly house-guaranteed, so a 98%-RTP game
+ * a flat 0.25% of turnover but partly house-guaranteed, so a 98%-RTP game
  * wagered at huge volume would let a grinder farm tickets far more cheaply
  * (in expected loss) than, say, Keno. Each game's rate is therefore roughly
  * inversely proportional to its house edge: thin-edge games need MORE chips
@@ -375,7 +375,7 @@ export class WeeklyDropService {
   // ──────────────────────────────────────────────────────────────────
 
   /**
-   * Accrue 0.5% of a settled wager into the open draw's pot and entry
+   * Accrue 0.25% of a settled wager into the open draw's pot and entry
    * progress at the game's rate. `gameKey` is the ledger reason minus its
    * `_bet` suffix (e.g. 'arcade_dice', 'keno', 'blackjack').
    *
@@ -410,7 +410,7 @@ export class WeeklyDropService {
     await client.query('SAVEPOINT weekly_drop_accrual');
     try {
       // One upsert per (open draw, player): tickets roll up from carried
-      // progress; the 0.5% pot funding accrues per player (summed at close)
+      // progress; the 0.25% pot funding accrues per player (summed at close)
       // to avoid a platform-wide hot row on drop_draws.
       await client.query(
         `INSERT INTO drop_entries AS de
@@ -444,7 +444,7 @@ export class WeeklyDropService {
   /**
    * Undo a prior accrual when a wager/buy-in is REFUNDED (e.g. tournament
    * unregister, blackjack bet returned). Subtracts the refunded wager's
-   * effective chips from (entries × 1,000 + progress) and its 0.5% from the
+   * effective chips from (entries × 1,000 + progress) and its 0.25% from the
    * player's pot contribution, both clamped at 0 — so refund loops can't farm
    * tickets, and a refund can never drive a row negative. Only touches the
    * OPEN draw: if the draw already rolled over the reversal is a no-op there

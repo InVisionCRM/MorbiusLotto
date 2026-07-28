@@ -526,6 +526,83 @@ export class DatabaseService implements MoneyDatabaseQueries {
     return this.withTransaction((client) => this.sweepWeiToChipsTx(client, walletAddress, amountWei, reason, ref));
   }
 
+  /**
+   * Admin user search for the /activity dashboard credit tool. Matches on wallet
+   * address OR profile display name (case-insensitive substring). Returns each
+   * player's current chip balance so the admin sees who they're about to credit.
+   */
+  async searchPlayers(
+    query: string,
+    limit = 20,
+  ): Promise<Array<{ address: string; displayName: string | null; profileImageUrl: string | null; chipBalance: string }>> {
+    const q = query.trim();
+    if (q.length < 2) return [];
+    const like = `%${q}%`;
+    const result = await this.pool.query(
+      `SELECT p.wallet_address AS address,
+              d.display_name    AS display_name,
+              d.profile_image_url AS profile_image_url,
+              COALESCE(c.balance, 0)::text AS chip_balance
+       FROM players p
+       LEFT JOIN chat_display_names d ON LOWER(d.wallet_address) = LOWER(p.wallet_address)
+       LEFT JOIN player_poker_chips  c ON LOWER(c.wallet_address) = LOWER(p.wallet_address)
+       WHERE p.wallet_address ILIKE $1 OR d.display_name ILIKE $1
+       ORDER BY p.last_seen DESC NULLS LAST
+       LIMIT $2`,
+      [like, limit],
+    );
+    return result.rows.map((r) => ({
+      address: String(r.address),
+      displayName: r.display_name ?? null,
+      profileImageUrl: r.profile_image_url ?? null,
+      chipBalance: String(r.chip_balance ?? '0'),
+    }));
+  }
+
+  /**
+   * Manual admin balance adjustment (credit or debit). `amountChips` is signed and
+   * expressed in whole MORBIUS (chip units): positive = credit, negative = clawback.
+   * Applies the delta to the chip ledger (reason admin_credit/admin_debit) and writes
+   * an admin_credit_log audit row recording the acting admin. Upserts a players row
+   * so brand-new wallets can be credited. Returns the new chip balance + audit id.
+   * Throws 'Insufficient poker chips' if a debit would drive the balance negative.
+   */
+  async adminAdjustChips(
+    adminAddress: string,
+    targetAddress: string,
+    amountChips: bigint,
+    note: string | null,
+  ): Promise<{ balance: string; logId: string }> {
+    if (amountChips === 0n) throw new Error('Amount must be non-zero');
+    const admin = this.normalizeAddress(adminAddress);
+    const target = this.normalizeAddress(targetAddress);
+    const reason: PokerChipLedgerReason = amountChips > 0n ? 'admin_credit' : 'admin_debit';
+    return this.withTransaction(async (client) => {
+      // Ensure a players row exists (mirrors the deposit-credit upsert) so a
+      // never-seen wallet can still be credited.
+      await client.query(
+        `INSERT INTO players (wallet_address, balance) VALUES ($1, 0)
+         ON CONFLICT (wallet_address) DO NOTHING`,
+        [target],
+      );
+      const log = await client.query(
+        `INSERT INTO admin_credit_log (admin_address, target_address, amount, balance_after, note)
+         VALUES ($1, $2, $3::NUMERIC, 0, $4) RETURNING id`,
+        [admin, target, amountChips.toString(), note],
+      );
+      const logId = String(log.rows[0].id);
+      const balance = await applyPokerChipDelta(client, target, amountChips, reason, {
+        type: 'admin_credit_log',
+        id: logId,
+      });
+      await client.query(
+        `UPDATE admin_credit_log SET balance_after = $2::NUMERIC WHERE id = $1`,
+        [logId, balance.toString()],
+      );
+      return { balance: balance.toString(), logId };
+    });
+  }
+
   /** Player's chip balance expressed in MORBIUS wei (1 chip = 10^18 wei), for wei-based callers (blackjack, balance display). */
   async getChipBalanceAsWei(walletAddress: string): Promise<bigint> {
     const chips = await getPokerChipBalance(this.pool, walletAddress);
