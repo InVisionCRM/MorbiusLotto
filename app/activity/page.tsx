@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useAccount } from 'wagmi'
 import { Loader2, ShieldAlert, ArrowUpRight, Wallet } from 'lucide-react'
 import GlobalMainNav from '@/components/shared/GlobalMainNav'
+import AdminCreditPanel from '@/components/activity/AdminCreditPanel'
 import { isAdminWallet } from '@/lib/admin'
 import { useTokenBalance } from '@/hooks/use-token'
 import { MORBIUS_VAULT_ADDRESS } from '@/lib/contracts'
@@ -367,6 +368,9 @@ export default function GameActivityPage() {
               )}
             </div>
           </div>
+
+          {/* Admin tools: search a player and credit/debit their balance */}
+          <AdminCreditPanel />
 
           <p className="mt-4 text-xs text-white/30">Amounts in MORBIUS. Vault reads on-chain; stats from the game ledger.</p>
         </div>

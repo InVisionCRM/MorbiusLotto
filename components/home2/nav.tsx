@@ -17,6 +17,8 @@
 
 import Link from 'next/link';
 import React from 'react';
+import { useAccount } from 'wagmi';
+import { isAdminWallet } from '@/lib/admin';
 import { IconHome, IconLayoutGrid, IconTicket } from '@tabler/icons-react';
 import { WalletIcon } from '@/components/shared/WalletIcon';
 
@@ -148,6 +150,11 @@ export function HomeSidebar({
   onDisconnect,
   onChartClick,
 }: HomeSidebarProps) {
+  // /activity is the admin platform dashboard — only surface its link to admin
+  // wallets (the page itself also blocks non-admins).
+  const { address } = useAccount();
+  const isAdmin = isAdminWallet(address);
+  const myStuffLinks = isAdmin ? MY_STUFF_LINKS : MY_STUFF_LINKS.filter((l) => l.href !== '/activity');
   return (
     <aside className="sidebar">
       <div className="sb-brand">
@@ -260,7 +267,7 @@ export function HomeSidebar({
               MY STUFF <span className="chev">▶</span>
             </div>
           </summary>
-          {MY_STUFF_LINKS.map((l) => (
+          {myStuffLinks.map((l) => (
             <SbLink key={l.label} {...l} />
           ))}
         </details>

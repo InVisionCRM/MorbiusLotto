@@ -78,6 +78,8 @@ export type PokerChipLedgerReason =
   | 'lp_holder_reward'  // LP holder epoch credit (1.5% slice → chips)
   | 'vip_rakeback'      // VIP loyalty: % of NET LOSS (bets − payouts) since last claim (owner decision 2026-07-02)
   | 'vip_tier_bonus'    // VIP loyalty: one-time chip bonus on reaching a new tier
+  | 'admin_credit'      // manual admin balance top-up from the /activity dashboard
+  | 'admin_debit'       // manual admin balance clawback (negative) from the /activity dashboard
   | 'vip_weekly_bonus'  // LEGACY (feature removed 2026-07-02): weekly cashback — historical rows only, no new accrual
   | 'vip_monthly_bonus' // LEGACY (feature removed 2026-07-02): monthly cashback — historical rows only, no new accrual
   | 'referral_welcome'  // referral: one-time welcome bonus credited to a referee on binding
