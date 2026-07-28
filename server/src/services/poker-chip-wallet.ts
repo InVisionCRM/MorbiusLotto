@@ -96,7 +96,7 @@ export function getPlatformFeeWalletLower(): string {
 
 /**
  * The Weekly Drop settlement hook (WEEKLY_DROP_SPEC.md — "Settlement hook: on
- * every settled bet, add 0.5% of wager to the open draw's pot and accrue entry
+ * every settled bet, add 0.25% of wager to the open draw's pot and accrue entry
  * progress at that game's rate").
  *
  * applyPokerChipDelta is the single choke point every game wager passes
@@ -230,7 +230,7 @@ export async function applyPokerChipDelta(
     [addr, delta.toString(), after.toString(), reason, ref?.type ?? null, refId],
   );
   // Weekly Drop raffle accrual (WEEKLY_DROP_SPEC.md): every settled wager
-  // (`*_bet` debit) funds 0.5% of the pot + entry progress. Fail-safe by
+  // (`*_bet` debit) funds 0.25% of the pot + entry progress. Fail-safe by
   // design — the hook SAVEPOINTs its own work and errors never reach the
   // game settlement this delta belongs to.
   if (delta < 0n && reason.endsWith('_bet')) {

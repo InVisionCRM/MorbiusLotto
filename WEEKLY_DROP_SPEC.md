@@ -16,7 +16,7 @@ progressive" concept.
 | Base entry rate | 1 entry per 1,000 MORBIUS wagered, any game, win or lose |
 | Entry reset | Entries reset to zero at every draw (weekly race) |
 | Draw cadence | Weekly, Sunday 8:00 PM America/New_York (US Eastern, DST-aware; shown as countdown on home) |
-| Pot funding | 0.5% of every settled bet, all games |
+| Pot funding | 0.25% of every settled bet, all games |
 | Pot floor | House-guaranteed minimum 25,000 MORBIUS per draw |
 | Winners | 3 per draw: 60% / 25% / 15% of the pot |
 | Payout | Auto-credit to winner's reserve balance + notification |
@@ -57,7 +57,7 @@ Same pattern as the poker provably-fair shuffle, applied server-side:
 - `drop_entries` — draw_id, player_address, entries, wager_progress, source
   (wager / daily_free), updated_at.
 - `drop_winners` — draw_id, rank, player_address, amount, credited_at.
-- Settlement hook: on every settled bet, add 0.5% of wager to the open draw's
+- Settlement hook: on every settled bet, add 0.25% of wager to the open draw's
   pot and accrue entry progress at that game's rate.
 
 ## API

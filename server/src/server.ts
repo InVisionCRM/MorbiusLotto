@@ -447,7 +447,7 @@ async function initializeServices() {
     const vipService = new VipService(dbService.getPool(), referralService);
     const gameActivityService = new GameActivityService(dbService.getPool());
 
-    // The Weekly Drop raffle (WEEKLY_DROP_SPEC.md): 0.5% of every settled bet
+    // The Weekly Drop raffle (WEEKLY_DROP_SPEC.md): 0.25% of every settled bet
     // funds a weekly pot, drawn Sunday 20:00 UTC. The wager hook plugs the
     // accrual into applyPokerChipDelta (the single settlement choke point);
     // start() ensures an open draw exists and polls for the due close.
