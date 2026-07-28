@@ -12,6 +12,8 @@
  * Endpoints (all require an admin session):
  *   GET  /api/admin-ops/users/search?q=  — search players by address / display name
  *   POST /api/admin-ops/credit           — credit (or debit) a wallet's chip balance
+ *   GET  /api/admin-ops/dashboard        — full financial dashboard payload
+ *   GET  /api/admin-ops/dashboard/players|deposits|withdrawals|big-wins|referrals|history
  */
 
 import type { Express, Request, Response, NextFunction, RequestHandler } from 'express';
@@ -22,11 +24,29 @@ import { requireAuth } from '../middleware/require-auth';
 import { isAdminWallet } from '../lib/cosmetics-catalog';
 import type { DatabaseService } from '../services/database.service';
 import type { AuthService } from '../services/auth.service';
+import { AdminDashboardService, type DashWindow } from '../services/admin-dashboard.service';
 
 interface RegisterAdminOpsRoutesOptions {
   app: Express;
   dbService: DatabaseService;
   authService: AuthService;
+}
+
+const WINDOWS = new Set<DashWindow>(['24h', '7d', '30d', 'all']);
+/** Parse ?window=, defaulting to 24h. */
+function winOf(q: unknown, fallback: DashWindow = '24h'): DashWindow {
+  return typeof q === 'string' && WINDOWS.has(q as DashWindow) ? (q as DashWindow) : fallback;
+}
+/** Default "big win" alert threshold, in whole MORBIUS. */
+const BIG_WIN_DEFAULT = 100000n;
+function minPayoutOf(q: unknown): bigint {
+  if (typeof q !== 'string' || !/^\d+$/.test(q)) return BIG_WIN_DEFAULT;
+  try {
+    const n = BigInt(q);
+    return n > 0n ? n : BIG_WIN_DEFAULT;
+  } catch {
+    return BIG_WIN_DEFAULT;
+  }
 }
 
 /** Max absolute size of a single manual adjustment, in whole MORBIUS. */
@@ -133,4 +153,56 @@ export function registerAdminOpsRoutes({ app, dbService, authService }: Register
       }
     },
   );
+
+  // ──────────────────────────────────────────────────────────────────────
+  // Financial dashboard
+  // ──────────────────────────────────────────────────────────────────────
+  const dash = new AdminDashboardService(dbService.getPool());
+
+  /** Wrap a dashboard read with admin auth + uniform error handling. */
+  const dashRoute = (path: string, handler: (req: Request) => Promise<unknown>) => {
+    app.get(path, requireAuth(authService), requireAdmin, async (req: Request, res: Response) => {
+      try {
+        return res.json(await handler(req));
+      } catch (error) {
+        logger.error(`admin-ops ${path} failed`, {
+          error: error instanceof Error ? error.message : String(error),
+        });
+        return res.status(500).json({ error: 'dashboard query failed' });
+      }
+    });
+  };
+
+  // Everything in one round trip — what the dashboard loads on mount.
+  dashRoute('/api/admin-ops/dashboard', (req) =>
+    dash.getOverview(winOf(req.query.window), minPayoutOf(req.query.minPayout)),
+  );
+
+  dashRoute('/api/admin-ops/dashboard/financials', (req) =>
+    dash.getFinancials(winOf(req.query.window)),
+  );
+  dashRoute('/api/admin-ops/dashboard/players', async (req) => ({
+    players: await dash.getPlayers(winOf(req.query.window), Number(req.query.limit) || 250),
+  }));
+  dashRoute('/api/admin-ops/dashboard/deposits', async (req) => ({
+    deposits: await dash.getDeposits(winOf(req.query.window, '7d'), Number(req.query.limit) || 500),
+  }));
+  dashRoute('/api/admin-ops/dashboard/withdrawals', async (req) => ({
+    withdrawals: await dash.getWithdrawals(winOf(req.query.window, '7d'), Number(req.query.limit) || 500),
+  }));
+  dashRoute('/api/admin-ops/dashboard/big-wins', async (req) => ({
+    bigWins: await dash.getBigWins(
+      winOf(req.query.window, '7d'),
+      minPayoutOf(req.query.minPayout),
+      Number(req.query.limit) || 200,
+    ),
+  }));
+  dashRoute('/api/admin-ops/dashboard/referrals', () => dash.getReferrers(200));
+  // Polled every ~10s by the dashboard's live badge — keep it cheap.
+  dashRoute('/api/admin-ops/dashboard/live', (req) =>
+    dash.getLiveNow(Number(req.query.minutes) || 5),
+  );
+  dashRoute('/api/admin-ops/dashboard/history', async (req) => ({
+    history: await dash.getDailyHistory(Number(req.query.days) || 30),
+  }));
 }
