@@ -160,6 +160,66 @@ export interface LiveNow {
   active: LiveNowPlayer[]
 }
 
+/** A rung of the VIP ladder, plus who is standing on it. */
+export interface VipLadderRung {
+  tierLevel: number
+  tierName: string
+  color: string
+  minWager: string
+  rakebackBps: number
+  levelUpBonus: string
+  players: number
+  wagered: string
+  rakebackPaid: string
+  bonusPaid: string
+}
+
+/** One player's standing on the ladder and their distance to the next rung. */
+export interface VipPlayerRow {
+  wallet: string
+  displayName: string | null
+  tierLevel: number
+  tierName: string
+  color: string
+  rakebackBps: number
+  lifetimeWager: string
+  nextTierLevel: number | null
+  nextTierName: string | null
+  wagerToNext: string
+  progressPct: number
+  rakebackPaid: string
+  bonusPaid: string
+  balance: string
+  lastPlayAt: string | null
+}
+
+export interface VipTierOverview {
+  ladder: VipLadderRung[]
+  players: VipPlayerRow[]
+  totals: { players: number; rakebackPaid: string; bonusPaid: string }
+}
+
+/**
+ * The VIP ladder. Tiers are lifetime (never windowed), so this is a separate
+ * all-time scan from the windowed dashboard payload and only runs while the
+ * Tiers tab is open. Tiers move slowly — no aggressive polling.
+ */
+export function useVipTierDashboard(enabled: boolean, limit = 500) {
+  return useQuery({
+    queryKey: ['admin-vip-tiers', limit],
+    queryFn: async (): Promise<VipTierOverview> => {
+      const r = await fetch(`/api/admin-ops/dashboard/vip-tiers?limit=${limit}`, {
+        credentials: 'include',
+      })
+      if (!r.ok) throw new Error(`vip-tiers ${r.status}`)
+      return r.json()
+    },
+    enabled,
+    staleTime: 60_000,
+    refetchInterval: enabled ? 120_000 : false,
+  })
+}
+
 /**
  * Who is playing right now. Polls fast (10s) and independently of the heavy
  * dashboard query so the live badge stays responsive.
