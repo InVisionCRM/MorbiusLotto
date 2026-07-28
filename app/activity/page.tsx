@@ -48,6 +48,7 @@ import {
   fmtCompact,
   fmtSigned,
   isNegative,
+  looksLikeWei,
   timeAgo,
 } from '@/components/activity/dashboard-ui'
 import { isAdminWallet } from '@/lib/admin'
@@ -189,9 +190,17 @@ export default function AdminDashboardPage() {
                 <StatCard
                   label="Player liability"
                   value={fmtCompact(f?.playerLiability)}
-                  tone="gold"
-                  sub={`owed to players · house float ${fmtCompact(f?.houseFloat)}`}
-                  hint="Every player's spendable balance. Excludes house-owned rake/fee accounts, which hold the platform's own float — not a debt."
+                  tone={looksLikeWei(f?.playerLiability) ? 'bad' : 'gold'}
+                  sub={
+                    looksLikeWei(f?.playerLiability)
+                      ? '⚠ implausible — likely wei in a chips row'
+                      : `owed to players · house float ${fmtCompact(f?.houseFloat)}`
+                  }
+                  hint={
+                    looksLikeWei(f?.playerLiability)
+                      ? 'This total is far larger than any real chip balance (1 chip = 1 MORBIUS). Almost certainly one or more player_poker_chips rows hold a wei-scale value (x10^18). Check the Players tab, sorted by balance.'
+                      : "Every player's spendable balance. Excludes house-owned rake/fee accounts, which hold the platform's own float — not a debt."
+                  }
                 />
                 <StatCard label="Vault balance" value={vault} tone="cyan" sub="on-chain bankroll" />
               </div>

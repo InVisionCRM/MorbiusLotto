@@ -31,8 +31,10 @@ import {
   WalletCell,
   exactTime,
   fmt,
+  fmtCompact,
   fmtSigned,
   isNegative,
+  looksLikeWei,
   timeAgo,
   useSortedRows,
 } from './dashboard-ui'
@@ -102,7 +104,18 @@ export function PlayersTable({ rows, windowLabel }: { rows: PlayerRow[]; windowL
                       </span>
                     </Td>
                     <Td align="right" className="text-white/50">{p.plays.toLocaleString()}</Td>
-                    <Td align="right" className="text-amber-300">{fmt(p.balance)}</Td>
+                    <Td align="right" className={looksLikeWei(p.balance) ? 'font-bold text-rose-300' : 'text-amber-300'}>
+                      <span
+                        title={
+                          looksLikeWei(p.balance)
+                            ? 'Implausible balance — this row looks like a wei value (x10^18) stored in a chips column'
+                            : undefined
+                        }
+                      >
+                        {looksLikeWei(p.balance) && '⚠ '}
+                        {fmtCompact(p.balance)}
+                      </span>
+                    </Td>
                     <Td align="right" className="text-white/40" ><span title={exactTime(p.lastAt)}>{timeAgo(p.lastAt)}</span></Td>
                   </tr>
                 )
