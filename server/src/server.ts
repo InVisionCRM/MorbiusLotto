@@ -507,7 +507,7 @@ async function initializeServices() {
     registerReferralRoutes({ app, referralService, authService });
     registerDropRoutes({ app, weeklyDropService, authService });
     registerActivityRoutes({ app, gameActivityService });
-    registerAdminOpsRoutes({ app, dbService, authService });
+    registerAdminOpsRoutes({ app, dbService, authService, referralService });
 
     // Public config (whitelisted keys only; used for ad creatives, etc.)
     const PUBLIC_CONFIG_KEYS = ['ad_creative_url', 'ad_creative_hero_url', 'ad_creative_loading_url'];
