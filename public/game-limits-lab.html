@@ -75,6 +75,10 @@
   .expo .v{font:800 22px/1.1 inherit;letter-spacing:-.02em;color:var(--amber)}
   .expo.hot .v{color:var(--rose)}
   .expo .s{font-size:11px;color:var(--dim);margin-top:3px}
+  .vf{display:inline-block;margin-left:6px;border-radius:6px;padding:2px 6px;
+    font:700 9.5px/1.4 inherit;vertical-align:1px}
+  .vf.ok{background:rgba(52,211,153,.12);border:1px solid rgba(52,211,153,.3);color:#6ee7b7}
+  .vf.no{background:rgba(251,191,36,.10);border:1px solid rgba(251,191,36,.3);color:#fcd34d}
   .track{height:6px;border-radius:99px;background:rgba(255,255,255,.07);margin-top:9px;overflow:hidden}
   .track i{display:block;height:100%;border-radius:99px;
     background:linear-gradient(90deg,var(--cyan),var(--vio))}
@@ -163,8 +167,13 @@
     <code>server/src/services/arcade-*.ts</code>.
     <b>Sample:</b> RTP, wagered, won, winners, biggest win, last play and max-multiplier are
     placeholders so the layout can be judged at realistic density — no DB access from here.
-    <b>Max able to be won</b> = max bet × max multiplier, shown against a 50M bankroll;
-    cards turn red when a single round could take &gt;10% of it.
+    <b>Max able to be won</b> = max bet × top multiplier, against a 50M bankroll; cards turn red
+    when one round could take &gt;10% of it. Multipliers marked <span class="vf ok">✓ verified</span>
+    were read from the real payout-bounding constants (Dice ~49.5×, Dice x2 ~49×, Limbo 100× via
+    <code>LIMBO_MAX_TARGET_X100</code>, Crash 100× via <code>CRASH_MAX_CASHOUT_X100</code>,
+    Roulette 36×). Ones marked <span class="vf no">? unverified</span> have <b>no payout cap
+    constant anywhere in the codebase</b> — their exposure figure here is a guess and the real
+    ceiling is whatever their paytable happens to produce.
   </div>
 
   <div class="grid" id="grid"></div>
@@ -183,28 +192,28 @@ const BANKROLL = 50_000_000;
 
 // min/max are REAL (from arcade-*.ts). Everything else is sample data.
 const GAMES = [
-  {k:'dice',n:'Dice',i:'🎲',href:'/dice',min:10,max:2000,mult:9900,rtp:98.1,th:99,w:4820000,won:4728000,p:12480,u:412,big:38000,bigBy:'0x9f…21ab',bigX:190,last:'2m',winners:[['0x9f…21ab',128000],['CryptoKate',74000],['0x33…7c02',41000]]},
+  {k:'dice',n:'Dice',i:'🎲',href:'/dice',min:10,max:2000,mult:49.5,vf:1,rtp:98.1,th:99,w:4820000,won:4728000,p:12480,u:412,big:38000,bigBy:'0x9f…21ab',bigX:190,last:'2m',winners:[['0x9f…21ab',128000],['CryptoKate',74000],['0x33…7c02',41000]]},
   {k:'dicex2',n:'Dice x2',i:'🎯',href:'/dicex2',min:10,max:2000,mult:9900,rtp:97.6,th:98,w:1960000,won:1913000,p:5120,u:198,big:24000,bigBy:'0x41…9de1',bigX:120,last:'11m',winners:[['0x41…9de1',52000],['Moonboi',28000],['0xa7…03ff',16000]]},
-  {k:'limbo',n:'Limbo',i:'🚀',href:'/limbo',min:10,max:2000,mult:1000000,rtp:98.9,th:99,w:6110000,won:6043000,p:18900,u:530,big:196000,bigBy:'0x0c…4411',bigX:980,last:'40s',winners:[['0x0c…4411',402000],['SendIt',151000],['0xbb…9a20',88000]]},
-  {k:'mines',n:'Mines',i:'💣',href:'/mines',min:10,max:2000,mult:24000,rtp:96.8,th:97,w:5340000,won:5169000,p:9870,u:445,big:88000,bigBy:'MinesKing',bigX:440,last:'5m',winners:[['MinesKing',214000],['0x77…12cd',96000],['0x2e…88b1',53000]]},
-  {k:'crash',n:'Crash',i:'📈',href:'/crash',min:10,max:2000,mult:1000000,rtp:100.6,th:99,w:7250000,won:7293000,p:21400,u:612,big:412000,bigBy:'0xde…5f77',bigX:2060,last:'8s',winners:[['0xde…5f77',688000],['RocketDad',233000],['0x91…4b6e',147000]]},
-  {k:'towers',n:'Towers',i:'🗼',href:'/towers',min:10,max:2000,mult:14000,rtp:97.2,th:97,w:2180000,won:2119000,p:6640,u:221,big:52000,bigBy:'0x64…aa10',bigX:260,last:'19m',winners:[['0x64…aa10',118000],['0x05…7731',44000],['Tower',21000]]},
-  {k:'chicken',n:'Chicken',i:'🐔',href:'/chicken',min:10,max:2000,mult:9800,rtp:96.6,th:97,w:1470000,won:1420000,p:4980,u:176,big:31000,bigBy:'ClucksAlot',bigX:155,last:'27m',winners:[['ClucksAlot',67000],['0x12…9902',29000],['0x8a…3d55',14000]]},
-  {k:'hilo',n:'Hi-Lo',i:'↕',href:'/hilo',min:10,max:2000,mult:5000,rtp:97.9,th:98,w:1120000,won:1096000,p:4210,u:150,big:27000,bigBy:'0xcc…6612',bigX:135,last:'33m',winners:[['0xcc…6612',58000],['0x39…0a4d',24000],['Flipper',11000]]},
-  {k:'firewalk',n:'Firewalk',i:'🔥',href:'/firewalk',min:10,max:2000,mult:12000,rtp:96.1,th:96,w:890000,won:855000,p:3120,u:118,big:19000,bigBy:'0x7b…41c9',bigX:95,last:'1h',winners:[['0x7b…41c9',41000],['0x66…d0a2',18000],['Ash',9000]]},
-  {k:'heist',n:'Heist',i:'🏦',href:'/heist',min:10,max:2000,mult:10000,rtp:97.4,th:97,w:760000,won:740000,p:2740,u:104,big:22000,bigBy:'SafeCracker',bigX:110,last:'44m',winners:[['SafeCracker',48000],['0x1d…7fa3',19000],['0x90…2255',8000]]},
-  {k:'baccarat',n:'Baccarat',i:'🃏',href:'/baccarat',min:10,max:2000,mult:9,rtp:98.6,th:98.9,w:2960000,won:2918000,p:7180,u:243,big:41000,bigBy:'0xa1…5b30',bigX:9,last:'6m',winners:[['0xa1…5b30',88000],['Banker',37000],['0x4f…6611',20000]]},
-  {k:'keno',n:'Keno',i:'🔢',href:'/keno',min:1,max:1000,mult:10000,rtp:94.9,th:95,w:1830000,won:1737000,p:14200,u:388,big:64000,bigBy:'0x2b…9911',bigX:320,last:'3m',winners:[['0x2b…9911',141000],['LuckyNum',62000],['0xf0…1a7c',33000]]},
-  {k:'plinko',n:'Plinko',i:'🔻',href:'/plinko',min:1,max:1000,mult:1000,rtp:97.8,th:98,w:3410000,won:3335000,p:26800,u:701,big:78000,bigBy:'DropIt',bigX:390,last:'50s',winners:[['DropIt',166000],['0x58…4d09',71000],['0xc3…8802',38000]]},
-  {k:'roulette',n:'Roulette',i:'🎡',href:'/roulette',min:5,max:1000,mult:36,rtp:97.3,th:97.3,w:2540000,won:2471000,p:8390,u:281,big:35000,bigBy:'0x86…2f14',bigX:36,last:'14m',winners:[['0x86…2f14',76000],['RedOrBlack',31000],['0x22…5a90',17000]]},
-  {k:'pachinko',n:'Pachinko',i:'🏮',href:'/pachinko',min:10,max:100000,mult:5000,rtp:95.8,th:96,w:1290000,won:1236000,p:3450,u:129,big:210000,bigBy:'0xee…7b23',bigX:1050,last:'21m',winners:[['0xee…7b23',388000],['PachiPro',96000],['0x74…c118',44000]]},
-  {k:'cascade',n:'Cascade',i:'💧',href:'/cascade',min:100,max:100000,mult:2500,rtp:96.9,th:97,w:980000,won:950000,p:1890,u:88,big:180000,bigBy:'0x3c…9f40',bigX:900,last:'38m',winners:[['0x3c…9f40',291000],['0x19…6d72',67000],['Flow',28000]]},
-  {k:'cipher',n:'Cipher',i:'🔐',href:'/cipher',min:100,max:100000,mult:3000,rtp:97.1,th:97,w:640000,won:621000,p:1210,u:61,big:145000,bigBy:'Decoder',bigX:725,last:'55m',winners:[['Decoder',233000],['0x08…3311',54000],['0xb2…7fd8',19000]]},
-  {k:'greeddice',n:'Greed Dice',i:'🤑',href:'/greed-dice',min:100,max:100000,mult:5000,rtp:96.4,th:96.5,w:1540000,won:1485000,p:2980,u:112,big:238000,bigBy:'0x55…0c2a',bigX:1190,last:'17m',winners:[['0x55…0c2a',401000],['GreedIsGood',88000],['0x7e…44b0',36000]]},
-  {k:'andarbahar',n:'Andar Bahar',i:'🪭',href:'/andar-bahar',min:100,max:50000,mult:25,rtp:97.7,th:97.9,w:720000,won:703000,p:1640,u:74,big:96000,bigBy:'0x30…8811',bigX:25,last:'1h',winners:[['0x30…8811',147000],['0xd4…2a03',42000],['Bahar',15000]]},
-  {k:'dragontiger',n:'Dragon Tiger',i:'🐉',href:'/dragon-tiger',min:100,max:50000,mult:50,rtp:98.0,th:98.1,w:1080000,won:1058000,p:2410,u:97,big:112000,bigBy:'DragonLord',bigX:50,last:'29m',winners:[['DragonLord',188000],['0x63…9c41',51000],['0xaa…1177',22000]]},
-  {k:'threecard',n:'Three Card Poker',i:'🂡',href:'/three-card-poker',min:100,max:50000,mult:100,rtp:96.7,th:96.6,w:860000,won:832000,p:1780,u:83,big:74000,bigBy:'0x4d…5e88',bigX:74,last:'47m',winners:[['0x4d…5e88',122000],['0x97…0b31',38000],['Trips',16000]]},
-  {k:'paigow',n:'Pai Gow Poker',i:'🀄',href:'/pai-gow-poker',min:100,max:10000,mult:50,rtp:97.5,th:97.5,w:410000,won:400000,p:920,u:47,big:38000,bigBy:'0x81…6a20',bigX:38,last:'2h',winners:[['0x81…6a20',61000],['0x26…c904',18000],['PaiGow',7000]]},
+  {k:'limbo',n:'Limbo',i:'🚀',href:'/limbo',min:10,max:2000,mult:100,vf:1,rtp:98.9,th:99,w:6110000,won:6043000,p:18900,u:530,big:196000,bigBy:'0x0c…4411',bigX:980,last:'40s',winners:[['0x0c…4411',402000],['SendIt',151000],['0xbb…9a20',88000]]},
+  {k:'mines',n:'Mines',i:'💣',href:'/mines',min:10,max:2000,mult:24000,vf:0,rtp:96.8,th:97,w:5340000,won:5169000,p:9870,u:445,big:88000,bigBy:'MinesKing',bigX:440,last:'5m',winners:[['MinesKing',214000],['0x77…12cd',96000],['0x2e…88b1',53000]]},
+  {k:'crash',n:'Crash',i:'📈',href:'/crash',min:10,max:2000,mult:100,vf:1,rtp:100.6,th:99,w:7250000,won:7293000,p:21400,u:612,big:412000,bigBy:'0xde…5f77',bigX:2060,last:'8s',winners:[['0xde…5f77',688000],['RocketDad',233000],['0x91…4b6e',147000]]},
+  {k:'towers',n:'Towers',i:'🗼',href:'/towers',min:10,max:2000,mult:14000,vf:0,rtp:97.2,th:97,w:2180000,won:2119000,p:6640,u:221,big:52000,bigBy:'0x64…aa10',bigX:260,last:'19m',winners:[['0x64…aa10',118000],['0x05…7731',44000],['Tower',21000]]},
+  {k:'chicken',n:'Chicken',i:'🐔',href:'/chicken',min:10,max:2000,mult:9800,vf:0,rtp:96.6,th:97,w:1470000,won:1420000,p:4980,u:176,big:31000,bigBy:'ClucksAlot',bigX:155,last:'27m',winners:[['ClucksAlot',67000],['0x12…9902',29000],['0x8a…3d55',14000]]},
+  {k:'hilo',n:'Hi-Lo',i:'↕',href:'/hilo',min:10,max:2000,mult:5000,vf:0,rtp:97.9,th:98,w:1120000,won:1096000,p:4210,u:150,big:27000,bigBy:'0xcc…6612',bigX:135,last:'33m',winners:[['0xcc…6612',58000],['0x39…0a4d',24000],['Flipper',11000]]},
+  {k:'firewalk',n:'Firewalk',i:'🔥',href:'/firewalk',min:10,max:2000,mult:12000,vf:0,rtp:96.1,th:96,w:890000,won:855000,p:3120,u:118,big:19000,bigBy:'0x7b…41c9',bigX:95,last:'1h',winners:[['0x7b…41c9',41000],['0x66…d0a2',18000],['Ash',9000]]},
+  {k:'heist',n:'Heist',i:'🏦',href:'/heist',min:10,max:2000,mult:10000,vf:0,rtp:97.4,th:97,w:760000,won:740000,p:2740,u:104,big:22000,bigBy:'SafeCracker',bigX:110,last:'44m',winners:[['SafeCracker',48000],['0x1d…7fa3',19000],['0x90…2255',8000]]},
+  {k:'baccarat',n:'Baccarat',i:'🃏',href:'/baccarat',min:10,max:2000,mult:9,vf:0,rtp:98.6,th:98.9,w:2960000,won:2918000,p:7180,u:243,big:41000,bigBy:'0xa1…5b30',bigX:9,last:'6m',winners:[['0xa1…5b30',88000],['Banker',37000],['0x4f…6611',20000]]},
+  {k:'keno',n:'Keno',i:'🔢',href:'/keno',min:1,max:1000,mult:10000,vf:0,rtp:94.9,th:95,w:1830000,won:1737000,p:14200,u:388,big:64000,bigBy:'0x2b…9911',bigX:320,last:'3m',winners:[['0x2b…9911',141000],['LuckyNum',62000],['0xf0…1a7c',33000]]},
+  {k:'plinko',n:'Plinko',i:'🔻',href:'/plinko',min:1,max:1000,mult:1000,vf:0,rtp:97.8,th:98,w:3410000,won:3335000,p:26800,u:701,big:78000,bigBy:'DropIt',bigX:390,last:'50s',winners:[['DropIt',166000],['0x58…4d09',71000],['0xc3…8802',38000]]},
+  {k:'roulette',n:'Roulette',i:'🎡',href:'/roulette',min:5,max:1000,mult:36,vf:1,rtp:97.3,th:97.3,w:2540000,won:2471000,p:8390,u:281,big:35000,bigBy:'0x86…2f14',bigX:36,last:'14m',winners:[['0x86…2f14',76000],['RedOrBlack',31000],['0x22…5a90',17000]]},
+  {k:'pachinko',n:'Pachinko',i:'🏮',href:'/pachinko',min:10,max:100000,mult:5000,vf:0,rtp:95.8,th:96,w:1290000,won:1236000,p:3450,u:129,big:210000,bigBy:'0xee…7b23',bigX:1050,last:'21m',winners:[['0xee…7b23',388000],['PachiPro',96000],['0x74…c118',44000]]},
+  {k:'cascade',n:'Cascade',i:'💧',href:'/cascade',min:100,max:100000,mult:2500,vf:0,rtp:96.9,th:97,w:980000,won:950000,p:1890,u:88,big:180000,bigBy:'0x3c…9f40',bigX:900,last:'38m',winners:[['0x3c…9f40',291000],['0x19…6d72',67000],['Flow',28000]]},
+  {k:'cipher',n:'Cipher',i:'🔐',href:'/cipher',min:100,max:100000,mult:3000,vf:0,rtp:97.1,th:97,w:640000,won:621000,p:1210,u:61,big:145000,bigBy:'Decoder',bigX:725,last:'55m',winners:[['Decoder',233000],['0x08…3311',54000],['0xb2…7fd8',19000]]},
+  {k:'greeddice',n:'Greed Dice',i:'🤑',href:'/greed-dice',min:100,max:100000,mult:5000,vf:0,rtp:96.4,th:96.5,w:1540000,won:1485000,p:2980,u:112,big:238000,bigBy:'0x55…0c2a',bigX:1190,last:'17m',winners:[['0x55…0c2a',401000],['GreedIsGood',88000],['0x7e…44b0',36000]]},
+  {k:'andarbahar',n:'Andar Bahar',i:'🪭',href:'/andar-bahar',min:100,max:50000,mult:25,vf:0,rtp:97.7,th:97.9,w:720000,won:703000,p:1640,u:74,big:96000,bigBy:'0x30…8811',bigX:25,last:'1h',winners:[['0x30…8811',147000],['0xd4…2a03',42000],['Bahar',15000]]},
+  {k:'dragontiger',n:'Dragon Tiger',i:'🐉',href:'/dragon-tiger',min:100,max:50000,mult:50,vf:0,rtp:98.0,th:98.1,w:1080000,won:1058000,p:2410,u:97,big:112000,bigBy:'DragonLord',bigX:50,last:'29m',winners:[['DragonLord',188000],['0x63…9c41',51000],['0xaa…1177',22000]]},
+  {k:'threecard',n:'Three Card Poker',i:'🂡',href:'/three-card-poker',min:100,max:50000,mult:100,vf:0,rtp:96.7,th:96.6,w:860000,won:832000,p:1780,u:83,big:74000,bigBy:'0x4d…5e88',bigX:74,last:'47m',winners:[['0x4d…5e88',122000],['0x97…0b31',38000],['Trips',16000]]},
+  {k:'paigow',n:'Pai Gow Poker',i:'🀄',href:'/pai-gow-poker',min:100,max:10000,mult:50,vf:0,rtp:97.5,th:97.5,w:410000,won:400000,p:920,u:47,big:38000,bigBy:'0x81…6a20',bigX:38,last:'2h',winners:[['0x81…6a20',61000],['0x26…c904',18000],['PaiGow',7000]]},
 ];
 
 const fmt = n => {
@@ -253,7 +262,9 @@ const card = g => {
         <div class="k">Max able to be won</div>
         <div class="v" data-mw="${g.k}">${fmt(mw)}</div>
       </div>
-      <div class="s">max bet × ${fmt(g.mult)}× top multiplier · <b data-ep="${g.k}">${ep.toFixed(1)}%</b> of bankroll</div>
+      <div class="s">max bet × ${fmt(g.mult)}× top multiplier · <b data-ep="${g.k}">${ep.toFixed(1)}%</b> of bankroll
+        ${g.vf ? '<span class="vf ok">✓ cap verified in code</span>'
+               : '<span class="vf no">? multiplier unverified</span>'}</div>
       <div class="track ${hot?'hot':''}"><i data-bar="${g.k}" style="width:${Math.min(100,ep)}%"></i></div>
     </div>
 
