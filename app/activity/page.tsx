@@ -25,6 +25,7 @@ import {
 } from 'lucide-react'
 import GlobalMainNav from '@/components/shared/GlobalMainNav'
 import AdminCreditPanel from '@/components/activity/AdminCreditPanel'
+import ReferralAbuseControls from '@/components/activity/ReferralAbuseControls'
 import LiveBadge from '@/components/activity/LiveBadge'
 import {
   BigWinsTable,
@@ -325,10 +326,13 @@ export default function AdminDashboardPage() {
                   />
                 )}
                 {tab === 'referrals' && (
+                  <>
+                  <ReferralAbuseControls />
                   <ReferralsTable
                     rows={data?.referrals.referrers ?? []}
                     totals={data?.referrals.totals ?? { referrers: 0, referees: 0, earned: '0', welcomePaid: '0' }}
                   />
+                  </>
                 )}
                 {tab === 'games' && (
                   <>

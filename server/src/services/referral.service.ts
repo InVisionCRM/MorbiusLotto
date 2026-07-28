@@ -158,6 +158,181 @@ export class ReferralService {
     return config;
   }
 
+  /** True when this wallet's referral privileges have been revoked by an admin. */
+  async isBlacklisted(db: Pool | PoolClient, addr: string): Promise<boolean> {
+    const { rows } = await db.query(
+      'SELECT 1 FROM referral_blacklist WHERE wallet_address = $1',
+      [normalizeAddr(addr)],
+    );
+    return rows.length > 0;
+  }
+
+  /**
+   * Every wallet this referrer brought in, with the balance and lifetime wager of
+   * each. Farmed accounts show up as a cluster of referees that took the welcome
+   * bonus and never wagered — that is the signal to blacklist on.
+   */
+  async getReferrerDetail(rawAddress: string): Promise<{
+    referrer: string;
+    blacklisted: boolean;
+    blacklistReason: string | null;
+    clawedBackChips: string;
+    totals: { referees: number; neverWagered: number; welcomePaid: string; earned: string };
+    referees: Array<{
+      address: string;
+      boundAt: string;
+      welcomeBonusChips: string;
+      rewardChips: string;
+      chipBalance: string;
+      lifetimeWager: string;
+    }>;
+  }> {
+    const referrer = normalizeAddr(rawAddress);
+
+    const { rows } = await this.pool.query<{
+      referee_address: string;
+      bound_at: string;
+      welcome_bonus_chips: string;
+      total_reward_chips: string;
+      chip_balance: string;
+      lifetime_wager: string;
+    }>(
+      `SELECT r.referee_address,
+              r.bound_at,
+              r.welcome_bonus_chips::text            AS welcome_bonus_chips,
+              r.total_reward_chips::text             AS total_reward_chips,
+              COALESCE(c.balance, 0)::text           AS chip_balance,
+              COALESCE(w.wagered, 0)::text           AS lifetime_wager
+         FROM referrals r
+         LEFT JOIN player_poker_chips c ON c.wallet_address = r.referee_address
+         LEFT JOIN LATERAL (
+           SELECT GREATEST(COALESCE(-SUM(delta), 0), 0) AS wagered
+             FROM poker_chip_ledger
+            WHERE wallet_address = r.referee_address AND ${BET_REASON_PREDICATE}
+         ) w ON TRUE
+        WHERE r.referrer_address = $1
+        ORDER BY r.bound_at DESC`,
+      [referrer],
+    );
+
+    const bl = await this.pool.query<{ reason: string | null; clawed_back_chips: string }>(
+      'SELECT reason, clawed_back_chips::text AS clawed_back_chips FROM referral_blacklist WHERE wallet_address = $1',
+      [referrer],
+    );
+
+    let welcomePaid = 0n;
+    let earned = 0n;
+    let neverWagered = 0;
+    const referees = rows.map((r) => {
+      welcomePaid += BigInt(r.welcome_bonus_chips || '0');
+      earned += BigInt(r.total_reward_chips || '0');
+      if (BigInt(r.lifetime_wager || '0') === 0n) neverWagered += 1;
+      return {
+        address: r.referee_address,
+        boundAt: r.bound_at,
+        welcomeBonusChips: r.welcome_bonus_chips,
+        rewardChips: r.total_reward_chips,
+        chipBalance: r.chip_balance,
+        lifetimeWager: r.lifetime_wager,
+      };
+    });
+
+    return {
+      referrer,
+      blacklisted: bl.rows.length > 0,
+      blacklistReason: bl.rows[0]?.reason ?? null,
+      clawedBackChips: bl.rows[0]?.clawed_back_chips ?? '0',
+      totals: {
+        referees: referees.length,
+        neverWagered,
+        welcomePaid: welcomePaid.toString(),
+        earned: earned.toString(),
+      },
+      referees,
+    };
+  }
+
+  /**
+   * Revoke a wallet's referral privileges. Their code can no longer be bound and
+   * they stop accruing rewards. When `clawback` is set, the referral reward chips
+   * they earned are debited back off their balance in the same transaction
+   * (welcome bonuses already paid to the REFEREES are reported but not touched —
+   * those sit in other wallets, so reversing them is a separate decision).
+   */
+  async blacklist(
+    rawAddress: string,
+    opts: { reason?: string; clawback?: boolean; by?: string } = {},
+  ): Promise<{ blacklisted: true; clawedBack: string }> {
+    const referrer = normalizeAddr(rawAddress);
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      let clawedBack = 0n;
+      if (opts.clawback) {
+        const { rows } = await client.query<{ earned: string }>(
+          `SELECT COALESCE(SUM(total_reward_chips), 0)::text AS earned
+             FROM referrals WHERE referrer_address = $1`,
+          [referrer],
+        );
+        clawedBack = BigInt(rows[0]?.earned ?? '0');
+        if (clawedBack > 0n) {
+          await applyPokerChipDelta(client, referrer, -clawedBack, 'referral_clawback', {
+            type: 'referral',
+            id: null,
+          });
+        }
+      }
+
+      await client.query(
+        `INSERT INTO referral_blacklist (wallet_address, reason, clawed_back_chips, blacklisted_by)
+         VALUES ($1, $2, $3::NUMERIC, $4)
+         ON CONFLICT (wallet_address) DO UPDATE
+           SET reason = EXCLUDED.reason,
+               clawed_back_chips = referral_blacklist.clawed_back_chips + EXCLUDED.clawed_back_chips,
+               blacklisted_by = EXCLUDED.blacklisted_by,
+               blacklisted_at = NOW()`,
+        [referrer, opts.reason ?? null, clawedBack.toString(), opts.by ? normalizeAddr(opts.by) : null],
+      );
+
+      await client.query('COMMIT');
+      logger.info('[Referral] blacklisted', { referrer, clawedBack: clawedBack.toString(), by: opts.by });
+      return { blacklisted: true, clawedBack: clawedBack.toString() };
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+  }
+
+  /** Restore referral privileges. Does not re-credit any clawed-back chips. */
+  async unblacklist(rawAddress: string): Promise<{ blacklisted: false }> {
+    await this.pool.query('DELETE FROM referral_blacklist WHERE wallet_address = $1', [
+      normalizeAddr(rawAddress),
+    ]);
+    logger.info('[Referral] blacklist lifted', { referrer: normalizeAddr(rawAddress) });
+    return { blacklisted: false };
+  }
+
+  /**
+   * Kill switch for the whole program. When disabled, bind() refuses new
+   * bindings (so no more welcome bonuses are paid) and no new referral rewards
+   * accrue. Existing bindings are left untouched. The config cache is cleared
+   * immediately so the change takes effect on the very next request rather than
+   * waiting out the TTL.
+   */
+  async setEnabled(enabled: boolean): Promise<ReferralConfig> {
+    await this.pool.query(
+      `UPDATE referral_config SET enabled = $1, updated_at = NOW() WHERE id = 1`,
+      [enabled],
+    );
+    this.configCache = null;
+    this.configCacheAt = 0;
+    logger.info('[Referral] program toggled', { enabled });
+    return this.getConfig();
+  }
+
   // ──────────────────────────────────────────────────────────────────
   // Lifetime wager (whole chips) — same derivation as VipService.
   // ──────────────────────────────────────────────────────────────────
@@ -354,6 +529,10 @@ export class ReferralService {
       const referrer = codeRow.rows[0]?.wallet_address;
       if (!referrer) throw new Error('That referral code does not exist');
       if (referrer === referee) throw new Error('You cannot use your own referral code');
+      // Blacklisted referrers can no longer recruit — their code stops working.
+      if (await this.isBlacklisted(client, referrer)) {
+        throw new Error('That referral code is no longer active');
+      }
 
       // Lock the referee's binding slot so a double-submit can't bind twice.
       const existing = await client.query<{ referrer_address: string }>(
@@ -419,12 +598,15 @@ export class ReferralService {
     const config = await this.getConfig();
     if (!config.enabled || config.rewardBps <= 0) return null;
 
+
     const row = await client.query<{ referrer_address: string }>(
       `SELECT referrer_address FROM referrals WHERE referee_address = $1`,
       [referee],
     );
     const referrer = row.rows[0]?.referrer_address;
     if (!referrer) return null;
+    // Blacklisted referrers stop earning from their existing referees too.
+    if (await this.isBlacklisted(client, referrer)) return null;
 
     const reward = (rakebackChips * BigInt(config.rewardBps)) / 10000n;
     if (reward <= 0n) return null;

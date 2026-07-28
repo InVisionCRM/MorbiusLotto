@@ -84,6 +84,7 @@ export type PokerChipLedgerReason =
   | 'vip_monthly_bonus' // LEGACY (feature removed 2026-07-02): monthly cashback — historical rows only, no new accrual
   | 'referral_welcome'  // referral: one-time welcome bonus credited to a referee on binding
   | 'referral_reward'   // referral: % of a referee's rakeback credited to their referrer
+  | 'referral_clawback' // referral: admin reversal of earned referral rewards when a referrer is blacklisted for abuse
   | 'weekly_drop_prize'; // The Weekly Drop raffle prize (WEEKLY_DROP_SPEC.md) — auto-credit at draw
 
 const DEFAULT_PLATFORM_FEE_WALLET = '0x41682815b05fe6b54a6c0f8813bb99423ee0309d';
