@@ -167,6 +167,68 @@ export class ReferralService {
     return rows.length > 0;
   }
 
+  /** Batch form of isBlacklisted — one query for many addresses. */
+  async blacklistedAmong(db: Pool | PoolClient, addrs: string[]): Promise<Set<string>> {
+    const list = Array.from(new Set(addrs.map((a) => normalizeAddr(a))));
+    if (list.length === 0) return new Set();
+    const { rows } = await db.query<{ wallet_address: string }>(
+      'SELECT wallet_address FROM referral_blacklist WHERE wallet_address = ANY($1::text[])',
+      [list],
+    );
+    return new Set(rows.map((r) => r.wallet_address));
+  }
+
+  /** Current blacklist, newest first, for the admin list view. */
+  async listBlacklist(limit = 200): Promise<
+    Array<{ address: string; reason: string | null; clawedBackChips: string; at: string; by: string | null }>
+  > {
+    const { rows } = await this.pool.query<{
+      wallet_address: string;
+      reason: string | null;
+      clawed_back_chips: string;
+      blacklisted_at: string;
+      blacklisted_by: string | null;
+    }>(
+      `SELECT wallet_address, reason, clawed_back_chips::text AS clawed_back_chips,
+              blacklisted_at, blacklisted_by
+         FROM referral_blacklist
+        ORDER BY blacklisted_at DESC
+        LIMIT $1`,
+      [Math.min(Math.max(limit, 1), 1000)],
+    );
+    return rows.map((r) => ({
+      address: r.wallet_address,
+      reason: r.reason,
+      clawedBackChips: r.clawed_back_chips,
+      at: r.blacklisted_at,
+      by: r.blacklisted_by,
+    }));
+  }
+
+  /**
+   * Blacklist any number of wallets in one statement — they do not have to be
+   * referrers. A blacklisted wallet cannot have its code bound and cannot collect
+   * a welcome bonus. No clawback here; that is the deliberate, separate action.
+   */
+  async blacklistMany(
+    addresses: string[],
+    opts: { reason?: string; by?: string } = {},
+  ): Promise<{ added: number; addresses: string[] }> {
+    const list = Array.from(new Set(addresses.map((a) => normalizeAddr(a))));
+    if (list.length === 0) return { added: 0, addresses: [] };
+    await this.pool.query(
+      `INSERT INTO referral_blacklist (wallet_address, reason, blacklisted_by)
+       SELECT UNNEST($1::text[]), $2, $3
+       ON CONFLICT (wallet_address) DO UPDATE
+         SET reason = COALESCE(EXCLUDED.reason, referral_blacklist.reason),
+             blacklisted_by = EXCLUDED.blacklisted_by,
+             blacklisted_at = NOW()`,
+      [list, opts.reason ?? null, opts.by ? normalizeAddr(opts.by) : null],
+    );
+    logger.info('[Referral] blacklisted (bulk)', { count: list.length, by: opts.by });
+    return { added: list.length, addresses: list };
+  }
+
   /**
    * Every wallet this referrer brought in, with the balance and lifetime wager of
    * each. Farmed accounts show up as a cluster of referees that took the welcome
@@ -325,35 +387,47 @@ export class ReferralService {
     referrer: string;
     totalRecovered: string;
     totalShortfall: string;
-    results: Array<{ address: string; recovered: string; shortfall: string; error?: string }>;
+    results: Array<{ address: string; recovered: string; shortfall: string }>;
   }> {
     const referrer = normalizeAddr(rawReferrer);
-    const wanted = new Set(refereeAddresses.map((a) => normalizeAddr(a)));
+    const wanted = refereeAddresses.map((a) => normalizeAddr(a));
+    if (wanted.length === 0) {
+      return { referrer, totalRecovered: '0', totalShortfall: '0', results: [] };
+    }
 
-    // Only referees actually bound to THIS referrer are eligible.
-    const { rows } = await this.pool.query<{ referee_address: string; welcome_bonus_chips: string }>(
-      `SELECT referee_address, welcome_bonus_chips::text AS welcome_bonus_chips
-         FROM referrals WHERE referrer_address = $1`,
-      [referrer],
-    );
-    const eligible = rows.filter((r) => wanted.has(r.referee_address));
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
 
-    const results: Array<{ address: string; recovered: string; shortfall: string; error?: string }> = [];
-    let totalRecovered = 0n;
-    let totalShortfall = 0n;
+      // One round trip: the eligible referees (bound to THIS referrer), their
+      // welcome bonus and their current balance, with the balance rows locked in
+      // the same statement so nothing moves underneath us.
+      const { rows } = await client.query<{
+        referee_address: string;
+        welcome_bonus_chips: string;
+        balance: string;
+      }>(
+        `SELECT r.referee_address,
+                r.welcome_bonus_chips::text  AS welcome_bonus_chips,
+                COALESCE(c.balance, 0)::text AS balance
+           FROM referrals r
+           LEFT JOIN player_poker_chips c ON c.wallet_address = r.referee_address
+          WHERE r.referrer_address = $1
+            AND r.referee_address = ANY($2::text[])
+            AND r.welcome_bonus_chips > 0
+          FOR UPDATE OF c`,
+        [referrer, wanted],
+      );
 
-    for (const row of eligible) {
-      const owed = BigInt(row.welcome_bonus_chips || '0');
-      if (owed <= 0n) continue;
-      const client = await this.pool.connect();
-      try {
-        await client.query('BEGIN');
-        const bal = await client.query<{ balance: string }>(
-          `SELECT COALESCE(balance, 0)::text AS balance FROM player_poker_chips
-            WHERE wallet_address = $1 FOR UPDATE`,
-          [row.referee_address],
-        );
-        const available = BigInt(bal.rows[0]?.balance ?? '0');
+      const results: Array<{ address: string; recovered: string; shortfall: string }> = [];
+      let totalRecovered = 0n;
+      let totalShortfall = 0n;
+
+      for (const row of rows) {
+        const owed = BigInt(row.welcome_bonus_chips || '0');
+        const available = BigInt(row.balance || '0');
+        // Clamp to what is actually there: chips already withdrawn on-chain cannot
+        // be recovered, and applyPokerChipDelta refuses to go negative.
         const take = available < owed ? available : owed;
         if (take > 0n) {
           await applyPokerChipDelta(client, row.referee_address, -take, 'referral_welcome_clawback', {
@@ -361,53 +435,45 @@ export class ReferralService {
             id: null,
           });
         }
-        await client.query('COMMIT');
-        const short = owed - take;
         totalRecovered += take;
-        totalShortfall += short;
+        totalShortfall += owed - take;
         results.push({
           address: row.referee_address,
           recovered: take.toString(),
-          shortfall: short.toString(),
+          shortfall: (owed - take).toString(),
         });
-      } catch (err) {
-        await client.query('ROLLBACK').catch(() => {});
-        totalShortfall += owed;
-        results.push({
-          address: row.referee_address,
-          recovered: '0',
-          shortfall: owed.toString(),
-          error: err instanceof Error ? err.message : 'clawback failed',
-        });
-      } finally {
-        client.release();
       }
+
+      // Fold the recovery into the referrer's blacklist row when one exists, so the
+      // audit trail stays on a single reviewable record.
+      if (totalRecovered > 0n) {
+        await client.query(
+          `UPDATE referral_blacklist
+              SET clawed_back_chips = clawed_back_chips + $2::NUMERIC
+            WHERE wallet_address = $1`,
+          [referrer, totalRecovered.toString()],
+        );
+      }
+
+      await client.query('COMMIT');
+      logger.info('[Referral] welcome clawback', {
+        referrer,
+        wallets: results.length,
+        recovered: totalRecovered.toString(),
+        shortfall: totalShortfall.toString(),
+      });
+      return {
+        referrer,
+        totalRecovered: totalRecovered.toString(),
+        totalShortfall: totalShortfall.toString(),
+        results,
+      };
+    } catch (err) {
+      await client.query('ROLLBACK').catch(() => {});
+      throw err;
+    } finally {
+      client.release();
     }
-
-    // Fold the recovery into the referrer's blacklist row when one exists, so the
-    // audit trail stays on a single reviewable record.
-    if (totalRecovered > 0n) {
-      await this.pool.query(
-        `UPDATE referral_blacklist
-            SET clawed_back_chips = clawed_back_chips + $2::NUMERIC
-          WHERE wallet_address = $1`,
-        [referrer, totalRecovered.toString()],
-      );
-    }
-
-    logger.info('[Referral] welcome clawback', {
-      referrer,
-      wallets: results.length,
-      recovered: totalRecovered.toString(),
-      shortfall: totalShortfall.toString(),
-    });
-
-    return {
-      referrer,
-      totalRecovered: totalRecovered.toString(),
-      totalShortfall: totalShortfall.toString(),
-      results,
-    };
   }
 
   /** Restore referral privileges. Does not re-credit any clawed-back chips. */
@@ -633,10 +699,11 @@ export class ReferralService {
       const referrer = codeRow.rows[0]?.wallet_address;
       if (!referrer) throw new Error('That referral code does not exist');
       if (referrer === referee) throw new Error('You cannot use your own referral code');
-      // Blacklisted referrers can no longer recruit — their code stops working.
-      if (await this.isBlacklisted(client, referrer)) {
-        throw new Error('That referral code is no longer active');
-      }
+      // One query covers both sides: a blacklisted referrer's code stops working,
+      // and a blacklisted wallet can no longer collect a welcome bonus either.
+      const banned = await this.blacklistedAmong(client, [referrer, referee]);
+      if (banned.has(referrer)) throw new Error('That referral code is no longer active');
+      if (banned.has(referee)) throw new Error('This wallet is not eligible for the referral program');
 
       // Lock the referee's binding slot so a double-submit can't bind twice.
       const existing = await client.query<{ referrer_address: string }>(
