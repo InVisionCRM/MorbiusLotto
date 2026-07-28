@@ -398,9 +398,10 @@ export class MoneyService {
       throw new Error('Withdrawals temporarily unavailable');
     }
 
-    const feeBps = 500n;
-    const feeAmount = (amountBigInt * feeBps) / 10000n;
-    const netToUser = amountBigInt - feeAmount;
+    // No withdrawal fee — retired with the 2026-07 economy change (VIP rakeback
+    // replaced the payout fee, burn and holder/LP distribution).
+    const feeAmount = 0n;
+    const netToUser = amountBigInt;
     const hotMorbiusBalance = await this.publicClient.readContract({
       address: MORBIUS_TOKEN_ADDRESS,
       abi: ERC20_BALANCE_OF_ABI,
@@ -494,39 +495,6 @@ export class MoneyService {
     }
   }
 
-  private async distributeWithdrawalFee(jobId: string, feeWei: bigint, walletClient: HotWalletClient): Promise<void> {
-    if (!walletClient.account || feeWei <= 0n) return;
-
-    try {
-      const recipients = await this.getFeeRecipients();
-      const payouts = [
-        { to: recipients.distributionRecipient, amount: (feeWei * 125n) / 500n, label: 'distributionRecipient' },
-        { to: recipients.burnAddress, amount: (feeWei * 50n) / 500n, label: 'burnAddress' },
-        { to: recipients.platformFeeRecipient, amount: (feeWei * 175n) / 500n, label: 'platformFeeRecipient' },
-        { to: recipients.lpDistributionRecipient, amount: (feeWei * 150n) / 500n, label: 'lpDistributionRecipient' },
-      ];
-
-      for (const payout of payouts) {
-        if (payout.amount <= 0n || payout.to === '0x0000000000000000000000000000000000000000') continue;
-        try {
-          await walletClient.writeContract({
-            account: walletClient.account,
-            chain: pulsechain,
-            address: MORBIUS_TOKEN_ADDRESS,
-            abi: ERC20_TRANSFER_ABI,
-            functionName: 'transfer',
-            args: [payout.to, payout.amount],
-          });
-          logger.info('Hot withdrawal fee sent', { jobId, to: payout.label, amount: payout.amount.toString() });
-        } catch (error) {
-          logger.error('Hot withdrawal fee transfer failed', { jobId, to: payout.label, error });
-        }
-      }
-    } catch (error) {
-      logger.error('Hot withdrawal fee distribution failed (reading recipients)', { jobId, error });
-    }
-  }
-
   async confirmHotWithdrawals(): Promise<void> {
     const jobs = await this.dbService.getHotWithdrawalJobsPendingConfirmation();
     const timeoutMs = HOT_WITHDRAW_CONFIRMATION_TIMEOUT_MS;
@@ -561,12 +529,8 @@ export class MoneyService {
         await this.dbService.addToBlackjackWithdrawnTotal(BigInt(job.amount_wei));
         await this.dbService.recordHotWalletWithdrawal(job.wallet_address, BigInt(job.amount_wei), job.tx_hash);
         logger.info('Hot withdrawal confirmed', { jobId: job.id, txHash: job.tx_hash });
-
-        const walletClient = this.getHotWalletClient();
-        const feeWei = (BigInt(job.amount_wei) * 500n) / 10000n;
-        if (walletClient) {
-          await this.distributeWithdrawalFee(job.id, feeWei, walletClient);
-        }
+        // No fee distribution — the payout fee and its burn / holder / platform / LP
+        // splits were retired with the 2026-07 economy change.
       } catch {
         if (ageMs > timeoutMs) {
           await markDropped();
