@@ -683,9 +683,6 @@ export default function BlackjackPage() {
     deposit,
     depositMORBIUS,
     withdraw,
-    isPaused: contractIsPaused,
-    emergencyPaused: contractEmergencyPaused,
-    contractPaused: contractOzPaused,
   } = useBlackjackContract();
 
   // Off-chain balance state (like Stake.com)
@@ -2432,9 +2429,6 @@ export default function BlackjackPage() {
         {currentView === 'game' && (
           <>
         <BlackjackGameView
-          contractIsPaused={Boolean(contractIsPaused)}
-          contractEmergencyPaused={Boolean(contractEmergencyPaused)}
-          contractOzPaused={Boolean(contractOzPaused)}
           tournament={tournament}
           currentGame={currentGame}
           gameState={gameState}
