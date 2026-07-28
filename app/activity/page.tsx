@@ -24,6 +24,7 @@ import {
 } from 'lucide-react'
 import GlobalMainNav from '@/components/shared/GlobalMainNav'
 import AdminCreditPanel from '@/components/activity/AdminCreditPanel'
+import LiveBadge from '@/components/activity/LiveBadge'
 import {
   BigWinsTable,
   DepositsTable,
@@ -114,15 +115,12 @@ export default function AdminDashboardPage() {
           <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
             <div>
               <h1 className="text-2xl font-bold text-white sm:text-3xl">Financial Dashboard</h1>
-              <p className="mt-1 flex items-center gap-2 text-sm text-white/50">
-                <span className="inline-flex items-center gap-1.5">
-                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-400 shadow-[0_0_0_3px_rgba(52,211,153,.15)]" />
-                  live
-                </span>
-                · the book for the last {windowLabel.toLowerCase()} · auto-refreshes every 30s
+              <p className="mt-1 text-sm text-white/50">
+                the book for the last {windowLabel.toLowerCase()} · auto-refreshes every 30s
               </p>
             </div>
             <div className="flex items-center gap-2">
+              <LiveBadge enabled={isAdmin} minutes={5} />
               <button
                 type="button"
                 onClick={() => refetch()}

@@ -100,6 +100,45 @@ export interface DashboardPayload {
   history: HistoryRow[]
 }
 
+export interface LiveNowPlayer {
+  wallet: string
+  displayName: string | null
+  gameKey: string
+  gameLabel: string
+  plays: number
+  wagered: string
+  lastAt: string
+}
+
+export interface LiveNow {
+  minutes: number
+  players: number
+  plays: number
+  wagered: string
+  lastPlayAt: string | null
+  active: LiveNowPlayer[]
+}
+
+/**
+ * Who is playing right now. Polls fast (10s) and independently of the heavy
+ * dashboard query so the live badge stays responsive.
+ */
+export function useLiveNow(enabled: boolean, minutes = 5) {
+  return useQuery({
+    queryKey: ['admin-live-now', minutes],
+    queryFn: async (): Promise<LiveNow> => {
+      const r = await fetch(`/api/admin-ops/dashboard/live?minutes=${minutes}`, {
+        credentials: 'include',
+      })
+      if (!r.ok) throw new Error(`live ${r.status}`)
+      return r.json()
+    },
+    enabled,
+    staleTime: 5_000,
+    refetchInterval: enabled ? 10_000 : false,
+  })
+}
+
 /**
  * The whole dashboard in one round trip. Auto-refreshes so the operator sees
  * money move without reloading.

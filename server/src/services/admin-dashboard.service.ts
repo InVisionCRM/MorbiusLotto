@@ -119,6 +119,26 @@ export interface ReferrerRow {
   lastBoundAt: string;
 }
 
+/** Who is playing right now — drives the dashboard's live badge. */
+export interface LiveNowPlayer {
+  wallet: string;
+  displayName: string | null;
+  gameKey: string;
+  gameLabel: string;
+  plays: number;
+  wagered: string;
+  lastAt: string;
+}
+
+export interface LiveNow {
+  minutes: number;
+  players: number;
+  plays: number;
+  wagered: string;
+  lastPlayAt: string | null;
+  active: LiveNowPlayer[];
+}
+
 export class AdminDashboardService {
   constructor(private pool: Pool) {}
 
@@ -452,6 +472,79 @@ export class AdminDashboardService {
         players: Number(r.players || '0'),
       };
     });
+  }
+
+  // ────────────────────────────────────────────────────────────────────
+  // Live now — is anyone actually playing this minute?
+  // ────────────────────────────────────────────────────────────────────
+
+  /**
+   * Betting activity in the last `minutes`, plus who is behind it. Polled far
+   * more often than the rest of the dashboard, so it is deliberately two small
+   * indexed reads over a narrow time slice.
+   */
+  async getLiveNow(minutes = 5): Promise<LiveNow> {
+    const m = Math.max(1, Math.min(180, Math.floor(minutes) || 5));
+
+    const totalsQ = this.pool.query<{
+      players: string; plays: string; wagered: string; last_at: string | null;
+    }>(
+      `SELECT COUNT(DISTINCT wallet_address)::text AS players,
+              COUNT(*)::text AS plays,
+              COALESCE(SUM(-delta),0)::text AS wagered,
+              MAX(created_at) AS last_at
+       FROM poker_chip_ledger
+       WHERE reason LIKE '%\\_bet'
+         AND created_at > NOW() - ($1::int * INTERVAL '1 minute')`,
+      [m],
+    );
+
+    const activeQ = this.pool.query<{
+      wallet: string; display_name: string | null; plays: string;
+      wagered: string; last_at: string; bet_reason: string | null;
+    }>(
+      `WITH a AS (
+         SELECT wallet_address AS wallet,
+                COUNT(*) AS plays,
+                COALESCE(SUM(-delta),0) AS wagered,
+                MAX(created_at) AS last_at,
+                (ARRAY_AGG(reason ORDER BY created_at DESC))[1] AS bet_reason
+         FROM poker_chip_ledger
+         WHERE reason LIKE '%\\_bet'
+           AND created_at > NOW() - ($1::int * INTERVAL '1 minute')
+         GROUP BY wallet_address
+       )
+       SELECT a.wallet, d.display_name, a.plays::text, a.wagered::text,
+              a.last_at, a.bet_reason
+       FROM a
+       LEFT JOIN chat_display_names d ON LOWER(d.wallet_address) = LOWER(a.wallet)
+       ORDER BY a.last_at DESC
+       LIMIT 12`,
+      [m],
+    );
+
+    const [totals, active] = await Promise.all([totalsQ, activeQ]);
+    const T = totals.rows[0];
+
+    return {
+      minutes: m,
+      players: Number(T?.players ?? '0'),
+      plays: Number(T?.plays ?? '0'),
+      wagered: (T?.wagered ?? '0').toString(),
+      lastPlayAt: T?.last_at ?? null,
+      active: active.rows.map((r) => {
+        const cls = classifyReason(r.bet_reason ?? '');
+        return {
+          wallet: r.wallet,
+          displayName: r.display_name,
+          gameKey: cls.gameKey,
+          gameLabel: cls.gameLabel,
+          plays: Number(r.plays || '0'),
+          wagered: (r.wagered ?? '0').toString(),
+          lastAt: r.last_at,
+        };
+      }),
+    };
   }
 
   /** Everything the dashboard needs in one round trip. */

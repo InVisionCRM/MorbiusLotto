@@ -198,6 +198,10 @@ export function registerAdminOpsRoutes({ app, dbService, authService }: Register
     ),
   }));
   dashRoute('/api/admin-ops/dashboard/referrals', () => dash.getReferrers(200));
+  // Polled every ~10s by the dashboard's live badge — keep it cheap.
+  dashRoute('/api/admin-ops/dashboard/live', (req) =>
+    dash.getLiveNow(Number(req.query.minutes) || 5),
+  );
   dashRoute('/api/admin-ops/dashboard/history', async (req) => ({
     history: await dash.getDailyHistory(Number(req.query.days) || 30),
   }));
