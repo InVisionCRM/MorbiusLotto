@@ -24,6 +24,7 @@ import { requireAuth } from '../middleware/require-auth';
 import { isAdminWallet } from '../lib/cosmetics-catalog';
 import type { DatabaseService } from '../services/database.service';
 import type { AuthService } from '../services/auth.service';
+import type { ReferralService } from '../services/referral.service';
 import { AdminDashboardService, type DashWindow } from '../services/admin-dashboard.service';
 import { GameLimitsService } from '../services/game-limits.service';
 
@@ -31,6 +32,7 @@ interface RegisterAdminOpsRoutesOptions {
   app: Express;
   dbService: DatabaseService;
   authService: AuthService;
+  referralService: ReferralService;
 }
 
 const WINDOWS = new Set<DashWindow>(['24h', '7d', '30d', 'all']);
@@ -57,7 +59,7 @@ const CREDIT_MAX_MORBIUS = (() => {
   return n > 0n ? n : 100_000_000n;
 })();
 
-export function registerAdminOpsRoutes({ app, dbService, authService }: RegisterAdminOpsRoutesOptions): void {
+export function registerAdminOpsRoutes({ app, dbService, authService, referralService }: RegisterAdminOpsRoutesOptions): void {
   // requireAuth establishes req.user.address from the session; then enforce the admin allowlist.
   const requireAdmin: RequestHandler = (req: Request, res: Response, next: NextFunction) => {
     const addr = req.user?.address;
@@ -295,4 +297,60 @@ export function registerAdminOpsRoutes({ app, dbService, authService }: Register
   dashRoute('/api/admin-ops/dashboard/history', async (req) => ({
     history: await dash.getDailyHistory(Number(req.query.days) || 30),
   }));
+
+  // ── Referral anti-abuse ────────────────────────────────────────────────
+  // Global pause (kill switch), per-referrer drill-down, and blacklist.
+
+  app.post(
+    '/api/admin-ops/referrals/enabled',
+    requireAuth(authService),
+    requireAdmin,
+    async (req: Request, res: Response) => {
+      try {
+        const enabled = (req.body ?? {}).enabled === true;
+        const config = await referralService.setEnabled(enabled);
+        return res.json({ ok: true, config });
+      } catch (error) {
+        return res.status(500).json({ error: error instanceof Error ? error.message : 'toggle failed' });
+      }
+    },
+  );
+
+  app.get(
+    '/api/admin-ops/referrals/referrer/:address',
+    requireAuth(authService),
+    requireAdmin,
+    async (req: Request, res: Response) => {
+      try {
+        return res.json(await referralService.getReferrerDetail(String(req.params.address)));
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : 'lookup failed';
+        return res.status(/Invalid wallet/.test(msg) ? 400 : 500).json({ error: msg });
+      }
+    },
+  );
+
+  app.post(
+    '/api/admin-ops/referrals/referrer/:address/blacklist',
+    requireAuth(authService),
+    requireAdmin,
+    async (req: Request, res: Response) => {
+      try {
+        const body = req.body ?? {};
+        const address = String(req.params.address);
+        if (body.undo === true) {
+          return res.json({ ok: true, ...(await referralService.unblacklist(address)) });
+        }
+        const result = await referralService.blacklist(address, {
+          reason: typeof body.reason === 'string' ? body.reason.slice(0, 500) : undefined,
+          clawback: body.clawback !== false, // default: claw back earned referral rewards
+          by: req.user!.address,
+        });
+        return res.json({ ok: true, ...result });
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : 'blacklist failed';
+        return res.status(/Invalid wallet/.test(msg) ? 400 : 500).json({ error: msg });
+      }
+    },
+  );
 }

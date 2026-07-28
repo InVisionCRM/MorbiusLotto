@@ -87,28 +87,20 @@ export const wagmiAdapter = new WagmiAdapter({
   networks,
   ssr: true,
   transports: {
-    // g4mm4 ("gamma") primary, then two independent backups.
-    //
-    // rpc.pulsechainstats.com was REMOVED: it is dead (TLS connection reset —
-    // no HTTP response at all), which left the chain with exactly one working
-    // endpoint. Any g4mm4 hiccup or rate-limit therefore fell through to a host
-    // that could never answer, and the PLS deposit quote — which has no
-    // off-chain fallback by design — reported "PLS price unavailable" and
-    // blocked the deposit outright.
-    //
-    // publicnode and rpc.pulsechain.com were both verified to serve the exact
-    // getReserves call the quote makes, with `access-control-allow-origin: *`
-    // so they work from the browser. rpc.pulsechain.com is ranked last because
-    // it has historically been slow on reads, but a slow endpoint that answers
-    // beats a dead one, and `rank` below routes around latency automatically.
+    // g4mm4 ("gamma") primary, publicnode as backup — the same pair the server uses.
+    // rpc.pulsechain.com is intentionally excluded (unreliable; stalls on-chain reads
+    // like the PLS deposit quote), and rpc.pulsechainstats.com was dropped after it
+    // started refusing connections in the browser — it is fully dead (TLS connection
+    // reset, no HTTP response at all), which had left this chain with exactly ONE
+    // working endpoint and blocked the PLS quote whenever g4mm4 so much as hiccuped.
     [pulsechain.id]: fallback(
       [
         http('https://rpc-pulsechain.g4mm4.io'),
         http('https://pulsechain-rpc.publicnode.com'),
-        http('https://rpc.pulsechain.com'),
       ],
-      // Re-rank on live latency/error rate so a degrading primary is bypassed
-      // instead of being retried until it times out.
+      // Re-rank on observed latency/error rate so a DEGRADING primary is routed
+      // around rather than retried until it times out. With only two endpoints
+      // this is what keeps a slow-but-alive g4mm4 from stalling the quote.
       { rank: { interval: 30_000, sampleCount: 5 }, retryCount: 2 },
     ),
   },

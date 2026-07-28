@@ -507,7 +507,7 @@ async function initializeServices() {
     registerReferralRoutes({ app, referralService, authService });
     registerDropRoutes({ app, weeklyDropService, authService });
     registerActivityRoutes({ app, gameActivityService });
-    registerAdminOpsRoutes({ app, dbService, authService });
+    registerAdminOpsRoutes({ app, dbService, authService, referralService });
 
     // Public config (whitelisted keys only; used for ad creatives, etc.)
     const PUBLIC_CONFIG_KEYS = ['ad_creative_url', 'ad_creative_hero_url', 'ad_creative_loading_url'];
@@ -4034,47 +4034,8 @@ async function initializeServices() {
                 await dbService.addToBlackjackWithdrawnTotal(BigInt(job.amount_wei));
                 await dbService.recordHotWalletWithdrawal(job.wallet_address, BigInt(job.amount_wei), job.tx_hash);
                 logger.info('Hot withdrawal confirmed', { jobId: job.id, txHash: job.tx_hash });
-                // Distribute 5% fee to holders, burn, platform, LP (same split as BlackjackV2: 1.25% / 0.5% / 1.75% / 1.5%)
-                const feeWei = (BigInt(job.amount_wei) * 500n) / 10000n;
-                if (feeWei > 0n) {
-                  const walletClient = getHotWalletClient();
-                  if (walletClient?.account) {
-                    try {
-                      const [distRecipient, burnAddr, platformRecipient, lpRecipient] = await Promise.all([
-                        publicClient.readContract({ address: blackjackContractAddress, abi: blackjackAbi, functionName: 'distributionRecipient' }) as Promise<`0x${string}`>,
-                        publicClient.readContract({ address: blackjackContractAddress, abi: blackjackAbi, functionName: 'burnAddress' }) as Promise<`0x${string}`>,
-                        publicClient.readContract({ address: blackjackContractAddress, abi: blackjackAbi, functionName: 'platformFeeRecipient' }) as Promise<`0x${string}`>,
-                        publicClient.readContract({ address: blackjackContractAddress, abi: blackjackAbi, functionName: 'lpDistributionRecipient' }) as Promise<`0x${string}`>,
-                      ]);
-                      const distAmt = (feeWei * 125n) / 500n;
-                      const burnAmt = (feeWei * 50n) / 500n;
-                      const platformAmt = (feeWei * 175n) / 500n;
-                      const lpAmt = (feeWei * 150n) / 500n;
-                      const send = async (to: string, amount: bigint, label: string) => {
-                        if (amount <= 0n || !to || to === '0x0000000000000000000000000000000000000000') return;
-                        try {
-                          await walletClient.writeContract({
-                            account: walletClient.account!,
-                            chain: pulsechain,
-                            address: MORBIUS_TOKEN_ADDRESS,
-                            abi: ERC20_TRANSFER_ABI,
-                            functionName: 'transfer',
-                            args: [to as `0x${string}`, amount],
-                          });
-                          logger.info('Hot withdrawal fee sent', { jobId: job.id, to: label, amount: amount.toString() });
-                        } catch (e) {
-                          logger.error('Hot withdrawal fee transfer failed', { jobId: job.id, to: label, error: e });
-                        }
-                      };
-                      await send(distRecipient, distAmt, 'distributionRecipient');
-                      await send(burnAddr, burnAmt, 'burnAddress');
-                      await send(platformRecipient, platformAmt, 'platformFeeRecipient');
-                      await send(lpRecipient, lpAmt, 'lpDistributionRecipient');
-                    } catch (e) {
-                      logger.error('Hot withdrawal fee distribution failed (reading recipients)', { jobId: job.id, error: e });
-                    }
-                  }
-                }
+                // No fee distribution: the 5% payout fee and its burn / holder / platform / LP
+                // splits were retired with the 2026-07 economy change (VIP rakeback replaced them).
               } else {
                 await dbService.updateHotWithdrawalJob(job.id, { status: 'failed', error_message: 'Transaction reverted on-chain — contact support' });
                 logger.warn('Hot withdrawal reverted on-chain (no refund — contact support)', { jobId: job.id, txHash: job.tx_hash });
@@ -4211,9 +4172,11 @@ async function initializeServices() {
           return res.status(503).json({ error: 'Withdrawals temporarily unavailable' });
         }
 
-        const feeBps = 500n; // 5%
-        const feeAmount = (amountBigInt * feeBps) / 10000n;
-        const netToUser = amountBigInt - feeAmount;
+        // No withdrawal fee: the 5% payout fee (and its burn / holder / platform / LP
+        // splits) was retired with the 2026-07 economy change — player value-back is the
+        // VIP rakeback system now. Users receive the full amount they withdraw.
+        const feeAmount = 0n;
+        const netToUser = amountBigInt;
 
         const hotWalletAddress = walletClient.account!.address;
         let hotMorbiusBalance: bigint;

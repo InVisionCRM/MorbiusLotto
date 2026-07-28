@@ -20,9 +20,6 @@ import { TableTokenProfileCard, type TableTokenProfileCardProps } from '@/compon
 import { ProvablyFairClientSeedModal } from '@/components/shared/ProvablyFairClientSeedModal';
 
 interface BlackjackGameViewProps {
-  contractIsPaused: boolean;
-  contractEmergencyPaused: boolean;
-  contractOzPaused: boolean;
   tournament: any;
   currentGame: any;
   gameState: any;
@@ -119,9 +116,6 @@ interface BlackjackGameViewProps {
 
 export function BlackjackGameView(props: BlackjackGameViewProps) {
   const {
-    contractIsPaused,
-    contractEmergencyPaused,
-    contractOzPaused,
     tournament,
     currentGame,
     gameState,
@@ -298,14 +292,6 @@ export function BlackjackGameView(props: BlackjackGameViewProps) {
   return (
     <>
       <div className="grid grid-cols-1 md:grid-cols-[minmax(0,3fr)_minmax(320px,1.2fr)] md:items-stretch gap-2 md:gap-4 min-h-0">
-        {contractIsPaused && (
-          <div className="col-span-full mb-0 px-3 py-2 rounded-lg bg-red-500/20 border border-red-500/40 text-red-200 text-sm">
-            <strong>Blackjack contract is paused.</strong> Deposits, withdrawals, and betting are disabled on-chain.
-            {contractEmergencyPaused && ' Emergency pause is active (emergency admin must call setEmergencyPause(false)).'}
-            {contractOzPaused && !contractEmergencyPaused && ' Owner has paused the contract (owner must call unpause()).'}
-          </div>
-        )}
-
         {!getWebSocketUrlOptional() && (
           <div className="col-span-full mb-0 px-3 py-2 rounded-lg bg-amber-500/20 border border-amber-500/40 text-amber-200 text-sm">
             <strong>Game server not connected.</strong>{' '}
