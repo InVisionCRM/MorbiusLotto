@@ -16,6 +16,7 @@ import {
 import { useTokenApproval } from '@/hooks/use-token-approval';
 import { useTokenBalance } from '@/hooks/use-token';
 import { useNativeBalance } from '@/hooks/use-native-balance';
+import { pulsechain } from 'wagmi/chains';
 import { usePlsQuote } from '@/hooks/use-pls-quote';
 import {
   MORBIUS_VAULT_ADDRESS,
@@ -378,6 +379,9 @@ export function GameWalletModal({
     abi: PULSEX_GET_AMOUNTS_OUT_ABI,
     functionName: 'getAmountsOut',
     args: [plsBudgetForMax, [WPLS_TOKEN_ADDRESS as `0x${string}`, MORBIUS_TOKEN_ADDRESS as `0x${string}`]],
+    // Pinned for the same reason as the deposit quote: an unpinned read follows
+    // the wallet's current chain, where the PulseX router does not exist.
+    chainId: pulsechain.id,
     query: {
       enabled: tab === 'deposit' && depositMethod === 'pls' && plsBudgetForMax > 0n,
       refetchInterval: 15000,

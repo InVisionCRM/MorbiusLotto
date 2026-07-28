@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
 import { useReadContract } from 'wagmi'
+import { pulsechain } from 'wagmi/chains'
 import type { Address } from 'viem'
 import {
   WPLS_TOKEN_ADDRESS,
@@ -128,6 +129,12 @@ export function usePlsQuote({
     address: WPLS_MORBIUS_PAIR as Address,
     abi: PAIR_ABI,
     functionName: 'token0',
+    // MUST be pinned. wagmi declares several networks (pulsechain, mainnet, …)
+    // so an unpinned read targets whatever chain the WALLET happens to be on —
+    // where this pair address holds no contract, so the read returns nothing and
+    // the quote reports "PLS price unavailable" even though PulseChain is fine.
+    // Every other PulseChain read in the app pins this the same way.
+    chainId: pulsechain.id,
     query: { enabled, staleTime: Infinity, retry: 5, retryDelay: 1500 },
   })
 
@@ -141,6 +148,7 @@ export function usePlsQuote({
     address: WPLS_MORBIUS_PAIR as Address,
     abi: PAIR_ABI,
     functionName: 'getReserves',
+    chainId: pulsechain.id, // see token0 above — never read this pair off-chain-369
     query: {
       enabled,
       refetchInterval: 10000,
