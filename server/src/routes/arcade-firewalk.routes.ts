@@ -31,6 +31,7 @@ import crypto from 'crypto';
 import type { Express, Request, Response } from 'express';
 import type { PoolClient } from 'pg';
 import { logger } from '../utils/logger';
+import { betLimits } from '../lib/game-limits';
 import { verifyTelegramInitData } from '../services/telegram.service';
 import { SESSION_COOKIE_NAME } from '../middleware/require-auth';
 import { applyPokerChipDelta } from '../services/poker-chip-wallet';
@@ -38,8 +39,6 @@ import { ProvablyFairService } from '../services/provably-fair.service';
 import {
   FIREWALK_HEATS,
   FIREWALK_HOUSE_EDGE_BP,
-  FIREWALK_MAX_BET,
-  FIREWALK_MIN_BET,
   FIREWALK_STONES,
   firewalkMultiplierLadder,
   firewalkPayout,
@@ -127,8 +126,8 @@ export function registerArcadeFirewalkRoutes({
     }
     res.json({
       ok: true,
-      minBet: FIREWALK_MIN_BET,
-      maxBet: FIREWALK_MAX_BET,
+      minBet: betLimits('firewalk').min,
+      maxBet: betLimits('firewalk').max,
       stones: FIREWALK_STONES,
       paces: [1, 2, 3],
       houseEdgeBp: FIREWALK_HOUSE_EDGE_BP,
@@ -191,10 +190,10 @@ export function registerArcadeFirewalkRoutes({
       }
 
       const bet = Math.floor(Number(req.body?.bet));
-      if (!Number.isFinite(bet) || bet < FIREWALK_MIN_BET || bet > FIREWALK_MAX_BET) {
+      if (!Number.isFinite(bet) || bet < betLimits('firewalk').min || bet > betLimits('firewalk').max) {
         return res.status(400).json({
           ok: false,
-          error: `Bet must be between ${FIREWALK_MIN_BET} and ${FIREWALK_MAX_BET} chips.`,
+          error: `Bet must be between ${betLimits('firewalk').min} and ${betLimits('firewalk').max} chips.`,
         });
       }
 

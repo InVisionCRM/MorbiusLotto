@@ -23,10 +23,11 @@
  * the approved prototype (public/andar-bahar-lab.html: PAY = {andar:0.9, bahar:1.0},
  * payout = floor(bet * (1 + PAY[winner]))).
  */
+import { betLimits, DEFAULT_BET_LIMITS } from '../lib/game-limits';
 
 /** Min and max chips per bet. Mirrors the prototype's Min 100 / Max 50,000. */
-export const AB_MIN_BET = 100;
-export const AB_MAX_BET = 50_000;
+export const AB_MIN_BET = DEFAULT_BET_LIMITS.andar_bahar.min;
+export const AB_MAX_BET = DEFAULT_BET_LIMITS.andar_bahar.max;
 
 // Multipliers ×100 paid on a winning bet (gross — bet was already debited).
 export const AB_PAY_ANDAR = 190; // 0.9:1 → 1.90× total return (dealt first)
@@ -77,8 +78,8 @@ export function validateAndarBahar(side: unknown, bet: unknown): AndarBaharValid
   if (side !== 'andar' && side !== 'bahar') {
     return { ok: false, error: 'Pick Andar or Bahar.' };
   }
-  if (!Number.isInteger(bet) || (bet as number) < AB_MIN_BET || (bet as number) > AB_MAX_BET) {
-    return { ok: false, error: `Bet must be between ${AB_MIN_BET} and ${AB_MAX_BET} chips.` };
+  if (!Number.isInteger(bet) || (bet as number) < betLimits('andar_bahar').min || (bet as number) > betLimits('andar_bahar').max) {
+    return { ok: false, error: `Bet must be between ${betLimits('andar_bahar').min} and ${betLimits('andar_bahar').max} chips.` };
   }
   return { ok: true, error: null };
 }

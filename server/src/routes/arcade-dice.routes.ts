@@ -14,6 +14,7 @@
 import crypto from 'crypto';
 import type { Express, Request, Response } from 'express';
 import { logger } from '../utils/logger';
+import { betLimits } from '../lib/game-limits';
 import { verifyTelegramInitData } from '../services/telegram.service';
 import { SESSION_COOKIE_NAME } from '../middleware/require-auth';
 import { applyPokerChipDelta } from '../services/poker-chip-wallet';
@@ -22,8 +23,6 @@ import {
   resolveDice,
   multiplierX100ForTarget,
   DICE_HOUSE_EDGE_BP,
-  DICE_MIN_BET,
-  DICE_MAX_BET,
   DICE_MIN_TARGET_X100,
   DICE_MAX_TARGET_X100,
   type DiceResult,
@@ -84,8 +83,8 @@ export function registerArcadeDiceRoutes({
   app.get('/api/arcade/dice/info', (_req: Request, res: Response) => {
     res.json({
       ok: true,
-      minBet: DICE_MIN_BET,
-      maxBet: DICE_MAX_BET,
+      minBet: betLimits('dice').min,
+      maxBet: betLimits('dice').max,
       minTargetX100: DICE_MIN_TARGET_X100,
       maxTargetX100: DICE_MAX_TARGET_X100,
       houseEdgeBp: DICE_HOUSE_EDGE_BP,
@@ -103,10 +102,10 @@ export function registerArcadeDiceRoutes({
       }
 
       const bet = Math.floor(Number(req.body?.bet));
-      if (!Number.isFinite(bet) || bet < DICE_MIN_BET || bet > DICE_MAX_BET) {
+      if (!Number.isFinite(bet) || bet < betLimits('dice').min || bet > betLimits('dice').max) {
         return res
           .status(400)
-          .json({ ok: false, error: `Bet must be between ${DICE_MIN_BET} and ${DICE_MAX_BET} chips.` });
+          .json({ ok: false, error: `Bet must be between ${betLimits('dice').min} and ${betLimits('dice').max} chips.` });
       }
 
       const targetX100 = Math.floor(Number(req.body?.targetX100));

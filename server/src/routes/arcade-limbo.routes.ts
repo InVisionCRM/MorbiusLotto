@@ -15,6 +15,7 @@
 import crypto from 'crypto';
 import type { Express, Request, Response } from 'express';
 import { logger } from '../utils/logger';
+import { betLimits } from '../lib/game-limits';
 import { verifyTelegramInitData } from '../services/telegram.service';
 import { SESSION_COOKIE_NAME } from '../middleware/require-auth';
 import { applyPokerChipDelta } from '../services/poker-chip-wallet';
@@ -22,8 +23,6 @@ import { ProvablyFairService } from '../services/provably-fair.service';
 import {
   resolveLimbo,
   LIMBO_HOUSE_EDGE_BP,
-  LIMBO_MIN_BET,
-  LIMBO_MAX_BET,
   LIMBO_MIN_TARGET_X100,
   LIMBO_MAX_TARGET_X100,
   type LimboResult,
@@ -84,8 +83,8 @@ export function registerArcadeLimboRoutes({
   app.get('/api/arcade/limbo/info', (_req: Request, res: Response) => {
     res.json({
       ok: true,
-      minBet: LIMBO_MIN_BET,
-      maxBet: LIMBO_MAX_BET,
+      minBet: betLimits('limbo').min,
+      maxBet: betLimits('limbo').max,
       minTargetX100: LIMBO_MIN_TARGET_X100,
       maxTargetX100: LIMBO_MAX_TARGET_X100,
       houseEdgeBp: LIMBO_HOUSE_EDGE_BP,
@@ -103,10 +102,10 @@ export function registerArcadeLimboRoutes({
       }
 
       const bet = Math.floor(Number(req.body?.bet));
-      if (!Number.isFinite(bet) || bet < LIMBO_MIN_BET || bet > LIMBO_MAX_BET) {
+      if (!Number.isFinite(bet) || bet < betLimits('limbo').min || bet > betLimits('limbo').max) {
         return res
           .status(400)
-          .json({ ok: false, error: `Bet must be between ${LIMBO_MIN_BET} and ${LIMBO_MAX_BET} chips.` });
+          .json({ ok: false, error: `Bet must be between ${betLimits('limbo').min} and ${betLimits('limbo').max} chips.` });
       }
 
       const targetX100 = Math.floor(Number(req.body?.targetX100));

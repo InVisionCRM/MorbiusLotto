@@ -34,13 +34,12 @@ import crypto from 'crypto';
 import type { Express, Request, Response } from 'express';
 import type { PoolClient } from 'pg';
 import { logger } from '../utils/logger';
+import { betLimits } from '../lib/game-limits';
 import { verifyTelegramInitData } from '../services/telegram.service';
 import { SESSION_COOKIE_NAME } from '../middleware/require-auth';
 import { applyPokerChipDelta } from '../services/poker-chip-wallet';
 import { ProvablyFairService } from '../services/provably-fair.service';
 import {
-  TCP_MIN_BET,
-  TCP_MAX_BET,
   TCP_PAIR_PLUS_PAY,
   TCP_ANTE_BONUS,
   TCP_HOUSE_EDGE_ANTE_BP,
@@ -118,8 +117,8 @@ export function registerArcadeThreeCardPokerRoutes({
   app.get('/api/arcade/three-card-poker/info', (_req: Request, res: Response) => {
     res.json({
       ok: true,
-      minBet: TCP_MIN_BET,
-      maxBet: TCP_MAX_BET,
+      minBet: betLimits('three_card_poker').min,
+      maxBet: betLimits('three_card_poker').max,
       // Net odds (X:1) by 3-card category index (5=SF .. 1=pair).
       pairPlusPay: TCP_PAIR_PLUS_PAY,
       anteBonus: TCP_ANTE_BONUS,

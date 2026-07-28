@@ -14,6 +14,7 @@
 import crypto from 'crypto';
 import type { Express, Request, Response } from 'express';
 import { logger } from '../utils/logger';
+import { betLimits } from '../lib/game-limits';
 import { verifyTelegramInitData } from '../services/telegram.service';
 import { SESSION_COOKIE_NAME } from '../middleware/require-auth';
 import { applyPokerChipDelta } from '../services/poker-chip-wallet';
@@ -22,8 +23,6 @@ import {
   resolveDiceX2,
   multiplierX100ForWidth,
   DICEX2_HOUSE_EDGE_BP,
-  DICEX2_MIN_BET,
-  DICEX2_MAX_BET,
   DICEX2_MIN_WIDTH_X100,
   DICEX2_MAX_WIDTH_X100,
   DICEX2_SCALE_MAX_X100,
@@ -84,8 +83,8 @@ export function registerArcadeDiceX2Routes({
   app.get('/api/arcade/dicex2/info', (_req: Request, res: Response) => {
     res.json({
       ok: true,
-      minBet: DICEX2_MIN_BET,
-      maxBet: DICEX2_MAX_BET,
+      minBet: betLimits('dicex2').min,
+      maxBet: betLimits('dicex2').max,
       minWidthX100: DICEX2_MIN_WIDTH_X100,
       maxWidthX100: DICEX2_MAX_WIDTH_X100,
       scaleMaxX100: DICEX2_SCALE_MAX_X100,
@@ -104,10 +103,10 @@ export function registerArcadeDiceX2Routes({
       }
 
       const bet = Math.floor(Number(req.body?.bet));
-      if (!Number.isFinite(bet) || bet < DICEX2_MIN_BET || bet > DICEX2_MAX_BET) {
+      if (!Number.isFinite(bet) || bet < betLimits('dicex2').min || bet > betLimits('dicex2').max) {
         return res
           .status(400)
-          .json({ ok: false, error: `Bet must be between ${DICEX2_MIN_BET} and ${DICEX2_MAX_BET} chips.` });
+          .json({ ok: false, error: `Bet must be between ${betLimits('dicex2').min} and ${betLimits('dicex2').max} chips.` });
       }
 
       const lowX100 = Math.floor(Number(req.body?.lowX100));

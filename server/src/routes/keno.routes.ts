@@ -25,6 +25,7 @@ import type { DatabaseService } from '../services/database.service';
 import type { AuthService } from '../services/auth.service';
 import { requireAuth } from '../middleware/require-auth';
 import { logger } from '../utils/logger';
+import { betLimits } from '../lib/game-limits';
 import { applyPokerChipDelta, getPokerChipBalance } from '../services/poker-chip-wallet';
 import { ProvablyFairService } from '../services/provably-fair.service';
 import {
@@ -37,8 +38,6 @@ import {
   KENO_DRAW_COUNT,
   KENO_MIN_PICKS,
   KENO_MAX_PICKS,
-  KENO_MIN_BET,
-  KENO_MAX_BET,
   type KenoResult,
 } from '../services/keno';
 import { consumeSeedForBet, revealedSeedForRound } from '../services/arcade-seed.service';
@@ -74,8 +73,8 @@ export function registerKenoRoutes({ app, dbService, authService }: RegisterKeno
       drawCount: KENO_DRAW_COUNT,
       minPicks: KENO_MIN_PICKS,
       maxPicks: KENO_MAX_PICKS,
-      minBet: KENO_MIN_BET,
-      maxBet: KENO_MAX_BET,
+      minBet: betLimits('keno').min,
+      maxBet: betLimits('keno').max,
       risks: KENO_RISKS,
     });
   });
@@ -125,10 +124,10 @@ export function registerKenoRoutes({ app, dbService, authService }: RegisterKeno
       }
 
       const bet = Math.floor(Number(req.body?.bet));
-      if (!Number.isFinite(bet) || bet < KENO_MIN_BET || bet > KENO_MAX_BET) {
+      if (!Number.isFinite(bet) || bet < betLimits('keno').min || bet > betLimits('keno').max) {
         return res
           .status(400)
-          .json({ ok: false, error: `bet must be between ${KENO_MIN_BET} and ${KENO_MAX_BET} chips` });
+          .json({ ok: false, error: `bet must be between ${betLimits('keno').min} and ${betLimits('keno').max} chips` });
       }
 
       // --- atomic settle (bet debit, provably-fair draw, payout, insert) ---

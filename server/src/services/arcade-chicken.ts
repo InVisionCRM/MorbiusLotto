@@ -27,12 +27,13 @@
  * same rounding convention as `arcade-towers.towersStepMultiplierX100` — the
  * published ladder is always honored as a minimum in chips on cash-out.
  */
+import { betLimits, DEFAULT_BET_LIMITS } from '../lib/game-limits';
 
 /** House edge, in basis points (1 bp = 0.01%). 100 = 1%. */
 export const CHICKEN_HOUSE_EDGE_BP = 100;
 
-export const CHICKEN_MIN_BET = 10;
-export const CHICKEN_MAX_BET = 2000;
+export const CHICKEN_MIN_BET = DEFAULT_BET_LIMITS.chicken.min;
+export const CHICKEN_MAX_BET = DEFAULT_BET_LIMITS.chicken.max;
 
 export type ChickenDifficulty = 'easy' | 'medium' | 'hard';
 
@@ -119,7 +120,7 @@ export function chickenMultiplierLadder(difficulty: ChickenDifficulty): number[]
  * bet × multiplier_x100 / 100 — floored. Matches the verifier's arithmetic.
  */
 export function chickenPayout(bet: number, multiplierX100: number): number {
-  if (!Number.isInteger(bet) || bet < CHICKEN_MIN_BET || bet > CHICKEN_MAX_BET) {
+  if (!Number.isInteger(bet) || bet < betLimits('chicken').min || bet > betLimits('chicken').max) {
     throw new Error('Chicken bet out of range');
   }
   if (!Number.isInteger(multiplierX100) || multiplierX100 < 100) {

@@ -29,13 +29,12 @@ import crypto from 'crypto';
 import type { Express, Request, Response } from 'express';
 import type { PoolClient } from 'pg';
 import { logger } from '../utils/logger';
+import { betLimits } from '../lib/game-limits';
 import { verifyTelegramInitData } from '../services/telegram.service';
 import { SESSION_COOKIE_NAME } from '../middleware/require-auth';
 import { applyPokerChipDelta } from '../services/poker-chip-wallet';
 import { ProvablyFairService } from '../services/provably-fair.service';
 import {
-  PG_MIN_BET,
-  PG_MAX_BET,
   PG_COMMISSION_BP,
   PG_HOUSE_EDGE_BP,
   validateBet,
@@ -102,8 +101,8 @@ export function registerArcadePaiGowPokerRoutes({
   app.get('/api/arcade/pai-gow-poker/info', (_req: Request, res: Response) => {
     res.json({
       ok: true,
-      minBet: PG_MIN_BET,
-      maxBet: PG_MAX_BET,
+      minBet: betLimits('pai_gow_poker').min,
+      maxBet: betLimits('pai_gow_poker').max,
       commissionBp: PG_COMMISSION_BP,
       houseEdgeBp: PG_HOUSE_EDGE_BP,
       rules: {

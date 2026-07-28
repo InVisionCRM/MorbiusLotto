@@ -30,6 +30,7 @@ import crypto from 'crypto';
 import type { Express, Request, Response } from 'express';
 import type { PoolClient } from 'pg';
 import { logger } from '../utils/logger';
+import { betLimits } from '../lib/game-limits';
 import { verifyTelegramInitData } from '../services/telegram.service';
 import { SESSION_COOKIE_NAME } from '../middleware/require-auth';
 import { applyPokerChipDelta } from '../services/poker-chip-wallet';
@@ -37,8 +38,6 @@ import { ProvablyFairService } from '../services/provably-fair.service';
 import {
   HEIST_DIFFICULTIES,
   HEIST_HOUSE_EDGE_BP,
-  HEIST_MAX_BET,
-  HEIST_MIN_BET,
   deriveAlarmDoors,
   heistMultiplierLadder,
   heistPayout,
@@ -119,8 +118,8 @@ export function registerArcadeHeistRoutes({
     }
     res.json({
       ok: true,
-      minBet: HEIST_MIN_BET,
-      maxBet: HEIST_MAX_BET,
+      minBet: betLimits('heist').min,
+      maxBet: betLimits('heist').max,
       houseEdgeBp: HEIST_HOUSE_EDGE_BP,
       difficulties,
     });
@@ -185,10 +184,10 @@ export function registerArcadeHeistRoutes({
       }
 
       const bet = Math.floor(Number(req.body?.bet));
-      if (!Number.isFinite(bet) || bet < HEIST_MIN_BET || bet > HEIST_MAX_BET) {
+      if (!Number.isFinite(bet) || bet < betLimits('heist').min || bet > betLimits('heist').max) {
         return res.status(400).json({
           ok: false,
-          error: `Bet must be between ${HEIST_MIN_BET} and ${HEIST_MAX_BET} chips.`,
+          error: `Bet must be between ${betLimits('heist').min} and ${betLimits('heist').max} chips.`,
         });
       }
 

@@ -14,6 +14,7 @@
 import crypto from 'crypto';
 import type { Express, Request, Response } from 'express';
 import { logger } from '../utils/logger';
+import { betLimits } from '../lib/game-limits';
 import { verifyTelegramInitData } from '../services/telegram.service';
 import { SESSION_COOKIE_NAME } from '../middleware/require-auth';
 import { applyPokerChipDelta } from '../services/poker-chip-wallet';
@@ -24,8 +25,6 @@ import {
   sumRoulettePayouts,
   rouletteResultFromFloat,
   roulettePayoutMultiplier,
-  ROULETTE_MIN_BET,
-  ROULETTE_MAX_BET_PER_ZONE,
   ROULETTE_MAX_TOTAL_BET,
   ROULETTE_MAX_ZONES,
   type RouletteBet,
@@ -94,8 +93,8 @@ export function registerArcadeRouletteRoutes({
   app.get('/api/arcade/roulette/info', (_req: Request, res: Response) => {
     res.json({
       ok: true,
-      minBet: ROULETTE_MIN_BET,
-      maxBetPerZone: ROULETTE_MAX_BET_PER_ZONE,
+      minBet: betLimits('roulette').min,
+      maxBetPerZone: betLimits('roulette').max,
       maxTotalBet: ROULETTE_MAX_TOTAL_BET,
       maxZones: ROULETTE_MAX_ZONES,
       payouts: {

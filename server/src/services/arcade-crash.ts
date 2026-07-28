@@ -16,11 +16,12 @@
  * Multipliers are stored ×100 (integers) so all win decisions are exact
  * integer comparisons — no float rounding anywhere in the wallet path.
  */
+import { betLimits, DEFAULT_BET_LIMITS } from '../lib/game-limits';
 
 export const CRASH_HOUSE_EDGE_BP = 100;
 
-export const CRASH_MIN_BET = 10;
-export const CRASH_MAX_BET = 2000;
+export const CRASH_MIN_BET = DEFAULT_BET_LIMITS.crash.min;
+export const CRASH_MAX_BET = DEFAULT_BET_LIMITS.crash.max;
 
 /** Auto-cashout bounds ×100. 1.01× is the minimum sensible target. */
 export const CRASH_MIN_CASHOUT_X100 = 101;
@@ -153,7 +154,7 @@ export function resolveCrash(
   bet: number,
   r: number,
 ): CrashResult {
-  if (!Number.isInteger(bet) || bet < CRASH_MIN_BET || bet > CRASH_MAX_BET) {
+  if (!Number.isInteger(bet) || bet < betLimits('crash').min || bet > betLimits('crash').max) {
     throw new Error('Crash bet out of range');
   }
   if (

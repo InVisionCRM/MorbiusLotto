@@ -28,10 +28,11 @@
  * stake back + equal winnings). BACC_PUSH = 100 means stake returned, no
  * win/loss — used for Player/Banker bets when the hand ties.
  */
+import { betLimits, DEFAULT_BET_LIMITS } from '../lib/game-limits';
 
 /** Min and max chips per individual bet zone. */
-export const BACC_MIN_BET = 10;
-export const BACC_MAX_BET = 2000;
+export const BACC_MIN_BET = DEFAULT_BET_LIMITS.baccarat.min;
+export const BACC_MAX_BET = DEFAULT_BET_LIMITS.baccarat.max;
 
 // Multipliers ×100 paid on a winning bet (gross — bet was already debited).
 export const BACC_PAY_PLAYER = 200; // 1:1 even money → 2.00× total return
@@ -107,7 +108,7 @@ export interface BaccaratValidation {
  *
  * Rules:
  *   • Each zone is a non-negative integer.
- *   • A zone is either 0 (skipped) or within [BACC_MIN_BET, BACC_MAX_BET].
+ *   • A zone is either 0 (skipped) or within [betLimits('baccarat').min, betLimits('baccarat').max].
  *   • At least one zone must have a positive wager.
  */
 export function validateBets(bets: BaccaratBets): BaccaratValidation {
@@ -117,11 +118,11 @@ export function validateBets(bets: BaccaratBets): BaccaratValidation {
     if (!Number.isInteger(v) || v < 0) {
       return { ok: false, total: 0, error: `Invalid bet on ${k}.` };
     }
-    if (v > 0 && v < BACC_MIN_BET) {
-      return { ok: false, total: 0, error: `Min bet per zone is ${BACC_MIN_BET} chips.` };
+    if (v > 0 && v < betLimits('baccarat').min) {
+      return { ok: false, total: 0, error: `Min bet per zone is ${betLimits('baccarat').min} chips.` };
     }
-    if (v > BACC_MAX_BET) {
-      return { ok: false, total: 0, error: `Max bet per zone is ${BACC_MAX_BET} chips.` };
+    if (v > betLimits('baccarat').max) {
+      return { ok: false, total: 0, error: `Max bet per zone is ${betLimits('baccarat').max} chips.` };
     }
     total += v;
   }

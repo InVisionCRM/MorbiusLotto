@@ -31,6 +31,7 @@ import crypto from 'crypto';
 import type { Express, Request, Response } from 'express';
 import type { PoolClient } from 'pg';
 import { logger } from '../utils/logger';
+import { betLimits } from '../lib/game-limits';
 import { verifyTelegramInitData } from '../services/telegram.service';
 import { SESSION_COOKIE_NAME } from '../middleware/require-auth';
 import { applyPokerChipDelta } from '../services/poker-chip-wallet';
@@ -39,8 +40,6 @@ import {
   TOWERS_DIFFICULTIES,
   TOWERS_FLOORS,
   TOWERS_HOUSE_EDGE_BP,
-  TOWERS_MAX_BET,
-  TOWERS_MIN_BET,
   deriveTowersBombs,
   isTowersDifficulty,
   towersMultiplierLadder,
@@ -121,8 +120,8 @@ export function registerArcadeTowersRoutes({
     res.json({
       ok: true,
       floors: TOWERS_FLOORS,
-      minBet: TOWERS_MIN_BET,
-      maxBet: TOWERS_MAX_BET,
+      minBet: betLimits('towers').min,
+      maxBet: betLimits('towers').max,
       houseEdgeBp: TOWERS_HOUSE_EDGE_BP,
       difficulties,
     });
@@ -184,10 +183,10 @@ export function registerArcadeTowersRoutes({
       }
 
       const bet = Math.floor(Number(req.body?.bet));
-      if (!Number.isFinite(bet) || bet < TOWERS_MIN_BET || bet > TOWERS_MAX_BET) {
+      if (!Number.isFinite(bet) || bet < betLimits('towers').min || bet > betLimits('towers').max) {
         return res.status(400).json({
           ok: false,
-          error: `Bet must be between ${TOWERS_MIN_BET} and ${TOWERS_MAX_BET} chips.`,
+          error: `Bet must be between ${betLimits('towers').min} and ${betLimits('towers').max} chips.`,
         });
       }
 

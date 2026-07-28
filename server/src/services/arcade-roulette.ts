@@ -19,9 +19,10 @@
  *
  * Zero (0) loses all bets except a straight bet on 0.
  */
+import { betLimits, DEFAULT_BET_LIMITS } from '../lib/game-limits';
 
-export const ROULETTE_MIN_BET = 5;
-export const ROULETTE_MAX_BET_PER_ZONE = 1000;
+export const ROULETTE_MIN_BET = DEFAULT_BET_LIMITS.roulette.min;
+export const ROULETTE_MAX_BET_PER_ZONE = DEFAULT_BET_LIMITS.roulette.max;
 export const ROULETTE_MAX_TOTAL_BET = 5000;
 export const ROULETTE_MAX_ZONES = 20;
 
@@ -166,11 +167,11 @@ export function validateRouletteBets(
     const bet = b as RouletteBet;
     if (!VALID_BET_TYPES.has(bet.type)) return { ok: false, error: `Unknown bet type: ${bet.type}` };
     const amt = Math.floor(Number(bet.amount));
-    if (!Number.isFinite(amt) || amt < ROULETTE_MIN_BET) {
-      return { ok: false, error: `Minimum bet per zone is ${ROULETTE_MIN_BET} chips.` };
+    if (!Number.isFinite(amt) || amt < betLimits('roulette').min) {
+      return { ok: false, error: `Minimum bet per zone is ${betLimits('roulette').min} chips.` };
     }
-    if (amt > ROULETTE_MAX_BET_PER_ZONE) {
-      return { ok: false, error: `Max bet per zone is ${ROULETTE_MAX_BET_PER_ZONE} chips.` };
+    if (amt > betLimits('roulette').max) {
+      return { ok: false, error: `Max bet per zone is ${betLimits('roulette').max} chips.` };
     }
     switch (bet.type) {
       case 'straight':

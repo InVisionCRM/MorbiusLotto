@@ -19,6 +19,7 @@
 import crypto from 'crypto';
 import type { Express, Request, Response } from 'express';
 import { logger } from '../utils/logger';
+import { betLimits } from '../lib/game-limits';
 import { verifyTelegramInitData } from '../services/telegram.service';
 import { SESSION_COOKIE_NAME } from '../middleware/require-auth';
 import { applyPokerChipDelta } from '../services/poker-chip-wallet';
@@ -30,8 +31,6 @@ import {
   PACHINKO_POCKETS,
   PACHINKO_CENTER,
   PACHINKO_ROWS,
-  PACHINKO_MIN_BET,
-  PACHINKO_MAX_BET,
   isPachinkoRisk,
   type PachinkoRisk,
 } from '../services/arcade-pachinko';
@@ -103,8 +102,8 @@ export function registerArcadePachinkoRoutes({
     }
     res.json({
       ok: true,
-      minBet: PACHINKO_MIN_BET,
-      maxBet: PACHINKO_MAX_BET,
+      minBet: betLimits('pachinko').min,
+      maxBet: betLimits('pachinko').max,
       pockets: PACHINKO_POCKETS,
       center: PACHINKO_CENTER,
       rows: PACHINKO_ROWS,
@@ -124,10 +123,10 @@ export function registerArcadePachinkoRoutes({
       }
 
       const bet = Math.floor(Number(req.body?.bet));
-      if (!Number.isFinite(bet) || bet < PACHINKO_MIN_BET || bet > PACHINKO_MAX_BET) {
+      if (!Number.isFinite(bet) || bet < betLimits('pachinko').min || bet > betLimits('pachinko').max) {
         return res.status(400).json({
           ok: false,
-          error: `Bet must be between ${PACHINKO_MIN_BET} and ${PACHINKO_MAX_BET} chips.`,
+          error: `Bet must be between ${betLimits('pachinko').min} and ${betLimits('pachinko').max} chips.`,
         });
       }
 

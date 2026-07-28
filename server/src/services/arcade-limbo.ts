@@ -17,12 +17,13 @@
  * ProvablyFairService.bytesToFloat(hmacByteStream(seed, client, 0, 0)) and
  * passes it to `crashPointFromFloat()`.
  */
+import { betLimits, DEFAULT_BET_LIMITS } from '../lib/game-limits';
 
 /** House edge, in basis points (1 bp = 0.01%). 100 bp = 1%. */
 export const LIMBO_HOUSE_EDGE_BP = 100;
 
-export const LIMBO_MIN_BET = 10;
-export const LIMBO_MAX_BET = 2000;
+export const LIMBO_MIN_BET = DEFAULT_BET_LIMITS.limbo.min;
+export const LIMBO_MAX_BET = DEFAULT_BET_LIMITS.limbo.max;
 
 /** Target multiplier bounds, expressed ×100 (so 1.01x ↔ 101, 100x ↔ 10000). */
 export const LIMBO_MIN_TARGET_X100 = 101;
@@ -65,7 +66,7 @@ export function resolveLimbo(targetX100: number, bet: number, r: number): LimboR
   if (targetX100 < LIMBO_MIN_TARGET_X100 || targetX100 > LIMBO_MAX_TARGET_X100) {
     throw new Error('Limbo target out of range');
   }
-  if (!Number.isInteger(bet) || bet < LIMBO_MIN_BET || bet > LIMBO_MAX_BET) {
+  if (!Number.isInteger(bet) || bet < betLimits('limbo').min || bet > betLimits('limbo').max) {
     throw new Error('Limbo bet out of range');
   }
   const resultX100 = crashPointFromFloat(r);

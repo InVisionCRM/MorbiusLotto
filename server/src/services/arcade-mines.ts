@@ -22,13 +22,14 @@
  * path. Floored to a whole chip on payout (the floor falls on the player so
  * the published multiplier is always honored as a *minimum* in chips).
  */
+import { betLimits, DEFAULT_BET_LIMITS } from '../lib/game-limits';
 
 export const MINES_TOTAL_CELLS = 25;
 /** House edge in basis points (1 bp = 0.01%). 100 = 1%. */
 export const MINES_HOUSE_EDGE_BP = 100;
 
-export const MINES_MIN_BET = 10;
-export const MINES_MAX_BET = 2000;
+export const MINES_MIN_BET = DEFAULT_BET_LIMITS.mines.min;
+export const MINES_MAX_BET = DEFAULT_BET_LIMITS.mines.max;
 
 /** Bomb count bounds. With 24 bombs only 1 safe cell remains — a coin flip. */
 export const MINES_MIN_BOMBS = 1;
@@ -116,7 +117,7 @@ export function minesMultiplierLadder(bombs: number): number[] {
  * ×100 multiplier directly so the chain of operations matches the verifier.
  */
 export function minesPayout(bet: number, bombs: number, picks: number): number {
-  if (!Number.isInteger(bet) || bet < MINES_MIN_BET || bet > MINES_MAX_BET) {
+  if (!Number.isInteger(bet) || bet < betLimits('mines').min || bet > betLimits('mines').max) {
     throw new Error('Mines bet out of range');
   }
   const mx100 = minesMultiplierX100(bombs, picks);

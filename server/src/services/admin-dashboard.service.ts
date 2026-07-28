@@ -787,6 +787,92 @@ export class AdminDashboardService {
     };
   }
 
+  /**
+   * Per-game performance for the game-limits page.
+   *
+   * `maxMultiplierSeen` is the largest payout/wager ratio this game has ACTUALLY
+   * produced. Only 1 of the 22 games declares a payout cap in code, so a real
+   * observed maximum is a far more honest basis for the max-exposure figure than
+   * a guessed theoretical ceiling.
+   */
+  async getGameLimitStats(win: DashWindow = '7d'): Promise<Array<{
+    gameKey: string; wagered: string; won: string; net: string; holdPct: number;
+    plays: number; players: number; biggestWin: string; biggestWinBy: string | null;
+    maxMultiplierSeen: number | null; lastPlayAt: string | null;
+  }>> {
+    const { rows } = await this.pool.query<{
+      bet_reason: string | null; wagered: string; won: string; plays: string;
+      players: string; biggest: string; biggest_by: string | null;
+      max_mult: string | null; last_at: string | null;
+    }>(
+      `WITH g AS (
+         SELECT ref_type, ref_id, wallet_address AS wallet,
+                ${SQL_WAGER} AS wager,
+                ${SQL_PAYOUT} AS payout,
+                MAX(created_at) AS at,
+                MAX(CASE WHEN reason LIKE '%\\_bet' THEN reason END) AS bet_reason
+         FROM poker_chip_ledger
+         WHERE (reason LIKE '%\\_bet' OR reason LIKE '%\\_payout')
+           AND ref_id IS NOT NULL AND ${whereWindow(win)}
+         GROUP BY ref_type, ref_id, wallet_address
+       ),
+       r AS (
+         SELECT bet_reason,
+                SUM(wager)::text  AS wagered,
+                SUM(payout)::text AS won,
+                COUNT(*)::text    AS plays,
+                COUNT(DISTINCT wallet)::text AS players,
+                MAX(payout)::text AS biggest,
+                MAX(CASE WHEN wager > 0 THEN payout / wager END)::text AS max_mult,
+                MAX(at) AS last_at,
+                (ARRAY_AGG(wallet ORDER BY payout DESC))[1] AS biggest_by
+         FROM g WHERE bet_reason IS NOT NULL
+         GROUP BY bet_reason
+       )
+       SELECT * FROM r`,
+    );
+
+    // Fold payout/bet reason pairs into one row per game via the taxonomy.
+    const out = new Map<string, {
+      gameKey: string; wagered: bigint; won: bigint; plays: number; players: number;
+      biggest: bigint; biggestBy: string | null; maxMult: number | null; lastAt: string | null;
+    }>();
+    for (const r of rows) {
+      const key = classifyReason(r.bet_reason ?? '').gameKey;
+      const cur = out.get(key) ?? {
+        gameKey: key, wagered: 0n, won: 0n, plays: 0, players: 0,
+        biggest: 0n, biggestBy: null, maxMult: null, lastAt: null,
+      };
+      cur.wagered += BigInt(r.wagered || '0');
+      cur.won += BigInt(r.won || '0');
+      cur.plays += Number(r.plays || '0');
+      cur.players = Math.max(cur.players, Number(r.players || '0'));
+      const big = BigInt(r.biggest || '0');
+      if (big > cur.biggest) { cur.biggest = big; cur.biggestBy = r.biggest_by; }
+      const mm = r.max_mult == null ? null : Number(r.max_mult);
+      if (mm != null && Number.isFinite(mm) && (cur.maxMult == null || mm > cur.maxMult)) cur.maxMult = mm;
+      if (r.last_at && (!cur.lastAt || r.last_at > cur.lastAt)) cur.lastAt = r.last_at;
+      out.set(key, cur);
+    }
+
+    return [...out.values()].map((g) => {
+      const net = g.wagered - g.won;
+      return {
+        gameKey: g.gameKey,
+        wagered: g.wagered.toString(),
+        won: g.won.toString(),
+        net: net.toString(),
+        holdPct: g.wagered > 0n ? Number((net * 10000n) / g.wagered) / 100 : 0,
+        plays: g.plays,
+        players: g.players,
+        biggestWin: g.biggest.toString(),
+        biggestWinBy: g.biggestBy,
+        maxMultiplierSeen: g.maxMult == null ? null : Math.round(g.maxMult * 100) / 100,
+        lastPlayAt: g.lastAt,
+      };
+    });
+  }
+
   /** Everything the dashboard needs in one round trip. */
   async getOverview(win: DashWindow, bigWinMin: bigint, minMultiplier = 0, freqMultiplier = 10) {
     const [financials, players, deposits, withdrawals, bigWins, referrals, history, multiplier] =

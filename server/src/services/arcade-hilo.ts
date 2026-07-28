@@ -27,12 +27,13 @@
  * recompute every card with WebCrypto. Card index 0..51 maps to rank
  * (idx % 13) + 1 and suit floor(idx / 13).
  */
+import { betLimits, DEFAULT_BET_LIMITS } from '../lib/game-limits';
 
 /** House edge, in basis points (1 bp = 0.01%). 100 = 1%. */
 export const HILO_HOUSE_EDGE_BP = 100;
 
-export const HILO_MIN_BET = 10;
-export const HILO_MAX_BET = 2000;
+export const HILO_MIN_BET = DEFAULT_BET_LIMITS.hilo.min;
+export const HILO_MAX_BET = DEFAULT_BET_LIMITS.hilo.max;
 
 /**
  * Hard cap on picks per round. After this many correct picks the player must
@@ -119,7 +120,7 @@ export function advanceHiLoMultiplier(
  * bet × multiplier_x100 / 100 — floored. Matches the verifier's arithmetic.
  */
 export function hiLoPayout(bet: number, multiplierX100: number): number {
-  if (!Number.isInteger(bet) || bet < HILO_MIN_BET || bet > HILO_MAX_BET) {
+  if (!Number.isInteger(bet) || bet < betLimits('hilo').min || bet > betLimits('hilo').max) {
     throw new Error('Hi-Lo bet out of range');
   }
   if (!Number.isInteger(multiplierX100) || multiplierX100 < 100) {

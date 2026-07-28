@@ -33,12 +33,13 @@
  * same rounding convention as `arcade-towers.towersStepMultiplierX100` — the
  * published ladder is always honored as a minimum in chips on cash-out.
  */
+import { betLimits, DEFAULT_BET_LIMITS } from '../lib/game-limits';
 
 /** House edge, in basis points (1 bp = 0.01%). 200 = 2% — matches the lab EDGE. */
 export const HEIST_HOUSE_EDGE_BP = 200;
 
-export const HEIST_MIN_BET = 10;
-export const HEIST_MAX_BET = 2000;
+export const HEIST_MIN_BET = DEFAULT_BET_LIMITS.heist.min;
+export const HEIST_MAX_BET = DEFAULT_BET_LIMITS.heist.max;
 
 export type HeistDifficulty = 'sneaky' | 'standard' | 'daring';
 
@@ -136,7 +137,7 @@ export function heistMultiplierLadder(difficulty: HeistDifficulty): number[] {
  * bet × multiplier_x100 / 100 — floored. Matches the verifier's arithmetic.
  */
 export function heistPayout(bet: number, multiplierX100: number): number {
-  if (!Number.isInteger(bet) || bet < HEIST_MIN_BET || bet > HEIST_MAX_BET) {
+  if (!Number.isInteger(bet) || bet < betLimits('heist').min || bet > betLimits('heist').max) {
     throw new Error('Heist bet out of range');
   }
   if (!Number.isInteger(multiplierX100) || multiplierX100 < 100) {

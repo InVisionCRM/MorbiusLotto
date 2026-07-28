@@ -18,6 +18,7 @@
 import crypto from 'crypto';
 import type { Express, Request, Response } from 'express';
 import { logger } from '../utils/logger';
+import { betLimits } from '../lib/game-limits';
 import { verifyTelegramInitData } from '../services/telegram.service';
 import { SESSION_COOKIE_NAME } from '../middleware/require-auth';
 import { applyPokerChipDelta } from '../services/poker-chip-wallet';
@@ -27,8 +28,6 @@ import {
   resolvePayouts,
   sumPayouts,
   validateBets,
-  BACC_MIN_BET,
-  BACC_MAX_BET,
   BACC_PAY_PLAYER,
   BACC_PAY_BANKER,
   BACC_PAY_TIE,
@@ -107,8 +106,8 @@ export function registerArcadeBaccaratRoutes({
   app.get('/api/arcade/baccarat/info', (_req: Request, res: Response) => {
     res.json({
       ok: true,
-      minBet: BACC_MIN_BET,
-      maxBet: BACC_MAX_BET,
+      minBet: betLimits('baccarat').min,
+      maxBet: betLimits('baccarat').max,
       // Multipliers ×100 paid on a winning bet (gross — bet was debited).
       payouts: {
         player: BACC_PAY_PLAYER,

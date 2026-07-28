@@ -19,10 +19,11 @@
  * stake is included) — the stakes were already debited at /deal (+/play at the
  * play decision), so a settle just credits these gross buckets.
  */
+import { betLimits, DEFAULT_BET_LIMITS } from '../lib/game-limits';
 
 /** Bet bounds in chips (mirrors the lab: Min 100, Max 50,000 on the Ante). */
-export const TCP_MIN_BET = 100;
-export const TCP_MAX_BET = 50_000;
+export const TCP_MIN_BET = DEFAULT_BET_LIMITS.three_card_poker.min;
+export const TCP_MAX_BET = DEFAULT_BET_LIMITS.three_card_poker.max;
 
 /**
  * Pair Plus paytable — multiplier on the Pair Plus stake by 3-card category.
@@ -320,12 +321,12 @@ export interface ThreeCardValidation {
  */
 export function validateDeal(rawAnte: unknown, rawPairPlus: unknown): ThreeCardValidation {
   const ante = Math.floor(Number(rawAnte));
-  if (!Number.isFinite(ante) || ante < TCP_MIN_BET || ante > TCP_MAX_BET) {
+  if (!Number.isFinite(ante) || ante < betLimits('three_card_poker').min || ante > betLimits('three_card_poker').max) {
     return {
       ok: false,
       ante: 0,
       pairPlus: 0,
-      error: `Ante must be between ${TCP_MIN_BET} and ${TCP_MAX_BET} chips.`,
+      error: `Ante must be between ${betLimits('three_card_poker').min} and ${betLimits('three_card_poker').max} chips.`,
     };
   }
   // Pair Plus is a toggle in the lab; accept a boolean flag or a numeric stake.

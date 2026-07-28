@@ -24,10 +24,11 @@
  *
  * All money math is integer ×100 — no floats on the decision or money path.
  */
+import { betLimits, DEFAULT_BET_LIMITS } from '../lib/game-limits';
 
 /** Min and max chips per individual bet zone. Mirrors the lab (Min 100 / Max 50,000). */
-export const DT_MIN_BET = 100;
-export const DT_MAX_BET = 50_000;
+export const DT_MIN_BET = DEFAULT_BET_LIMITS.dragon_tiger.min;
+export const DT_MAX_BET = DEFAULT_BET_LIMITS.dragon_tiger.max;
 
 // Multipliers ×100 paid on a winning bet (gross — bet was already debited).
 export const DT_PAY_SIDE = 200; // Dragon / Tiger even money → 2.00× total return
@@ -83,7 +84,7 @@ export interface DragonTigerValidation {
  *
  * Rules:
  *   • Each zone is a non-negative integer.
- *   • A zone is either 0 (skipped) or within [DT_MIN_BET, DT_MAX_BET].
+ *   • A zone is either 0 (skipped) or within [betLimits('dragon_tiger').min, betLimits('dragon_tiger').max].
  *   • At least one zone must have a positive wager.
  */
 export function validateBets(bets: DragonTigerBets): DragonTigerValidation {
@@ -93,11 +94,11 @@ export function validateBets(bets: DragonTigerBets): DragonTigerValidation {
     if (!Number.isInteger(v) || v < 0) {
       return { ok: false, total: 0, error: `Invalid bet on ${k}.` };
     }
-    if (v > 0 && v < DT_MIN_BET) {
-      return { ok: false, total: 0, error: `Min bet per zone is ${DT_MIN_BET} chips.` };
+    if (v > 0 && v < betLimits('dragon_tiger').min) {
+      return { ok: false, total: 0, error: `Min bet per zone is ${betLimits('dragon_tiger').min} chips.` };
     }
-    if (v > DT_MAX_BET) {
-      return { ok: false, total: 0, error: `Max bet per zone is ${DT_MAX_BET} chips.` };
+    if (v > betLimits('dragon_tiger').max) {
+      return { ok: false, total: 0, error: `Max bet per zone is ${betLimits('dragon_tiger').max} chips.` };
     }
     total += v;
   }
