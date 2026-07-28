@@ -20,6 +20,18 @@ import { classifyReason } from './activity-taxonomy';
 /** wei → whole MORBIUS, as SQL. */
 const TO_CHIPS = (col: string) => `FLOOR(COALESCE(${col},0) / 1000000000000000000)`;
 
+/** SQL sums for one grouped play — bets are negative deltas, payouts positive. */
+const SQL_WAGER = `COALESCE(SUM(CASE WHEN reason LIKE '%\\_bet'    THEN -delta ELSE 0 END),0)`;
+const SQL_PAYOUT = `COALESCE(SUM(CASE WHEN reason LIKE '%\\_payout' THEN  delta ELSE 0 END),0)`;
+
+/**
+ * HAVING fragment: keep plays whose payout/wager multiplier is at least `param`.
+ * A non-positive threshold disables the filter. Guards wager > 0 so free/zero-stake
+ * rounds can't divide by zero or masquerade as an infinite multiplier.
+ */
+const multiplierHaving = (param: string) =>
+  `(${param}::numeric <= 0 OR (${SQL_WAGER} > 0 AND ${SQL_PAYOUT} >= ${SQL_WAGER} * ${param}::numeric))`;
+
 export type DashWindow = '24h' | '7d' | '30d' | 'all';
 
 const WINDOW_INTERVALS: Record<Exclude<DashWindow, 'all'>, string> = {
@@ -117,6 +129,47 @@ export interface ReferrerRow {
   earned: string;
   welcomePaid: string;
   lastBoundAt: string;
+}
+
+/**
+ * One player's high-multiplier hit record. Frequency is the signal that matters:
+ * a single 500× is variance, twenty of them is an exploit or a broken game.
+ */
+export interface MultiplierPlayerRow {
+  wallet: string;
+  displayName: string | null;
+  hits: number;
+  maxMultiplier: number;
+  avgMultiplier: number;
+  wagered: string;
+  payout: string;
+  net: string;
+  games: number;
+  topGameLabel: string;
+  firstAt: string;
+  lastAt: string;
+  /** Hits per hour across the player's own hit span — how fast they're landing them. */
+  hitsPerDay: number;
+}
+
+/** Per-game high-multiplier profile — catches one game's math being wrong. */
+export interface MultiplierGameRow {
+  gameKey: string;
+  gameLabel: string;
+  hits: number;
+  players: number;
+  maxMultiplier: number;
+  avgMultiplier: number;
+  payout: string;
+  /** Share of this game's total payout that came from hits above the threshold. */
+  payoutSharePct: number;
+}
+
+export interface MultiplierFrequency {
+  minMultiplier: number;
+  totalHits: number;
+  byPlayer: MultiplierPlayerRow[];
+  byGame: MultiplierGameRow[];
 }
 
 /** Who is playing right now — drives the dashboard's live badge. */
@@ -344,8 +397,10 @@ export class AdminDashboardService {
     win: DashWindow = '7d',
     minPayout = 100000n,
     limit = 200,
+    minMultiplier = 0,
   ): Promise<BigWinRow[]> {
     const lim = Math.max(1, Math.min(1000, Math.floor(limit) || 200));
+    const mx = Number.isFinite(minMultiplier) && minMultiplier > 0 ? minMultiplier : 0;
     const { rows } = await this.pool.query<{
       wallet: string; display_name: string | null; wager: string; payout: string;
       bet_reason: string | null; at: string;
@@ -361,13 +416,14 @@ export class AdminDashboardService {
            AND ref_id IS NOT NULL AND ${whereWindow(win)}
          GROUP BY ref_type, ref_id, wallet_address
          HAVING COALESCE(SUM(CASE WHEN reason LIKE '%\\_payout' THEN delta ELSE 0 END),0) >= $1::NUMERIC
+            AND ${multiplierHaving('$3')}
        )
        SELECT g.wallet, d.display_name, g.wager::text, g.payout::text, g.bet_reason, g.at
        FROM g
        LEFT JOIN chat_display_names d ON LOWER(d.wallet_address) = LOWER(g.wallet)
        ORDER BY g.payout DESC
        LIMIT $2`,
-      [minPayout.toString(), lim],
+      [minPayout.toString(), lim, mx],
     );
     return rows.map((r) => {
       const wager = BigInt(r.wager || '0');
@@ -385,6 +441,146 @@ export class AdminDashboardService {
         at: r.at,
       };
     });
+  }
+
+  // ────────────────────────────────────────────────────────────────────
+  // Multiplier frequency — the cheat-detection view.
+  //
+  // Sorting single wins by size finds lucky players. Sorting by how OFTEN a
+  // wallet clears a multiplier threshold finds exploited games, leaked seeds
+  // and bot farms — which is what an operator actually needs to catch.
+  // ────────────────────────────────────────────────────────────────────
+  async getMultiplierFrequency(
+    win: DashWindow = '7d',
+    minMultiplier = 10,
+    limit = 100,
+  ): Promise<MultiplierFrequency> {
+    const lim = Math.max(1, Math.min(500, Math.floor(limit) || 100));
+    const mx = Number.isFinite(minMultiplier) && minMultiplier > 0 ? minMultiplier : 10;
+
+    // Grouped plays that cleared the threshold, reused by both roll-ups.
+    const hitsCte = `
+      WITH g AS (
+        SELECT ref_type, ref_id, wallet_address AS wallet,
+               ${SQL_WAGER} AS wager,
+               ${SQL_PAYOUT} AS payout,
+               MAX(created_at) AS at,
+               MAX(CASE WHEN reason LIKE '%\\_bet' THEN reason END) AS bet_reason
+        FROM poker_chip_ledger
+        WHERE (reason LIKE '%\\_bet' OR reason LIKE '%\\_payout')
+          AND ref_id IS NOT NULL AND ${whereWindow(win)}
+        GROUP BY ref_type, ref_id, wallet_address
+        HAVING ${SQL_WAGER} > 0
+           AND ${SQL_PAYOUT} >= ${SQL_WAGER} * $1::numeric
+      )`;
+
+    const byPlayerQ = this.pool.query<{
+      wallet: string; display_name: string | null; hits: string;
+      max_multi: string; avg_multi: string; wagered: string; payout: string;
+      games: string; top_reason: string | null; first_at: string; last_at: string;
+    }>(
+      `${hitsCte}
+       SELECT g.wallet, d.display_name,
+              COUNT(*)::text                              AS hits,
+              MAX(g.payout / g.wager)::text               AS max_multi,
+              AVG(g.payout / g.wager)::text               AS avg_multi,
+              SUM(g.wager)::text                          AS wagered,
+              SUM(g.payout)::text                         AS payout,
+              COUNT(DISTINCT g.bet_reason)::text          AS games,
+              (ARRAY_AGG(g.bet_reason ORDER BY g.payout DESC))[1] AS top_reason,
+              MIN(g.at)                                   AS first_at,
+              MAX(g.at)                                   AS last_at
+       FROM g
+       LEFT JOIN chat_display_names d ON LOWER(d.wallet_address) = LOWER(g.wallet)
+       GROUP BY g.wallet, d.display_name
+       ORDER BY COUNT(*) DESC, MAX(g.payout / g.wager) DESC
+       LIMIT $2`,
+      [mx, lim],
+    );
+
+    // Per-game: hits vs that game's total payout in the same window, so a game
+    // paying most of its money out through outlier multipliers stands out.
+    const byGameQ = this.pool.query<{
+      bet_reason: string | null; hits: string; players: string;
+      max_multi: string; avg_multi: string; payout: string;
+    }>(
+      `${hitsCte}
+       SELECT g.bet_reason,
+              COUNT(*)::text                     AS hits,
+              COUNT(DISTINCT g.wallet)::text     AS players,
+              MAX(g.payout / g.wager)::text      AS max_multi,
+              AVG(g.payout / g.wager)::text      AS avg_multi,
+              SUM(g.payout)::text                AS payout
+       FROM g
+       GROUP BY g.bet_reason
+       ORDER BY COUNT(*) DESC`,
+      [mx],
+    );
+
+    // Denominator for payout share: every payout per game in the window.
+    const totalsQ = this.pool.query<{ reason: string; payout: string }>(
+      `SELECT reason, COALESCE(SUM(delta),0)::text AS payout
+       FROM poker_chip_ledger
+       WHERE reason LIKE '%\\_payout' AND ${whereWindow(win)}
+       GROUP BY reason`,
+    );
+
+    const [byPlayer, byGame, totals] = await Promise.all([byPlayerQ, byGameQ, totalsQ]);
+
+    // Game payout totals keyed by gameKey (payout reason → same key as its bet).
+    const totalByGame = new Map<string, bigint>();
+    for (const r of totals.rows) {
+      const key = classifyReason(r.reason).gameKey;
+      totalByGame.set(key, (totalByGame.get(key) ?? 0n) + BigInt(r.payout || '0'));
+    }
+
+    const num = (s: string | null | undefined) => {
+      const n = Number(s ?? 0);
+      return Number.isFinite(n) ? Math.round(n * 100) / 100 : 0;
+    };
+
+    return {
+      minMultiplier: mx,
+      totalHits: byGame.rows.reduce((n, r) => n + Number(r.hits || '0'), 0),
+      byPlayer: byPlayer.rows.map((r) => {
+        const wagered = BigInt(r.wagered || '0');
+        const payout = BigInt(r.payout || '0');
+        const hits = Number(r.hits || '0');
+        const spanMs = new Date(r.last_at).getTime() - new Date(r.first_at).getTime();
+        const spanDays = Math.max(spanMs, 0) / 86_400_000;
+        return {
+          wallet: r.wallet,
+          displayName: r.display_name,
+          hits,
+          maxMultiplier: num(r.max_multi),
+          avgMultiplier: num(r.avg_multi),
+          wagered: wagered.toString(),
+          payout: payout.toString(),
+          net: (payout - wagered).toString(),
+          games: Number(r.games || '0'),
+          topGameLabel: classifyReason(r.top_reason ?? '').gameLabel,
+          firstAt: r.first_at,
+          lastAt: r.last_at,
+          // Sub-day bursts would divide to absurd rates; floor the span at an hour.
+          hitsPerDay: Math.round((hits / Math.max(spanDays, 1 / 24)) * 10) / 10,
+        };
+      }),
+      byGame: byGame.rows.map((r) => {
+        const cls = classifyReason(r.bet_reason ?? '');
+        const payout = BigInt(r.payout || '0');
+        const total = totalByGame.get(cls.gameKey) ?? 0n;
+        return {
+          gameKey: cls.gameKey,
+          gameLabel: cls.gameLabel,
+          hits: Number(r.hits || '0'),
+          players: Number(r.players || '0'),
+          maxMultiplier: num(r.max_multi),
+          avgMultiplier: num(r.avg_multi),
+          payout: payout.toString(),
+          payoutSharePct: total > 0n ? Number((payout * 10000n) / total) / 100 : 0,
+        };
+      }),
+    };
   }
 
   // ────────────────────────────────────────────────────────────────────
@@ -548,17 +744,18 @@ export class AdminDashboardService {
   }
 
   /** Everything the dashboard needs in one round trip. */
-  async getOverview(win: DashWindow, bigWinMin: bigint) {
-    const [financials, players, deposits, withdrawals, bigWins, referrals, history] =
+  async getOverview(win: DashWindow, bigWinMin: bigint, minMultiplier = 0, freqMultiplier = 10) {
+    const [financials, players, deposits, withdrawals, bigWins, referrals, history, multiplier] =
       await Promise.all([
         this.getFinancials(win),
         this.getPlayers(win, 250),
         this.getDeposits(win === 'all' ? 'all' : win, 500),
         this.getWithdrawals(win === 'all' ? 'all' : win, 500),
-        this.getBigWins(win, bigWinMin, 200),
+        this.getBigWins(win, bigWinMin, 200, minMultiplier),
         this.getReferrers(200),
         this.getDailyHistory(30),
+        this.getMultiplierFrequency(win, freqMultiplier, 100),
       ]);
-    return { financials, players, deposits, withdrawals, bigWins, referrals, history };
+    return { financials, players, deposits, withdrawals, bigWins, referrals, history, multiplier };
   }
 }

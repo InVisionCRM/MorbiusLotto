@@ -31,6 +31,7 @@ import {
   PlayersTable,
   ReferralsTable,
   WithdrawalsTable,
+  type BigWinView,
 } from '@/components/activity/DashboardTables'
 import {
   MetricLine,
@@ -81,8 +82,18 @@ export default function AdminDashboardPage() {
   const [win, setWin] = useState<DashWindow>('24h')
   const [tab, setTab] = useState<TabKey>('players')
   const [bigWinMin, setBigWinMin] = useState('100000')
+  // Drives both the hits filter and the frequency roll-ups. 0 = no multiplier filter.
+  const [minMultiplier, setMinMultiplier] = useState('10')
+  const [bigWinView, setBigWinView] = useState<BigWinView>('hits')
 
-  const { data, isLoading, isFetching, refetch } = useAdminDashboard(isAdmin, win, bigWinMin || '100000')
+  const multNum = Number(minMultiplier) || 0
+  const { data, isLoading, isFetching, refetch } = useAdminDashboard(
+    isAdmin,
+    win,
+    bigWinMin || '100000',
+    multNum,
+    multNum > 0 ? multNum : 10,
+  )
   const { data: summary } = useGameSummaries(isAdmin, win)
   const { data: plays } = useRecentPlays(isAdmin && tab === 'live', 60)
   const { balanceFormatted: vaultRaw } = useTokenBalance(isAdmin ? MORBIUS_VAULT_ADDRESS : undefined)
@@ -290,9 +301,14 @@ export default function AdminDashboardPage() {
                 {tab === 'bigwins' && (
                   <BigWinsTable
                     rows={data?.bigWins ?? []}
+                    freq={data?.multiplier}
                     windowLabel={windowLabel.toLowerCase()}
                     threshold={bigWinMin}
                     onThresholdChange={setBigWinMin}
+                    minMultiplier={minMultiplier}
+                    onMinMultiplierChange={setMinMultiplier}
+                    view={bigWinView}
+                    onViewChange={setBigWinView}
                   />
                 )}
                 {tab === 'referrals' && (

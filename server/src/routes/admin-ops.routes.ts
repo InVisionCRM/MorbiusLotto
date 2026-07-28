@@ -173,9 +173,29 @@ export function registerAdminOpsRoutes({ app, dbService, authService }: Register
     });
   };
 
+  /** Multiplier thresholds arrive as decimals ("2.5"); clamp to something sane. */
+  const multOf = (q: unknown, fallback: number): number => {
+    const n = typeof q === 'string' ? Number(q) : NaN;
+    return Number.isFinite(n) && n > 0 ? Math.min(n, 1_000_000) : fallback;
+  };
+
   // Everything in one round trip — what the dashboard loads on mount.
   dashRoute('/api/admin-ops/dashboard', (req) =>
-    dash.getOverview(winOf(req.query.window), minPayoutOf(req.query.minPayout)),
+    dash.getOverview(
+      winOf(req.query.window),
+      minPayoutOf(req.query.minPayout),
+      multOf(req.query.minMultiplier, 0),
+      multOf(req.query.freqMultiplier, 10),
+    ),
+  );
+
+  // Frequency scan: who clears a multiplier threshold, and how often.
+  dashRoute('/api/admin-ops/dashboard/multiplier-frequency', (req) =>
+    dash.getMultiplierFrequency(
+      winOf(req.query.window, '7d'),
+      multOf(req.query.minMultiplier, 10),
+      Number(req.query.limit) || 100,
+    ),
   );
 
   dashRoute('/api/admin-ops/dashboard/financials', (req) =>
@@ -195,6 +215,7 @@ export function registerAdminOpsRoutes({ app, dbService, authService }: Register
       winOf(req.query.window, '7d'),
       minPayoutOf(req.query.minPayout),
       Number(req.query.limit) || 200,
+      multOf(req.query.minMultiplier, 0),
     ),
   }));
   dashRoute('/api/admin-ops/dashboard/referrals', () => dash.getReferrers(200));

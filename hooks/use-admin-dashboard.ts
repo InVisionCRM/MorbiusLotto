@@ -90,6 +90,41 @@ export interface HistoryRow {
   players: number
 }
 
+/** A player's repeat high-multiplier record — frequency is the abuse signal. */
+export interface MultiplierPlayerRow {
+  wallet: string
+  displayName: string | null
+  hits: number
+  maxMultiplier: number
+  avgMultiplier: number
+  wagered: string
+  payout: string
+  net: string
+  games: number
+  topGameLabel: string
+  firstAt: string
+  lastAt: string
+  hitsPerDay: number
+}
+
+export interface MultiplierGameRow {
+  gameKey: string
+  gameLabel: string
+  hits: number
+  players: number
+  maxMultiplier: number
+  avgMultiplier: number
+  payout: string
+  payoutSharePct: number
+}
+
+export interface MultiplierFrequency {
+  minMultiplier: number
+  totalHits: number
+  byPlayer: MultiplierPlayerRow[]
+  byGame: MultiplierGameRow[]
+}
+
 export interface DashboardPayload {
   financials: Financials
   players: PlayerRow[]
@@ -98,6 +133,7 @@ export interface DashboardPayload {
   bigWins: BigWinRow[]
   referrals: { referrers: ReferrerRow[]; totals: { referrers: number; referees: number; earned: string; welcomePaid: string } }
   history: HistoryRow[]
+  multiplier: MultiplierFrequency
 }
 
 export interface LiveNowPlayer {
@@ -143,14 +179,23 @@ export function useLiveNow(enabled: boolean, minutes = 5) {
  * The whole dashboard in one round trip. Auto-refreshes so the operator sees
  * money move without reloading.
  */
-export function useAdminDashboard(enabled: boolean, window: DashWindow, minPayout: string) {
+export function useAdminDashboard(
+  enabled: boolean,
+  window: DashWindow,
+  minPayout: string,
+  minMultiplier = 0,
+  freqMultiplier = 10,
+) {
   return useQuery({
-    queryKey: ['admin-dashboard', window, minPayout],
+    queryKey: ['admin-dashboard', window, minPayout, minMultiplier, freqMultiplier],
     queryFn: async (): Promise<DashboardPayload> => {
-      const r = await fetch(
-        `/api/admin-ops/dashboard?window=${window}&minPayout=${encodeURIComponent(minPayout)}`,
-        { credentials: 'include' },
-      )
+      const qs = new URLSearchParams({
+        window,
+        minPayout,
+        minMultiplier: String(minMultiplier),
+        freqMultiplier: String(freqMultiplier),
+      })
+      const r = await fetch(`/api/admin-ops/dashboard?${qs}`, { credentials: 'include' })
       if (!r.ok) throw new Error(`dashboard ${r.status}`)
       return r.json()
     },
