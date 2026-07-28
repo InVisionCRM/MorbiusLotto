@@ -87,12 +87,13 @@ export const wagmiAdapter = new WagmiAdapter({
   networks,
   ssr: true,
   transports: {
-    // g4mm4 ("gamma") primary, pulsechainstats as backup. rpc.pulsechain.com is
-    // intentionally excluded — it's unreliable and stalls on-chain reads (e.g. the
-    // PLS deposit quote) with no price.
+    // g4mm4 ("gamma") primary, publicnode as backup — the same pair the server uses.
+    // rpc.pulsechain.com is intentionally excluded (unreliable; stalls on-chain reads
+    // like the PLS deposit quote), and rpc.pulsechainstats.com was dropped after it
+    // started refusing connections in the browser.
     [pulsechain.id]: fallback([
       http('https://rpc-pulsechain.g4mm4.io'),
-      http('https://rpc.pulsechainstats.com'),
+      http('https://pulsechain-rpc.publicnode.com'),
     ]),
   },
 })
