@@ -10,6 +10,7 @@
  */
 
 import { useMemo, useState } from 'react'
+import Link from 'next/link'
 import { useAccount } from 'wagmi'
 import {
   Activity,
@@ -329,7 +330,23 @@ export default function AdminDashboardPage() {
                     totals={data?.referrals.totals ?? { referrers: 0, referees: 0, earned: '0', welcomePaid: '0' }}
                   />
                 )}
-                {tab === 'games' && <GamesPanel games={summary?.games ?? []} windowLabel={windowLabel.toLowerCase()} />}
+                {tab === 'games' && (
+                  <>
+                    <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-cyan-500/25 bg-cyan-500/[0.06] px-4 py-3">
+                      <p className="text-sm text-white/60">
+                        Set <b className="text-white">min and max bets per game</b>, with exposure and
+                        performance on each card.
+                      </p>
+                      <Link
+                        href="/activity/games"
+                        className="rounded-xl border border-cyan-400/35 bg-cyan-400/12 px-4 py-2 text-xs font-bold text-cyan-200 transition hover:bg-cyan-400/20"
+                      >
+                        Open game limits ↗
+                      </Link>
+                    </div>
+                    <GamesPanel games={summary?.games ?? []} windowLabel={windowLabel.toLowerCase()} />
+                  </>
+                )}
                 {tab === 'live' && <LivePanel plays={plays ?? []} />}
               </div>
 
