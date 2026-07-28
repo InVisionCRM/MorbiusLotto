@@ -16,6 +16,7 @@ import {
   Activity,
   ArrowDownToLine,
   ArrowUpFromLine,
+  Crown,
   Gift,
   Loader2,
   RefreshCw,
@@ -27,6 +28,7 @@ import GlobalMainNav from '@/components/shared/GlobalMainNav'
 import AdminCreditPanel from '@/components/activity/AdminCreditPanel'
 import ReferralAbuseControls from '@/components/activity/ReferralAbuseControls'
 import LiveBadge from '@/components/activity/LiveBadge'
+import TiersPanel from '@/components/activity/TiersPanel'
 import {
   BigWinsTable,
   DepositsTable,
@@ -56,7 +58,7 @@ import {
 import { isAdminWallet } from '@/lib/admin'
 import { useTokenBalance } from '@/hooks/use-token'
 import { MORBIUS_VAULT_ADDRESS } from '@/lib/contracts'
-import { useAdminDashboard, type DashWindow } from '@/hooks/use-admin-dashboard'
+import { useAdminDashboard, useVipTierDashboard, type DashWindow } from '@/hooks/use-admin-dashboard'
 import { useGameSummaries, useRecentPlays } from '@/hooks/use-game-activity'
 
 const WINDOWS: Array<{ key: DashWindow; label: string }> = [
@@ -66,10 +68,11 @@ const WINDOWS: Array<{ key: DashWindow; label: string }> = [
   { key: 'all', label: 'All time' },
 ]
 
-type TabKey = 'players' | 'deposits' | 'withdrawals' | 'bigwins' | 'referrals' | 'games' | 'live'
+type TabKey = 'players' | 'tiers' | 'deposits' | 'withdrawals' | 'bigwins' | 'referrals' | 'games' | 'live'
 
 const TABS: Array<{ key: TabKey; label: string; icon: React.ReactNode }> = [
   { key: 'players', label: 'Players', icon: <Users className="h-3.5 w-3.5" /> },
+  { key: 'tiers', label: 'Tiers', icon: <Crown className="h-3.5 w-3.5" /> },
   { key: 'deposits', label: 'Deposits', icon: <ArrowDownToLine className="h-3.5 w-3.5" /> },
   { key: 'withdrawals', label: 'Withdrawals', icon: <ArrowUpFromLine className="h-3.5 w-3.5" /> },
   { key: 'bigwins', label: 'Big wins', icon: <Trophy className="h-3.5 w-3.5" /> },
@@ -99,6 +102,7 @@ export default function AdminDashboardPage() {
   )
   const { data: summary } = useGameSummaries(isAdmin, win)
   const { data: plays } = useRecentPlays(isAdmin && tab === 'live', 60)
+  const { data: vip, isLoading: vipLoading } = useVipTierDashboard(isAdmin && tab === 'tiers')
   const { balanceFormatted: vaultRaw } = useTokenBalance(isAdmin ? MORBIUS_VAULT_ADDRESS : undefined)
 
   const vault = useMemo(() => {
@@ -306,6 +310,7 @@ export default function AdminDashboardPage() {
                 {tab === 'players' && (
                   <PlayersTable rows={data?.players ?? []} windowLabel={windowLabel.toLowerCase()} />
                 )}
+                {tab === 'tiers' && <TiersPanel data={vip} isLoading={vipLoading} />}
                 {tab === 'deposits' && (
                   <DepositsTable rows={data?.deposits ?? []} windowLabel={windowLabel.toLowerCase()} />
                 )}

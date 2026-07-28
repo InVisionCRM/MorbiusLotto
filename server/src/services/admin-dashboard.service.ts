@@ -209,6 +209,55 @@ export interface LiveNow {
   active: LiveNowPlayer[];
 }
 
+/** A rung of the VIP ladder (vip_tier_config), plus who is standing on it. */
+export interface VipLadderRung {
+  tierLevel: number;
+  tierName: string;
+  color: string;
+  minWager: string;
+  rakebackBps: number;
+  levelUpBonus: string;
+  /** Occupancy — players currently sitting on this rung. */
+  players: number;
+  /** Their combined lifetime wager, and what the program has already paid them. */
+  wagered: string;
+  rakebackPaid: string;
+  bonusPaid: string;
+}
+
+/** One player's standing on the ladder and their distance to the next rung. */
+export interface VipPlayerRow {
+  wallet: string;
+  displayName: string | null;
+  tierLevel: number;
+  tierName: string;
+  color: string;
+  rakebackBps: number;
+  /** Lifetime wagered chips — the value the tier is derived from. */
+  lifetimeWager: string;
+  nextTierLevel: number | null;
+  nextTierName: string | null;
+  /** Wager still needed to reach the next rung ('0' at max tier). */
+  wagerToNext: string;
+  /** 0–100 through the current rung (100 at max tier). */
+  progressPct: number;
+  /** Already claimed by this player, lifetime. */
+  rakebackPaid: string;
+  bonusPaid: string;
+  balance: string;
+  lastPlayAt: string | null;
+}
+
+export interface VipTierOverview {
+  ladder: VipLadderRung[];
+  players: VipPlayerRow[];
+  totals: {
+    players: number;
+    rakebackPaid: string;
+    bonusPaid: string;
+  };
+}
+
 export class AdminDashboardService {
   constructor(private pool: Pool) {}
 
@@ -784,6 +833,206 @@ export class AdminDashboardService {
           lastAt: r.last_at,
         };
       }),
+    };
+  }
+
+  // ────────────────────────────────────────────────────────────────────
+  // VIP ladder — who is on which rung, and how far from the next one.
+  // ────────────────────────────────────────────────────────────────────
+
+  /**
+   * The VIP ladder with live occupancy, plus every player's standing and
+   * distance to their next tier.
+   *
+   * Tier is derived EXACTLY the way VipService derives it — the highest rung in
+   * vip_tier_config whose `min_lifetime_wager_chips` is covered by the player's
+   * all-time `*_bet` turnover in poker_chip_ledger. That derivation is duplicated
+   * here rather than reused because VipService resolves one wallet at a time
+   * (a query per player); this is the same rule expressed as a single set query.
+   * If the tier rule ever changes, both must change together — a player seeing
+   * one tier on /vip and the operator seeing another on /activity is worse than
+   * no tier column at all.
+   *
+   * `rakebackPaid` / `bonusPaid` come from player_vip_state's lifetime counters,
+   * so the ladder doubles as the program's cost sheet: what each rung has
+   * actually paid out, not what it theoretically could.
+   *
+   * House-owned accounts are excluded — they wager nothing, but their presence
+   * in player_poker_chips would otherwise show up as an Unranked "player".
+   */
+  async getVipTiers(limit = 500): Promise<VipTierOverview> {
+    const lim = Math.max(1, Math.min(2000, Math.floor(limit) || 500));
+
+    const ladderQ = this.pool.query<{
+      tier_level: number; tier_name: string; color: string;
+      min_wager: string; rakeback_bps: number; level_up_bonus: string;
+    }>(
+      `SELECT tier_level, tier_name, color,
+              min_lifetime_wager_chips::text AS min_wager,
+              rakeback_bps,
+              level_up_bonus_chips::text AS level_up_bonus
+       FROM vip_tier_config
+       ORDER BY tier_level ASC`,
+    );
+
+    // Lifetime turnover per wallet. Bets are negative deltas, so -SUM(delta) is
+    // positive turnover; GREATEST guards a wallet whose only *_bet rows are
+    // corrections (which would otherwise read as negative wager).
+    const playersQ = this.pool.query<{
+      wallet: string; display_name: string | null; lifetime_wager: string;
+      balance: string; rakeback_paid: string; bonus_paid: string; last_at: string | null;
+    }>(
+      `WITH w AS (
+         SELECT wallet_address AS wallet,
+                GREATEST(COALESCE(-SUM(delta), 0), 0) AS lifetime_wager,
+                MAX(created_at) AS last_at
+         FROM poker_chip_ledger
+         WHERE reason LIKE '%\\_bet'
+         GROUP BY wallet_address
+       )
+       SELECT w.wallet, d.display_name,
+              w.lifetime_wager::text,
+              COALESCE(c.balance, 0)::text            AS balance,
+              COALESCE(v.lifetime_rakeback_chips, 0)::text AS rakeback_paid,
+              COALESCE(v.lifetime_bonus_chips, 0)::text    AS bonus_paid,
+              w.last_at
+       FROM w
+       LEFT JOIN chat_display_names d ON LOWER(d.wallet_address) = LOWER(w.wallet)
+       LEFT JOIN player_poker_chips  c ON LOWER(c.wallet_address) = LOWER(w.wallet)
+       LEFT JOIN player_vip_state    v ON LOWER(v.wallet_address) = LOWER(w.wallet)
+       WHERE w.lifetime_wager > 0
+         AND LOWER(w.wallet) <> ALL($1::text[])
+       ORDER BY w.lifetime_wager DESC
+       LIMIT $2`,
+      [houseWallets(), lim],
+    );
+
+    // Occupancy is aggregated across EVERY player, not just the `lim` rows
+    // returned above — otherwise the ladder counts would silently mean "of the
+    // top 500 by wager", which reads as a total and isn't one. Bucketing here
+    // uses "highest rung with min <= wager", equivalent to the break-on-miss
+    // loop below because the ladder's thresholds increase with tier_level.
+    const occupancyQ = this.pool.query<{
+      tier_level: number; players: string; wagered: string;
+      rakeback_paid: string; bonus_paid: string;
+    }>(
+      `WITH w AS (
+         SELECT wallet_address AS wallet,
+                GREATEST(COALESCE(-SUM(delta), 0), 0) AS lifetime_wager
+         FROM poker_chip_ledger
+         WHERE reason LIKE '%\\_bet'
+         GROUP BY wallet_address
+       ),
+       p AS (
+         SELECT w.wallet, w.lifetime_wager,
+                COALESCE(
+                  (SELECT t.tier_level FROM vip_tier_config t
+                    WHERE t.min_lifetime_wager_chips <= w.lifetime_wager
+                    ORDER BY t.tier_level DESC LIMIT 1),
+                  (SELECT MIN(tier_level) FROM vip_tier_config)
+                ) AS tier_level
+         FROM w
+         WHERE w.lifetime_wager > 0
+           AND LOWER(w.wallet) <> ALL($1::text[])
+       )
+       SELECT p.tier_level,
+              COUNT(*)::text AS players,
+              COALESCE(SUM(p.lifetime_wager), 0)::text AS wagered,
+              COALESCE(SUM(COALESCE(v.lifetime_rakeback_chips, 0)), 0)::text AS rakeback_paid,
+              COALESCE(SUM(COALESCE(v.lifetime_bonus_chips, 0)), 0)::text    AS bonus_paid
+       FROM p
+       LEFT JOIN player_vip_state v ON LOWER(v.wallet_address) = LOWER(p.wallet)
+       GROUP BY p.tier_level`,
+      [houseWallets()],
+    );
+
+    const [ladderRes, playersRes, occupancyRes] = await Promise.all([
+      ladderQ, playersQ, occupancyQ,
+    ]);
+
+    const rungs = ladderRes.rows.map((r) => ({
+      tierLevel: r.tier_level,
+      tierName: r.tier_name,
+      color: r.color,
+      minWager: r.min_wager,
+      rakebackBps: r.rakeback_bps,
+      levelUpBonus: r.level_up_bonus,
+    }));
+
+    /** Highest rung whose threshold is covered — mirrors VipService.tierForWager. */
+    const tierFor = (wager: bigint) => {
+      let current = rungs[0] ?? null;
+      for (const t of rungs) {
+        if (wager >= BigInt(t.minWager)) current = t;
+        else break;
+      }
+      return current;
+    };
+
+    const occupancy = new Map(
+      occupancyRes.rows.map((r) => [Number(r.tier_level), {
+        players: Number(r.players || '0'),
+        wagered: r.wagered ?? '0',
+        rakebackPaid: r.rakeback_paid ?? '0',
+        bonusPaid: r.bonus_paid ?? '0',
+      }]),
+    );
+
+    const players: VipPlayerRow[] = playersRes.rows.map((r) => {
+      const lifetime = BigInt(r.lifetime_wager || '0');
+      const current = tierFor(lifetime);
+      const next = current ? rungs.find((t) => t.tierLevel === current.tierLevel + 1) ?? null : null;
+
+      let wagerToNext = 0n;
+      let progressPct = 100;
+      if (current && next) {
+        const floor = BigInt(current.minWager);
+        const ceil = BigInt(next.minWager);
+        const span = ceil - floor;
+        wagerToNext = ceil > lifetime ? ceil - lifetime : 0n;
+        progressPct = span > 0n
+          ? Math.min(100, Math.max(0, Number(((lifetime - floor) * 10000n) / span) / 100))
+          : 0;
+      }
+
+      return {
+        wallet: r.wallet,
+        displayName: r.display_name,
+        tierLevel: current?.tierLevel ?? 0,
+        tierName: current?.tierName ?? 'Unranked',
+        color: current?.color ?? '#9ca3af',
+        rakebackBps: current?.rakebackBps ?? 0,
+        lifetimeWager: lifetime.toString(),
+        nextTierLevel: next?.tierLevel ?? null,
+        nextTierName: next?.tierName ?? null,
+        wagerToNext: wagerToNext.toString(),
+        progressPct,
+        rakebackPaid: r.rakeback_paid ?? '0',
+        bonusPaid: r.bonus_paid ?? '0',
+        balance: r.balance ?? '0',
+        lastPlayAt: r.last_at,
+      };
+    });
+
+    const ladder: VipLadderRung[] = rungs.map((t) => {
+      const o = occupancy.get(t.tierLevel);
+      return {
+        ...t,
+        players: o?.players ?? 0,
+        wagered: o?.wagered ?? '0',
+        rakebackPaid: o?.rakebackPaid ?? '0',
+        bonusPaid: o?.bonusPaid ?? '0',
+      };
+    });
+
+    return {
+      ladder,
+      players,
+      totals: {
+        players: ladder.reduce((n, t) => n + t.players, 0),
+        rakebackPaid: ladder.reduce((s, t) => s + BigInt(t.rakebackPaid), 0n).toString(),
+        bonusPaid: ladder.reduce((s, t) => s + BigInt(t.bonusPaid), 0n).toString(),
+      },
     };
   }
 

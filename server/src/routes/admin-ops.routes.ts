@@ -223,6 +223,13 @@ export function registerAdminOpsRoutes({ app, dbService, authService, referralSe
   }));
   dashRoute('/api/admin-ops/dashboard/referrals', () => dash.getReferrers(200));
 
+  // VIP ladder: rung occupancy + every player's distance to their next tier.
+  // Not part of /dashboard's one-shot payload — it scans the ledger all-time
+  // (tiers are lifetime, not windowed), so it loads only when the tab opens.
+  dashRoute('/api/admin-ops/dashboard/vip-tiers', (req) =>
+    dash.getVipTiers(Number(req.query.limit) || 500),
+  );
+
   // ── Per-game bet limits ────────────────────────────────────────────────
   const limitsSvc = new GameLimitsService(dbService.getPool());
   void limitsSvc.start().catch((e) =>

@@ -117,6 +117,8 @@ class WebSocketService {
     pokerTournamentService = null;
     bjMultiService = null;
     bjMultiTimerInterval = null;
+    // True while a timer sweep is running, so overlapping 5s ticks are skipped.
+    bjMultiTickInFlight = false;
     // Per-action rate limiting for BJ multi: address -> timestamp array (5 actions per 3s window)
     bjMultiActionTimestamps = new Map();
     betLimitsCache = null;
@@ -3993,6 +3995,24 @@ class WebSocketService {
     async tickBJMultiTimers() {
         if (!this.bjMultiService)
             return;
+        // Overlap guard. The sweeps below await each table in turn while every handler
+        // takes that table's lock, so a single slow (or lock-contended) table stretches
+        // the whole tick past the 5s interval. Without this, ticks pile up on top of
+        // each other and each new one queues another lock waiter behind the same
+        // table — the backlog grows instead of draining, and recovery for every OTHER
+        // table stalls with it. Skipping is safe: the sweeps are stateless queries, so
+        // the next tick sees the same work.
+        if (this.bjMultiTickInFlight)
+            return;
+        this.bjMultiTickInFlight = true;
+        try {
+            await this.runBJMultiTimerSweeps();
+        }
+        finally {
+            this.bjMultiTickInFlight = false;
+        }
+    }
+    async runBJMultiTimerSweeps() {
         const pool = this.dbService.getPool();
         // Find tables with an active round that has an expired turn (playing + turn_started_at + 30s < NOW())
         const timedOutTurns = await pool.query(`
@@ -4063,6 +4083,38 @@ class WebSocketService {
             }
             catch (err) {
                 logger_1.logger.error('BJMulti stuck betting error', { tableId: row.table_id, error: err });
+            }
+        }
+        // Recover tables whose live round and table row have drifted apart, or whose
+        // round is 'playing' with no acting seat. Neither is reachable by the cases
+        // above — the auto-stand sweep requires acting_seat_position IS NOT NULL, and
+        // startBettingPhase is blocked by canCreateBettingRound while a non-completed
+        // round exists — so those tables freeze mid-hand permanently. _startRoundInternal
+        // flips the round to 'playing' before it deals seats and sets the acting seat /
+        // table status, all outside a transaction, so any throw in that window (or a
+        // redeploy) strands the round exactly here. Recovery re-reads under the table
+        // lock, so a sweep that overlaps a live deal is a no-op.
+        const desyncedTables = await pool.query(`
+      SELECT t.id AS table_id
+      FROM blackjack_multi_tables t
+      JOIN LATERAL (
+        SELECT r.status, r.acting_seat_position
+        FROM blackjack_multi_rounds r
+        WHERE r.table_id = t.id
+        ORDER BY r.round_number DESC
+        LIMIT 1
+      ) lr ON TRUE
+      WHERE lr.status IN ('playing', 'dealer_turn')
+        AND (t.status <> lr.status
+             OR (lr.status = 'playing' AND lr.acting_seat_position IS NULL))
+    `);
+        for (const row of desyncedTables.rows) {
+            try {
+                await this.bjMultiService.recoverDesyncedTable(row.table_id);
+                await this.broadcastBJMultiTableState(row.table_id);
+            }
+            catch (err) {
+                logger_1.logger.error('BJMulti desync recovery error', { tableId: row.table_id, error: err });
             }
         }
         // Transition waiting/completed tables with seated players to betting (so next round can start)

@@ -15,7 +15,17 @@ import crypto from 'crypto';
 
 /** Kick from table after this many consecutive timeouts (betting window + in-round auto-stand). */
 const BJ_MULTI_AFK_KICK_AFTER = 3;
+
 const BJ_MULTI_BETTING_RESTART_GRACE_MS = 3000;
+
+/**
+ * Acting player's decision clock before the watchdog auto-stands them. Must stay
+ * in sync with the timer watchdog's sweep query (tickBJMultiTimers in
+ * websocket.service.impl.js) and with the client countdown ring
+ * (TURN_TIMEOUT in components/BLACKJACK/multi/) — the player watches that ring
+ * hit zero and expects the server to act right then.
+ */
+const BJ_MULTI_TURN_TIMEOUT_SECONDS = 30;
 
 /** 3:2 blackjack payout floored to whole chips (1 chip = 1 MORBIUS); the half-chip on odd bets rounds to the house. */
 function bjMultiPayoutWhole(betWei: bigint): bigint {
@@ -342,22 +352,44 @@ export class BlackjackMultiGameService {
         await this.pool.query(
           `UPDATE blackjack_multi_tables SET status = 'betting' WHERE id = $1`, [tableId],
         );
-        // Create a betting round so the timer has a created_at to track.
-        // server_seed/hash are placeholders — overwritten with real values in startRound().
-        const placeholderSeed = require('crypto').randomBytes(32).toString('hex');
-        const placeholderHash = require('crypto').createHash('sha256').update(placeholderSeed).digest('hex');
-        await this.pool.query(
-          `INSERT INTO blackjack_multi_rounds (table_id, round_number, status, server_seed, server_seed_hash)
-           SELECT $1, COALESCE(MAX(round_number), 0) + 1, 'betting', $2, $3
-           FROM blackjack_multi_rounds WHERE table_id = $1`,
-          [tableId, placeholderSeed, placeholderHash],
-        );
+        await this.ensureBettingRound(tableId);
       }
 
       return this.getTableState(tableId);
     } finally {
       release();
     }
+  }
+
+  /**
+   * Ensure the table has an open `betting` round. Its `created_at` is the ONLY
+   * basis for the betting countdown — the client renders it as `bettingStartedAt`
+   * and the timer watchdog uses it to decide when to fire handleBettingTimeout.
+   *
+   * A table sitting in status `betting` with no betting round is a frozen table:
+   * players see no countdown and nothing ever starts the round.
+   *
+   * server_seed/hash are placeholders here — startRound() overwrites them with
+   * the real committed values before any card is dealt.
+   *
+   * Caller must hold the table lock. Returns true if a round was created.
+   */
+  private async ensureBettingRound(tableId: string): Promise<boolean> {
+    const existing = await this.pool.query(
+      `SELECT 1 FROM blackjack_multi_rounds WHERE table_id = $1 AND status = 'betting' LIMIT 1`,
+      [tableId],
+    );
+    if (existing.rows.length > 0) return false;
+
+    const placeholderSeed = crypto.randomBytes(32).toString('hex');
+    const placeholderHash = crypto.createHash('sha256').update(placeholderSeed).digest('hex');
+    await this.pool.query(
+      `INSERT INTO blackjack_multi_rounds (table_id, round_number, status, server_seed, server_seed_hash)
+       SELECT $1, COALESCE(MAX(round_number), 0) + 1, 'betting', $2, $3
+       FROM blackjack_multi_rounds WHERE table_id = $1`,
+      [tableId, placeholderSeed, placeholderHash],
+    );
+    return true;
   }
 
   async leaveTable(tableId: string, playerAddress: string): Promise<BJMultiTableState> {
@@ -484,11 +516,19 @@ export class BlackjackMultiGameService {
       });
       this.audit(tableId, 'place_bet', null, normalized, { betAmount: betAmount.toString() });
 
-      // If table is still 'waiting' or 'completed', advance it to 'betting'
+      // If table is still 'waiting' or 'completed', advance it to 'betting'.
+      // Create the betting round alongside the status flip. joinTable does this on
+      // the FIRST join, but once a round settles the table returns to 'completed'
+      // and the next bet arrives here — which used to flip the status and nothing
+      // else, leaving 'betting' with no round. The watchdog does eventually catch
+      // that (its stuckBetting sweep hands it to handleBettingTimeout), but that
+      // path starts the round IMMEDIATELY: no `bettingStartedAt` for the client
+      // countdown, and everyone else at the table loses their window to bet.
       if (table.status === 'waiting' || table.status === 'completed') {
         await this.pool.query(
           `UPDATE blackjack_multi_tables SET status = 'betting' WHERE id = $1`, [tableId],
         );
+        await this.ensureBettingRound(tableId);
       }
 
       return this.getTableState(tableId);
@@ -664,7 +704,7 @@ export class BlackjackMultiGameService {
 
     // Check if any seat has immediate blackjack — they don't need to act
     // Find first non-blackjack betting seat for first turn
-    const firstActingSeat = await this.firstActiveTurnSeat(roundId, bettingSeats);
+    const firstActingSeat = await this.firstActiveTurnSeat(roundId);
     const now = new Date().toISOString();
 
     if (firstActingSeat !== null) {
@@ -802,6 +842,95 @@ export class BlackjackMultiGameService {
   }
 
   /**
+   * Called by the timer watchdog: recover a table whose live round and table row
+   * have drifted apart, or whose round is `playing` with nobody able to act.
+   *
+   * Both states are permanent freezes that none of the other watchdog cases can
+   * clear:
+   *
+   * - `acting_seat_position IS NULL` on a `playing` round → autoStandTimedOut
+   *   requires a non-null acting seat, so it never matches; and startBettingPhase
+   *   is blocked by canCreateBettingRound while a non-completed round exists. The
+   *   table sits mid-hand forever with the players' chips still staked.
+   *
+   * - `blackjack_multi_tables.status` disagreeing with the live round →
+   *   getTableState reports `phase` straight from the TABLE row and picks the
+   *   round snapshot by it (loadAuthorityRoundForSnapshot), so clients are told
+   *   e.g. 'waiting' while a real round is in progress: the cards and action
+   *   buttons vanish mid-hand even though the round is still live server-side.
+   *   This is what a player sees as "the game froze".
+   *
+   * _startRoundInternal is the source of both: it flips the round to `playing`
+   * up front, then deals seats, then sets acting_seat_position and the table
+   * status across a dozen separate statements with no enclosing transaction. Any
+   * throw in that window (or a redeploy) strands the round exactly here.
+   *
+   * Recovery is idempotent — state is re-read under the table lock, so a sweep
+   * that overlaps a live deal simply finds nothing to do.
+   */
+  async recoverDesyncedTable(tableId: string): Promise<void> {
+    const release = await this.tableLocks.acquire(tableId);
+    let recovered = false;
+    try {
+      const roundResult = await this.pool.query(
+        `SELECT * FROM blackjack_multi_rounds
+         WHERE table_id = $1 AND status IN ('playing', 'dealer_turn')
+         ORDER BY round_number DESC LIMIT 1`,
+        [tableId],
+      );
+      if (roundResult.rows.length > 0) {
+        const round = roundResult.rows[0];
+
+        // 1. The live round is authoritative — realign the table row so clients
+        //    are shown the phase they are actually in.
+        const tableResult = await this.pool.query(
+          `SELECT status FROM blackjack_multi_tables WHERE id = $1`, [tableId],
+        );
+        if (tableResult.rows.length > 0 && tableResult.rows[0].status !== round.status) {
+          logger.warn('BJMulti: table status drifted from live round', {
+            tableId, roundId: round.id, tableStatus: tableResult.rows[0].status, roundStatus: round.status,
+          });
+          await this.pool.query(
+            `UPDATE blackjack_multi_tables SET status = $1 WHERE id = $2`, [round.status, tableId],
+          );
+          this.audit(tableId, 'recover_table_status', round.id, null, {
+            from: tableResult.rows[0].status, to: round.status,
+          });
+          recovered = true;
+        }
+
+        // 2. A playing round with no acting seat has nobody to move it along.
+        if (round.status === 'playing' && round.acting_seat_position === null) {
+          logger.warn('BJMulti: recovering round stranded in playing with no acting seat', {
+            tableId, roundId: round.id,
+          });
+          this.audit(tableId, 'recover_stranded_playing', round.id, null, {});
+
+          const nextSeat = await this.firstActiveTurnSeat(round.id);
+          if (nextSeat !== null) {
+            await this.pool.query(
+              `UPDATE blackjack_multi_rounds SET acting_seat_position = $1, turn_started_at = NOW() WHERE id = $2`,
+              [nextSeat, round.id],
+            );
+          } else {
+            // Nobody left to act (all blackjack, all finished, or the deal never
+            // produced an actionable hand) — run the dealer and settle, which is
+            // where the round should have gone in the first place.
+            const deck = this.pfService.fisherYatesShuffle(round.server_seed, round.client_seed, round.round_number);
+            const dp = await this.computeDeckPositionAsync(round.id, round.dealer_cards);
+            await this.runDealerTurnInternal(tableId, round.id, deck, dp);
+          }
+          recovered = true;
+        }
+      }
+    } finally {
+      release();
+    }
+
+    if (recovered) await this.broadcastTableState(tableId, 'desync_recovery');
+  }
+
+  /**
    * Called by the timer watchdog: auto-stand the acting player if their 30s has expired.
    */
   async autoStandTimedOut(tableId: string): Promise<void> {
@@ -811,9 +940,9 @@ export class BlackjackMultiGameService {
         `SELECT * FROM blackjack_multi_rounds
          WHERE table_id = $1 AND status = 'playing'
            AND acting_seat_position IS NOT NULL
-           AND turn_started_at < NOW() - INTERVAL '30 seconds'
+           AND turn_started_at < NOW() - ($2::text || ' seconds')::interval
          ORDER BY round_number DESC LIMIT 1`,
-        [tableId],
+        [tableId, String(BJ_MULTI_TURN_TIMEOUT_SECONDS)],
       );
       if (roundResult.rows.length === 0) return;
       const round = roundResult.rows[0];
@@ -1650,10 +1779,10 @@ export class BlackjackMultiGameService {
   }
 
   /**
-   * Find the first seat position that has an active (non-blackjack) hand, among betting seats.
-   * Returns null if all are blackjacks or no seats.
+   * Find the first seat position that has an active (non-blackjack) hand.
+   * Returns null if all are blackjacks, all are finished, or there are no seats.
    */
-  private async firstActiveTurnSeat(roundId: string, bettingSeats: any[]): Promise<number | null> {
+  private async firstActiveTurnSeat(roundId: string): Promise<number | null> {
     // After insert, reload round_seats
     const rsResult = await this.pool.query(
       `SELECT * FROM blackjack_multi_round_seats WHERE round_id = $1 ORDER BY seat_position ASC`,
