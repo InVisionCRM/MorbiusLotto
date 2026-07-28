@@ -3,154 +3,175 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Game Limits — layout lab</title>
+<title>Game control — limits &amp; oversight</title>
 <style>
   :root{
-    --bg:#070a12; --panel:rgba(255,255,255,.02); --line:rgba(255,255,255,.10);
-    --txt:#fff; --mut:rgba(255,255,255,.45); --dim:rgba(255,255,255,.30);
-    --cyan:#22d3ee; --amber:#fbbf24; --emerald:#34d399; --rose:#fb7185; --violet:#a78bfa;
+    --bg:#070a12; --card:rgba(255,255,255,.026); --line:rgba(255,255,255,.10);
+    --mut:rgba(255,255,255,.45); --dim:rgba(255,255,255,.28);
+    --cyan:#22d3ee; --amber:#fbbf24; --em:#34d399; --rose:#fb7185; --vio:#a78bfa;
   }
   *{box-sizing:border-box}
-  body{margin:0;background:var(--bg);color:var(--txt);
+  body{margin:0;background:var(--bg);color:#fff;
     font:14px/1.45 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
     -webkit-font-smoothing:antialiased}
-  .wrap{max-width:1400px;margin:0 auto;padding:24px 16px 96px}
-  h1{font-size:26px;font-weight:800;margin:0}
-  .sub{color:var(--mut);font-size:13px;margin-top:4px}
-  .tabular{font-variant-numeric:tabular-nums}
-
-  /* layout switcher */
-  .switch{display:inline-flex;gap:2px;background:rgba(255,255,255,.03);
-    border:1px solid var(--line);border-radius:12px;padding:3px;margin:18px 0 6px}
-  .switch button{background:none;border:0;color:var(--mut);font:600 12px/1 inherit;
-    padding:9px 14px;border-radius:9px;cursor:pointer}
-  .switch button.on{background:rgba(255,255,255,.10);color:#fff}
-  .note{font-size:12px;color:var(--dim);margin:8px 0 20px;max-width:70ch}
+  .wrap{max-width:1560px;margin:0 auto;padding:24px 16px 110px}
+  h1{font-size:27px;font-weight:800;margin:0;letter-spacing:-.01em}
+  .sub{color:var(--mut);font-size:13px;margin-top:5px}
+  .tab{font-variant-numeric:tabular-nums}
+  .note{font-size:12px;color:var(--dim);margin:14px 0 20px;max-width:84ch}
   .note b{color:var(--mut)}
 
-  .layout{display:none}
-  .layout.on{display:block}
+  .bar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:18px 0 4px}
+  .seg{display:inline-flex;gap:2px;background:rgba(255,255,255,.03);
+    border:1px solid var(--line);border-radius:12px;padding:3px}
+  .seg button{background:none;border:0;color:var(--mut);font:600 12px/1 inherit;
+    padding:9px 13px;border-radius:9px;cursor:pointer}
+  .seg button.on{background:rgba(255,255,255,.10);color:#fff}
 
-  /* ── shared bits ─────────────────────────────────────── */
-  .lim{display:flex;align-items:center;gap:6px}
-  .lim input{width:100%;background:rgba(0,0,0,.35);border:1px solid var(--line);
-    color:#fff;border-radius:9px;padding:7px 9px;font:700 13px/1 inherit;
-    font-variant-numeric:tabular-nums;text-align:right}
-  .lim input:focus{outline:none;border-color:rgba(34,211,238,.5)}
-  .lim input.dirty{border-color:rgba(251,191,36,.6);background:rgba(251,191,36,.08)}
-  .lab{font:600 9px/1 inherit;letter-spacing:.09em;text-transform:uppercase;color:var(--dim)}
-  .dash{color:var(--dim)}
-  .pill{display:inline-block;border:1px solid var(--line);border-radius:6px;
-    padding:2px 6px;font:600 10px/1.4 inherit;color:var(--mut)}
-  .pill.live{border-color:rgba(52,211,153,.35);background:rgba(52,211,153,.10);color:#6ee7b7}
-  .pill.off{border-color:rgba(251,113,133,.35);background:rgba(251,113,133,.10);color:#fda4af}
-  .hold{color:var(--emerald);font-weight:700}
-  .hold.neg{color:var(--rose)}
+  .grid{display:grid;gap:14px;grid-template-columns:repeat(auto-fill,minmax(430px,1fr))}
+  .grid.dense{grid-template-columns:repeat(auto-fill,minmax(330px,1fr))}
+  .grid.dense .whenDense{display:none}
 
-  /* spark bars */
-  .spark{display:flex;align-items:flex-end;gap:2px;height:28px}
-  .spark i{flex:1;background:linear-gradient(180deg,rgba(34,211,238,.85),rgba(34,211,238,.18));
-    border-radius:2px 2px 0 0;min-width:2px}
-  .spark.neg i{background:linear-gradient(180deg,rgba(251,113,133,.85),rgba(251,113,133,.18))}
+  .card{border:1px solid var(--line);border-radius:20px;padding:16px 16px 13px;
+    background:linear-gradient(165deg,rgba(255,255,255,.05),rgba(255,255,255,.012));
+    position:relative;overflow:hidden}
+  .card::before{content:"";position:absolute;inset:0 0 auto 0;height:1px;
+    background:linear-gradient(90deg,transparent,rgba(255,255,255,.16),transparent)}
+  .card.risk{border-color:rgba(251,113,133,.34);
+    background:linear-gradient(165deg,rgba(251,113,133,.09),rgba(255,255,255,.012))}
 
-  /* range visual: where min/max sit on a log scale */
-  .rng{position:relative;height:5px;border-radius:99px;background:rgba(255,255,255,.07);margin-top:9px}
-  .rng span{position:absolute;top:0;bottom:0;border-radius:99px;
-    background:linear-gradient(90deg,var(--cyan),var(--violet))}
+  .head{display:flex;align-items:center;gap:11px}
+  .ico{width:38px;height:38px;border-radius:12px;display:grid;place-items:center;
+    font-size:19px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.07);flex:none}
+  .nm{font-weight:800;font-size:16.5px;letter-spacing:-.01em}
+  .meta{font-size:11px;color:var(--dim);margin-top:1px}
+  .go{margin-left:auto;flex:none;display:inline-flex;align-items:center;gap:5px;
+    border:1px solid var(--line);background:rgba(255,255,255,.04);color:rgba(255,255,255,.72);
+    border-radius:10px;padding:7px 11px;font:700 11.5px/1 inherit;cursor:pointer;text-decoration:none}
+  .go:hover{background:rgba(34,211,238,.12);border-color:rgba(34,211,238,.4);color:#a5f3fc}
 
-  /* ── A: compact grid ─────────────────────────────────── */
-  #A .grid{display:grid;gap:10px;grid-template-columns:repeat(auto-fill,minmax(230px,1fr))}
-  #A .card{border:1px solid var(--line);background:var(--panel);border-radius:14px;padding:12px}
-  #A .top{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:9px}
-  #A .nm{font-weight:700;font-size:13px;display:flex;align-items:center;gap:7px}
-  #A .ico{font-size:15px}
-  #A .row{display:grid;grid-template-columns:1fr 1fr;gap:7px}
-  #A .stats{display:flex;justify-content:space-between;margin-top:10px;
-    padding-top:9px;border-top:1px solid rgba(255,255,255,.06);font-size:11px;color:var(--mut)}
-  #A .stats b{display:block;color:#fff;font-size:12px;font-weight:700}
-
-  /* ── B: rich cards ───────────────────────────────────── */
-  #B .grid{display:grid;gap:14px;grid-template-columns:repeat(auto-fill,minmax(330px,1fr))}
-  #B .card{border:1px solid var(--line);border-radius:18px;padding:16px;
-    background:linear-gradient(160deg,rgba(255,255,255,.045),rgba(255,255,255,.012))}
-  #B .top{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
-  #B .nm{font-weight:800;font-size:16px;display:flex;align-items:center;gap:9px}
-  #B .ico{font-size:20px}
-  #B .kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:14px 0 12px}
-  #B .kpi{background:rgba(0,0,0,.22);border:1px solid rgba(255,255,255,.05);
-    border-radius:11px;padding:8px 9px}
-  #B .kpi span{display:block;font:600 9px/1 inherit;letter-spacing:.08em;
-    text-transform:uppercase;color:var(--dim);margin-bottom:5px}
-  #B .kpi b{font-size:15px;font-weight:800}
-  #B .limits{display:grid;grid-template-columns:1fr 1fr;gap:9px;
-    padding-top:12px;border-top:1px solid rgba(255,255,255,.07)}
-  #B .foot{display:flex;justify-content:space-between;align-items:center;
-    margin-top:11px;font-size:11px;color:var(--dim)}
-
-  /* ── C: control-room rows ────────────────────────────── */
-  #C .tbl{border:1px solid var(--line);border-radius:16px;overflow:hidden}
-  #C .hd,#C .rw{display:grid;
-    grid-template-columns:minmax(150px,1.4fr) 96px 96px 1fr 82px 74px 78px 96px;
-    gap:10px;align-items:center;padding:10px 14px}
-  #C .hd{background:#0b0f18;border-bottom:1px solid var(--line);
-    font:600 9px/1 inherit;letter-spacing:.09em;text-transform:uppercase;color:var(--dim);
-    position:sticky;top:0;z-index:2}
-  #C .rw{border-bottom:1px solid rgba(255,255,255,.05)}
-  #C .rw:last-child{border-bottom:0}
-  #C .rw:hover{background:rgba(255,255,255,.03)}
-  #C .nm{font-weight:700;font-size:13px;display:flex;align-items:center;gap:8px}
-  #C .r{text-align:right}
-  @media(max-width:1100px){
-    #C .hd,#C .rw{grid-template-columns:minmax(120px,1.2fr) 88px 88px 74px 74px;}
-    #C .hideSm{display:none}
+  /* BIG editable limit numbers — transparent, no blinding white boxes */
+  .limits{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:15px 0 4px}
+  .lim{background:rgba(0,0,0,.24);border:1px solid rgba(255,255,255,.07);
+    border-radius:14px;padding:9px 12px 10px}
+  .lim .k{font:700 9.5px/1 inherit;letter-spacing:.11em;text-transform:uppercase;color:var(--dim)}
+  .lim input{
+    display:block;width:100%;margin-top:5px;
+    background:transparent;border:0;padding:0;
+    color:#fff;font:800 25px/1.1 inherit;font-variant-numeric:tabular-nums;
+    letter-spacing:-.02em;
   }
+  .lim input:focus{outline:none;color:var(--cyan)}
+  .lim input::-webkit-outer-spin-button,.lim input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+  .lim.dirty{border-color:rgba(251,191,36,.55);background:rgba(251,191,36,.10)}
+  .lim.dirty input{color:var(--amber)}
+  .lim .u{font-size:11px;color:var(--dim);margin-top:2px}
 
-  /* save bar */
-  .savebar{position:fixed;left:0;right:0;bottom:0;background:rgba(9,12,20,.94);
-    border-top:1px solid var(--line);backdrop-filter:blur(10px);
-    padding:11px 16px;display:none;align-items:center;justify-content:space-between;gap:12px;z-index:9}
+  /* max exposure — the number that can end you */
+  .expo{margin-top:11px;border-radius:14px;padding:10px 12px;
+    background:rgba(0,0,0,.24);border:1px solid rgba(255,255,255,.07)}
+  .expo .t{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+  .expo .k{font:700 9.5px/1 inherit;letter-spacing:.11em;text-transform:uppercase;color:var(--dim)}
+  .expo .v{font:800 22px/1.1 inherit;letter-spacing:-.02em;color:var(--amber)}
+  .expo.hot .v{color:var(--rose)}
+  .expo .s{font-size:11px;color:var(--dim);margin-top:3px}
+  .track{height:6px;border-radius:99px;background:rgba(255,255,255,.07);margin-top:9px;overflow:hidden}
+  .track i{display:block;height:100%;border-radius:99px;
+    background:linear-gradient(90deg,var(--cyan),var(--vio))}
+  .track.hot i{background:linear-gradient(90deg,var(--amber),var(--rose))}
+
+  /* RTP actual vs theoretical */
+  .rtp{margin-top:11px}
+  .rtp .t{display:flex;justify-content:space-between;align-items:baseline;font-size:11px;color:var(--dim)}
+  .rtp b{font-size:15px;font-weight:800;font-variant-numeric:tabular-nums}
+  .rtp .ok{color:var(--em)} .rtp .bad{color:var(--rose)}
+  .gauge{position:relative;height:8px;border-radius:99px;margin-top:7px;
+    background:linear-gradient(90deg,rgba(52,211,153,.30),rgba(251,191,36,.30),rgba(251,113,133,.34))}
+  .gauge .mk{position:absolute;top:-3px;width:2px;height:14px;background:#fff;border-radius:2px;
+    box-shadow:0 0 0 2px rgba(0,0,0,.45)}
+  .gauge .th{position:absolute;top:-5px;width:2px;height:18px;background:rgba(255,255,255,.45);border-radius:2px}
+
+  /* stat strip */
+  .strip{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:12px}
+  .st{background:rgba(0,0,0,.2);border:1px solid rgba(255,255,255,.05);border-radius:11px;padding:8px 9px}
+  .st span{display:block;font:700 9px/1 inherit;letter-spacing:.09em;text-transform:uppercase;
+    color:var(--dim);margin-bottom:5px}
+  .st b{font-size:15.5px;font-weight:800;font-variant-numeric:tabular-nums;letter-spacing:-.01em}
+
+  /* spark */
+  .spark{display:flex;align-items:flex-end;gap:2px;height:26px;margin-top:12px}
+  .spark i{flex:1;min-width:2px;border-radius:2px 2px 0 0;
+    background:linear-gradient(180deg,rgba(34,211,238,.8),rgba(34,211,238,.14))}
+  .spark.neg i{background:linear-gradient(180deg,rgba(251,113,133,.8),rgba(251,113,133,.14))}
+
+  /* biggest win + winners */
+  .big{display:flex;align-items:center;gap:10px;margin-top:12px;
+    border:1px solid rgba(251,191,36,.22);background:rgba(251,191,36,.07);
+    border-radius:13px;padding:9px 11px}
+  .big .m{font:800 19px/1 inherit;color:var(--amber);font-variant-numeric:tabular-nums}
+  .big .who{font-size:11.5px;color:var(--mut);margin-top:3px}
+  .big .x{margin-left:auto;font:800 12px/1 inherit;color:var(--rose);
+    border:1px solid rgba(251,113,133,.3);border-radius:8px;padding:5px 8px;background:rgba(251,113,133,.1)}
+
+  .win{margin-top:11px}
+  .win .h{font:700 9px/1 inherit;letter-spacing:.09em;text-transform:uppercase;color:var(--dim);margin-bottom:7px}
+  .wr{display:flex;align-items:center;gap:9px;padding:5px 0;border-bottom:1px solid rgba(255,255,255,.045)}
+  .wr:last-child{border-bottom:0}
+  .av{width:23px;height:23px;border-radius:50%;display:grid;place-items:center;flex:none;
+    font:800 9.5px/1 inherit;background:rgba(255,255,255,.08);color:rgba(255,255,255,.75)}
+  .wr .n{font-size:12px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .wr .p{margin-left:auto;font-size:12px;font-weight:800;font-variant-numeric:tabular-nums;flex:none}
+  .up{color:var(--rose)} .dn{color:var(--em)}
+
+  .foot{display:flex;align-items:center;justify-content:space-between;gap:8px;
+    margin-top:11px;padding-top:10px;border-top:1px solid rgba(255,255,255,.06);
+    font-size:11px;color:var(--dim)}
+  .dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--em);
+    box-shadow:0 0 0 3px rgba(52,211,153,.16);margin-right:5px}
+  .pill{border:1px solid var(--line);border-radius:7px;padding:3px 7px;font:700 10px/1.3 inherit;color:var(--mut)}
+  .pill.warn{border-color:rgba(251,113,133,.35);background:rgba(251,113,133,.1);color:#fda4af}
+
+  .savebar{position:fixed;left:0;right:0;bottom:0;background:rgba(9,12,20,.95);
+    border-top:1px solid var(--line);backdrop-filter:blur(12px);padding:12px 18px;
+    display:none;align-items:center;justify-content:space-between;gap:12px;z-index:20}
   .savebar.on{display:flex}
-  .savebar .txt{font-size:13px;color:var(--amber);font-weight:600}
-  .btn{border:0;border-radius:11px;padding:9px 16px;font:700 13px/1 inherit;cursor:pointer}
+  .btn{border:0;border-radius:11px;padding:10px 17px;font:800 13px/1 inherit;cursor:pointer}
   .btn.p{background:var(--amber);color:#000}
   .btn.g{background:transparent;border:1px solid var(--line);color:var(--mut)}
 </style>
 </head>
 <body>
 <div class="wrap">
-  <h1>Game limits — layout options</h1>
-  <div class="sub">Per-game min/max bet, with performance stats. Three layouts for the same data — pick one.</div>
+  <h1>Game control</h1>
+  <div class="sub">Per-game limits and full oversight — one card per game.</div>
 
-  <div class="switch" id="sw">
-    <button data-t="A" class="on">A · Compact grid</button>
-    <button data-t="B">B · Rich cards</button>
-    <button data-t="C">C · Control room</button>
+  <div class="bar">
+    <div class="seg" id="dens">
+      <button data-d="comfy" class="on">Comfortable</button>
+      <button data-d="dense">Dense</button>
+    </div>
+    <div class="seg" id="sortby">
+      <button data-s="expo" class="on">Sort: exposure</button>
+      <button data-s="w">Volume</button>
+      <button data-s="rtp">RTP drift</button>
+      <button data-s="name">A–Z</button>
+    </div>
   </div>
 
   <div class="note">
-    <b>Real data:</b> all 22 games and their current min/max are read from the actual constants in
-    <code>server/src/services/arcade-*.ts</code> — these are your live limits today.
-    <b>Sample data:</b> wagered / hold / plays / players / biggest-win are illustrative placeholders,
-    so the layouts can be judged with realistic density. Edit any limit to see the dirty state + save bar.
+    <b>Real:</b> all 22 games and their current min/max come from the live constants in
+    <code>server/src/services/arcade-*.ts</code>.
+    <b>Sample:</b> RTP, wagered, won, winners, biggest win, last play and max-multiplier are
+    placeholders so the layout can be judged at realistic density — no DB access from here.
+    <b>Max able to be won</b> = max bet × max multiplier, shown against a 50M bankroll;
+    cards turn red when a single round could take &gt;10% of it.
   </div>
 
-  <div class="layout on" id="A"><div class="grid"></div></div>
-  <div class="layout" id="B"><div class="grid"></div></div>
-  <div class="layout" id="C">
-    <div class="tbl">
-      <div class="hd">
-        <div>Game</div><div class="r">Min bet</div><div class="r">Max bet</div>
-        <div class="hideSm">Range / 30d volume</div>
-        <div class="r hideSm">Wagered</div><div class="r">Hold</div>
-        <div class="r hideSm">Plays</div><div class="r">Biggest win</div>
-      </div>
-      <div id="rows"></div>
-    </div>
-  </div>
+  <div class="grid" id="grid"></div>
 </div>
 
 <div class="savebar" id="bar">
-  <div class="txt"><span id="n">0</span> unsaved limit change(s)</div>
+  <div style="color:var(--amber);font-weight:700;font-size:13px"><span id="n">0</span> unsaved change(s)</div>
   <div style="display:flex;gap:8px">
     <button class="btn g" onclick="reset()">Discard</button>
     <button class="btn p">Save limits</button>
@@ -158,135 +179,193 @@
 </div>
 
 <script>
-// Real games + real current limits (from server/src/services/arcade-*.ts).
-// Stats are illustrative sample values.
+const BANKROLL = 50_000_000;
+
+// min/max are REAL (from arcade-*.ts). Everything else is sample data.
 const GAMES = [
-  {k:'dice',       n:'Dice',             i:'🎲', min:10,  max:2000,   w:4820000, hold:1.9, p:12480, u:412, big:38000},
-  {k:'dicex2',     n:'Dice x2',          i:'🎯', min:10,  max:2000,   w:1960000, hold:2.4, p:5120,  u:198, big:24000},
-  {k:'limbo',      n:'Limbo',            i:'🚀', min:10,  max:2000,   w:6110000, hold:1.1, p:18900, u:530, big:196000},
-  {k:'mines',      n:'Mines',            i:'💣', min:10,  max:2000,   w:5340000, hold:3.2, p:9870,  u:445, big:88000},
-  {k:'crash',      n:'Crash',            i:'📈', min:10,  max:2000,   w:7250000, hold:-0.6, p:21400, u:612, big:412000},
-  {k:'towers',     n:'Towers',           i:'🗼', min:10,  max:2000,   w:2180000, hold:2.8, p:6640,  u:221, big:52000},
-  {k:'chicken',    n:'Chicken',          i:'🐔', min:10,  max:2000,   w:1470000, hold:3.4, p:4980,  u:176, big:31000},
-  {k:'hilo',       n:'Hi-Lo',            i:'↕',  min:10,  max:2000,   w:1120000, hold:2.1, p:4210,  u:150, big:27000},
-  {k:'firewalk',   n:'Firewalk',         i:'🔥', min:10,  max:2000,   w:890000,  hold:3.9, p:3120,  u:118, big:19000},
-  {k:'heist',      n:'Heist',            i:'🏦', min:10,  max:2000,   w:760000,  hold:2.6, p:2740,  u:104, big:22000},
-  {k:'baccarat',   n:'Baccarat',         i:'🃏', min:10,  max:2000,   w:2960000, hold:1.4, p:7180,  u:243, big:41000},
-  {k:'keno',       n:'Keno',             i:'🔢', min:1,   max:1000,   w:1830000, hold:5.1, p:14200, u:388, big:64000},
-  {k:'plinko',     n:'Plinko',           i:'🔻', min:1,   max:1000,   w:3410000, hold:2.2, p:26800, u:701, big:78000},
-  {k:'roulette',   n:'Roulette',         i:'🎡', min:5,   max:1000,   w:2540000, hold:2.7, p:8390,  u:281, big:35000, note:'max is per zone'},
-  {k:'pachinko',   n:'Pachinko',         i:'🏮', min:10,  max:100000, w:1290000, hold:4.2, p:3450,  u:129, big:210000},
-  {k:'cascade',    n:'Cascade',          i:'💧', min:100, max:100000, w:980000,  hold:3.1, p:1890,  u:88,  big:180000},
-  {k:'cipher',     n:'Cipher',           i:'🔐', min:100, max:100000, w:640000,  hold:2.9, p:1210,  u:61,  big:145000},
-  {k:'greeddice',  n:'Greed Dice',       i:'🤑', min:100, max:100000, w:1540000, hold:3.6, p:2980,  u:112, big:238000},
-  {k:'andarbahar', n:'Andar Bahar',      i:'🪭', min:100, max:50000,  w:720000,  hold:2.3, p:1640,  u:74,  big:96000},
-  {k:'dragontiger',n:'Dragon Tiger',     i:'🐉', min:100, max:50000,  w:1080000, hold:2.0, p:2410,  u:97,  big:112000},
-  {k:'threecard',  n:'Three Card Poker', i:'🂡', min:100, max:50000,  w:860000,  hold:3.3, p:1780,  u:83,  big:74000},
-  {k:'paigow',     n:'Pai Gow Poker',    i:'🀄', min:100, max:10000,  w:410000,  hold:2.5, p:920,   u:47,  big:38000},
+  {k:'dice',n:'Dice',i:'🎲',href:'/dice',min:10,max:2000,mult:9900,rtp:98.1,th:99,w:4820000,won:4728000,p:12480,u:412,big:38000,bigBy:'0x9f…21ab',bigX:190,last:'2m',winners:[['0x9f…21ab',128000],['CryptoKate',74000],['0x33…7c02',41000]]},
+  {k:'dicex2',n:'Dice x2',i:'🎯',href:'/dicex2',min:10,max:2000,mult:9900,rtp:97.6,th:98,w:1960000,won:1913000,p:5120,u:198,big:24000,bigBy:'0x41…9de1',bigX:120,last:'11m',winners:[['0x41…9de1',52000],['Moonboi',28000],['0xa7…03ff',16000]]},
+  {k:'limbo',n:'Limbo',i:'🚀',href:'/limbo',min:10,max:2000,mult:1000000,rtp:98.9,th:99,w:6110000,won:6043000,p:18900,u:530,big:196000,bigBy:'0x0c…4411',bigX:980,last:'40s',winners:[['0x0c…4411',402000],['SendIt',151000],['0xbb…9a20',88000]]},
+  {k:'mines',n:'Mines',i:'💣',href:'/mines',min:10,max:2000,mult:24000,rtp:96.8,th:97,w:5340000,won:5169000,p:9870,u:445,big:88000,bigBy:'MinesKing',bigX:440,last:'5m',winners:[['MinesKing',214000],['0x77…12cd',96000],['0x2e…88b1',53000]]},
+  {k:'crash',n:'Crash',i:'📈',href:'/crash',min:10,max:2000,mult:1000000,rtp:100.6,th:99,w:7250000,won:7293000,p:21400,u:612,big:412000,bigBy:'0xde…5f77',bigX:2060,last:'8s',winners:[['0xde…5f77',688000],['RocketDad',233000],['0x91…4b6e',147000]]},
+  {k:'towers',n:'Towers',i:'🗼',href:'/towers',min:10,max:2000,mult:14000,rtp:97.2,th:97,w:2180000,won:2119000,p:6640,u:221,big:52000,bigBy:'0x64…aa10',bigX:260,last:'19m',winners:[['0x64…aa10',118000],['0x05…7731',44000],['Tower',21000]]},
+  {k:'chicken',n:'Chicken',i:'🐔',href:'/chicken',min:10,max:2000,mult:9800,rtp:96.6,th:97,w:1470000,won:1420000,p:4980,u:176,big:31000,bigBy:'ClucksAlot',bigX:155,last:'27m',winners:[['ClucksAlot',67000],['0x12…9902',29000],['0x8a…3d55',14000]]},
+  {k:'hilo',n:'Hi-Lo',i:'↕',href:'/hilo',min:10,max:2000,mult:5000,rtp:97.9,th:98,w:1120000,won:1096000,p:4210,u:150,big:27000,bigBy:'0xcc…6612',bigX:135,last:'33m',winners:[['0xcc…6612',58000],['0x39…0a4d',24000],['Flipper',11000]]},
+  {k:'firewalk',n:'Firewalk',i:'🔥',href:'/firewalk',min:10,max:2000,mult:12000,rtp:96.1,th:96,w:890000,won:855000,p:3120,u:118,big:19000,bigBy:'0x7b…41c9',bigX:95,last:'1h',winners:[['0x7b…41c9',41000],['0x66…d0a2',18000],['Ash',9000]]},
+  {k:'heist',n:'Heist',i:'🏦',href:'/heist',min:10,max:2000,mult:10000,rtp:97.4,th:97,w:760000,won:740000,p:2740,u:104,big:22000,bigBy:'SafeCracker',bigX:110,last:'44m',winners:[['SafeCracker',48000],['0x1d…7fa3',19000],['0x90…2255',8000]]},
+  {k:'baccarat',n:'Baccarat',i:'🃏',href:'/baccarat',min:10,max:2000,mult:9,rtp:98.6,th:98.9,w:2960000,won:2918000,p:7180,u:243,big:41000,bigBy:'0xa1…5b30',bigX:9,last:'6m',winners:[['0xa1…5b30',88000],['Banker',37000],['0x4f…6611',20000]]},
+  {k:'keno',n:'Keno',i:'🔢',href:'/keno',min:1,max:1000,mult:10000,rtp:94.9,th:95,w:1830000,won:1737000,p:14200,u:388,big:64000,bigBy:'0x2b…9911',bigX:320,last:'3m',winners:[['0x2b…9911',141000],['LuckyNum',62000],['0xf0…1a7c',33000]]},
+  {k:'plinko',n:'Plinko',i:'🔻',href:'/plinko',min:1,max:1000,mult:1000,rtp:97.8,th:98,w:3410000,won:3335000,p:26800,u:701,big:78000,bigBy:'DropIt',bigX:390,last:'50s',winners:[['DropIt',166000],['0x58…4d09',71000],['0xc3…8802',38000]]},
+  {k:'roulette',n:'Roulette',i:'🎡',href:'/roulette',min:5,max:1000,mult:36,rtp:97.3,th:97.3,w:2540000,won:2471000,p:8390,u:281,big:35000,bigBy:'0x86…2f14',bigX:36,last:'14m',winners:[['0x86…2f14',76000],['RedOrBlack',31000],['0x22…5a90',17000]]},
+  {k:'pachinko',n:'Pachinko',i:'🏮',href:'/pachinko',min:10,max:100000,mult:5000,rtp:95.8,th:96,w:1290000,won:1236000,p:3450,u:129,big:210000,bigBy:'0xee…7b23',bigX:1050,last:'21m',winners:[['0xee…7b23',388000],['PachiPro',96000],['0x74…c118',44000]]},
+  {k:'cascade',n:'Cascade',i:'💧',href:'/cascade',min:100,max:100000,mult:2500,rtp:96.9,th:97,w:980000,won:950000,p:1890,u:88,big:180000,bigBy:'0x3c…9f40',bigX:900,last:'38m',winners:[['0x3c…9f40',291000],['0x19…6d72',67000],['Flow',28000]]},
+  {k:'cipher',n:'Cipher',i:'🔐',href:'/cipher',min:100,max:100000,mult:3000,rtp:97.1,th:97,w:640000,won:621000,p:1210,u:61,big:145000,bigBy:'Decoder',bigX:725,last:'55m',winners:[['Decoder',233000],['0x08…3311',54000],['0xb2…7fd8',19000]]},
+  {k:'greeddice',n:'Greed Dice',i:'🤑',href:'/greed-dice',min:100,max:100000,mult:5000,rtp:96.4,th:96.5,w:1540000,won:1485000,p:2980,u:112,big:238000,bigBy:'0x55…0c2a',bigX:1190,last:'17m',winners:[['0x55…0c2a',401000],['GreedIsGood',88000],['0x7e…44b0',36000]]},
+  {k:'andarbahar',n:'Andar Bahar',i:'🪭',href:'/andar-bahar',min:100,max:50000,mult:25,rtp:97.7,th:97.9,w:720000,won:703000,p:1640,u:74,big:96000,bigBy:'0x30…8811',bigX:25,last:'1h',winners:[['0x30…8811',147000],['0xd4…2a03',42000],['Bahar',15000]]},
+  {k:'dragontiger',n:'Dragon Tiger',i:'🐉',href:'/dragon-tiger',min:100,max:50000,mult:50,rtp:98.0,th:98.1,w:1080000,won:1058000,p:2410,u:97,big:112000,bigBy:'DragonLord',bigX:50,last:'29m',winners:[['DragonLord',188000],['0x63…9c41',51000],['0xaa…1177',22000]]},
+  {k:'threecard',n:'Three Card Poker',i:'🂡',href:'/three-card-poker',min:100,max:50000,mult:100,rtp:96.7,th:96.6,w:860000,won:832000,p:1780,u:83,big:74000,bigBy:'0x4d…5e88',bigX:74,last:'47m',winners:[['0x4d…5e88',122000],['0x97…0b31',38000],['Trips',16000]]},
+  {k:'paigow',n:'Pai Gow Poker',i:'🀄',href:'/pai-gow-poker',min:100,max:10000,mult:50,rtp:97.5,th:97.5,w:410000,won:400000,p:920,u:47,big:38000,bigBy:'0x81…6a20',bigX:38,last:'2h',winners:[['0x81…6a20',61000],['0x26…c904',18000],['PaiGow',7000]]},
 ];
 
-const fmt = n => n>=1e6 ? (n/1e6).toFixed(2)+'M' : n>=1e3 ? (n/1e3).toFixed(1)+'K' : String(n);
-const orig = {}; GAMES.forEach(g => orig[g.k] = {min:g.min, max:g.max});
+const fmt = n => {
+  const a = Math.abs(n);
+  if (a>=1e9) return (n/1e9).toFixed(2)+'B';
+  if (a>=1e6) return (n/1e6).toFixed(2)+'M';
+  if (a>=1e3) return (n/1e3).toFixed(1)+'K';
+  return n.toLocaleString('en-US');
+};
+const orig = {}; GAMES.forEach(g => orig[g.k]={min:g.min,max:g.max});
 let dirty = {};
 
-// log-scale position so 1 → 100,000 is readable on one axis
-const LO = 1, HI = 100000;
-const pos = v => (Math.log10(Math.max(v,LO)) - Math.log10(LO)) / (Math.log10(HI) - Math.log10(LO)) * 100;
-const rangeBar = g => `<div class="rng"><span style="left:${pos(g.min)}%;right:${100-pos(g.max)}%"></span></div>`;
-const sparkOf = g => {
-  let h = '';
-  for (let i=0;i<14;i++){
-    const seed = (g.k.charCodeAt(0)*7 + i*g.p) % 100;
-    h += `<i style="height:${20 + seed*0.8}%"></i>`;
-  }
-  return `<div class="spark ${g.hold<0?'neg':''}">${h}</div>`;
-};
-const input = (g, which) => `<input class="tabular" data-k="${g.k}" data-f="${which}" value="${g[which]}" inputmode="numeric">`;
+const maxWin = g => g.max * g.mult;
+const expoPct = g => maxWin(g) / BANKROLL * 100;
 
-// A — compact
-document.querySelector('#A .grid').innerHTML = GAMES.map(g => `
-  <div class="card">
-    <div class="top">
-      <div class="nm"><span class="ico">${g.i}</span>${g.n}</div>
-      <span class="pill live">live</span>
-    </div>
-    <div class="row">
-      <div><div class="lab">Min</div>${input(g,'min')}</div>
-      <div><div class="lab">Max</div>${input(g,'max')}</div>
-    </div>
-    ${rangeBar(g)}
-    <div class="stats">
-      <div>Wagered<b class="tabular">${fmt(g.w)}</b></div>
-      <div>Hold<b class="hold ${g.hold<0?'neg':''}">${g.hold}%</b></div>
-      <div>Plays<b class="tabular">${fmt(g.p)}</b></div>
-    </div>
-  </div>`).join('');
+// RTP gauge spans 94→102%; theoretical marker + actual marker
+const gpos = v => Math.max(0, Math.min(100, (v - 94) / 8 * 100));
 
-// B — rich
-document.querySelector('#B .grid').innerHTML = GAMES.map(g => `
-  <div class="card">
-    <div class="top">
-      <div class="nm"><span class="ico">${g.i}</span>${g.n}</div>
-      <span class="pill live">live</span>
+const card = g => {
+  const mw = maxWin(g), ep = expoPct(g);
+  const hot = ep > 10;
+  const drift = +(g.rtp - g.th).toFixed(2);
+  const bad = drift > 0.4;
+  return `
+  <div class="card ${hot?'risk':''}">
+    <div class="head">
+      <div class="ico">${g.i}</div>
+      <div style="min-width:0">
+        <div class="nm">${g.n}</div>
+        <div class="meta">${g.u} players · ${fmt(g.p)} plays</div>
+      </div>
+      <a class="go" href="${g.href}" target="_blank" rel="noopener">Go to game ↗</a>
     </div>
-    <div class="kpis">
-      <div class="kpi"><span>Wagered</span><b class="tabular">${fmt(g.w)}</b></div>
-      <div class="kpi"><span>Hold</span><b class="hold ${g.hold<0?'neg':''}">${g.hold}%</b></div>
-      <div class="kpi"><span>Players</span><b class="tabular">${g.u}</b></div>
-    </div>
-    ${sparkOf(g)}
+
     <div class="limits">
-      <div><div class="lab">Min bet</div>${input(g,'min')}</div>
-      <div><div class="lab">Max bet</div>${input(g,'max')}</div>
+      <div class="lim" data-w="${g.k}.min"><div class="k">Min bet</div>
+        <input class="tab" data-k="${g.k}" data-f="min" value="${g.min}" inputmode="numeric">
+        <div class="u">MORBIUS</div></div>
+      <div class="lim" data-w="${g.k}.max"><div class="k">Max bet${g.k==='roulette'?' / zone':''}</div>
+        <input class="tab" data-k="${g.k}" data-f="max" value="${g.max}" inputmode="numeric">
+        <div class="u">MORBIUS</div></div>
     </div>
-    ${rangeBar(g)}
+
+    <div class="expo ${hot?'hot':''}">
+      <div class="t">
+        <div class="k">Max able to be won</div>
+        <div class="v" data-mw="${g.k}">${fmt(mw)}</div>
+      </div>
+      <div class="s">max bet × ${fmt(g.mult)}× top multiplier · <b data-ep="${g.k}">${ep.toFixed(1)}%</b> of bankroll</div>
+      <div class="track ${hot?'hot':''}"><i data-bar="${g.k}" style="width:${Math.min(100,ep)}%"></i></div>
+    </div>
+
+    <div class="rtp">
+      <div class="t">
+        <span>RTP actual vs theoretical</span>
+        <span><b class="${bad?'bad':'ok'}">${g.rtp}%</b> <span style="color:var(--dim)">/ ${g.th}%</span></span>
+      </div>
+      <div class="gauge">
+        <div class="th" style="left:${gpos(g.th)}%"></div>
+        <div class="mk" style="left:${gpos(g.rtp)}%"></div>
+      </div>
+    </div>
+
+    <div class="strip">
+      <div class="st"><span>Wagered</span><b>${fmt(g.w)}</b></div>
+      <div class="st"><span>Won</span><b>${fmt(g.won)}</b></div>
+      <div class="st"><span>Hold</span><b class="${g.w-g.won<0?'':''}" style="color:${g.w-g.won<0?'var(--rose)':'var(--em)'}">${((g.w-g.won)/g.w*100).toFixed(1)}%</b></div>
+      <div class="st"><span>Net</span><b style="color:${g.w-g.won<0?'var(--rose)':'var(--em)'}">${g.w-g.won<0?'':'+'}${fmt(g.w-g.won)}</b></div>
+    </div>
+
+    <div class="spark ${g.w-g.won<0?'neg':''}">${
+      Array.from({length:16},(_,i)=>`<i style="height:${18+((g.k.charCodeAt(0)*11+i*g.p)%100)*0.82}%"></i>`).join('')
+    }</div>
+
+    <div class="big whenDense">
+      <div>
+        <div class="m">${fmt(g.big)}</div>
+        <div class="who">biggest win · ${g.bigBy}</div>
+      </div>
+      <div class="x">${fmt(g.bigX)}×</div>
+    </div>
+
+    <div class="win whenDense">
+      <div class="h">Biggest winners (net)</div>
+      ${g.winners.map(([n,v])=>`
+        <div class="wr">
+          <div class="av">${n.startsWith('0x')?n.slice(2,4).toUpperCase():n.slice(0,2).toUpperCase()}</div>
+          <div class="n">${n}</div>
+          <div class="p up">+${fmt(v)}</div>
+        </div>`).join('')}
+    </div>
+
     <div class="foot">
-      <span>${fmt(g.p)} plays · biggest ${fmt(g.big)}</span>
-      <span>${g.note ? '⚠ '+g.note : 'MORBIUS'}</span>
+      <span><span class="dot"></span>last play ${g.last} ago</span>
+      ${hot ? '<span class="pill warn">exposure &gt;10% bankroll</span>'
+            : bad ? '<span class="pill warn">RTP above target</span>'
+            : '<span class="pill">healthy</span>'}
     </div>
-  </div>`).join('');
+  </div>`;
+};
 
-// C — control room
-document.getElementById('rows').innerHTML = GAMES.map(g => `
-  <div class="rw">
-    <div class="nm"><span>${g.i}</span>${g.n}</div>
-    <div>${input(g,'min')}</div>
-    <div>${input(g,'max')}</div>
-    <div class="hideSm">${rangeBar(g)}</div>
-    <div class="r tabular hideSm">${fmt(g.w)}</div>
-    <div class="r"><span class="hold ${g.hold<0?'neg':''}">${g.hold}%</span></div>
-    <div class="r tabular hideSm" style="color:var(--mut)">${fmt(g.p)}</div>
-    <div class="r tabular" style="color:var(--amber)">${fmt(g.big)}</div>
-  </div>`).join('');
+const grid = document.getElementById('grid');
+let sortMode = 'expo';
+function render(){
+  const arr = [...GAMES];
+  if (sortMode==='expo') arr.sort((a,b)=>expoPct(b)-expoPct(a));
+  if (sortMode==='w')    arr.sort((a,b)=>b.w-a.w);
+  if (sortMode==='rtp')  arr.sort((a,b)=>(b.rtp-b.th)-(a.rtp-a.th));
+  if (sortMode==='name') arr.sort((a,b)=>a.n.localeCompare(b.n));
+  grid.innerHTML = arr.map(card).join('');
+  // restore any in-flight edits
+  Object.keys(dirty).forEach(id=>{
+    const [k,f]=id.split('.');
+    const el=document.querySelector(`input[data-k="${k}"][data-f="${f}"]`);
+    if(el){ el.value=dirty[id]; el.closest('.lim').classList.add('dirty'); recalc(k); }
+  });
+}
+render();
 
-// switching
-document.getElementById('sw').addEventListener('click', e => {
-  const b = e.target.closest('button'); if(!b) return;
-  document.querySelectorAll('#sw button').forEach(x=>x.classList.toggle('on', x===b));
-  document.querySelectorAll('.layout').forEach(l=>l.classList.toggle('on', l.id===b.dataset.t));
+document.getElementById('dens').addEventListener('click',e=>{
+  const b=e.target.closest('button'); if(!b)return;
+  document.querySelectorAll('#dens button').forEach(x=>x.classList.toggle('on',x===b));
+  grid.classList.toggle('dense', b.dataset.d==='dense');
+});
+document.getElementById('sortby').addEventListener('click',e=>{
+  const b=e.target.closest('button'); if(!b)return;
+  document.querySelectorAll('#sortby button').forEach(x=>x.classList.toggle('on',x===b));
+  sortMode=b.dataset.s; render();
 });
 
-// dirty tracking across all three layouts at once
-document.addEventListener('input', e => {
-  const el = e.target; if(!el.matches('input[data-k]')) return;
-  const {k,f} = el.dataset;
-  const changed = String(orig[k][f]) !== el.value.trim();
-  // mirror the edit into the other layouts so switching keeps state
-  document.querySelectorAll(`input[data-k="${k}"][data-f="${f}"]`).forEach(o=>{
-    o.value = el.value; o.classList.toggle('dirty', changed);
-  });
-  const id = k+'.'+f;
-  changed ? dirty[id]=1 : delete dirty[id];
-  const n = Object.keys(dirty).length;
-  document.getElementById('n').textContent = n;
-  document.getElementById('bar').classList.toggle('on', n>0);
+// live-recompute max exposure as the max bet is edited
+function recalc(k){
+  const g=GAMES.find(x=>x.k===k); if(!g) return;
+  const el=document.querySelector(`input[data-k="${k}"][data-f="max"]`);
+  const mx=Number(String(el?.value||'').replace(/[^\d]/g,''))||0;
+  const mw=mx*g.mult, ep=mw/BANKROLL*100;
+  const v=document.querySelector(`[data-mw="${k}"]`), p=document.querySelector(`[data-ep="${k}"]`),
+        b=document.querySelector(`[data-bar="${k}"]`);
+  if(v) v.textContent=fmt(mw);
+  if(p) p.textContent=ep.toFixed(1)+'%';
+  if(b) b.style.width=Math.min(100,ep)+'%';
+  const card=el?.closest('.card');
+  if(card){ card.classList.toggle('risk',ep>10);
+    card.querySelector('.expo')?.classList.toggle('hot',ep>10);
+    card.querySelector('.track')?.classList.toggle('hot',ep>10); }
+}
+
+document.addEventListener('input',e=>{
+  const el=e.target; if(!el.matches('input[data-k]')) return;
+  const {k,f}=el.dataset, id=k+'.'+f;
+  const changed=String(orig[k][f])!==el.value.trim();
+  el.closest('.lim').classList.toggle('dirty',changed);
+  changed ? dirty[id]=el.value : delete dirty[id];
+  if(f==='max') recalc(k);
+  const n=Object.keys(dirty).length;
+  document.getElementById('n').textContent=n;
+  document.getElementById('bar').classList.toggle('on',n>0);
 });
 
 function reset(){
-  dirty = {};
-  document.querySelectorAll('input[data-k]').forEach(i=>{
-    i.value = orig[i.dataset.k][i.dataset.f]; i.classList.remove('dirty');
-  });
+  dirty={}; render();
   document.getElementById('bar').classList.remove('on');
 }
 </script>
