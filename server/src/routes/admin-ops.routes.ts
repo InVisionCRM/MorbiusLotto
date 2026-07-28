@@ -326,6 +326,65 @@ export function registerAdminOpsRoutes({ app, dbService, authService, referralSe
     },
   );
 
+  // Blacklist any wallets directly (they need not be referrers) + list/remove.
+  app.get(
+    '/api/admin-ops/referrals/blacklist',
+    requireAuth(authService),
+    requireAdmin,
+    async (req: Request, res: Response) => {
+      try {
+        const limit = Number(req.query.limit) || 200;
+        return res.json({ entries: await referralService.listBlacklist(limit) });
+      } catch (error) {
+        return res.status(500).json({ error: error instanceof Error ? error.message : 'list failed' });
+      }
+    },
+  );
+
+  app.post(
+    '/api/admin-ops/referrals/blacklist',
+    requireAuth(authService),
+    requireAdmin,
+    async (req: Request, res: Response) => {
+      try {
+        const body = req.body ?? {};
+        const raw = Array.isArray(body.addresses) ? body.addresses : [body.address];
+        const list = raw.filter((x: unknown) => typeof x === 'string' && x.trim() !== '').map(String);
+        if (list.length === 0) return res.status(400).json({ error: 'No addresses supplied' });
+        const result = await referralService.blacklistMany(list, {
+          reason: typeof body.reason === 'string' ? body.reason.slice(0, 500) : undefined,
+          by: req.user!.address,
+        });
+        return res.json({ ok: true, ...result });
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : 'blacklist failed';
+        return res.status(/Invalid wallet/.test(msg) ? 400 : 500).json({ error: msg });
+      }
+    },
+  );
+
+  app.post(
+    '/api/admin-ops/referrals/referrer/:address/clawback-welcome',
+    requireAuth(authService),
+    requireAdmin,
+    async (req: Request, res: Response) => {
+      try {
+        const list = (req.body ?? {}).referees;
+        if (!Array.isArray(list) || list.length === 0) {
+          return res.status(400).json({ error: 'Select at least one referred wallet' });
+        }
+        const result = await referralService.clawbackWelcomeBonuses(
+          String(req.params.address),
+          list.map((x: unknown) => String(x)),
+        );
+        return res.json({ ok: true, ...result });
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : 'clawback failed';
+        return res.status(/Invalid wallet/.test(msg) ? 400 : 500).json({ error: msg });
+      }
+    },
+  );
+
   app.post(
     '/api/admin-ops/referrals/referrer/:address/blacklist',
     requireAuth(authService),
