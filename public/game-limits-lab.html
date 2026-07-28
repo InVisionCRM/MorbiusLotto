@@ -1,0 +1,294 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Game Limits — layout lab</title>
+<style>
+  :root{
+    --bg:#070a12; --panel:rgba(255,255,255,.02); --line:rgba(255,255,255,.10);
+    --txt:#fff; --mut:rgba(255,255,255,.45); --dim:rgba(255,255,255,.30);
+    --cyan:#22d3ee; --amber:#fbbf24; --emerald:#34d399; --rose:#fb7185; --violet:#a78bfa;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--txt);
+    font:14px/1.45 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    -webkit-font-smoothing:antialiased}
+  .wrap{max-width:1400px;margin:0 auto;padding:24px 16px 96px}
+  h1{font-size:26px;font-weight:800;margin:0}
+  .sub{color:var(--mut);font-size:13px;margin-top:4px}
+  .tabular{font-variant-numeric:tabular-nums}
+
+  /* layout switcher */
+  .switch{display:inline-flex;gap:2px;background:rgba(255,255,255,.03);
+    border:1px solid var(--line);border-radius:12px;padding:3px;margin:18px 0 6px}
+  .switch button{background:none;border:0;color:var(--mut);font:600 12px/1 inherit;
+    padding:9px 14px;border-radius:9px;cursor:pointer}
+  .switch button.on{background:rgba(255,255,255,.10);color:#fff}
+  .note{font-size:12px;color:var(--dim);margin:8px 0 20px;max-width:70ch}
+  .note b{color:var(--mut)}
+
+  .layout{display:none}
+  .layout.on{display:block}
+
+  /* ── shared bits ─────────────────────────────────────── */
+  .lim{display:flex;align-items:center;gap:6px}
+  .lim input{width:100%;background:rgba(0,0,0,.35);border:1px solid var(--line);
+    color:#fff;border-radius:9px;padding:7px 9px;font:700 13px/1 inherit;
+    font-variant-numeric:tabular-nums;text-align:right}
+  .lim input:focus{outline:none;border-color:rgba(34,211,238,.5)}
+  .lim input.dirty{border-color:rgba(251,191,36,.6);background:rgba(251,191,36,.08)}
+  .lab{font:600 9px/1 inherit;letter-spacing:.09em;text-transform:uppercase;color:var(--dim)}
+  .dash{color:var(--dim)}
+  .pill{display:inline-block;border:1px solid var(--line);border-radius:6px;
+    padding:2px 6px;font:600 10px/1.4 inherit;color:var(--mut)}
+  .pill.live{border-color:rgba(52,211,153,.35);background:rgba(52,211,153,.10);color:#6ee7b7}
+  .pill.off{border-color:rgba(251,113,133,.35);background:rgba(251,113,133,.10);color:#fda4af}
+  .hold{color:var(--emerald);font-weight:700}
+  .hold.neg{color:var(--rose)}
+
+  /* spark bars */
+  .spark{display:flex;align-items:flex-end;gap:2px;height:28px}
+  .spark i{flex:1;background:linear-gradient(180deg,rgba(34,211,238,.85),rgba(34,211,238,.18));
+    border-radius:2px 2px 0 0;min-width:2px}
+  .spark.neg i{background:linear-gradient(180deg,rgba(251,113,133,.85),rgba(251,113,133,.18))}
+
+  /* range visual: where min/max sit on a log scale */
+  .rng{position:relative;height:5px;border-radius:99px;background:rgba(255,255,255,.07);margin-top:9px}
+  .rng span{position:absolute;top:0;bottom:0;border-radius:99px;
+    background:linear-gradient(90deg,var(--cyan),var(--violet))}
+
+  /* ── A: compact grid ─────────────────────────────────── */
+  #A .grid{display:grid;gap:10px;grid-template-columns:repeat(auto-fill,minmax(230px,1fr))}
+  #A .card{border:1px solid var(--line);background:var(--panel);border-radius:14px;padding:12px}
+  #A .top{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:9px}
+  #A .nm{font-weight:700;font-size:13px;display:flex;align-items:center;gap:7px}
+  #A .ico{font-size:15px}
+  #A .row{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+  #A .stats{display:flex;justify-content:space-between;margin-top:10px;
+    padding-top:9px;border-top:1px solid rgba(255,255,255,.06);font-size:11px;color:var(--mut)}
+  #A .stats b{display:block;color:#fff;font-size:12px;font-weight:700}
+
+  /* ── B: rich cards ───────────────────────────────────── */
+  #B .grid{display:grid;gap:14px;grid-template-columns:repeat(auto-fill,minmax(330px,1fr))}
+  #B .card{border:1px solid var(--line);border-radius:18px;padding:16px;
+    background:linear-gradient(160deg,rgba(255,255,255,.045),rgba(255,255,255,.012))}
+  #B .top{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
+  #B .nm{font-weight:800;font-size:16px;display:flex;align-items:center;gap:9px}
+  #B .ico{font-size:20px}
+  #B .kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:14px 0 12px}
+  #B .kpi{background:rgba(0,0,0,.22);border:1px solid rgba(255,255,255,.05);
+    border-radius:11px;padding:8px 9px}
+  #B .kpi span{display:block;font:600 9px/1 inherit;letter-spacing:.08em;
+    text-transform:uppercase;color:var(--dim);margin-bottom:5px}
+  #B .kpi b{font-size:15px;font-weight:800}
+  #B .limits{display:grid;grid-template-columns:1fr 1fr;gap:9px;
+    padding-top:12px;border-top:1px solid rgba(255,255,255,.07)}
+  #B .foot{display:flex;justify-content:space-between;align-items:center;
+    margin-top:11px;font-size:11px;color:var(--dim)}
+
+  /* ── C: control-room rows ────────────────────────────── */
+  #C .tbl{border:1px solid var(--line);border-radius:16px;overflow:hidden}
+  #C .hd,#C .rw{display:grid;
+    grid-template-columns:minmax(150px,1.4fr) 96px 96px 1fr 82px 74px 78px 96px;
+    gap:10px;align-items:center;padding:10px 14px}
+  #C .hd{background:#0b0f18;border-bottom:1px solid var(--line);
+    font:600 9px/1 inherit;letter-spacing:.09em;text-transform:uppercase;color:var(--dim);
+    position:sticky;top:0;z-index:2}
+  #C .rw{border-bottom:1px solid rgba(255,255,255,.05)}
+  #C .rw:last-child{border-bottom:0}
+  #C .rw:hover{background:rgba(255,255,255,.03)}
+  #C .nm{font-weight:700;font-size:13px;display:flex;align-items:center;gap:8px}
+  #C .r{text-align:right}
+  @media(max-width:1100px){
+    #C .hd,#C .rw{grid-template-columns:minmax(120px,1.2fr) 88px 88px 74px 74px;}
+    #C .hideSm{display:none}
+  }
+
+  /* save bar */
+  .savebar{position:fixed;left:0;right:0;bottom:0;background:rgba(9,12,20,.94);
+    border-top:1px solid var(--line);backdrop-filter:blur(10px);
+    padding:11px 16px;display:none;align-items:center;justify-content:space-between;gap:12px;z-index:9}
+  .savebar.on{display:flex}
+  .savebar .txt{font-size:13px;color:var(--amber);font-weight:600}
+  .btn{border:0;border-radius:11px;padding:9px 16px;font:700 13px/1 inherit;cursor:pointer}
+  .btn.p{background:var(--amber);color:#000}
+  .btn.g{background:transparent;border:1px solid var(--line);color:var(--mut)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Game limits — layout options</h1>
+  <div class="sub">Per-game min/max bet, with performance stats. Three layouts for the same data — pick one.</div>
+
+  <div class="switch" id="sw">
+    <button data-t="A" class="on">A · Compact grid</button>
+    <button data-t="B">B · Rich cards</button>
+    <button data-t="C">C · Control room</button>
+  </div>
+
+  <div class="note">
+    <b>Real data:</b> all 22 games and their current min/max are read from the actual constants in
+    <code>server/src/services/arcade-*.ts</code> — these are your live limits today.
+    <b>Sample data:</b> wagered / hold / plays / players / biggest-win are illustrative placeholders,
+    so the layouts can be judged with realistic density. Edit any limit to see the dirty state + save bar.
+  </div>
+
+  <div class="layout on" id="A"><div class="grid"></div></div>
+  <div class="layout" id="B"><div class="grid"></div></div>
+  <div class="layout" id="C">
+    <div class="tbl">
+      <div class="hd">
+        <div>Game</div><div class="r">Min bet</div><div class="r">Max bet</div>
+        <div class="hideSm">Range / 30d volume</div>
+        <div class="r hideSm">Wagered</div><div class="r">Hold</div>
+        <div class="r hideSm">Plays</div><div class="r">Biggest win</div>
+      </div>
+      <div id="rows"></div>
+    </div>
+  </div>
+</div>
+
+<div class="savebar" id="bar">
+  <div class="txt"><span id="n">0</span> unsaved limit change(s)</div>
+  <div style="display:flex;gap:8px">
+    <button class="btn g" onclick="reset()">Discard</button>
+    <button class="btn p">Save limits</button>
+  </div>
+</div>
+
+<script>
+// Real games + real current limits (from server/src/services/arcade-*.ts).
+// Stats are illustrative sample values.
+const GAMES = [
+  {k:'dice',       n:'Dice',             i:'🎲', min:10,  max:2000,   w:4820000, hold:1.9, p:12480, u:412, big:38000},
+  {k:'dicex2',     n:'Dice x2',          i:'🎯', min:10,  max:2000,   w:1960000, hold:2.4, p:5120,  u:198, big:24000},
+  {k:'limbo',      n:'Limbo',            i:'🚀', min:10,  max:2000,   w:6110000, hold:1.1, p:18900, u:530, big:196000},
+  {k:'mines',      n:'Mines',            i:'💣', min:10,  max:2000,   w:5340000, hold:3.2, p:9870,  u:445, big:88000},
+  {k:'crash',      n:'Crash',            i:'📈', min:10,  max:2000,   w:7250000, hold:-0.6, p:21400, u:612, big:412000},
+  {k:'towers',     n:'Towers',           i:'🗼', min:10,  max:2000,   w:2180000, hold:2.8, p:6640,  u:221, big:52000},
+  {k:'chicken',    n:'Chicken',          i:'🐔', min:10,  max:2000,   w:1470000, hold:3.4, p:4980,  u:176, big:31000},
+  {k:'hilo',       n:'Hi-Lo',            i:'↕',  min:10,  max:2000,   w:1120000, hold:2.1, p:4210,  u:150, big:27000},
+  {k:'firewalk',   n:'Firewalk',         i:'🔥', min:10,  max:2000,   w:890000,  hold:3.9, p:3120,  u:118, big:19000},
+  {k:'heist',      n:'Heist',            i:'🏦', min:10,  max:2000,   w:760000,  hold:2.6, p:2740,  u:104, big:22000},
+  {k:'baccarat',   n:'Baccarat',         i:'🃏', min:10,  max:2000,   w:2960000, hold:1.4, p:7180,  u:243, big:41000},
+  {k:'keno',       n:'Keno',             i:'🔢', min:1,   max:1000,   w:1830000, hold:5.1, p:14200, u:388, big:64000},
+  {k:'plinko',     n:'Plinko',           i:'🔻', min:1,   max:1000,   w:3410000, hold:2.2, p:26800, u:701, big:78000},
+  {k:'roulette',   n:'Roulette',         i:'🎡', min:5,   max:1000,   w:2540000, hold:2.7, p:8390,  u:281, big:35000, note:'max is per zone'},
+  {k:'pachinko',   n:'Pachinko',         i:'🏮', min:10,  max:100000, w:1290000, hold:4.2, p:3450,  u:129, big:210000},
+  {k:'cascade',    n:'Cascade',          i:'💧', min:100, max:100000, w:980000,  hold:3.1, p:1890,  u:88,  big:180000},
+  {k:'cipher',     n:'Cipher',           i:'🔐', min:100, max:100000, w:640000,  hold:2.9, p:1210,  u:61,  big:145000},
+  {k:'greeddice',  n:'Greed Dice',       i:'🤑', min:100, max:100000, w:1540000, hold:3.6, p:2980,  u:112, big:238000},
+  {k:'andarbahar', n:'Andar Bahar',      i:'🪭', min:100, max:50000,  w:720000,  hold:2.3, p:1640,  u:74,  big:96000},
+  {k:'dragontiger',n:'Dragon Tiger',     i:'🐉', min:100, max:50000,  w:1080000, hold:2.0, p:2410,  u:97,  big:112000},
+  {k:'threecard',  n:'Three Card Poker', i:'🂡', min:100, max:50000,  w:860000,  hold:3.3, p:1780,  u:83,  big:74000},
+  {k:'paigow',     n:'Pai Gow Poker',    i:'🀄', min:100, max:10000,  w:410000,  hold:2.5, p:920,   u:47,  big:38000},
+];
+
+const fmt = n => n>=1e6 ? (n/1e6).toFixed(2)+'M' : n>=1e3 ? (n/1e3).toFixed(1)+'K' : String(n);
+const orig = {}; GAMES.forEach(g => orig[g.k] = {min:g.min, max:g.max});
+let dirty = {};
+
+// log-scale position so 1 → 100,000 is readable on one axis
+const LO = 1, HI = 100000;
+const pos = v => (Math.log10(Math.max(v,LO)) - Math.log10(LO)) / (Math.log10(HI) - Math.log10(LO)) * 100;
+const rangeBar = g => `<div class="rng"><span style="left:${pos(g.min)}%;right:${100-pos(g.max)}%"></span></div>`;
+const sparkOf = g => {
+  let h = '';
+  for (let i=0;i<14;i++){
+    const seed = (g.k.charCodeAt(0)*7 + i*g.p) % 100;
+    h += `<i style="height:${20 + seed*0.8}%"></i>`;
+  }
+  return `<div class="spark ${g.hold<0?'neg':''}">${h}</div>`;
+};
+const input = (g, which) => `<input class="tabular" data-k="${g.k}" data-f="${which}" value="${g[which]}" inputmode="numeric">`;
+
+// A — compact
+document.querySelector('#A .grid').innerHTML = GAMES.map(g => `
+  <div class="card">
+    <div class="top">
+      <div class="nm"><span class="ico">${g.i}</span>${g.n}</div>
+      <span class="pill live">live</span>
+    </div>
+    <div class="row">
+      <div><div class="lab">Min</div>${input(g,'min')}</div>
+      <div><div class="lab">Max</div>${input(g,'max')}</div>
+    </div>
+    ${rangeBar(g)}
+    <div class="stats">
+      <div>Wagered<b class="tabular">${fmt(g.w)}</b></div>
+      <div>Hold<b class="hold ${g.hold<0?'neg':''}">${g.hold}%</b></div>
+      <div>Plays<b class="tabular">${fmt(g.p)}</b></div>
+    </div>
+  </div>`).join('');
+
+// B — rich
+document.querySelector('#B .grid').innerHTML = GAMES.map(g => `
+  <div class="card">
+    <div class="top">
+      <div class="nm"><span class="ico">${g.i}</span>${g.n}</div>
+      <span class="pill live">live</span>
+    </div>
+    <div class="kpis">
+      <div class="kpi"><span>Wagered</span><b class="tabular">${fmt(g.w)}</b></div>
+      <div class="kpi"><span>Hold</span><b class="hold ${g.hold<0?'neg':''}">${g.hold}%</b></div>
+      <div class="kpi"><span>Players</span><b class="tabular">${g.u}</b></div>
+    </div>
+    ${sparkOf(g)}
+    <div class="limits">
+      <div><div class="lab">Min bet</div>${input(g,'min')}</div>
+      <div><div class="lab">Max bet</div>${input(g,'max')}</div>
+    </div>
+    ${rangeBar(g)}
+    <div class="foot">
+      <span>${fmt(g.p)} plays · biggest ${fmt(g.big)}</span>
+      <span>${g.note ? '⚠ '+g.note : 'MORBIUS'}</span>
+    </div>
+  </div>`).join('');
+
+// C — control room
+document.getElementById('rows').innerHTML = GAMES.map(g => `
+  <div class="rw">
+    <div class="nm"><span>${g.i}</span>${g.n}</div>
+    <div>${input(g,'min')}</div>
+    <div>${input(g,'max')}</div>
+    <div class="hideSm">${rangeBar(g)}</div>
+    <div class="r tabular hideSm">${fmt(g.w)}</div>
+    <div class="r"><span class="hold ${g.hold<0?'neg':''}">${g.hold}%</span></div>
+    <div class="r tabular hideSm" style="color:var(--mut)">${fmt(g.p)}</div>
+    <div class="r tabular" style="color:var(--amber)">${fmt(g.big)}</div>
+  </div>`).join('');
+
+// switching
+document.getElementById('sw').addEventListener('click', e => {
+  const b = e.target.closest('button'); if(!b) return;
+  document.querySelectorAll('#sw button').forEach(x=>x.classList.toggle('on', x===b));
+  document.querySelectorAll('.layout').forEach(l=>l.classList.toggle('on', l.id===b.dataset.t));
+});
+
+// dirty tracking across all three layouts at once
+document.addEventListener('input', e => {
+  const el = e.target; if(!el.matches('input[data-k]')) return;
+  const {k,f} = el.dataset;
+  const changed = String(orig[k][f]) !== el.value.trim();
+  // mirror the edit into the other layouts so switching keeps state
+  document.querySelectorAll(`input[data-k="${k}"][data-f="${f}"]`).forEach(o=>{
+    o.value = el.value; o.classList.toggle('dirty', changed);
+  });
+  const id = k+'.'+f;
+  changed ? dirty[id]=1 : delete dirty[id];
+  const n = Object.keys(dirty).length;
+  document.getElementById('n').textContent = n;
+  document.getElementById('bar').classList.toggle('on', n>0);
+});
+
+function reset(){
+  dirty = {};
+  document.querySelectorAll('input[data-k]').forEach(i=>{
+    i.value = orig[i.dataset.k][i.dataset.f]; i.classList.remove('dirty');
+  });
+  document.getElementById('bar').classList.remove('on');
+}
+</script>
+</body>
+</html>
