@@ -147,6 +147,12 @@ export class GameLimitsService {
       await client.query('COMMIT');
     } catch (e) {
       await client.query('ROLLBACK').catch(() => {});
+      // Say WHICH migration is missing — "save failed" sends people hunting.
+      if (/relation .*game_bet_limit.* does not exist/i.test((e as Error).message ?? '')) {
+        throw new Error(
+          'Bet-limit tables are missing — run migration 177_game_bet_limits.sql, then try again.',
+        );
+      }
       throw e;
     } finally {
       client.release();
@@ -188,18 +194,38 @@ export class GameLimitsService {
     await this.reload();
   }
 
-  /** Recent limit changes across all games, for the admin audit view. */
+  /**
+   * Recent limit changes across all games, for the admin audit view.
+   *
+   * Returns [] rather than throwing when migration 177 has not been applied —
+   * the page is perfectly usable on built-in defaults without a history table,
+   * and letting this throw took the whole game-limits endpoint down with a 500.
+   */
   async history(limit = 50) {
     const lim = Math.max(1, Math.min(500, Math.floor(limit) || 50));
-    const { rows } = await this.pool.query<{
+    let rows: Array<{
       game_key: string; admin_address: string; old_min: string | null; old_max: string | null;
       new_min: string; new_max: string; created_at: string;
-    }>(
-      `SELECT game_key, admin_address, old_min::text, old_max::text,
-              new_min::text, new_max::text, created_at
-       FROM game_bet_limit_log ORDER BY created_at DESC LIMIT $1`,
-      [lim],
-    );
+    }> = [];
+    try {
+      const r = await this.pool.query<{
+        game_key: string; admin_address: string; old_min: string | null; old_max: string | null;
+        new_min: string; new_max: string; created_at: string;
+      }>(
+        `SELECT game_key, admin_address, old_min::text, old_max::text,
+                new_min::text, new_max::text, created_at
+         FROM game_bet_limit_log ORDER BY created_at DESC LIMIT $1`,
+        [lim],
+      );
+      rows = r.rows;
+    } catch (e) {
+      const msg = (e as Error).message ?? '';
+      if (/relation .*game_bet_limit_log.* does not exist/i.test(msg)) {
+        logger.info('[game-limits] game_bet_limit_log absent — no change history yet');
+        return [];
+      }
+      throw e;
+    }
     return rows.map((r) => ({
       gameKey: r.game_key,
       admin: r.admin_address,

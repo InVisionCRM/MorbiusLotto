@@ -263,9 +263,13 @@ export function registerAdminOpsRoutes({ app, dbService, authService, referralSe
       } catch (error) {
         const msg = error instanceof Error ? error.message : 'save failed';
         logger.error('admin-ops game-limits save failed', { error: msg });
-        // Validation errors are the caller's fault; surface them verbatim.
+        // Validation errors are the caller's fault; surface them verbatim. The
+        // missing-migration message is surfaced too — it is actionable.
         const bad = /Unknown game|must be|exceeds|at least/.test(msg);
-        return res.status(bad ? 400 : 500).json({ error: bad ? msg : 'save failed' });
+        const setup = /run migration/i.test(msg);
+        return res
+          .status(bad ? 400 : setup ? 503 : 500)
+          .json({ error: bad || setup ? msg : 'save failed' });
       }
     },
   );

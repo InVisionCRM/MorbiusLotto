@@ -90,11 +90,19 @@ export const wagmiAdapter = new WagmiAdapter({
     // g4mm4 ("gamma") primary, publicnode as backup — the same pair the server uses.
     // rpc.pulsechain.com is intentionally excluded (unreliable; stalls on-chain reads
     // like the PLS deposit quote), and rpc.pulsechainstats.com was dropped after it
-    // started refusing connections in the browser.
-    [pulsechain.id]: fallback([
-      http('https://rpc-pulsechain.g4mm4.io'),
-      http('https://pulsechain-rpc.publicnode.com'),
-    ]),
+    // started refusing connections in the browser — it is fully dead (TLS connection
+    // reset, no HTTP response at all), which had left this chain with exactly ONE
+    // working endpoint and blocked the PLS quote whenever g4mm4 so much as hiccuped.
+    [pulsechain.id]: fallback(
+      [
+        http('https://rpc-pulsechain.g4mm4.io'),
+        http('https://pulsechain-rpc.publicnode.com'),
+      ],
+      // Re-rank on observed latency/error rate so a DEGRADING primary is routed
+      // around rather than retried until it times out. With only two endpoints
+      // this is what keeps a slow-but-alive g4mm4 from stalling the quote.
+      { rank: { interval: 30_000, sampleCount: 5 }, retryCount: 2 },
+    ),
   },
 })
 

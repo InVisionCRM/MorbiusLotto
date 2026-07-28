@@ -18,11 +18,34 @@ export async function GET(request: NextRequest, context: { params: Promise<{ pat
 }
 
 export async function POST(request: NextRequest, context: { params: Promise<{ path?: string[] }> }) {
+  return withBody(request, context, 'POST');
+}
+
+// PUT is required by the game-limits save. Next.js returns 405 for any method a
+// route file doesn't export, so omitting it made saving limits fail with
+// "Method Not Allowed" before the request ever reached the backend.
+export async function PUT(request: NextRequest, context: { params: Promise<{ path?: string[] }> }) {
+  return withBody(request, context, 'PUT');
+}
+
+export async function PATCH(request: NextRequest, context: { params: Promise<{ path?: string[] }> }) {
+  return withBody(request, context, 'PATCH');
+}
+
+export async function DELETE(request: NextRequest, context: { params: Promise<{ path?: string[] }> }) {
+  return withBody(request, context, 'DELETE');
+}
+
+async function withBody(
+  request: NextRequest,
+  context: { params: Promise<{ path?: string[] }> },
+  method: 'POST' | 'PUT' | 'PATCH' | 'DELETE',
+) {
   const { path } = await context.params;
   const body = await request.text();
   return proxyJson(request, targetPath(request, path), {
-    method: 'POST',
+    method,
     headers: { 'Content-Type': 'application/json' },
-    body,
+    body: body || undefined,
   });
 }
