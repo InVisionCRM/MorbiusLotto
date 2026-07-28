@@ -87,13 +87,30 @@ export const wagmiAdapter = new WagmiAdapter({
   networks,
   ssr: true,
   transports: {
-    // g4mm4 ("gamma") primary, pulsechainstats as backup. rpc.pulsechain.com is
-    // intentionally excluded — it's unreliable and stalls on-chain reads (e.g. the
-    // PLS deposit quote) with no price.
-    [pulsechain.id]: fallback([
-      http('https://rpc-pulsechain.g4mm4.io'),
-      http('https://rpc.pulsechainstats.com'),
-    ]),
+    // g4mm4 ("gamma") primary, then two independent backups.
+    //
+    // rpc.pulsechainstats.com was REMOVED: it is dead (TLS connection reset —
+    // no HTTP response at all), which left the chain with exactly one working
+    // endpoint. Any g4mm4 hiccup or rate-limit therefore fell through to a host
+    // that could never answer, and the PLS deposit quote — which has no
+    // off-chain fallback by design — reported "PLS price unavailable" and
+    // blocked the deposit outright.
+    //
+    // publicnode and rpc.pulsechain.com were both verified to serve the exact
+    // getReserves call the quote makes, with `access-control-allow-origin: *`
+    // so they work from the browser. rpc.pulsechain.com is ranked last because
+    // it has historically been slow on reads, but a slow endpoint that answers
+    // beats a dead one, and `rank` below routes around latency automatically.
+    [pulsechain.id]: fallback(
+      [
+        http('https://rpc-pulsechain.g4mm4.io'),
+        http('https://pulsechain-rpc.publicnode.com'),
+        http('https://rpc.pulsechain.com'),
+      ],
+      // Re-rank on live latency/error rate so a degrading primary is bypassed
+      // instead of being retried until it times out.
+      { rank: { interval: 30_000, sampleCount: 5 }, retryCount: 2 },
+    ),
   },
 })
 

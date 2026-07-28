@@ -45,9 +45,9 @@ const WEB3_INFRA_HOST_SUFFIXES = [
   "walletconnect.org", // relay.walletconnect.org + pulse.walletconnect.org analytics
   "walletconnect.com", // explorer-api.walletconnect.com (legacy) + relay
   "reown.com",
-  "pulsechain.com", // scan.pulsechain.com / api.scan.pulsechain.com
+  "pulsechain.com", // scan.pulsechain.com / api.scan.pulsechain.com + rpc.pulsechain.com (3rd RPC)
   "g4mm4.io", // rpc-pulsechain.g4mm4.io — primary RPC ("gamma")
-  "pulsechainstats.com", // rpc.pulsechainstats.com — backup RPC
+  "publicnode.com", // pulsechain-rpc.publicnode.com — backup RPC
 ];
 
 function isWeb3Infra(url: URL): boolean {
