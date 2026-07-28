@@ -32,15 +32,14 @@ import crypto from 'crypto';
 import type { Express, Request, Response } from 'express';
 import type { PoolClient } from 'pg';
 import { logger } from '../utils/logger';
+import { betLimits } from '../lib/game-limits';
 import { verifyTelegramInitData } from '../services/telegram.service';
 import { SESSION_COOKIE_NAME } from '../middleware/require-auth';
 import { applyPokerChipDelta } from '../services/poker-chip-wallet';
 import { ProvablyFairService } from '../services/provably-fair.service';
 import {
   HILO_HOUSE_EDGE_BP,
-  HILO_MAX_BET,
   HILO_MAX_PICKS,
-  HILO_MIN_BET,
   advanceHiLoMultiplier,
   deriveHiLoCard,
   hiLoPayout,
@@ -123,8 +122,8 @@ export function registerArcadeHiLoRoutes({
   app.get('/api/arcade/hilo/info', (_req: Request, res: Response) => {
     res.json({
       ok: true,
-      minBet: HILO_MIN_BET,
-      maxBet: HILO_MAX_BET,
+      minBet: betLimits('hilo').min,
+      maxBet: betLimits('hilo').max,
       maxPicks: HILO_MAX_PICKS,
       houseEdgeBp: HILO_HOUSE_EDGE_BP,
     });
@@ -188,10 +187,10 @@ export function registerArcadeHiLoRoutes({
       }
 
       const bet = Math.floor(Number(req.body?.bet));
-      if (!Number.isFinite(bet) || bet < HILO_MIN_BET || bet > HILO_MAX_BET) {
+      if (!Number.isFinite(bet) || bet < betLimits('hilo').min || bet > betLimits('hilo').max) {
         return res.status(400).json({
           ok: false,
-          error: `Bet must be between ${HILO_MIN_BET} and ${HILO_MAX_BET} chips.`,
+          error: `Bet must be between ${betLimits('hilo').min} and ${betLimits('hilo').max} chips.`,
         });
       }
 

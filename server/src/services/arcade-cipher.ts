@@ -29,12 +29,13 @@
  * the approved prototype (public/cipher-lab.html) and tuned so that even strong
  * play returns just under the stake on average (a small built-in house edge).
  */
+import { betLimits, DEFAULT_BET_LIMITS } from '../lib/game-limits';
 
 /** House edge target baked into the ladders, in basis points (200 = 2%). */
 export const CIPHER_HOUSE_EDGE_BP = 200;
 
-export const CIPHER_MIN_BET = 100;
-export const CIPHER_MAX_BET = 100000;
+export const CIPHER_MIN_BET = DEFAULT_BET_LIMITS.cipher.min;
+export const CIPHER_MAX_BET = DEFAULT_BET_LIMITS.cipher.max;
 
 export type CipherDifficulty = 'easy' | 'medium' | 'hard';
 
@@ -215,7 +216,7 @@ export function cipherSecuredMultiplierX100(
  * floor(bet × multiplier_x100 / 100). Matches the verifier's arithmetic.
  */
 export function cipherPayout(bet: number, multiplierX100: number): number {
-  if (!Number.isInteger(bet) || bet < CIPHER_MIN_BET || bet > CIPHER_MAX_BET) {
+  if (!Number.isInteger(bet) || bet < betLimits('cipher').min || bet > betLimits('cipher').max) {
     throw new Error('Cipher bet out of range');
   }
   if (!Number.isInteger(multiplierX100) || multiplierX100 < 0) {

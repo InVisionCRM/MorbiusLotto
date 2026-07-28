@@ -25,6 +25,7 @@ import { isAdminWallet } from '../lib/cosmetics-catalog';
 import type { DatabaseService } from '../services/database.service';
 import type { AuthService } from '../services/auth.service';
 import { AdminDashboardService, type DashWindow } from '../services/admin-dashboard.service';
+import { GameLimitsService } from '../services/game-limits.service';
 
 interface RegisterAdminOpsRoutesOptions {
   app: Express;
@@ -173,9 +174,29 @@ export function registerAdminOpsRoutes({ app, dbService, authService }: Register
     });
   };
 
+  /** Multiplier thresholds arrive as decimals ("2.5"); clamp to something sane. */
+  const multOf = (q: unknown, fallback: number): number => {
+    const n = typeof q === 'string' ? Number(q) : NaN;
+    return Number.isFinite(n) && n > 0 ? Math.min(n, 1_000_000) : fallback;
+  };
+
   // Everything in one round trip — what the dashboard loads on mount.
   dashRoute('/api/admin-ops/dashboard', (req) =>
-    dash.getOverview(winOf(req.query.window), minPayoutOf(req.query.minPayout)),
+    dash.getOverview(
+      winOf(req.query.window),
+      minPayoutOf(req.query.minPayout),
+      multOf(req.query.minMultiplier, 0),
+      multOf(req.query.freqMultiplier, 10),
+    ),
+  );
+
+  // Frequency scan: who clears a multiplier threshold, and how often.
+  dashRoute('/api/admin-ops/dashboard/multiplier-frequency', (req) =>
+    dash.getMultiplierFrequency(
+      winOf(req.query.window, '7d'),
+      multOf(req.query.minMultiplier, 10),
+      Number(req.query.limit) || 100,
+    ),
   );
 
   dashRoute('/api/admin-ops/dashboard/financials', (req) =>
@@ -195,9 +216,74 @@ export function registerAdminOpsRoutes({ app, dbService, authService }: Register
       winOf(req.query.window, '7d'),
       minPayoutOf(req.query.minPayout),
       Number(req.query.limit) || 200,
+      multOf(req.query.minMultiplier, 0),
     ),
   }));
   dashRoute('/api/admin-ops/dashboard/referrals', () => dash.getReferrers(200));
+
+  // ── Per-game bet limits ────────────────────────────────────────────────
+  const limitsSvc = new GameLimitsService(dbService.getPool());
+  void limitsSvc.start().catch((e) =>
+    logger.error('[game-limits] initial load failed', { error: (e as Error).message }),
+  );
+
+  /** Limits + per-game performance, everything the /activity/games page needs. */
+  dashRoute('/api/admin-ops/game-limits', async (req) => {
+    const win = winOf(req.query.window, '7d');
+    const [stats, history] = await Promise.all([
+      dash.getGameLimitStats(win),
+      limitsSvc.history(30),
+    ]);
+    const byKey = new Map(stats.map((s) => [s.gameKey, s]));
+    return {
+      window: win,
+      games: limitsSvc.list().map((g) => ({ ...g, stats: byKey.get(g.gameKey) ?? null })),
+      history,
+    };
+  });
+
+  app.put(
+    '/api/admin-ops/game-limits',
+    express.json(),
+    requireAuth(authService),
+    requireAdmin,
+    async (req: Request, res: Response) => {
+      try {
+        const body = (req.body ?? {}) as { changes?: unknown };
+        if (!Array.isArray(body.changes) || body.changes.length === 0) {
+          return res.status(400).json({ error: 'changes[] required' });
+        }
+        const result = await limitsSvc.save(
+          req.user!.address,
+          body.changes as Array<{ gameKey: string; min: number; max: number }>,
+        );
+        return res.json({ ok: true, ...result });
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : 'save failed';
+        logger.error('admin-ops game-limits save failed', { error: msg });
+        // Validation errors are the caller's fault; surface them verbatim.
+        const bad = /Unknown game|must be|exceeds|at least/.test(msg);
+        return res.status(bad ? 400 : 500).json({ error: bad ? msg : 'save failed' });
+      }
+    },
+  );
+
+  app.post(
+    '/api/admin-ops/game-limits/reset',
+    express.json(),
+    requireAuth(authService),
+    requireAdmin,
+    async (req: Request, res: Response) => {
+      try {
+        const key = String((req.body ?? {}).gameKey ?? '');
+        await limitsSvc.reset(req.user!.address, key);
+        return res.json({ ok: true, gameKey: key });
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : 'reset failed';
+        return res.status(/Unknown game/.test(msg) ? 400 : 500).json({ error: msg });
+      }
+    },
+  );
   // Polled every ~10s by the dashboard's live badge — keep it cheap.
   dashRoute('/api/admin-ops/dashboard/live', (req) =>
     dash.getLiveNow(Number(req.query.minutes) || 5),

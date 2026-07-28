@@ -30,6 +30,7 @@ import crypto from 'crypto';
 import type { Express, Request, Response } from 'express';
 import type { PoolClient } from 'pg';
 import { logger } from '../utils/logger';
+import { betLimits } from '../lib/game-limits';
 import { verifyTelegramInitData } from '../services/telegram.service';
 import { SESSION_COOKIE_NAME } from '../middleware/require-auth';
 import { applyPokerChipDelta } from '../services/poker-chip-wallet';
@@ -37,8 +38,6 @@ import { ProvablyFairService } from '../services/provably-fair.service';
 import {
   CHICKEN_DIFFICULTIES,
   CHICKEN_HOUSE_EDGE_BP,
-  CHICKEN_MAX_BET,
-  CHICKEN_MIN_BET,
   chickenMultiplierLadder,
   chickenPayout,
   deriveChickenBumpers,
@@ -119,8 +118,8 @@ export function registerArcadeChickenRoutes({
     }
     res.json({
       ok: true,
-      minBet: CHICKEN_MIN_BET,
-      maxBet: CHICKEN_MAX_BET,
+      minBet: betLimits('chicken').min,
+      maxBet: betLimits('chicken').max,
       houseEdgeBp: CHICKEN_HOUSE_EDGE_BP,
       difficulties,
     });
@@ -181,10 +180,10 @@ export function registerArcadeChickenRoutes({
       }
 
       const bet = Math.floor(Number(req.body?.bet));
-      if (!Number.isFinite(bet) || bet < CHICKEN_MIN_BET || bet > CHICKEN_MAX_BET) {
+      if (!Number.isFinite(bet) || bet < betLimits('chicken').min || bet > betLimits('chicken').max) {
         return res.status(400).json({
           ok: false,
-          error: `Bet must be between ${CHICKEN_MIN_BET} and ${CHICKEN_MAX_BET} chips.`,
+          error: `Bet must be between ${betLimits('chicken').min} and ${betLimits('chicken').max} chips.`,
         });
       }
 

@@ -19,12 +19,13 @@
  *
  * Everything is integer ×100 so the win/lose decision is exact (no float compares).
  */
+import { betLimits, DEFAULT_BET_LIMITS } from '../lib/game-limits';
 
 /** House edge, in basis points (1 bp = 0.01%). 100 bp = 1%. */
 export const DICEX2_HOUSE_EDGE_BP = 100;
 
-export const DICEX2_MIN_BET = 10;
-export const DICEX2_MAX_BET = 2000;
+export const DICEX2_MIN_BET = DEFAULT_BET_LIMITS.dicex2.min;
+export const DICEX2_MAX_BET = DEFAULT_BET_LIMITS.dicex2.max;
 
 /** Band-width bounds, ×100. 2.00 ↔ 200, 98.00 ↔ 9800.
  *  The floor enforces a max multiplier (~49.50x at width 2.00) without a
@@ -95,7 +96,7 @@ export function resolveDiceX2(lowX100: number, highX100: number, bet: number, r:
   if (widthX100 < DICEX2_MIN_WIDTH_X100 || widthX100 > DICEX2_MAX_WIDTH_X100) {
     throw new Error('Dice x2 band width out of range');
   }
-  if (!Number.isInteger(bet) || bet < DICEX2_MIN_BET || bet > DICEX2_MAX_BET) {
+  if (!Number.isInteger(bet) || bet < betLimits('dicex2').min || bet > betLimits('dicex2').max) {
     throw new Error('Dice x2 bet out of range');
   }
   const rollX100 = rollX100FromFloat(r);

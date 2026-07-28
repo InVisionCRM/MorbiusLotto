@@ -15,15 +15,16 @@
  * (1600 ↔ 16x), so chip payouts stay exact integer math. The path itself is
  * drawn in ProvablyFairService.drawPlinkoPath — this module only scores it.
  */
+import { betLimits, DEFAULT_BET_LIMITS } from '../lib/game-limits';
 
 export const PLINKO_ROWS = 16;
 export const PLINKO_BUCKETS = PLINKO_ROWS + 1;
 
-export const PLINKO_MIN_BET = 1;
+export const PLINKO_MIN_BET = DEFAULT_BET_LIMITS.plinko.min;
 // Capped so the worst-case single-ball liability (max bet × 200× top
 // multiplier = 200k chips) stays survivable. Raise deliberately — never by
 // accident.
-export const PLINKO_MAX_BET = 1_000;
+export const PLINKO_MAX_BET = DEFAULT_BET_LIMITS.plinko.max;
 
 export type PlinkoRisk = 'low' | 'medium' | 'high';
 export const PLINKO_RISKS: readonly PlinkoRisk[] = ['low', 'medium', 'high'] as const;
@@ -86,7 +87,7 @@ export interface PlinkoResult {
  * Pure integer math — no floats on the money path.
  */
 export function resolvePlinko(risk: PlinkoRisk, bet: number, path: readonly number[]): PlinkoResult {
-  if (!Number.isInteger(bet) || bet < PLINKO_MIN_BET || bet > PLINKO_MAX_BET) {
+  if (!Number.isInteger(bet) || bet < betLimits('plinko').min || bet > betLimits('plinko').max) {
     throw new Error('Plinko bet out of range');
   }
   const bucket = plinkoBucketFromPath(path);

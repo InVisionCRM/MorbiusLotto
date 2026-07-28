@@ -26,6 +26,7 @@
  * All money math is integer ×100. multiplier_x100 is the pocket multiplier ×100
  * (e.g. 1.52× ↔ 152, jackpot 5.05× ↔ 505); payout = floor(bet × m / 100).
  */
+import { betLimits, DEFAULT_BET_LIMITS } from '../lib/game-limits';
 
 /** Number of pockets across the bottom of the board. */
 export const PACHINKO_POCKETS = 9;
@@ -36,8 +37,8 @@ export const PACHINKO_CENTER = 4;
 /** Triangular pin rows the cosmetic bounce walks through. */
 export const PACHINKO_ROWS = 10;
 
-export const PACHINKO_MIN_BET = 10;
-export const PACHINKO_MAX_BET = 100_000;
+export const PACHINKO_MIN_BET = DEFAULT_BET_LIMITS.pachinko.min;
+export const PACHINKO_MAX_BET = DEFAULT_BET_LIMITS.pachinko.max;
 
 export type PachinkoRisk = 'low' | 'medium' | 'high';
 
@@ -147,7 +148,7 @@ export function resolvePachinko(
   if (!isPachinkoRisk(risk)) {
     throw new Error('Pachinko risk must be low, medium or high');
   }
-  if (!Number.isInteger(bet) || bet < PACHINKO_MIN_BET || bet > PACHINKO_MAX_BET) {
+  if (!Number.isInteger(bet) || bet < betLimits('pachinko').min || bet > betLimits('pachinko').max) {
     throw new Error('Pachinko bet out of range');
   }
   const { multX100 } = PACHINKO_RISKS[risk];

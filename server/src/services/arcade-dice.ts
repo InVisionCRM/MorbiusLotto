@@ -15,12 +15,13 @@
  * All thresholds, rolls, and multipliers are stored as integers ×100 so the
  * win/lose decision is exact (no float compares ever).
  */
+import { betLimits, DEFAULT_BET_LIMITS } from '../lib/game-limits';
 
 /** House edge, in basis points (1 bp = 0.01%). 100 bp = 1%. */
 export const DICE_HOUSE_EDGE_BP = 100;
 
-export const DICE_MIN_BET = 10;
-export const DICE_MAX_BET = 2000;
+export const DICE_MIN_BET = DEFAULT_BET_LIMITS.dice.min;
+export const DICE_MAX_BET = DEFAULT_BET_LIMITS.dice.max;
 
 /** Roll-under threshold bounds, ×100. 2.00 ↔ 200, 98.00 ↔ 9800.
  *  Floors enforce a max multiplier (~49.50x at 2.00x) without introducing a
@@ -80,7 +81,7 @@ export function resolveDice(targetX100: number, bet: number, r: number): DiceRes
   if (targetX100 < DICE_MIN_TARGET_X100 || targetX100 > DICE_MAX_TARGET_X100) {
     throw new Error('Dice target out of range');
   }
-  if (!Number.isInteger(bet) || bet < DICE_MIN_BET || bet > DICE_MAX_BET) {
+  if (!Number.isInteger(bet) || bet < betLimits('dice').min || bet > betLimits('dice').max) {
     throw new Error('Dice bet out of range');
   }
   const rollX100 = rollX100FromFloat(r);

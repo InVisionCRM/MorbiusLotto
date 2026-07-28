@@ -27,9 +27,10 @@
  *   multiplierX100 = round(points / scale × 100)
  *   payout         = floor(bet × multiplierX100 / 100)
  */
+import { betLimits, DEFAULT_BET_LIMITS } from '../lib/game-limits';
 
-export const GREED_DICE_MIN_BET = 100;
-export const GREED_DICE_MAX_BET = 100000;
+export const GREED_DICE_MIN_BET = DEFAULT_BET_LIMITS.greed_dice.min;
+export const GREED_DICE_MAX_BET = DEFAULT_BET_LIMITS.greed_dice.max;
 
 export type GreedDiceVolatility = 'five' | 'six' | 'seven';
 
@@ -130,7 +131,7 @@ export function greedDiceMultiplierX100(points: number, volatility: GreedDiceVol
  * floor(bet × multiplierX100 / 100). Matches the verifier's arithmetic.
  */
 export function greedDicePayout(bet: number, points: number, volatility: GreedDiceVolatility): number {
-  if (!Number.isInteger(bet) || bet < GREED_DICE_MIN_BET || bet > GREED_DICE_MAX_BET) {
+  if (!Number.isInteger(bet) || bet < betLimits('greed_dice').min || bet > betLimits('greed_dice').max) {
     throw new Error('Greed Dice bet out of range');
   }
   const multX100 = greedDiceMultiplierX100(points, volatility);

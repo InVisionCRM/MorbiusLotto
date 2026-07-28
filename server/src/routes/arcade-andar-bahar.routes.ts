@@ -17,6 +17,7 @@
 import crypto from 'crypto';
 import type { Express, Request, Response } from 'express';
 import { logger } from '../utils/logger';
+import { betLimits } from '../lib/game-limits';
 import { verifyTelegramInitData } from '../services/telegram.service';
 import { SESSION_COOKIE_NAME } from '../middleware/require-auth';
 import { applyPokerChipDelta } from '../services/poker-chip-wallet';
@@ -24,8 +25,6 @@ import { ProvablyFairService } from '../services/provably-fair.service';
 import {
   resolveAndarBahar,
   validateAndarBahar,
-  AB_MIN_BET,
-  AB_MAX_BET,
   AB_PAY_ANDAR,
   AB_PAY_BAHAR,
   AB_HOUSE_EDGE_BP,
@@ -87,8 +86,8 @@ export function registerArcadeAndarBaharRoutes({
   app.get('/api/arcade/andar-bahar/info', (_req: Request, res: Response) => {
     res.json({
       ok: true,
-      minBet: AB_MIN_BET,
-      maxBet: AB_MAX_BET,
+      minBet: betLimits('andar_bahar').min,
+      maxBet: betLimits('andar_bahar').max,
       payAndarX100: AB_PAY_ANDAR,
       payBaharX100: AB_PAY_BAHAR,
       houseEdgeBp: AB_HOUSE_EDGE_BP,

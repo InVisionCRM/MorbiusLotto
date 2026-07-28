@@ -40,6 +40,7 @@ import crypto from 'crypto';
 import type { Express, Request, Response } from 'express';
 import type { PoolClient } from 'pg';
 import { logger } from '../utils/logger';
+import { betLimits } from '../lib/game-limits';
 import { verifyTelegramInitData } from '../services/telegram.service';
 import { SESSION_COOKIE_NAME } from '../middleware/require-auth';
 import { applyPokerChipDelta } from '../services/poker-chip-wallet';
@@ -50,8 +51,6 @@ import {
   crashPointFromFloat,
   crashMultiplierX100AtMs,
   CRASH_HOUSE_EDGE_BP,
-  CRASH_MIN_BET,
-  CRASH_MAX_BET,
   CRASH_MIN_CASHOUT_X100,
   CRASH_MAX_CASHOUT_X100,
 } from '../services/arcade-crash';
@@ -165,8 +164,8 @@ export function registerArcadeCrashRoutes({
   app.get('/api/arcade/crash/info', (_req: Request, res: Response) => {
     res.json({
       ok: true,
-      minBet: CRASH_MIN_BET,
-      maxBet: CRASH_MAX_BET,
+      minBet: betLimits('crash').min,
+      maxBet: betLimits('crash').max,
       minCashoutX100: CRASH_MIN_CASHOUT_X100,
       maxCashoutX100: CRASH_MAX_CASHOUT_X100,
       houseEdgeBp: CRASH_HOUSE_EDGE_BP,
@@ -184,10 +183,10 @@ export function registerArcadeCrashRoutes({
       }
 
       const bet = Math.floor(Number(req.body?.bet));
-      if (!Number.isFinite(bet) || bet < CRASH_MIN_BET || bet > CRASH_MAX_BET) {
+      if (!Number.isFinite(bet) || bet < betLimits('crash').min || bet > betLimits('crash').max) {
         return res.status(400).json({
           ok: false,
-          error: `Bet must be between ${CRASH_MIN_BET} and ${CRASH_MAX_BET} chips.`,
+          error: `Bet must be between ${betLimits('crash').min} and ${betLimits('crash').max} chips.`,
         });
       }
 
@@ -297,10 +296,10 @@ export function registerArcadeCrashRoutes({
       }
 
       const bet = Math.floor(Number(req.body?.bet));
-      if (!Number.isFinite(bet) || bet < CRASH_MIN_BET || bet > CRASH_MAX_BET) {
+      if (!Number.isFinite(bet) || bet < betLimits('crash').min || bet > betLimits('crash').max) {
         return res.status(400).json({
           ok: false,
-          error: `Bet must be between ${CRASH_MIN_BET} and ${CRASH_MAX_BET} chips.`,
+          error: `Bet must be between ${betLimits('crash').min} and ${betLimits('crash').max} chips.`,
         });
       }
 

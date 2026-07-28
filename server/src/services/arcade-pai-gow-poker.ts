@@ -21,10 +21,11 @@
  * Money math is integer chips. `*Payout` values are GROSS returns (the stake is
  * included) — the bet was already debited at /deal, so settle just credits it.
  */
+import { betLimits, DEFAULT_BET_LIMITS } from '../lib/game-limits';
 
 /** Bet bounds in chips (mirrors the lab: Min 100, Max 10,000). */
-export const PG_MIN_BET = 100;
-export const PG_MAX_BET = 10_000;
+export const PG_MIN_BET = DEFAULT_BET_LIMITS.pai_gow_poker.min;
+export const PG_MAX_BET = DEFAULT_BET_LIMITS.pai_gow_poker.max;
 
 /** Commission taken on a hand that wins BOTH comparisons (basis points: 5%). */
 export const PG_COMMISSION_BP = 500;
@@ -383,8 +384,8 @@ export interface PaiGowBetValidation {
 /** Validate the /deal payload: bet required and within [MIN, MAX]. */
 export function validateBet(rawBet: unknown): PaiGowBetValidation {
   const bet = Math.floor(Number(rawBet));
-  if (!Number.isFinite(bet) || bet < PG_MIN_BET || bet > PG_MAX_BET) {
-    return { ok: false, bet: 0, error: `Bet must be between ${PG_MIN_BET} and ${PG_MAX_BET} chips.` };
+  if (!Number.isFinite(bet) || bet < betLimits('pai_gow_poker').min || bet > betLimits('pai_gow_poker').max) {
+    return { ok: false, bet: 0, error: `Bet must be between ${betLimits('pai_gow_poker').min} and ${betLimits('pai_gow_poker').max} chips.` };
   }
   return { ok: true, bet, error: null };
 }

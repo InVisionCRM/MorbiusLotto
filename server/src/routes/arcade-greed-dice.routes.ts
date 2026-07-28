@@ -32,13 +32,12 @@ import crypto from 'crypto';
 import type { Express, Request, Response } from 'express';
 import type { PoolClient } from 'pg';
 import { logger } from '../utils/logger';
+import { betLimits } from '../lib/game-limits';
 import { verifyTelegramInitData } from '../services/telegram.service';
 import { SESSION_COOKIE_NAME } from '../middleware/require-auth';
 import { applyPokerChipDelta } from '../services/poker-chip-wallet';
 import { ProvablyFairService } from '../services/provably-fair.service';
 import {
-  GREED_DICE_MIN_BET,
-  GREED_DICE_MAX_BET,
   GREED_DICE_VOLATILITIES,
   GREED_DICE_VOLATILITY_ORDER,
   isGreedDiceVolatility,
@@ -127,8 +126,8 @@ export function registerArcadeGreedDiceRoutes({
     }
     res.json({
       ok: true,
-      minBet: GREED_DICE_MIN_BET,
-      maxBet: GREED_DICE_MAX_BET,
+      minBet: betLimits('greed_dice').min,
+      maxBet: betLimits('greed_dice').max,
       volatilities,
     });
   });
@@ -204,10 +203,10 @@ export function registerArcadeGreedDiceRoutes({
       }
 
       const bet = Math.floor(Number(req.body?.bet));
-      if (!Number.isFinite(bet) || bet < GREED_DICE_MIN_BET || bet > GREED_DICE_MAX_BET) {
+      if (!Number.isFinite(bet) || bet < betLimits('greed_dice').min || bet > betLimits('greed_dice').max) {
         return res.status(400).json({
           ok: false,
-          error: `Bet must be between ${GREED_DICE_MIN_BET} and ${GREED_DICE_MAX_BET} chips.`,
+          error: `Bet must be between ${betLimits('greed_dice').min} and ${betLimits('greed_dice').max} chips.`,
         });
       }
 

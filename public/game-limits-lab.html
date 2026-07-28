@@ -1,0 +1,335 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Game limits — hover to expand</title>
+<style>
+  :root{
+    --bg:#070a12; --line:rgba(255,255,255,.10);
+    --mut:rgba(255,255,255,.45); --dim:rgba(255,255,255,.28);
+    --cyan:#22d3ee; --amber:#fbbf24; --em:#34d399; --rose:#fb7185; --vio:#a78bfa;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:#fff;
+    font:14px/1.45 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    -webkit-font-smoothing:antialiased}
+  .wrap{max-width:1500px;margin:0 auto;padding:26px 16px 260px}
+  h1{font-size:27px;font-weight:800;margin:0;letter-spacing:-.015em}
+  .sub{color:var(--mut);font-size:13px;margin-top:5px}
+  .note{font-size:12px;color:var(--dim);margin:14px 0 22px;max-width:86ch}
+  .note b{color:var(--mut)}
+  .tab{font-variant-numeric:tabular-nums}
+
+  .grid{display:grid;gap:14px;grid-template-columns:repeat(auto-fill,minmax(300px,1fr))}
+
+  /* ── the card ─────────────────────────────────────────── */
+  .card{position:relative;border:1px solid var(--line);border-radius:18px;
+    background:linear-gradient(165deg,rgba(255,255,255,.055),rgba(255,255,255,.014));
+    padding:14px 15px 15px;transition:border-color .18s, box-shadow .18s, transform .18s;
+    cursor:default}
+  .card:hover{z-index:60;border-color:rgba(34,211,238,.42);
+    border-bottom-left-radius:0;border-bottom-right-radius:0;
+    box-shadow:0 -1px 0 rgba(34,211,238,.16)}
+  .card.risk{border-color:rgba(251,113,133,.36)}
+  .card.risk:hover{border-color:rgba(251,113,133,.6)}
+
+  .head{display:flex;align-items:center;gap:9px}
+  .ico{width:30px;height:30px;border-radius:10px;display:grid;place-items:center;font-size:16px;
+    background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.07);flex:none}
+  .nm{font-weight:800;font-size:14px;letter-spacing:-.01em}
+  .dot{margin-left:auto;width:7px;height:7px;border-radius:50%;background:var(--em);
+    box-shadow:0 0 0 3px rgba(52,211,153,.15);flex:none}
+
+  /* min → max, BIG */
+  .mm{display:flex;align-items:flex-end;gap:10px;margin-top:14px}
+  .fld{flex:1;min-width:0}
+  .fld .k{font:700 9px/1 inherit;letter-spacing:.12em;text-transform:uppercase;color:var(--dim)}
+  .fld input{display:block;width:100%;margin-top:4px;background:transparent;border:0;padding:0;
+    color:#fff;font:800 30px/1 inherit;font-variant-numeric:tabular-nums;letter-spacing:-.03em}
+  .fld input:focus{outline:none;color:var(--cyan)}
+  .fld input::-webkit-outer-spin-button,.fld input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+  .fld.dirty input{color:var(--amber)}
+  .arrow{color:var(--dim);font-size:19px;font-weight:800;padding-bottom:5px;flex:none}
+
+  /* max win — the hero */
+  .mw{margin-top:15px;padding-top:13px;border-top:1px solid rgba(255,255,255,.08)}
+  .mw .k{font:700 9px/1 inherit;letter-spacing:.12em;text-transform:uppercase;color:var(--dim)}
+  .mw .v{font:800 40px/1 inherit;letter-spacing:-.035em;color:var(--amber);margin-top:6px;
+    font-variant-numeric:tabular-nums;transition:color .2s}
+  .card.risk .mw .v{color:var(--rose)}
+  .mw .s{font-size:11px;color:var(--dim);margin-top:5px}
+  .track{height:5px;border-radius:99px;background:rgba(255,255,255,.07);margin-top:9px;overflow:hidden}
+  .track i{display:block;height:100%;border-radius:99px;transition:width .25s;
+    background:linear-gradient(90deg,var(--cyan),var(--vio))}
+  .card.risk .track i{background:linear-gradient(90deg,var(--amber),var(--rose))}
+
+  .hint{margin-top:11px;font:600 9.5px/1 inherit;letter-spacing:.1em;text-transform:uppercase;
+    color:var(--dim);text-align:center;opacity:.75;transition:opacity .15s}
+  .card:hover .hint{opacity:0}
+
+  /* ── the expanding drawer ─────────────────────────────── */
+  .drawer{position:absolute;left:-1px;right:-1px;top:100%;
+    border:1px solid rgba(34,211,238,.42);border-top:0;
+    border-radius:0 0 18px 18px;background:#0b1018;
+    box-shadow:0 26px 50px -12px rgba(0,0,0,.85);
+    padding:0 15px;max-height:0;overflow:hidden;opacity:0;pointer-events:none;
+    transition:max-height .26s ease, opacity .16s ease, padding .26s ease}
+  .card:hover .drawer{max-height:640px;opacity:1;pointer-events:auto;padding:14px 15px 15px}
+  .card.risk:hover .drawer{border-color:rgba(251,113,133,.6)}
+
+  .chart{height:86px;border-radius:12px;background:rgba(0,0,0,.3);
+    border:1px solid rgba(255,255,255,.06);padding:6px;position:relative}
+  .chart svg{width:100%;height:100%;display:block}
+  .chart .cap{position:absolute;top:7px;left:10px;font:700 9px/1 inherit;
+    letter-spacing:.1em;text-transform:uppercase;color:var(--dim)}
+  .chart .now{position:absolute;top:7px;right:10px;font:800 11px/1 inherit;
+    font-variant-numeric:tabular-nums}
+
+  .kv{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin-top:11px}
+  .kv div{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.05);
+    border-radius:10px;padding:7px 8px}
+  .kv span{display:block;font:700 8.5px/1 inherit;letter-spacing:.09em;text-transform:uppercase;
+    color:var(--dim);margin-bottom:4px}
+  .kv b{font-size:14px;font-weight:800;font-variant-numeric:tabular-nums}
+
+  .rtp{margin-top:11px}
+  .rtp .t{display:flex;justify-content:space-between;font-size:10.5px;color:var(--dim)}
+  .gauge{position:relative;height:7px;border-radius:99px;margin-top:6px;
+    background:linear-gradient(90deg,rgba(52,211,153,.3),rgba(251,191,36,.3),rgba(251,113,133,.34))}
+  .gauge .mk{position:absolute;top:-3px;width:2px;height:13px;background:#fff;border-radius:2px;
+    box-shadow:0 0 0 2px rgba(0,0,0,.5)}
+  .gauge .th{position:absolute;top:-4px;width:2px;height:15px;background:rgba(255,255,255,.5);border-radius:2px}
+
+  .big{display:flex;align-items:center;gap:9px;margin-top:11px;border-radius:11px;padding:8px 10px;
+    border:1px solid rgba(251,191,36,.22);background:rgba(251,191,36,.07)}
+  .big .m{font:800 17px/1 inherit;color:var(--amber);font-variant-numeric:tabular-nums}
+  .big .w{font-size:11px;color:var(--mut);margin-top:2px}
+  .big .x{margin-left:auto;font:800 11px/1 inherit;color:var(--rose);
+    border:1px solid rgba(251,113,133,.3);background:rgba(251,113,133,.1);border-radius:7px;padding:5px 7px}
+
+  .wins{margin-top:11px}
+  .wins .h{font:700 8.5px/1 inherit;letter-spacing:.09em;text-transform:uppercase;color:var(--dim);margin-bottom:6px}
+  .wr{display:flex;align-items:center;gap:8px;padding:4px 0}
+  .av{width:21px;height:21px;border-radius:50%;display:grid;place-items:center;flex:none;
+    font:800 9px/1 inherit;background:rgba(255,255,255,.08);color:rgba(255,255,255,.72)}
+  .wr .n{font-size:11.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .wr .p{margin-left:auto;font:800 11.5px/1 inherit;color:var(--rose);font-variant-numeric:tabular-nums}
+
+  .foot{display:flex;align-items:center;gap:8px;margin-top:12px;padding-top:11px;
+    border-top:1px solid rgba(255,255,255,.07)}
+  .last{font-size:11px;color:var(--dim)}
+  .go{margin-left:auto;display:inline-flex;align-items:center;gap:5px;text-decoration:none;
+    border:1px solid rgba(34,211,238,.35);background:rgba(34,211,238,.12);color:#a5f3fc;
+    border-radius:10px;padding:8px 13px;font:800 11.5px/1 inherit}
+  .go:hover{background:rgba(34,211,238,.22)}
+  .vf{border-radius:6px;padding:2px 6px;font:700 9px/1.4 inherit}
+  .vf.ok{background:rgba(52,211,153,.12);border:1px solid rgba(52,211,153,.3);color:#6ee7b7}
+  .vf.no{background:rgba(251,191,36,.10);border:1px solid rgba(251,191,36,.3);color:#fcd34d}
+
+  .savebar{position:fixed;left:0;right:0;bottom:0;background:rgba(9,12,20,.95);
+    border-top:1px solid var(--line);backdrop-filter:blur(12px);padding:12px 18px;
+    display:none;align-items:center;justify-content:space-between;z-index:200}
+  .savebar.on{display:flex}
+  .btn{border:0;border-radius:11px;padding:10px 17px;font:800 13px/1 inherit;cursor:pointer}
+  .btn.p{background:var(--amber);color:#000}
+  .btn.g{background:transparent;border:1px solid var(--line);color:var(--mut)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Game limits</h1>
+  <div class="sub">Set min and max per game. Hover any card for the full picture.</div>
+  <div class="note">
+    <b>Collapsed:</b> min → max and the live <b>max available to win</b>, which recalculates as you type.
+    <b>Hover:</b> drawer opens with a live-ticking history chart, RTP vs theoretical, volume, biggest win,
+    top winners and a link into the game.
+    Min/max are your <b>real</b> current values; multipliers marked <span class="vf ok">✓</span> were verified
+    in source (Dice 49.5×, Limbo 100×, Crash 100×, Roulette 36×), <span class="vf no">?</span> are estimates —
+    17 games have no payout cap in code. Stats are sample data. Exposure is against a 50M bankroll.
+  </div>
+  <div class="grid" id="grid"></div>
+</div>
+
+<div class="savebar" id="bar">
+  <div style="color:var(--amber);font-weight:700;font-size:13px"><span id="n">0</span> unsaved change(s)</div>
+  <div style="display:flex;gap:8px">
+    <button class="btn g" onclick="reset()">Discard</button><button class="btn p">Save limits</button>
+  </div>
+</div>
+
+<script>
+const BANKROLL = 50_000_000;
+const G = [
+  {k:'dice',n:'Dice',i:'🎲',h:'/dice',min:10,max:2000,x:49.5,vf:1,rtp:98.1,th:99,w:4820000,won:4728000,p:12480,u:412,big:38000,by:'0x9f…21ab',bx:190,last:'2m',win:[['0x9f…21ab',128000],['CryptoKate',74000],['0x33…7c02',41000]]},
+  {k:'dicex2',n:'Dice x2',i:'🎯',h:'/dicex2',min:10,max:2000,x:49,vf:1,rtp:97.6,th:98,w:1960000,won:1913000,p:5120,u:198,big:24000,by:'0x41…9de1',bx:120,last:'11m',win:[['0x41…9de1',52000],['Moonboi',28000],['0xa7…03ff',16000]]},
+  {k:'limbo',n:'Limbo',i:'🚀',h:'/limbo',min:10,max:2000,x:100,vf:1,rtp:98.9,th:99,w:6110000,won:6043000,p:18900,u:530,big:196000,by:'0x0c…4411',bx:98,last:'40s',win:[['0x0c…4411',402000],['SendIt',151000],['0xbb…9a20',88000]]},
+  {k:'crash',n:'Crash',i:'📈',h:'/crash',min:10,max:2000,x:100,vf:1,rtp:100.6,th:99,w:7250000,won:7293000,p:21400,u:612,big:412000,by:'0xde…5f77',bx:100,last:'8s',win:[['0xde…5f77',688000],['RocketDad',233000],['0x91…4b6e',147000]]},
+  {k:'roulette',n:'Roulette',i:'🎡',h:'/roulette',min:5,max:1000,x:36,vf:1,rtp:97.3,th:97.3,w:2540000,won:2471000,p:8390,u:281,big:35000,by:'0x86…2f14',bx:36,last:'14m',win:[['0x86…2f14',76000],['RedOrBlack',31000],['0x22…5a90',17000]]},
+  {k:'mines',n:'Mines',i:'💣',h:'/mines',min:10,max:2000,x:2400,vf:0,rtp:96.8,th:97,w:5340000,won:5169000,p:9870,u:445,big:88000,by:'MinesKing',bx:440,last:'5m',win:[['MinesKing',214000],['0x77…12cd',96000],['0x2e…88b1',53000]]},
+  {k:'towers',n:'Towers',i:'🗼',h:'/towers',min:10,max:2000,x:1400,vf:0,rtp:97.2,th:97,w:2180000,won:2119000,p:6640,u:221,big:52000,by:'0x64…aa10',bx:260,last:'19m',win:[['0x64…aa10',118000],['0x05…7731',44000],['Tower',21000]]},
+  {k:'chicken',n:'Chicken',i:'🐔',h:'/chicken',min:10,max:2000,x:980,vf:0,rtp:96.6,th:97,w:1470000,won:1420000,p:4980,u:176,big:31000,by:'ClucksAlot',bx:155,last:'27m',win:[['ClucksAlot',67000],['0x12…9902',29000],['0x8a…3d55',14000]]},
+  {k:'hilo',n:'Hi-Lo',i:'↕',h:'/hilo',min:10,max:2000,x:500,vf:0,rtp:97.9,th:98,w:1120000,won:1096000,p:4210,u:150,big:27000,by:'0xcc…6612',bx:135,last:'33m',win:[['0xcc…6612',58000],['0x39…0a4d',24000],['Flipper',11000]]},
+  {k:'firewalk',n:'Firewalk',i:'🔥',h:'/firewalk',min:10,max:2000,x:1200,vf:0,rtp:96.1,th:96,w:890000,won:855000,p:3120,u:118,big:19000,by:'0x7b…41c9',bx:95,last:'1h',win:[['0x7b…41c9',41000],['0x66…d0a2',18000],['Ash',9000]]},
+  {k:'heist',n:'Heist',i:'🏦',h:'/heist',min:10,max:2000,x:1000,vf:0,rtp:97.4,th:97,w:760000,won:740000,p:2740,u:104,big:22000,by:'SafeCracker',bx:110,last:'44m',win:[['SafeCracker',48000],['0x1d…7fa3',19000],['0x90…2255',8000]]},
+  {k:'baccarat',n:'Baccarat',i:'🃏',h:'/baccarat',min:10,max:2000,x:9,vf:0,rtp:98.6,th:98.9,w:2960000,won:2918000,p:7180,u:243,big:41000,by:'0xa1…5b30',bx:9,last:'6m',win:[['0xa1…5b30',88000],['Banker',37000],['0x4f…6611',20000]]},
+  {k:'keno',n:'Keno',i:'🔢',h:'/keno',min:1,max:1000,x:1000,vf:0,rtp:94.9,th:95,w:1830000,won:1737000,p:14200,u:388,big:64000,by:'0x2b…9911',bx:320,last:'3m',win:[['0x2b…9911',141000],['LuckyNum',62000],['0xf0…1a7c',33000]]},
+  {k:'plinko',n:'Plinko',i:'🔻',h:'/plinko',min:1,max:1000,x:1000,vf:0,rtp:97.8,th:98,w:3410000,won:3335000,p:26800,u:701,big:78000,by:'DropIt',bx:390,last:'50s',win:[['DropIt',166000],['0x58…4d09',71000],['0xc3…8802',38000]]},
+  {k:'pachinko',n:'Pachinko',i:'🏮',h:'/pachinko',min:10,max:100000,x:500,vf:0,rtp:95.8,th:96,w:1290000,won:1236000,p:3450,u:129,big:210000,by:'0xee…7b23',bx:1050,last:'21m',win:[['0xee…7b23',388000],['PachiPro',96000],['0x74…c118',44000]]},
+  {k:'cascade',n:'Cascade',i:'💧',h:'/cascade',min:100,max:100000,x:250,vf:0,rtp:96.9,th:97,w:980000,won:950000,p:1890,u:88,big:180000,by:'0x3c…9f40',bx:900,last:'38m',win:[['0x3c…9f40',291000],['0x19…6d72',67000],['Flow',28000]]},
+  {k:'cipher',n:'Cipher',i:'🔐',h:'/cipher',min:100,max:100000,x:300,vf:0,rtp:97.1,th:97,w:640000,won:621000,p:1210,u:61,big:145000,by:'Decoder',bx:725,last:'55m',win:[['Decoder',233000],['0x08…3311',54000],['0xb2…7fd8',19000]]},
+  {k:'greeddice',n:'Greed Dice',i:'🤑',h:'/greed-dice',min:100,max:100000,x:500,vf:0,rtp:96.4,th:96.5,w:1540000,won:1485000,p:2980,u:112,big:238000,by:'0x55…0c2a',bx:1190,last:'17m',win:[['0x55…0c2a',401000],['GreedIsGood',88000],['0x7e…44b0',36000]]},
+  {k:'andarbahar',n:'Andar Bahar',i:'🪭',h:'/andar-bahar',min:100,max:50000,x:25,vf:0,rtp:97.7,th:97.9,w:720000,won:703000,p:1640,u:74,big:96000,by:'0x30…8811',bx:25,last:'1h',win:[['0x30…8811',147000],['0xd4…2a03',42000],['Bahar',15000]]},
+  {k:'dragontiger',n:'Dragon Tiger',i:'🐉',h:'/dragon-tiger',min:100,max:50000,x:50,vf:0,rtp:98.0,th:98.1,w:1080000,won:1058000,p:2410,u:97,big:112000,by:'DragonLord',bx:50,last:'29m',win:[['DragonLord',188000],['0x63…9c41',51000],['0xaa…1177',22000]]},
+  {k:'threecard',n:'Three Card Poker',i:'🂡',h:'/three-card-poker',min:100,max:50000,x:100,vf:0,rtp:96.7,th:96.6,w:860000,won:832000,p:1780,u:83,big:74000,by:'0x4d…5e88',bx:74,last:'47m',win:[['0x4d…5e88',122000],['0x97…0b31',38000],['Trips',16000]]},
+  {k:'paigow',n:'Pai Gow Poker',i:'🀄',h:'/pai-gow-poker',min:100,max:10000,x:50,vf:0,rtp:97.5,th:97.5,w:410000,won:400000,p:920,u:47,big:38000,by:'0x81…6a20',bx:38,last:'2h',win:[['0x81…6a20',61000],['0x26…c904',18000],['PaiGow',7000]]},
+];
+
+const fmt = n => { const a=Math.abs(n);
+  if(a>=1e9) return (n/1e9).toFixed(2)+'B';
+  if(a>=1e6) return (n/1e6).toFixed(2)+'M';
+  if(a>=1e3) return (n/1e3).toFixed(1)+'K';
+  return Math.round(n).toLocaleString('en-US'); };
+const orig={}; G.forEach(g=>orig[g.k]={min:g.min,max:g.max});
+let dirty={};
+const gpos = v => Math.max(0,Math.min(100,(v-94)/8*100));
+
+// seeded history series per game (house net per interval) — ticks live while hovered
+const series = {};
+G.forEach(g=>{ const a=[]; let v=g.w/g.p*0.02;
+  for(let i=0;i<40;i++){ v += (Math.sin(i*1.7+g.k.length)*0.9+((i*g.p)%7-3)*0.35); a.push(v); }
+  series[g.k]=a; });
+
+function path(a,w,h){
+  const mn=Math.min(...a), mx=Math.max(...a), r=(mx-mn)||1;
+  return a.map((v,i)=>`${i?'L':'M'}${(i/(a.length-1)*w).toFixed(1)},${(h-((v-mn)/r)*h).toFixed(1)}`).join('');
+}
+function chartSVG(k){
+  const a=series[k], w=300,h=64, d=path(a,w,h);
+  const up = a[a.length-1] >= a[0];
+  const c = up ? '52,211,153' : '251,113,133';
+  return `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">
+    <defs><linearGradient id="g${k}" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0" stop-color="rgba(${c},.42)"/><stop offset="1" stop-color="rgba(${c},0)"/>
+    </linearGradient></defs>
+    <path d="${d}L${w},${h}L0,${h}Z" fill="url(#g${k})"/>
+    <path d="${d}" fill="none" stroke="rgb(${c})" stroke-width="1.8"
+      stroke-linejoin="round" stroke-linecap="round"/>
+  </svg>`;
+}
+
+const maxWin=g=>g.max*g.x, ep=g=>maxWin(g)/BANKROLL*100;
+
+const card = g => {
+  const mw=maxWin(g), e=ep(g), hot=e>10, drift=+(g.rtp-g.th).toFixed(2), bad=drift>0.4;
+  const net=g.w-g.won;
+  return `<div class="card ${hot?'risk':''}" data-c="${g.k}">
+    <div class="head"><div class="ico">${g.i}</div><div class="nm">${g.n}</div><div class="dot"></div></div>
+
+    <div class="mm">
+      <div class="fld" data-f="min"><div class="k">Min</div>
+        <input class="tab" data-k="${g.k}" data-f="min" value="${g.min}" inputmode="numeric"></div>
+      <div class="arrow">→</div>
+      <div class="fld" data-f="max"><div class="k">Max</div>
+        <input class="tab" data-k="${g.k}" data-f="max" value="${g.max}" inputmode="numeric"></div>
+    </div>
+
+    <div class="mw">
+      <div class="k">Max available to win</div>
+      <div class="v" data-mw="${g.k}">${fmt(mw)}</div>
+      <div class="s">at ${g.x}× top multiplier · <b data-ep="${g.k}">${e.toFixed(1)}%</b> of bankroll
+        <span class="vf ${g.vf?'ok':'no'}">${g.vf?'✓':'?'}</span></div>
+      <div class="track"><i data-bar="${g.k}" style="width:${Math.min(100,e)}%"></i></div>
+    </div>
+
+    <div class="hint">hover for detail</div>
+
+    <div class="drawer">
+      <div class="chart">
+        <span class="cap">House net · live</span>
+        <span class="now" data-now="${g.k}" style="color:${net<0?'var(--rose)':'var(--em)'}">${net<0?'':'+'}${fmt(net)}</span>
+        <div data-chart="${g.k}">${chartSVG(g.k)}</div>
+      </div>
+
+      <div class="kv">
+        <div><span>Wagered</span><b>${fmt(g.w)}</b></div>
+        <div><span>Won</span><b>${fmt(g.won)}</b></div>
+        <div><span>Hold</span><b style="color:${net<0?'var(--rose)':'var(--em)'}">${(net/g.w*100).toFixed(1)}%</b></div>
+        <div><span>Players</span><b>${g.u}</b></div>
+      </div>
+
+      <div class="rtp">
+        <div class="t"><span>RTP vs theoretical</span>
+          <span style="color:${bad?'var(--rose)':'var(--em)'};font-weight:800">${g.rtp}%
+            <span style="color:var(--dim);font-weight:600">/ ${g.th}%</span></span></div>
+        <div class="gauge"><div class="th" style="left:${gpos(g.th)}%"></div>
+          <div class="mk" style="left:${gpos(g.rtp)}%"></div></div>
+      </div>
+
+      <div class="big">
+        <div><div class="m">${fmt(g.big)}</div><div class="w">biggest win · ${g.by}</div></div>
+        <div class="x">${fmt(g.bx)}×</div>
+      </div>
+
+      <div class="wins"><div class="h">Biggest winners (net)</div>
+        ${g.win.map(([n,v])=>`<div class="wr">
+          <div class="av">${n.startsWith('0x')?n.slice(2,4).toUpperCase():n.slice(0,2).toUpperCase()}</div>
+          <div class="n">${n}</div><div class="p">+${fmt(v)}</div></div>`).join('')}
+      </div>
+
+      <div class="foot">
+        <span class="last">last play ${g.last} ago · ${fmt(g.p)} plays</span>
+        <a class="go" href="${g.h}" target="_blank" rel="noopener">Go to game ↗</a>
+      </div>
+    </div>
+  </div>`;
+};
+
+document.getElementById('grid').innerHTML = G.map(card).join('');
+
+// live chart: only the hovered card ticks (keeps 22 cards cheap)
+let hovered=null;
+document.getElementById('grid').addEventListener('pointerover',e=>{
+  const c=e.target.closest('.card'); if(c) hovered=c.dataset.c;
+});
+document.getElementById('grid').addEventListener('pointerleave',()=>{hovered=null},true);
+setInterval(()=>{
+  if(!hovered) return;
+  const a=series[hovered]; if(!a) return;
+  a.push(a[a.length-1] + (Math.random()*2.4-1.1)); a.shift();
+  const box=document.querySelector(`[data-chart="${hovered}"]`);
+  if(box) box.innerHTML=chartSVG(hovered);
+},1200);
+
+function recalc(k){
+  const g=G.find(x=>x.k===k); if(!g) return;
+  const el=document.querySelector(`input[data-k="${k}"][data-f="max"]`);
+  const mx=Number(String(el?.value||'').replace(/[^\d]/g,''))||0;
+  const mw=mx*g.x, e=mw/BANKROLL*100;
+  document.querySelector(`[data-mw="${k}"]`).textContent=fmt(mw);
+  document.querySelector(`[data-ep="${k}"]`).textContent=e.toFixed(1)+'%';
+  document.querySelector(`[data-bar="${k}"]`).style.width=Math.min(100,e)+'%';
+  el.closest('.card').classList.toggle('risk',e>10);
+}
+document.addEventListener('input',e=>{
+  const el=e.target; if(!el.matches('input[data-k]')) return;
+  const {k,f}=el.dataset, id=k+'.'+f;
+  const ch=String(orig[k][f])!==el.value.trim();
+  el.closest('.fld').classList.toggle('dirty',ch);
+  ch?dirty[id]=el.value:delete dirty[id];
+  if(f==='max') recalc(k);
+  const n=Object.keys(dirty).length;
+  document.getElementById('n').textContent=n;
+  document.getElementById('bar').classList.toggle('on',n>0);
+});
+function reset(){
+  dirty={};
+  document.querySelectorAll('input[data-k]').forEach(i=>{
+    i.value=orig[i.dataset.k][i.dataset.f]; i.closest('.fld').classList.remove('dirty');
+    if(i.dataset.f==='max') recalc(i.dataset.k);
+  });
+  document.getElementById('bar').classList.remove('on');
+}
+</script>
+</body>
+</html>

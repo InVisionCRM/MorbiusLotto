@@ -32,6 +32,7 @@ import crypto from 'crypto';
 import type { Express, Request, Response } from 'express';
 import type { PoolClient } from 'pg';
 import { logger } from '../utils/logger';
+import { betLimits } from '../lib/game-limits';
 import { verifyTelegramInitData } from '../services/telegram.service';
 import { SESSION_COOKIE_NAME } from '../middleware/require-auth';
 import { applyPokerChipDelta } from '../services/poker-chip-wallet';
@@ -39,8 +40,6 @@ import { ProvablyFairService } from '../services/provably-fair.service';
 import {
   CIPHER_DIFFICULTIES,
   CIPHER_HOUSE_EDGE_BP,
-  CIPHER_MAX_BET,
-  CIPHER_MIN_BET,
   cipherCrackMultiplierX100,
   cipherFeedback,
   cipherPayout,
@@ -136,8 +135,8 @@ export function registerArcadeCipherRoutes({
     }
     res.json({
       ok: true,
-      minBet: CIPHER_MIN_BET,
-      maxBet: CIPHER_MAX_BET,
+      minBet: betLimits('cipher').min,
+      maxBet: betLimits('cipher').max,
       houseEdgeBp: CIPHER_HOUSE_EDGE_BP,
       difficulties,
     });
@@ -210,10 +209,10 @@ export function registerArcadeCipherRoutes({
       }
 
       const bet = Math.floor(Number(req.body?.bet));
-      if (!Number.isFinite(bet) || bet < CIPHER_MIN_BET || bet > CIPHER_MAX_BET) {
+      if (!Number.isFinite(bet) || bet < betLimits('cipher').min || bet > betLimits('cipher').max) {
         return res.status(400).json({
           ok: false,
-          error: `Bet must be between ${CIPHER_MIN_BET} and ${CIPHER_MAX_BET} chips.`,
+          error: `Bet must be between ${betLimits('cipher').min} and ${betLimits('cipher').max} chips.`,
         });
       }
 

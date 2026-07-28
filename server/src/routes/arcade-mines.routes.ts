@@ -29,15 +29,14 @@ import crypto from 'crypto';
 import type { Express, Request, Response } from 'express';
 import type { PoolClient } from 'pg';
 import { logger } from '../utils/logger';
+import { betLimits } from '../lib/game-limits';
 import { verifyTelegramInitData } from '../services/telegram.service';
 import { SESSION_COOKIE_NAME } from '../middleware/require-auth';
 import { applyPokerChipDelta } from '../services/poker-chip-wallet';
 import { ProvablyFairService } from '../services/provably-fair.service';
 import {
   MINES_HOUSE_EDGE_BP,
-  MINES_MAX_BET,
   MINES_MAX_BOMBS,
-  MINES_MIN_BET,
   MINES_MIN_BOMBS,
   MINES_TOTAL_CELLS,
   deriveBombGrid,
@@ -124,8 +123,8 @@ export function registerArcadeMinesRoutes({
     res.json({
       ok: true,
       totalCells: MINES_TOTAL_CELLS,
-      minBet: MINES_MIN_BET,
-      maxBet: MINES_MAX_BET,
+      minBet: betLimits('mines').min,
+      maxBet: betLimits('mines').max,
       minBombs: MINES_MIN_BOMBS,
       maxBombs: MINES_MAX_BOMBS,
       houseEdgeBp: MINES_HOUSE_EDGE_BP,
@@ -191,10 +190,10 @@ export function registerArcadeMinesRoutes({
       }
 
       const bet = Math.floor(Number(req.body?.bet));
-      if (!Number.isFinite(bet) || bet < MINES_MIN_BET || bet > MINES_MAX_BET) {
+      if (!Number.isFinite(bet) || bet < betLimits('mines').min || bet > betLimits('mines').max) {
         return res.status(400).json({
           ok: false,
-          error: `Bet must be between ${MINES_MIN_BET} and ${MINES_MAX_BET} chips.`,
+          error: `Bet must be between ${betLimits('mines').min} and ${betLimits('mines').max} chips.`,
         });
       }
 

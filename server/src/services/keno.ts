@@ -16,17 +16,18 @@
  * The draw itself is provably fair and lives in ProvablyFairService.drawKenoNumbers
  * — this module only scores a draw that's already been made.
  */
+import { betLimits, DEFAULT_BET_LIMITS } from '../lib/game-limits';
 
 export const KENO_TOTAL_TILES = 40;
 export const KENO_DRAW_COUNT = 10;
 export const KENO_MIN_PICKS = 1;
 export const KENO_MAX_PICKS = 10;
 
-export const KENO_MIN_BET = 1;
+export const KENO_MIN_BET = DEFAULT_BET_LIMITS.keno.min;
 // Capped so the worst-case single-round liability (max bet × 1000× top
 // multiplier = 1M chips) stays survivable for the house bankroll. Raise
 // deliberately once the chip economy proves out — never by accident.
-export const KENO_MAX_BET = 1_000;
+export const KENO_MAX_BET = DEFAULT_BET_LIMITS.keno.max;
 
 export type KenoRisk = 'classic' | 'low' | 'medium' | 'high';
 export const KENO_RISKS: readonly KenoRisk[] = ['classic', 'low', 'medium', 'high'] as const;
@@ -165,7 +166,7 @@ export function resolveKeno(
   risk: KenoRisk,
   bet: number,
 ): KenoResult {
-  if (!Number.isInteger(bet) || bet < KENO_MIN_BET || bet > KENO_MAX_BET) {
+  if (!Number.isInteger(bet) || bet < betLimits('keno').min || bet > betLimits('keno').max) {
     throw new Error('Keno bet out of range');
   }
   const drawnSet = new Set(drawn);

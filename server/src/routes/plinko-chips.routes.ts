@@ -24,6 +24,7 @@ import type { DatabaseService } from '../services/database.service';
 import type { AuthService } from '../services/auth.service';
 import { requireAuth } from '../middleware/require-auth';
 import { logger } from '../utils/logger';
+import { betLimits } from '../lib/game-limits';
 import { applyPokerChipDelta } from '../services/poker-chip-wallet';
 import { ProvablyFairService } from '../services/provably-fair.service';
 import { consumeSeedForBet, revealedSeedForRound } from '../services/arcade-seed.service';
@@ -34,8 +35,6 @@ import {
   PLINKO_RISKS,
   PLINKO_ROWS,
   PLINKO_BUCKETS,
-  PLINKO_MIN_BET,
-  PLINKO_MAX_BET,
 } from '../services/plinko-chips';
 
 interface RegisterPlinkoChipRoutesOptions {
@@ -69,8 +68,8 @@ export function registerPlinkoChipRoutes({
       ok: true,
       rows: PLINKO_ROWS,
       buckets: PLINKO_BUCKETS,
-      minBet: PLINKO_MIN_BET,
-      maxBet: PLINKO_MAX_BET,
+      minBet: betLimits('plinko').min,
+      maxBet: betLimits('plinko').max,
       risks: PLINKO_RISKS,
     });
   });
@@ -95,10 +94,10 @@ export function registerPlinkoChipRoutes({
       }
 
       const bet = Math.floor(Number(req.body?.bet));
-      if (!Number.isFinite(bet) || bet < PLINKO_MIN_BET || bet > PLINKO_MAX_BET) {
+      if (!Number.isFinite(bet) || bet < betLimits('plinko').min || bet > betLimits('plinko').max) {
         return res.status(400).json({
           ok: false,
-          error: `bet must be between ${PLINKO_MIN_BET} and ${PLINKO_MAX_BET} chips`,
+          error: `bet must be between ${betLimits('plinko').min} and ${betLimits('plinko').max} chips`,
         });
       }
 

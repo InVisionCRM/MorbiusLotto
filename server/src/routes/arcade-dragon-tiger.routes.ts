@@ -21,6 +21,7 @@
 import crypto from 'crypto';
 import type { Express, Request, Response } from 'express';
 import { logger } from '../utils/logger';
+import { betLimits } from '../lib/game-limits';
 import { verifyTelegramInitData } from '../services/telegram.service';
 import { SESSION_COOKIE_NAME } from '../middleware/require-auth';
 import { applyPokerChipDelta } from '../services/poker-chip-wallet';
@@ -30,8 +31,6 @@ import {
   resolvePayouts,
   sumPayouts,
   validateBets,
-  DT_MIN_BET,
-  DT_MAX_BET,
   DT_PAY_SIDE,
   DT_PAY_TIE,
   DT_TIE_REFUND,
@@ -109,8 +108,8 @@ export function registerArcadeDragonTigerRoutes({
   app.get('/api/arcade/dragon-tiger/info', (_req: Request, res: Response) => {
     res.json({
       ok: true,
-      minBet: DT_MIN_BET,
-      maxBet: DT_MAX_BET,
+      minBet: betLimits('dragon_tiger').min,
+      maxBet: betLimits('dragon_tiger').max,
       // Multipliers ×100 paid on a winning bet (gross — bet was debited).
       payouts: {
         dragon: DT_PAY_SIDE,

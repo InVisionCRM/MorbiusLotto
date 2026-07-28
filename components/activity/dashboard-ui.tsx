@@ -23,22 +23,64 @@ export function fmt(s: string | number | undefined | null): string {
   }
 }
 
-/** Compact headline form: "12.4M", "461.2K". */
+/** Magnitude suffixes, largest first. Beyond Q we fall back to exponent form. */
+const MAGNITUDES: Array<{ v: bigint; s: string }> = [
+  { v: 10n ** 15n, s: 'Q' },
+  { v: 10n ** 12n, s: 'T' },
+  { v: 10n ** 9n, s: 'B' },
+  { v: 10n ** 6n, s: 'M' },
+  { v: 10n ** 3n, s: 'K' },
+]
+
+/**
+ * Compact headline form: "12.40M", "461.2K", "1.75T".
+ *
+ * Done entirely in BigInt — chip balances routinely exceed Number.MAX_SAFE_INTEGER
+ * (2^53), and going through Number() both loses precision (producing junk tails
+ * like "…04") and, with only a B suffix, rendered 2e22 as "20000000000000.04B".
+ * Anything at or above 10^18 is shown in exponent form, because at that scale the
+ * value is almost certainly a wei amount that leaked into a chip field — and it
+ * should look wrong rather than quietly render as a plausible number.
+ */
 export function fmtCompact(s: string | number | undefined | null): string {
   if (s == null) return '0'
-  let n: number
+  let n: bigint
   try {
-    n = Number(BigInt(String(s)))
+    n = BigInt(String(s).trim().split('.')[0] || '0')
   } catch {
-    n = Number(s)
+    const f = Number(s)
+    return Number.isFinite(f) ? f.toLocaleString('en-US') : String(s)
   }
-  if (!Number.isFinite(n)) return String(s)
-  const abs = Math.abs(n)
-  const sign = n < 0 ? '-' : ''
-  if (abs >= 1_000_000_000) return `${sign}${(abs / 1_000_000_000).toFixed(2)}B`
-  if (abs >= 1_000_000) return `${sign}${(abs / 1_000_000).toFixed(2)}M`
-  if (abs >= 1_000) return `${sign}${(abs / 1_000).toFixed(1)}K`
-  return n.toLocaleString('en-US')
+
+  const sign = n < 0n ? '-' : ''
+  const abs = n < 0n ? -n : n
+
+  // 10^18+ — beyond any plausible chip balance; show the true scale.
+  if (abs >= 10n ** 18n) {
+    const digits = abs.toString()
+    const exp = digits.length - 1
+    const mantissa = `${digits[0]}.${digits.slice(1, 3).padEnd(2, '0')}`
+    return `${sign}${mantissa}e${exp}`
+  }
+
+  for (const { v, s: suffix } of MAGNITUDES) {
+    if (abs >= v) {
+      const whole = abs / v
+      const frac = ((abs % v) * 100n) / v // 2dp, exact
+      return `${sign}${whole}.${frac.toString().padStart(2, '0')}${suffix}`
+    }
+  }
+  return `${sign}${abs.toLocaleString('en-US')}`
+}
+
+/** True when a chip figure is too large to be real — i.e. wei in a chips field. */
+export function looksLikeWei(s: string | number | undefined | null): boolean {
+  try {
+    const n = BigInt(String(s ?? '0').trim().split('.')[0] || '0')
+    return (n < 0n ? -n : n) >= 10n ** 15n
+  } catch {
+    return false
+  }
 }
 
 /** Compact with an explicit +/− sign. */

@@ -10,6 +10,7 @@
  */
 
 import { useMemo, useState } from 'react'
+import Link from 'next/link'
 import { useAccount } from 'wagmi'
 import {
   Activity,
@@ -31,6 +32,7 @@ import {
   PlayersTable,
   ReferralsTable,
   WithdrawalsTable,
+  type BigWinView,
 } from '@/components/activity/DashboardTables'
 import {
   MetricLine,
@@ -47,6 +49,7 @@ import {
   fmtCompact,
   fmtSigned,
   isNegative,
+  looksLikeWei,
   timeAgo,
 } from '@/components/activity/dashboard-ui'
 import { isAdminWallet } from '@/lib/admin'
@@ -81,8 +84,18 @@ export default function AdminDashboardPage() {
   const [win, setWin] = useState<DashWindow>('24h')
   const [tab, setTab] = useState<TabKey>('players')
   const [bigWinMin, setBigWinMin] = useState('100000')
+  // Drives both the hits filter and the frequency roll-ups. 0 = no multiplier filter.
+  const [minMultiplier, setMinMultiplier] = useState('10')
+  const [bigWinView, setBigWinView] = useState<BigWinView>('hits')
 
-  const { data, isLoading, isFetching, refetch } = useAdminDashboard(isAdmin, win, bigWinMin || '100000')
+  const multNum = Number(minMultiplier) || 0
+  const { data, isLoading, isFetching, refetch } = useAdminDashboard(
+    isAdmin,
+    win,
+    bigWinMin || '100000',
+    multNum,
+    multNum > 0 ? multNum : 10,
+  )
   const { data: summary } = useGameSummaries(isAdmin, win)
   const { data: plays } = useRecentPlays(isAdmin && tab === 'live', 60)
   const { balanceFormatted: vaultRaw } = useTokenBalance(isAdmin ? MORBIUS_VAULT_ADDRESS : undefined)
@@ -155,16 +168,18 @@ export default function AdminDashboardPage() {
               {/* Headline KPIs */}
               <div className="grid grid-cols-2 gap-3 lg:grid-cols-6">
                 <StatCard
-                  label={`House profit · ${windowLabel}`}
+                  label={`Total revenue · ${windowLabel}`}
                   value={fmtSigned(f?.ggr)}
                   tone={isNegative(f?.ggr) ? 'bad' : 'good'}
-                  sub="wagered − won (GGR)"
+                  sub={`games ${fmtCompact(f?.houseGgr)} · rake ${fmtCompact(f?.rake)} · fees ${fmtCompact(f?.fees)}`}
+                  hint="House-banked margin + poker rake + platform/creator fees"
                 />
                 <StatCard
                   label="Hold"
                   value={`${(f?.holdPct ?? 0).toFixed(2)}%`}
                   tone={(f?.holdPct ?? 0) < 0 ? 'bad' : 'neutral'}
-                  sub="margin on turnover"
+                  sub="margin on house-banked turnover"
+                  hint="Excludes poker rake — that isn't earned against wagered volume"
                 />
                 <StatCard
                   label="Net revenue"
@@ -176,9 +191,17 @@ export default function AdminDashboardPage() {
                 <StatCard
                   label="Player liability"
                   value={fmtCompact(f?.playerLiability)}
-                  tone="gold"
-                  sub="chips owed to players"
-                  hint="Total of every player's spendable balance right now"
+                  tone={looksLikeWei(f?.playerLiability) ? 'bad' : 'gold'}
+                  sub={
+                    looksLikeWei(f?.playerLiability)
+                      ? '⚠ implausible — likely wei in a chips row'
+                      : `owed to players · house float ${fmtCompact(f?.houseFloat)}`
+                  }
+                  hint={
+                    looksLikeWei(f?.playerLiability)
+                      ? 'This total is far larger than any real chip balance (1 chip = 1 MORBIUS). Almost certainly one or more player_poker_chips rows hold a wei-scale value (x10^18). Check the Players tab, sorted by balance.'
+                      : "Every player's spendable balance. Excludes house-owned rake/fee accounts, which hold the platform's own float — not a debt."
+                  }
                 />
                 <StatCard label="Vault balance" value={vault} tone="cyan" sub="on-chain bankroll" />
               </div>
@@ -208,6 +231,7 @@ export default function AdminDashboardPage() {
                     <MetricLine label="VIP rakeback" value={fmt(f?.rakebackPaid)} tone="muted" />
                     <MetricLine label="Referral payouts" value={fmt(f?.referralPaid)} tone="muted" />
                     <MetricLine label="Weekly Drop prizes" value={fmt(f?.dropPrizesPaid)} tone="muted" />
+                    <MetricLine label="Holder / LP rewards" value={fmt(f?.holderRewardsPaid)} tone="muted" />
                     <MetricLine label="Admin adjustments" value={fmtSigned(f?.adminAdjustments)} tone="muted" />
                     <MetricLine label="Total bonus cost" value={fmt(f?.bonusCostTotal)} tone="bad" />
                   </div>
@@ -290,9 +314,14 @@ export default function AdminDashboardPage() {
                 {tab === 'bigwins' && (
                   <BigWinsTable
                     rows={data?.bigWins ?? []}
+                    freq={data?.multiplier}
                     windowLabel={windowLabel.toLowerCase()}
                     threshold={bigWinMin}
                     onThresholdChange={setBigWinMin}
+                    minMultiplier={minMultiplier}
+                    onMinMultiplierChange={setMinMultiplier}
+                    view={bigWinView}
+                    onViewChange={setBigWinView}
                   />
                 )}
                 {tab === 'referrals' && (
@@ -301,7 +330,23 @@ export default function AdminDashboardPage() {
                     totals={data?.referrals.totals ?? { referrers: 0, referees: 0, earned: '0', welcomePaid: '0' }}
                   />
                 )}
-                {tab === 'games' && <GamesPanel games={summary?.games ?? []} windowLabel={windowLabel.toLowerCase()} />}
+                {tab === 'games' && (
+                  <>
+                    <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-cyan-500/25 bg-cyan-500/[0.06] px-4 py-3">
+                      <p className="text-sm text-white/60">
+                        Set <b className="text-white">min and max bets per game</b>, with exposure and
+                        performance on each card.
+                      </p>
+                      <Link
+                        href="/activity/games"
+                        className="rounded-xl border border-cyan-400/35 bg-cyan-400/12 px-4 py-2 text-xs font-bold text-cyan-200 transition hover:bg-cyan-400/20"
+                      >
+                        Open game limits ↗
+                      </Link>
+                    </div>
+                    <GamesPanel games={summary?.games ?? []} windowLabel={windowLabel.toLowerCase()} />
+                  </>
+                )}
                 {tab === 'live' && <LivePanel plays={plays ?? []} />}
               </div>
 

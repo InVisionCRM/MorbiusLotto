@@ -21,6 +21,7 @@
 import crypto from 'crypto';
 import type { Express, Request, Response } from 'express';
 import { logger } from '../utils/logger';
+import { betLimits } from '../lib/game-limits';
 import { verifyTelegramInitData } from '../services/telegram.service';
 import { SESSION_COOKIE_NAME } from '../middleware/require-auth';
 import { applyPokerChipDelta } from '../services/poker-chip-wallet';
@@ -30,8 +31,6 @@ import {
   cascadePayout,
   isCascadeVolatility,
   CASCADE_VOLATILITIES,
-  CASCADE_MIN_BET,
-  CASCADE_MAX_BET,
   CASCADE_COLS,
   CASCADE_ROWS,
   type CascadeVolatility,
@@ -130,8 +129,8 @@ export function registerArcadeCascadeRoutes({
     }
     res.json({
       ok: true,
-      minBet: CASCADE_MIN_BET,
-      maxBet: CASCADE_MAX_BET,
+      minBet: betLimits('cascade').min,
+      maxBet: betLimits('cascade').max,
       cols: CASCADE_COLS,
       rows: CASCADE_ROWS,
       volatilities,
@@ -151,10 +150,10 @@ export function registerArcadeCascadeRoutes({
       }
 
       const bet = Math.floor(Number(req.body?.bet));
-      if (!Number.isFinite(bet) || bet < CASCADE_MIN_BET || bet > CASCADE_MAX_BET) {
+      if (!Number.isFinite(bet) || bet < betLimits('cascade').min || bet > betLimits('cascade').max) {
         return res.status(400).json({
           ok: false,
-          error: `Bet must be between ${CASCADE_MIN_BET} and ${CASCADE_MAX_BET} chips.`,
+          error: `Bet must be between ${betLimits('cascade').min} and ${betLimits('cascade').max} chips.`,
         });
       }
 

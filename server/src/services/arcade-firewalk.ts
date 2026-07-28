@@ -32,12 +32,13 @@
  * The published ladder is always honored as a minimum in chips on cash-out, the
  * same rounding contract as arcade-chicken / arcade-towers.
  */
+import { betLimits, DEFAULT_BET_LIMITS } from '../lib/game-limits';
 
 /** House edge, in basis points (1 bp = 0.01%). 200 = 2% → ~98% RTP. */
 export const FIREWALK_HOUSE_EDGE_BP = 200;
 
-export const FIREWALK_MIN_BET = 10;
-export const FIREWALK_MAX_BET = 2000;
+export const FIREWALK_MIN_BET = DEFAULT_BET_LIMITS.firewalk.min;
+export const FIREWALK_MAX_BET = DEFAULT_BET_LIMITS.firewalk.max;
 
 /** Total stones over the coals — clear them all and the round auto-settles. */
 export const FIREWALK_STONES = 14;
@@ -138,7 +139,7 @@ export function firewalkMultiplierLadder(heat: FirewalkHeat): number[] {
  * bet × multiplier_x100 / 100 — floored. Matches the verifier's arithmetic.
  */
 export function firewalkPayout(bet: number, multiplierX100: number): number {
-  if (!Number.isInteger(bet) || bet < FIREWALK_MIN_BET || bet > FIREWALK_MAX_BET) {
+  if (!Number.isInteger(bet) || bet < betLimits('firewalk').min || bet > betLimits('firewalk').max) {
     throw new Error('Firewalk bet out of range');
   }
   if (!Number.isInteger(multiplierX100) || multiplierX100 < 100) {

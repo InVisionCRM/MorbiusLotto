@@ -24,9 +24,10 @@
  * BigInt money path in the route. payScale per volatility is tuned by Monte-Carlo
  * so each mode's RTP ≈ 97% (the prototype target).
  */
+import { betLimits, DEFAULT_BET_LIMITS } from '../lib/game-limits';
 
-export const CASCADE_MIN_BET = 100;
-export const CASCADE_MAX_BET = 100_000;
+export const CASCADE_MIN_BET = DEFAULT_BET_LIMITS.cascade.min;
+export const CASCADE_MAX_BET = DEFAULT_BET_LIMITS.cascade.max;
 
 export const CASCADE_COLS = 6;
 export const CASCADE_ROWS = 6;
@@ -292,7 +293,7 @@ export function resolveCascade(
 
 /** Payout in chips for a settled round — floor(bet × totalMultiplierX100 / 100). */
 export function cascadePayout(bet: number, totalMultiplierX100: number): number {
-  if (!Number.isInteger(bet) || bet < CASCADE_MIN_BET || bet > CASCADE_MAX_BET) {
+  if (!Number.isInteger(bet) || bet < betLimits('cascade').min || bet > betLimits('cascade').max) {
     throw new Error('Cascade bet out of range');
   }
   if (!Number.isInteger(totalMultiplierX100) || totalMultiplierX100 < 0) {
