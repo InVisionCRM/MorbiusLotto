@@ -16,6 +16,18 @@
 import type { Pool } from 'pg';
 import { logger } from '../utils/logger';
 import { classifyReason } from './activity-taxonomy';
+import { getPlatformFeeWalletLower } from './poker-chip-wallet';
+import { getPokerRakeWallet } from '../lib/poker-chip-scale';
+
+/**
+ * House-owned chip accounts. These hold the platform's OWN float (poker rake,
+ * platform fees) in the same table as players, seeded by migration 098 — so any
+ * "what do we owe players" sum must exclude them or the liability is overstated
+ * by the house's own money. Both are env-overridable, so resolve at call time.
+ */
+function houseWallets(): string[] {
+  return [getPokerRakeWallet().toLowerCase(), getPlatformFeeWalletLower()];
+}
 
 /** wei → whole MORBIUS, as SQL. */
 const TO_CHIPS = (col: string) => `FLOOR(COALESCE(${col},0) / 1000000000000000000)`;
@@ -55,8 +67,11 @@ export interface Financials {
   /** Gameplay */
   wagered: string;
   won: string;
-  ggr: string;            // wagered − won = house gross gaming revenue
-  holdPct: number;        // ggr / wagered, %
+  ggr: string;            // total revenue: houseGgr + rake + fees
+  houseGgr: string;       // house-banked games only: wagered − won
+  rake: string;           // poker rake (PvP revenue — not in bet/payout deltas)
+  fees: string;           // platform + creator fee cuts
+  holdPct: number;        // houseGgr / wagered, %
   plays: number;
   activePlayers: number;
   newPlayers: number;
@@ -74,9 +89,11 @@ export interface Financials {
   referralPaid: string;
   dropPrizesPaid: string;
   adminAdjustments: string;
+  holderRewardsPaid: string;  // MORBIUS + LP holder epoch credits
   bonusCostTotal: string;
   /** Balance-sheet */
-  playerLiability: string;    // every chip the house owes players right now
+  playerLiability: string;    // chips owed to PLAYERS (house wallets excluded)
+  houseFloat: string;         // chips sitting in house-owned accounts (rake + fees)
   netRevenue: string;         // ggr − bonusCostTotal
 }
 
@@ -204,6 +221,7 @@ export class AdminDashboardService {
     const ledgerQ = this.pool.query<{
       wagered: string; won: string; rakeback: string; referral: string;
       drop_prizes: string; admin_adj: string; plays: string; active_players: string;
+      holder_rewards: string; rake: string; fees: string;
     }>(
       `SELECT
          COALESCE(SUM(CASE WHEN reason LIKE '%\\_bet'    THEN -delta ELSE 0 END),0)::text AS wagered,
@@ -212,6 +230,12 @@ export class AdminDashboardService {
          COALESCE(SUM(CASE WHEN reason IN ('referral_reward','referral_welcome') THEN delta ELSE 0 END),0)::text AS referral,
          COALESCE(SUM(CASE WHEN reason = 'weekly_drop_prize' THEN delta ELSE 0 END),0)::text AS drop_prizes,
          COALESCE(SUM(CASE WHEN reason IN ('admin_credit','admin_debit') THEN delta ELSE 0 END),0)::text AS admin_adj,
+         COALESCE(SUM(CASE WHEN reason IN ('holder_reward','lp_holder_reward') THEN delta ELSE 0 END),0)::text AS holder_rewards,
+         -- Revenue that never appears in bet/payout deltas: poker rake and the
+         -- platform/creator fee cuts. These are credits TO house wallets, so the
+         -- delta is positive on the house side.
+         COALESCE(SUM(CASE WHEN reason = 'rake' AND delta > 0 THEN delta ELSE 0 END),0)::text AS rake,
+         COALESCE(SUM(CASE WHEN reason IN ('platform_fee','creator_fee') AND delta > 0 THEN delta ELSE 0 END),0)::text AS fees,
          COUNT(*) FILTER (WHERE reason LIKE '%\\_bet')::text AS plays,
          COUNT(DISTINCT CASE WHEN reason LIKE '%\\_bet' THEN wallet_address END)::text AS active_players
        FROM poker_chip_ledger
@@ -238,8 +262,14 @@ export class AdminDashboardService {
       `SELECT COUNT(*)::text AS n FROM players WHERE ${w}`,
     );
 
-    const liabilityQ = this.pool.query<{ total: string }>(
-      `SELECT COALESCE(SUM(balance),0)::text AS total FROM player_poker_chips`,
+    // Exclude house-owned accounts — their float is the platform's money, not a
+    // debt to players. Including them overstates liability (and understates the
+    // solvency picture the number exists to give).
+    const liabilityQ = this.pool.query<{ total: string; house: string }>(
+      `SELECT COALESCE(SUM(balance) FILTER (WHERE LOWER(wallet_address) <> ALL($1::text[])),0)::text AS total,
+              COALESCE(SUM(balance) FILTER (WHERE LOWER(wallet_address)  = ANY($1::text[])),0)::text AS house
+       FROM player_poker_chips`,
+      [houseWallets()],
     );
 
     const [ledger, dep, wd, np, liab] = await Promise.all([
@@ -249,12 +279,19 @@ export class AdminDashboardService {
     const L = ledger.rows[0];
     const wagered = BigInt(L?.wagered ?? '0');
     const won = BigInt(L?.won ?? '0');
-    const ggr = wagered - won;
+    // House-banked margin only. Poker is PvP — the house earns rake there, not
+    // bet-minus-payout — so rake and fees are separate revenue lines, not part
+    // of this. Adding them here would double-count against poker's own bets.
+    const houseGgr = wagered - won;
+    const rake = BigInt(L?.rake ?? '0');
+    const fees = BigInt(L?.fees ?? '0');
+    const ggr = houseGgr + rake + fees;
     const rakeback = BigInt(L?.rakeback ?? '0');
     const referral = BigInt(L?.referral ?? '0');
     const dropPrizes = BigInt(L?.drop_prizes ?? '0');
     const adminAdj = BigInt(L?.admin_adj ?? '0');
-    const bonusCost = rakeback + referral + dropPrizes + adminAdj;
+    const holderRewards = BigInt(L?.holder_rewards ?? '0');
+    const bonusCost = rakeback + referral + dropPrizes + adminAdj + holderRewards;
 
     const depositsTotal = BigInt(dep.rows[0]?.total ?? '0');
     const wdTotal = BigInt(wd.rows[0]?.total ?? '0');
@@ -264,7 +301,12 @@ export class AdminDashboardService {
       wagered: wagered.toString(),
       won: won.toString(),
       ggr: ggr.toString(),
-      holdPct: wagered > 0n ? Number((ggr * 10000n) / wagered) / 100 : 0,
+      houseGgr: houseGgr.toString(),
+      rake: rake.toString(),
+      fees: fees.toString(),
+      // Hold is margin on house-banked turnover; rake/fees aren't earned against
+      // `wagered`, so including them here would inflate the percentage.
+      holdPct: wagered > 0n ? Number((houseGgr * 10000n) / wagered) / 100 : 0,
       plays: Number(L?.plays ?? '0'),
       activePlayers: Number(L?.active_players ?? '0'),
       newPlayers: Number(np.rows[0]?.n ?? '0'),
@@ -278,10 +320,12 @@ export class AdminDashboardService {
       netFlow: (depositsTotal - wdTotal).toString(),
       rakebackPaid: rakeback.toString(),
       referralPaid: referral.toString(),
+      holderRewardsPaid: holderRewards.toString(),
       dropPrizesPaid: dropPrizes.toString(),
       adminAdjustments: adminAdj.toString(),
       bonusCostTotal: bonusCost.toString(),
       playerLiability: (liab.rows[0]?.total ?? '0').toString(),
+      houseFloat: (liab.rows[0]?.house ?? '0').toString(),
       netRevenue: (ggr - bonusCost).toString(),
     };
   }

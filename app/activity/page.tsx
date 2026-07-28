@@ -166,16 +166,18 @@ export default function AdminDashboardPage() {
               {/* Headline KPIs */}
               <div className="grid grid-cols-2 gap-3 lg:grid-cols-6">
                 <StatCard
-                  label={`House profit · ${windowLabel}`}
+                  label={`Total revenue · ${windowLabel}`}
                   value={fmtSigned(f?.ggr)}
                   tone={isNegative(f?.ggr) ? 'bad' : 'good'}
-                  sub="wagered − won (GGR)"
+                  sub={`games ${fmtCompact(f?.houseGgr)} · rake ${fmtCompact(f?.rake)} · fees ${fmtCompact(f?.fees)}`}
+                  hint="House-banked margin + poker rake + platform/creator fees"
                 />
                 <StatCard
                   label="Hold"
                   value={`${(f?.holdPct ?? 0).toFixed(2)}%`}
                   tone={(f?.holdPct ?? 0) < 0 ? 'bad' : 'neutral'}
-                  sub="margin on turnover"
+                  sub="margin on house-banked turnover"
+                  hint="Excludes poker rake — that isn't earned against wagered volume"
                 />
                 <StatCard
                   label="Net revenue"
@@ -188,8 +190,8 @@ export default function AdminDashboardPage() {
                   label="Player liability"
                   value={fmtCompact(f?.playerLiability)}
                   tone="gold"
-                  sub="chips owed to players"
-                  hint="Total of every player's spendable balance right now"
+                  sub={`owed to players · house float ${fmtCompact(f?.houseFloat)}`}
+                  hint="Every player's spendable balance. Excludes house-owned rake/fee accounts, which hold the platform's own float — not a debt."
                 />
                 <StatCard label="Vault balance" value={vault} tone="cyan" sub="on-chain bankroll" />
               </div>
@@ -219,6 +221,7 @@ export default function AdminDashboardPage() {
                     <MetricLine label="VIP rakeback" value={fmt(f?.rakebackPaid)} tone="muted" />
                     <MetricLine label="Referral payouts" value={fmt(f?.referralPaid)} tone="muted" />
                     <MetricLine label="Weekly Drop prizes" value={fmt(f?.dropPrizesPaid)} tone="muted" />
+                    <MetricLine label="Holder / LP rewards" value={fmt(f?.holderRewardsPaid)} tone="muted" />
                     <MetricLine label="Admin adjustments" value={fmtSigned(f?.adminAdjustments)} tone="muted" />
                     <MetricLine label="Total bonus cost" value={fmt(f?.bonusCostTotal)} tone="bad" />
                   </div>

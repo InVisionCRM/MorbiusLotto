@@ -7,8 +7,11 @@ export type DashWindow = '24h' | '7d' | '30d' | 'all'
 export interface Financials {
   window: DashWindow
   wagered: string
-  won: string
   ggr: string
+  houseGgr: string
+  rake: string
+  fees: string
+  won: string
   holdPct: number
   plays: number
   activePlayers: number
@@ -25,8 +28,10 @@ export interface Financials {
   referralPaid: string
   dropPrizesPaid: string
   adminAdjustments: string
+  holderRewardsPaid: string
   bonusCostTotal: string
   playerLiability: string
+  houseFloat: string
   netRevenue: string
 }
 
