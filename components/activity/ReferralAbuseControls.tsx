@@ -54,6 +54,8 @@ export default function ReferralAbuseControls() {
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [confirmBlacklist, setConfirmBlacklist] = useState(false)
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [confirmClaw, setConfirmClaw] = useState(false)
 
   // Read the live program state so the button reflects reality on load.
   useEffect(() => {
@@ -100,6 +102,8 @@ export default function ReferralAbuseControls() {
     setError(null)
     setNotice(null)
     setConfirmBlacklist(false)
+    setConfirmClaw(false)
+    setSelected(new Set())
     try {
       const res = await fetch(`/api/admin-ops/referrals/referrer/${a}`)
       const data = await res.json().catch(() => ({}))
@@ -141,6 +145,60 @@ export default function ReferralAbuseControls() {
     },
     [detail, lookup],
   )
+
+  const toggleOne = useCallback((addr: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (next.has(addr)) next.delete(addr)
+      else next.add(addr)
+      return next
+    })
+  }, [])
+
+  // "Select never-played" is the one-click version of the farm heuristic.
+  const selectIdle = useCallback(() => {
+    if (!detail) return
+    setSelected(new Set(detail.referees.filter((r) => BigInt(r.lifetimeWager || '0') === 0n).map((r) => r.address)))
+  }, [detail])
+
+  // What we can actually recover: min(welcome bonus, that wallet's balance).
+  const recoverable = detail
+    ? detail.referees
+        .filter((r) => selected.has(r.address))
+        .reduce((sum, r) => {
+          const owed = BigInt(r.welcomeBonusChips || '0')
+          const bal = BigInt(r.chipBalance || '0')
+          return sum + (bal < owed ? bal : owed)
+        }, 0n)
+    : 0n
+
+  const clawbackWelcome = useCallback(async () => {
+    if (!detail || selected.size === 0) return
+    setLoading(true)
+    setError(null)
+    try {
+      const res = await fetch(`/api/admin-ops/referrals/referrer/${detail.referrer}/clawback-welcome`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ referees: Array.from(selected) }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || 'Clawback failed')
+      setNotice(
+        `Recovered ${fmt(data.totalRecovered ?? '0')} MORBIUS from ${selected.size} wallet(s)` +
+          (BigInt(data.totalShortfall ?? '0') > 0n
+            ? ` · ${fmt(data.totalShortfall)} unrecoverable (already spent or withdrawn)`
+            : ''),
+      )
+      setConfirmClaw(false)
+      setSelected(new Set())
+      await lookup(detail.referrer)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Clawback failed')
+    } finally {
+      setLoading(false)
+    }
+  }, [detail, selected, lookup])
 
   return (
     <div className="mb-4 rounded-xl border border-white/10 bg-white/[0.02] p-4">
@@ -276,10 +334,68 @@ export default function ReferralAbuseControls() {
               </div>
             )}
 
+            {detail.referees.length > 0 && (
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <button
+                  onClick={selectIdle}
+                  className="rounded-lg bg-white/10 px-3 py-1.5 text-[11px] font-semibold text-white/80 hover:bg-white/15"
+                >
+                  Select never-played ({detail.totals.neverWagered})
+                </button>
+                {selected.size > 0 && (
+                  <button
+                    onClick={() => setSelected(new Set())}
+                    className="rounded-lg px-2.5 py-1.5 text-[11px] text-white/50 hover:text-white/80"
+                  >
+                    Clear ({selected.size})
+                  </button>
+                )}
+                <div className="flex-1" />
+                {selected.size > 0 &&
+                  (confirmClaw ? (
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={clawbackWelcome}
+                        disabled={loading}
+                        className="inline-flex items-center gap-2 rounded-lg bg-rose-500/25 px-3.5 py-1.5 text-[11px] font-bold text-rose-200 hover:bg-rose-500/35 disabled:opacity-50"
+                      >
+                        {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Ban className="h-3.5 w-3.5" />}
+                        Confirm — take back {fmt(recoverable.toString())}
+                      </button>
+                      <button
+                        onClick={() => setConfirmClaw(false)}
+                        className="rounded-lg px-2.5 py-1.5 text-[11px] text-white/50 hover:text-white/80"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => setConfirmClaw(true)}
+                      className="inline-flex items-center gap-2 rounded-lg bg-rose-500/15 px-3.5 py-1.5 text-[11px] font-semibold text-rose-300 hover:bg-rose-500/25"
+                    >
+                      <Ban className="h-3.5 w-3.5" /> Claw back welcome bonuses ({fmt(recoverable.toString())})
+                    </button>
+                  ))}
+              </div>
+            )}
+
+            {confirmClaw && selected.size > 0 && (
+              <div className="mt-2 flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+                <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                <span>
+                  Debits each selected wallet up to the welcome bonus it received. Chips already spent or
+                  withdrawn on-chain cannot be recovered — those wallets are debited only down to zero and the
+                  shortfall is reported.
+                </span>
+              </div>
+            )}
+
             <div className="mt-3 max-h-80 overflow-auto rounded-lg border border-white/10">
               <table className="w-full border-collapse text-xs">
                 <thead className="sticky top-0 bg-[#0b1117]">
                   <tr className="text-left text-[10px] uppercase tracking-wider text-white/40">
+                    <th className="w-8 px-3 py-2 font-medium" />
                     <th className="px-3 py-2 font-medium">Referred wallet</th>
                     <th className="px-3 py-2 text-right font-medium">Balance</th>
                     <th className="px-3 py-2 text-right font-medium">Lifetime wager</th>
@@ -290,7 +406,7 @@ export default function ReferralAbuseControls() {
                 <tbody>
                   {detail.referees.length === 0 ? (
                     <tr>
-                      <td colSpan={5} className="px-3 py-6 text-center text-white/40">
+                      <td colSpan={6} className="px-3 py-6 text-center text-white/40">
                         This wallet has not referred anyone.
                       </td>
                     </tr>
@@ -302,6 +418,15 @@ export default function ReferralAbuseControls() {
                           key={r.address}
                           className={`border-t border-white/5 ${idle ? 'bg-amber-500/[0.06]' : ''}`}
                         >
+                          <td className="px-3 py-2">
+                            <input
+                              type="checkbox"
+                              checked={selected.has(r.address)}
+                              onChange={() => toggleOne(r.address)}
+                              aria-label={`Select ${r.address}`}
+                              className="h-3.5 w-3.5 cursor-pointer accent-rose-400"
+                            />
+                          </td>
                           <td className="px-3 py-2 font-mono text-white/80" title={r.address}>
                             {short(r.address)}
                             {idle && (

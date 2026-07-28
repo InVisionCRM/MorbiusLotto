@@ -327,6 +327,28 @@ export function registerAdminOpsRoutes({ app, dbService, authService, referralSe
   );
 
   app.post(
+    '/api/admin-ops/referrals/referrer/:address/clawback-welcome',
+    requireAuth(authService),
+    requireAdmin,
+    async (req: Request, res: Response) => {
+      try {
+        const list = (req.body ?? {}).referees;
+        if (!Array.isArray(list) || list.length === 0) {
+          return res.status(400).json({ error: 'Select at least one referred wallet' });
+        }
+        const result = await referralService.clawbackWelcomeBonuses(
+          String(req.params.address),
+          list.map((x: unknown) => String(x)),
+        );
+        return res.json({ ok: true, ...result });
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : 'clawback failed';
+        return res.status(/Invalid wallet/.test(msg) ? 400 : 500).json({ error: msg });
+      }
+    },
+  );
+
+  app.post(
     '/api/admin-ops/referrals/referrer/:address/blacklist',
     requireAuth(authService),
     requireAdmin,

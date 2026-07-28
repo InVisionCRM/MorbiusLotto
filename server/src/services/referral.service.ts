@@ -306,6 +306,110 @@ export class ReferralService {
     }
   }
 
+  /**
+   * Claw back the WELCOME BONUS from specific referees of a referrer — the money
+   * a bonus-farmer actually walks away with (the referral-reward clawback in
+   * blacklist() only touches the referrer's own rakeback share, which is ~0 for a
+   * farmer whose referees never played).
+   *
+   * Per referee we recover min(welcome bonus paid, current balance): chips that
+   * have already been withdrawn on-chain cannot be taken back, and
+   * applyPokerChipDelta refuses to push a balance negative, so a blanket debit
+   * would simply throw. Each wallet is reported with what was recovered and what
+   * was short, and one wallet failing never aborts the rest.
+   */
+  async clawbackWelcomeBonuses(
+    rawReferrer: string,
+    refereeAddresses: string[],
+  ): Promise<{
+    referrer: string;
+    totalRecovered: string;
+    totalShortfall: string;
+    results: Array<{ address: string; recovered: string; shortfall: string; error?: string }>;
+  }> {
+    const referrer = normalizeAddr(rawReferrer);
+    const wanted = new Set(refereeAddresses.map((a) => normalizeAddr(a)));
+
+    // Only referees actually bound to THIS referrer are eligible.
+    const { rows } = await this.pool.query<{ referee_address: string; welcome_bonus_chips: string }>(
+      `SELECT referee_address, welcome_bonus_chips::text AS welcome_bonus_chips
+         FROM referrals WHERE referrer_address = $1`,
+      [referrer],
+    );
+    const eligible = rows.filter((r) => wanted.has(r.referee_address));
+
+    const results: Array<{ address: string; recovered: string; shortfall: string; error?: string }> = [];
+    let totalRecovered = 0n;
+    let totalShortfall = 0n;
+
+    for (const row of eligible) {
+      const owed = BigInt(row.welcome_bonus_chips || '0');
+      if (owed <= 0n) continue;
+      const client = await this.pool.connect();
+      try {
+        await client.query('BEGIN');
+        const bal = await client.query<{ balance: string }>(
+          `SELECT COALESCE(balance, 0)::text AS balance FROM player_poker_chips
+            WHERE wallet_address = $1 FOR UPDATE`,
+          [row.referee_address],
+        );
+        const available = BigInt(bal.rows[0]?.balance ?? '0');
+        const take = available < owed ? available : owed;
+        if (take > 0n) {
+          await applyPokerChipDelta(client, row.referee_address, -take, 'referral_welcome_clawback', {
+            type: 'referral',
+            id: null,
+          });
+        }
+        await client.query('COMMIT');
+        const short = owed - take;
+        totalRecovered += take;
+        totalShortfall += short;
+        results.push({
+          address: row.referee_address,
+          recovered: take.toString(),
+          shortfall: short.toString(),
+        });
+      } catch (err) {
+        await client.query('ROLLBACK').catch(() => {});
+        totalShortfall += owed;
+        results.push({
+          address: row.referee_address,
+          recovered: '0',
+          shortfall: owed.toString(),
+          error: err instanceof Error ? err.message : 'clawback failed',
+        });
+      } finally {
+        client.release();
+      }
+    }
+
+    // Fold the recovery into the referrer's blacklist row when one exists, so the
+    // audit trail stays on a single reviewable record.
+    if (totalRecovered > 0n) {
+      await this.pool.query(
+        `UPDATE referral_blacklist
+            SET clawed_back_chips = clawed_back_chips + $2::NUMERIC
+          WHERE wallet_address = $1`,
+        [referrer, totalRecovered.toString()],
+      );
+    }
+
+    logger.info('[Referral] welcome clawback', {
+      referrer,
+      wallets: results.length,
+      recovered: totalRecovered.toString(),
+      shortfall: totalShortfall.toString(),
+    });
+
+    return {
+      referrer,
+      totalRecovered: totalRecovered.toString(),
+      totalShortfall: totalShortfall.toString(),
+      results,
+    };
+  }
+
   /** Restore referral privileges. Does not re-credit any clawed-back chips. */
   async unblacklist(rawAddress: string): Promise<{ blacklisted: false }> {
     await this.pool.query('DELETE FROM referral_blacklist WHERE wallet_address = $1', [
