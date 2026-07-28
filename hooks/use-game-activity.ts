@@ -28,12 +28,21 @@ export interface GamePlay {
   at: string
 }
 
-/** All games + all-time totals (wagered / won / plays / players), busiest first. */
-export function useGameSummaries(enabled = true) {
+/** A play in the cross-game feed — carries which game it belongs to. */
+export interface RecentPlay extends GamePlay {
+  gameKey: string
+  gameLabel: string
+}
+
+/** Time windows the dashboard can slice its stats by. */
+export type StatsWindow = '24h' | '7d' | '30d' | 'all'
+
+/** All games + totals (wagered / won / plays / players) for a window, busiest first. */
+export function useGameSummaries(enabled = true, window: StatsWindow = 'all') {
   return useQuery({
-    queryKey: ['activity-games'],
+    queryKey: ['activity-games', window],
     queryFn: async (): Promise<GameSummariesResult> => {
-      const r = await fetch('/api/activity/games', { credentials: 'include' })
+      const r = await fetch(`/api/activity/games?window=${window}`, { credentials: 'include' })
       if (!r.ok) throw new Error(`games ${r.status}`)
       const d = await r.json()
       return {
@@ -43,6 +52,22 @@ export function useGameSummaries(enabled = true) {
     },
     enabled,
     staleTime: 30_000,
+  })
+}
+
+/** Most recent plays across every game (global feed), newest first. */
+export function useRecentPlays(enabled = true, limit = 40) {
+  return useQuery({
+    queryKey: ['activity-recent-plays', limit],
+    queryFn: async (): Promise<RecentPlay[]> => {
+      const r = await fetch(`/api/activity/plays?limit=${limit}`, { credentials: 'include' })
+      if (!r.ok) throw new Error(`plays ${r.status}`)
+      const d = await r.json()
+      return Array.isArray(d?.plays) ? d.plays : []
+    },
+    enabled,
+    staleTime: 10_000,
+    refetchInterval: enabled ? 15_000 : false,
   })
 }
 
