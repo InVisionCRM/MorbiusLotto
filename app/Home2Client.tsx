@@ -11,7 +11,6 @@ import { SceneDefs } from '@/components/home2/scenes'
 import {
   HomeTicker,
   HeroPlayer,
-  TonightsTable,
   TheFloor,
   WeeklyDrop,
   VipLadder,
@@ -287,7 +286,6 @@ export default function Home2Client() {
               onDashboard={onDashboard}
             />
           ) : null}
-          <TonightsTable />
           <TheFloor />
           {weeklyDrop ? (
             <WeeklyDrop
