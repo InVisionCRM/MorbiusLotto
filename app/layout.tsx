@@ -32,8 +32,12 @@ export const metadata: Metadata = {
   title: "MORBIUS",
   description: "Morbius.io is a web3 gaming platform built on PulseChain. PulseChain is a fast and secure blockchain that is built for the future of web3.",
   icons: {
+    // Browsers pick by size; give them exact PNG matches for the tab (16/32)
+    // instead of making them downscale a large icon, with the .ico as fallback.
     icon: [
       { url: '/icons/favicon.ico', sizes: 'any' },
+      { url: '/icons/favicon-16x16.png', sizes: '16x16', type: 'image/png' },
+      { url: '/icons/favicon-32x32.png', sizes: '32x32', type: 'image/png' },
       { url: '/icons/favicon-96x96.png', sizes: '96x96', type: 'image/png' },
     ],
     apple: [{ url: '/icons/apple-touch-icon.png', sizes: '180x180', type: 'image/png' }],
