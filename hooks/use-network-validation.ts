@@ -1,6 +1,5 @@
 import { useChainId, useSwitchChain } from 'wagmi'
 import { pulsechain } from '@/lib/chains'
-import { useEffect } from 'react'
 import { toast } from 'sonner'
 
 export function useNetworkValidation() {
@@ -9,12 +8,10 @@ export function useNetworkValidation() {
 
   const isOnPulseChain = chainId === pulsechain.id
 
-  useEffect(() => {
-    if (!isOnPulseChain && chainId) {
-      console.warn(`⚠️ Wrong network detected. Current: ${chainId}, Expected: ${pulsechain.id}`)
-      toast.warning('Please switch to PulseChain network to use this app.')
-    }
-  }, [chainId, isOnPulseChain])
+  // No wrong-network toast here: ChainGuard (mounted once in providers.tsx) both
+  // auto-switches and owns the single notification. This hook previously fired a
+  // toast from every component that called it — and fired it while disconnected
+  // too, since wagmi still reports a chainId then.
 
   const switchToPulseChain = async () => {
     try {

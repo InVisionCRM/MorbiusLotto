@@ -13,6 +13,7 @@ import { ProfileWsProvider } from '@/contexts/profile-ws-context'
 import { PwaInstallPromptProvider } from '@/contexts/pwa-install-prompt-context'
 import { InstallAppHelpDialogProvider } from '@/contexts/install-app-help-dialog-context'
 import { SiweProvider } from '@/contexts/siwe-context'
+import ChainGuard from '@/components/shared/ChainGuard'
 import { WalletActionProvider } from '@/contexts/wallet-action-context'
 import { BigWinProvider } from '@/contexts/big-win-context'
 // Side-effect: force AppKit's All Wallets list to load every page (its lazy-load
@@ -75,6 +76,9 @@ export function Providers({ children }: { children: React.ReactNode }) {
       <LocaleProvider>
       <WagmiProvider config={config}>
         <QueryClientProvider client={queryClient}>
+          {/* Keeps a connected wallet on PulseChain — the wide `networks` list
+              makes other chains valid session chains, so drift is possible. */}
+          <ChainGuard />
           <WalletActionProvider>
             <SiweProvider>
               <ProfileSettingsModalProvider>
