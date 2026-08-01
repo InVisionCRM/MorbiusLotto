@@ -1,4 +1,5 @@
 import { formatEther } from 'viem';
+import { randomUUID } from 'crypto';
 import { DatabaseService, Game, GameHand } from './database.service';
 import { ProvablyFairService } from './provably-fair.service';
 import { TournamentService, TournamentState, TOURNAMENT_CONFIG } from './tournament.service';
@@ -339,9 +340,16 @@ export class BlackjackGameService {
 
       // Game-domain balance authority remains here (Phase 7 reviews full authority concentration).
       // Deduct total stake (main + Perfect Pairs) from the chip ledger (1 chip = 1 MORBIUS).
+      // The game row doesn't exist yet at this point, so the id is generated up
+      // front and handed to createGame() below — that's what lets the Activity
+      // tab's "Verify" link find this exact game (see lib/round-verify.ts).
+      // Without it the ledger row's ref_id stayed null and single-player
+      // blackjack could never be verified from the player dashboard, unlike
+      // every other game.
+      const gameId = randomUUID();
       await this.dbService.debitChipsForWei(request.playerAddress, totalStake, 'blackjack_bet', {
         type: 'blackjack_game',
-        id: null,
+        id: gameId,
       });
       logger.debug('Deducted stake from balance', {
         playerAddress: request.playerAddress,
@@ -351,8 +359,10 @@ export class BlackjackGameService {
 
       const immediatePayout = initialHand.payout + perfectPairsPayout;
 
-      // Create game record (v2: rng_version = 2, rng_counter = deck position)
+      // Create game record (v2: rng_version = 2, rng_counter = deck position).
+      // id is pinned to the value already recorded as this bet's ledger ref_id.
       const game = await this.dbService.createGame(session.id, {
+        id: gameId,
         game_number: gameNumber,
         total_bet_amount: request.betAmount,
         dealer_cards: dealerCards,
