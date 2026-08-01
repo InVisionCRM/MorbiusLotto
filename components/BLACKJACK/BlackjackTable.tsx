@@ -1777,32 +1777,8 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
         }
 
         /* Simple slide-in animation from top-right */
-        @keyframes cardSlideIn {
-          0% {
-            transform: translateX(100px) translateY(-80px);
-            opacity: 0;
-          }
-          100% {
-            transform: translateX(0) translateY(0);
-            opacity: 1;
-          }
-        }
-
-        .card-slide-in {
-          animation: cardSlideIn 0.6s ease-out both;
-        }
-
-        /* Card clear: fade + slide down (collect) */
-        @keyframes cardClearOut {
-          to {
-            opacity: 0;
-            transform: translate(-80px, -120px) scale(0.6);
-          }
-        }
-        .card-clear-out {
-          animation: cardClearOut 0.45s ease-in forwards;
-          pointer-events: none;
-        }
+        /* Card deal-in and collect animations now live in blackjack-cards.css,
+           imported by PlayingCard, so the multiplayer table gets them too. */
 
         /* Chip lose animation - slides up and fades out */
         @keyframes chipLose {
@@ -1890,41 +1866,8 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
         .dock-icon-split:active > div > div {
           transform: scale(0.95);
         }
-        .blackjack-card {
-          @apply relative;
-        }
-        .blackjack-card-dealer:hover {
-          box-shadow: 0 6px 12px rgba(0, 0, 0, 0.4);
-        }
-        .blackjack-card-player:hover {
-          box-shadow: 0 6px 12px rgba(0, 0, 0, 0.4);
-        }
-
-        /* Desktop: overlapping card margins */
-        @media (min-width: 641px) {
-          .card-overlap-dealer {
-            margin-left: -15px;
-          }
-          .card-overlap-player {
-            margin-left: -25px;
-          }
-        }
-
-        /* Mobile: cards larger size with xs border radius + overlap so cards stay close */
-        @media (max-width: 640px) {
-          .blackjack-table .blackjack-card-player,
-          .blackjack-table .blackjack-card-dealer {
-            width: 56px !important;
-            height: 80px !important;
-            border-radius: 0.125rem !important; /* rounded-xs */
-          }
-          .card-overlap-dealer {
-            margin-left: -12px;
-          }
-          .card-overlap-player {
-            margin-left: -18px;
-          }
-        }
+        /* Card sizing, stacking offsets and hover shadows now live in
+           blackjack-cards.css so both blackjack tables share one source. */
 
         /* Card counter active border animation */
         @keyframes cyanGlow {

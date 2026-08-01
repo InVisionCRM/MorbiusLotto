@@ -3,6 +3,9 @@
 import React from 'react';
 import Image from 'next/image';
 import { Card } from '@/app/BLACKJACK/types';
+import { useBlackjackTableLayout } from '@/components/BLACKJACK/BlackjackTableLayoutContext';
+import { cardFacePath } from '@/lib/blackjack-table-layout';
+import './blackjack-cards.css';
 
 interface PlayingCardProps {
   card: Card;
@@ -19,6 +22,7 @@ interface PlayingCardProps {
 }
 
 const PlayingCard: React.FC<PlayingCardProps> = ({ card, hidden = false, owner, className = '', index = 0, isNewCard = false, size = 'normal', exiting = false, exitDelay = 0 }) => {
+  const layout = useBlackjackTableLayout();
   const isDealer = owner === 'dealer';
 
   const ownerClass = isDealer ? 'blackjack-card-dealer' : 'blackjack-card-player';
@@ -27,7 +31,7 @@ const PlayingCard: React.FC<PlayingCardProps> = ({ card, hidden = false, owner, 
   const animationClass = exiting ? 'card-clear-out' : (isNewCard ? 'card-slide-in' : '');
 
   // Staggered animation delay (slide-in); when exiting use exitDelay
-  const animationDelay = exiting ? exitDelay : (index * 0.25);
+  const animationDelay = exiting ? exitDelay : (index * (layout.motion.dealIn.staggerMs / 1000));
 
   // Get suit letter for image filename (S=spades, D=diamonds, C=clubs, H=hearts)
   const getSuitLetter = (suit: string) => {
@@ -50,42 +54,34 @@ const PlayingCard: React.FC<PlayingCardProps> = ({ card, hidden = false, owner, 
   };
 
   // Build the card image path
-  const getCardImagePath = () => {
-    const valueStr = getValueString(card.value);
-    const suitLetter = getSuitLetter(card.suit);
-    return `/BlackJack/Cards/PNG/${valueStr}${suitLetter}.png`;
-  };
+  const getCardImagePath = () =>
+    cardFacePath(layout, `${getValueString(card.value)}${getSuitLetter(card.suit)}`);
 
-  // Simple shadow for card depth
-  const getCardShadow = () => {
-    return '0 2px 4px rgba(0, 0, 0, 0.2)';
-  };
-
-  // Size dimensions: large = 112x160, medium = 108x152, normal = 80x112, small = 56x80
-  const sizePx = size === 'large' ? { w: 112, h: 160 } : size === 'medium' ? { w: 108, h: 152 } : size === 'small' ? { w: 56, h: 80 } : { w: 80, h: 112 };
+  const sizePx = layout.cards.sizes[size];
   const imageSize = sizePx;
 
-  // Initial state for new cards: start hidden and offset
+  // Initial state for new cards: parked at the shoe until the deal animation
+  // picks it up, so there is no flash at the resting position first.
+  const { fromX, fromY } = layout.motion.dealIn;
   const initialStyle = isNewCard && !exiting ? {
     opacity: 0,
-    transform: 'translateX(100px) translateY(-80px)',
+    transform: `translateX(${fromX}px) translateY(${fromY}px)`,
   } : {};
 
   if (hidden) {
     return (
       <div
-        className={`blackjack-card blackjack-card-hidden ${ownerClass} ${animationClass} ${className} relative overflow-hidden rounded-lg`}
+        className={`blackjack-card blackjack-card-hidden ${ownerClass} ${animationClass} ${className} overflow-hidden`}
         style={{
           width: sizePx.w,
           height: sizePx.h,
-          boxShadow: getCardShadow(),
           animationDelay: exiting ? `${animationDelay}s` : (isNewCard ? `${animationDelay}s` : '1s'),
           ...initialStyle,
         }}
       >
         <div className="w-full h-full bg-slate-900 overflow-hidden">
           <Image
-            src="/Pulse Branding/Logo/ball.png"
+            src={layout.cards.backImage}
             alt="Card back"
             width={imageSize.w}
             height={imageSize.h}
@@ -99,11 +95,10 @@ const PlayingCard: React.FC<PlayingCardProps> = ({ card, hidden = false, owner, 
 
   return (
     <div
-      className={`blackjack-card ${ownerClass} ${animationClass} ${className} relative overflow-hidden rounded-lg bg-white`}
+      className={`blackjack-card ${ownerClass} ${animationClass} ${className} overflow-hidden bg-white`}
       style={{
         width: sizePx.w,
         height: sizePx.h,
-        boxShadow: getCardShadow(),
         animationDelay: exiting ? `${animationDelay}s` : (isNewCard ? `${animationDelay}s` : '1s'),
         ...initialStyle,
       }}
