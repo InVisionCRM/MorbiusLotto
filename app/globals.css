@@ -1,4 +1,6 @@
 @import "tailwindcss";
+/* Runtime-tunable colour layer. Generated — see scripts/generate-theme-tokens.js */
+@import "./theme-tokens.css";
 
 @custom-variant dark (&:is(.dark *));
 
