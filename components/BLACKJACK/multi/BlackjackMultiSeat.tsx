@@ -7,6 +7,7 @@ import type { LucideIcon } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { toast } from 'sonner';
 import PlayingCard from '@/components/BLACKJACK/PlayingCard';
+import { useBlackjackTableLayout } from '@/components/BLACKJACK/BlackjackTableLayoutContext';
 import { BetChip, formatChipLabel } from '@/components/ui/BetChip';
 import { AvatarView, type Emotion } from '@/components/avatar';
 import { VipAvatarBadge } from '@/components/vip/VipTierBadge';
@@ -170,6 +171,7 @@ export function BlackjackMultiSeat({
   cardsExiting = false,
   newPlayerCardByHandKey,
 }: BlackjackMultiSeatProps) {
+  const cardClearStaggerMs = useBlackjackTableLayout().motion.clearOut.playerStaggerMs;
   const canOpenProfile = !!seat?.playerAddress && !!onOpenProfile && !isMe;
   const seatOutcomeLabel = seat
     ? seatOutcomeLabelFromSummary(summarizeSeatHands(seat.hands), seat.payout || '0')
@@ -385,7 +387,7 @@ export function BlackjackMultiSeat({
                                 index={ci}
                                 isNewCard={isNewCard}
                                 exiting={cardsExiting}
-                                exitDelay={ci * 0.12}
+                                exitDelay={(ci * cardClearStaggerMs) / 1000}
                               />
                             </div>
                           );

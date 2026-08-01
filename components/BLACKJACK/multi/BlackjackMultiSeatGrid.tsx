@@ -5,20 +5,11 @@ import type { BJMultiSeatState } from '@/lib/websocket-client';
 import type { Emotion } from '@/components/avatar';
 import { BlackjackMultiSeat } from '@/components/BLACKJACK/multi/BlackjackMultiSeat';
 import { POKER_DIRECTED_EMOTES, POKER_DIRECTED_EMOTE_FLY_MS, type PokerDirectedEmoteKind } from '@/lib/poker-directed-emotes';
+import { useBlackjackTableLayout } from '@/components/BLACKJACK/BlackjackTableLayoutContext';
 
-// ── Canvas coordinate system ─────────────────────────────────────────────────
-// All coordinates are in the logical 800×450 canvas space.
-// `cx`    — horizontal center of the seat in canvas px.
-// `floorY` — Y position of the bottom edge of the name tag in canvas px.
-//            Expressed as distance from the TOP of the canvas (same axis as CSS top).
-// `angle` — rotation of the whole seat column in degrees (positive = clockwise).
-//            The name tag counter-rotates by the same amount so text stays upright.
-
-const SEATS = [
-  { cx: 140, floorY: 415, angle: 18 },   // left
-  { cx: 400, floorY: 428, angle: 0 },    // center (slightly lower = reads as closer)
-  { cx: 660, floorY: 415, angle: -18 },  // right
-] as const;
+// Seat placement lives in the table layout (lib/blackjack-table-layout.ts) so a
+// table theme can move seats without touching this component. Coordinates are
+// in the layout's logical canvas space; see SeatPlacement for what each means.
 
 const POSITIONS = [0, 1, 2] as const;
 
@@ -69,6 +60,9 @@ export function BlackjackMultiSeatGrid({
   broadcastEmotionByAddress,
   directedEmotes,
 }: BlackjackMultiSeatGridProps) {
+  const layout = useBlackjackTableLayout();
+  const SEATS = layout.seats;
+
   return (
     <div className="absolute inset-0" style={{ pointerEvents: 'none' }}>
       {POSITIONS.map((pos) => {
@@ -125,12 +119,12 @@ export function BlackjackMultiSeatGrid({
         const toPos = seats.findIndex((s) => s?.playerAddress?.toLowerCase() === de.toAddress.toLowerCase());
         const def = POKER_DIRECTED_EMOTES[de.kind];
         if (fromPos < 0 || toPos < 0 || !def) return null;
-        const RAISE = 175; // logical px above the name-tag floor → roughly above the head
+        const RAISE = layout.emotes.raise; // above the name-tag floor → roughly above the head
         const fromX = SEATS[fromPos].cx;
         const fromY = SEATS[fromPos].floorY - RAISE;
         const dx = SEATS[toPos].cx - fromX;
         const dy = (SEATS[toPos].floorY - RAISE) - fromY;
-        const apexY = Math.min(0, dy) - 70; // arc up and over
+        const apexY = Math.min(0, dy) - layout.emotes.arcApex; // arc up and over
         return (
           <div
             key={de.id}

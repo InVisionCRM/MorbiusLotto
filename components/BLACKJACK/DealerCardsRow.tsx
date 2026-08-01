@@ -3,6 +3,7 @@
 import React from 'react';
 import type { Card } from '@/app/BLACKJACK/types';
 import PlayingCard from '@/components/BLACKJACK/PlayingCard';
+import { useBlackjackTableLayout } from '@/components/BLACKJACK/BlackjackTableLayoutContext';
 
 type DealerCardsRowProps = {
   cards: Card[];
@@ -22,6 +23,8 @@ export default function DealerCardsRow({
   cardsExiting = false,
   newDealerCardIndices = null,
 }: DealerCardsRowProps) {
+  const { clearOut } = useBlackjackTableLayout().motion;
+
   return (
     <>
       {cards.map((card, index) => {
@@ -45,7 +48,7 @@ export default function DealerCardsRow({
               index={index}
               isNewCard={isNewCard}
               exiting={cardsExiting}
-              exitDelay={index * 0.12}
+              exitDelay={(index * clearOut.dealerStaggerMs) / 1000}
             />
           </div>
         );

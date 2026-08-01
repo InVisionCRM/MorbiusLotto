@@ -1,0 +1,85 @@
+/*
+ * Shared card presentation for every blackjack surface: stacking offsets, the
+ * deal-in flight from the shoe, and the end-of-round collect.
+ *
+ * These rules previously lived in a <style jsx global> block inside the
+ * single-player BlackjackTable component, which meant they only existed while
+ * that component happened to be mounted. Moving them into a real stylesheet
+ * lets the multiplayer table import them too.
+ *
+ * Every value reads from a custom property emitted by
+ * BlackjackTableLayoutProvider, with a fallback equal to the shipped default,
+ * so these rules are correct even on a surface with no provider above them.
+ */
+
+.blackjack-card {
+  position: relative;
+  border-radius: var(--bj-card-radius, 0.5rem);
+  box-shadow: var(--bj-card-shadow, 0 2px 4px rgba(0, 0, 0, 0.2));
+}
+
+.blackjack-card-dealer:hover,
+.blackjack-card-player:hover {
+  box-shadow: var(--bj-card-shadow-hover, 0 6px 12px rgba(0, 0, 0, 0.4));
+}
+
+/* ── Stacking ─────────────────────────────────────────────────────────────
+   Applied to every card after the first, pulling it back over its neighbour. */
+@media (min-width: 641px) {
+  .card-overlap-dealer {
+    margin-left: var(--bj-card-overlap-dealer, -15px);
+  }
+  .card-overlap-player {
+    margin-left: var(--bj-card-overlap-player, -25px);
+  }
+}
+
+@media (max-width: 640px) {
+  .card-overlap-dealer {
+    margin-left: var(--bj-card-overlap-dealer-mobile, -12px);
+  }
+  .card-overlap-player {
+    margin-left: var(--bj-card-overlap-player-mobile, -18px);
+  }
+
+  /* Narrow screens use one fixed card size regardless of the requested size. */
+  .blackjack-table .blackjack-card-player,
+  .blackjack-table .blackjack-card-dealer {
+    width: var(--bj-card-mobile-w, 56px) !important;
+    height: var(--bj-card-mobile-h, 80px) !important;
+    border-radius: var(--bj-card-radius-mobile, 0.125rem) !important;
+  }
+}
+
+/* ── Deal in ──────────────────────────────────────────────────────────────
+   Card flies from the shoe to its resting spot. The per-card delay is set
+   inline by PlayingCard so each card in a hand lands in sequence. */
+@keyframes cardSlideIn {
+  0% {
+    transform: translateX(var(--bj-deal-from-x, 100px)) translateY(var(--bj-deal-from-y, -80px));
+    opacity: 0;
+  }
+  100% {
+    transform: translateX(0) translateY(0);
+    opacity: 1;
+  }
+}
+
+.card-slide-in {
+  animation: cardSlideIn var(--bj-deal-duration, 600ms) var(--bj-deal-easing, ease-out) both;
+}
+
+/* ── Collect ──────────────────────────────────────────────────────────────
+   End of round: cards fade and sweep off toward the discard tray. */
+@keyframes cardClearOut {
+  to {
+    opacity: 0;
+    transform: translate(var(--bj-clear-to-x, -80px), var(--bj-clear-to-y, -120px))
+      scale(var(--bj-clear-scale, 0.6));
+  }
+}
+
+.card-clear-out {
+  animation: cardClearOut var(--bj-clear-duration, 450ms) var(--bj-clear-easing, ease-in) forwards;
+  pointer-events: none;
+}
