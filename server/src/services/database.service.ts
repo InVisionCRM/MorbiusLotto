@@ -1906,8 +1906,16 @@ export class DatabaseService implements MoneyDatabaseQueries {
     // so the first player_action isn't rejected as "Game already completed".
     const persistedResult = (gameData.result ?? 'ongoing') as any;
 
+    // Callers that need the game's id BEFORE this insert (single-player blackjack
+    // records its initial bet against the chip ledger before the game row exists,
+    // so it must know the id up front to tie the ledger row to this game for
+    // provably-fair verification) may pass gameData.id; otherwise the column
+    // default (gen_random_uuid()) applies as before.
+    const explicitId = typeof gameData.id === 'string' && gameData.id.trim() !== '' ? gameData.id : null;
+
     const query = `
       INSERT INTO games (
+        ${explicitId ? 'id,' : ''}
         session_id,
         game_number,
         total_bet_amount,
@@ -1926,7 +1934,7 @@ export class DatabaseService implements MoneyDatabaseQueries {
         perfect_pairs_payout,
         rng_version
       )
-      VALUES ($1, $2, $3::NUMERIC, $4, $5, $6, $7::NUMERIC, $8, $9, $10, $11, $12, $13, $14, $15::NUMERIC, $16::NUMERIC, $17)
+      VALUES (${explicitId ? '$18,' : ''} $1, $2, $3::NUMERIC, $4, $5, $6, $7::NUMERIC, $8, $9, $10, $11, $12, $13, $14, $15::NUMERIC, $16::NUMERIC, $17)
       RETURNING *
     `;
 
@@ -1948,6 +1956,7 @@ export class DatabaseService implements MoneyDatabaseQueries {
       (gameData.perfect_pairs_bet_amount ?? 0n).toString(),
       (gameData.perfect_pairs_payout ?? 0n).toString(),
       Number(gameData.rng_version ?? 1),
+      ...(explicitId ? [explicitId] : []),
     ];
 
     const result = await this.pool.query(query, values);
