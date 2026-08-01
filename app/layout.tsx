@@ -8,6 +8,7 @@ import { BreakReminderWrapper } from "@/components/ResponsibleGaming";
 import { ChatSidebar } from "@/components/chat/ChatSidebar";
 import { GameLockOverlay } from "@/components/shared/GameLockOverlay";
 import { ServiceWorkerRegistration } from "@/components/shared/ServiceWorkerRegistration";
+import ThemeStudioMount from "@/components/theme/ThemeStudioMount";
 
 // Use system fonts instead of Google Fonts to avoid build issues
 const geistSans = {
@@ -124,6 +125,7 @@ export default function RootLayout({
                 Restore `<WheelLauncher />` here + its import above to re-enable.
                 The /wheel route still works by direct URL for testing. */}
             <Analytics />
+            <ThemeStudioMount />
           </Providers>
         </div>
       </body>
