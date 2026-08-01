@@ -2754,7 +2754,10 @@ export class DatabaseService implements MoneyDatabaseQueries {
       await client.query('COMMIT');
       return result;
     } catch (error) {
-      await client.query('ROLLBACK');
+      // Never let a failing ROLLBACK (dead connection, already-aborted
+      // transaction) replace the error that actually caused the failure —
+      // that turns a diagnosable bug into a misleading one.
+      await client.query('ROLLBACK').catch(() => {});
       throw error;
     } finally {
       client.release();

@@ -1735,6 +1735,16 @@ export class BlackjackMultiGameService {
           });
         }
 
+        // Wheel/milestone credit is best-effort: a failure here must not cost the
+        // player their settled payout. It runs on the settle transaction's client
+        // though, and in Postgres any failed statement aborts the whole
+        // transaction — every later command then fails with 25P02
+        // ("current transaction is aborted") until it unwinds. Swallowing the
+        // error without unwinding therefore took down the round completion below
+        // and surfaced 25P02 to the player, hiding the real cause in a warning.
+        // A savepoint scopes the damage: roll back just this block and the rest
+        // of the settlement proceeds on a healthy transaction.
+        await client.query('SAVEPOINT bj_multi_wheel_ledger');
         try {
           const totalWagered = hands.reduce(
             (sum: bigint, h: any) => sum + BigInt(h.betAmount || '0'),
@@ -1756,9 +1766,14 @@ export class BlackjackMultiGameService {
               overallResult === 'win',
             );
           }
+          await client.query('RELEASE SAVEPOINT bj_multi_wheel_ledger');
         } catch (e) {
+          await client.query('ROLLBACK TO SAVEPOINT bj_multi_wheel_ledger');
+          await client.query('RELEASE SAVEPOINT bj_multi_wheel_ledger');
           logger.warn('wheel ledger update failed (multi blackjack)', {
             seatId: rs.id,
+            roundId,
+            code: (e as { code?: string }).code,
             error: (e as Error).message,
           });
         }
