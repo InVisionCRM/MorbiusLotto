@@ -71,6 +71,14 @@ export interface BlackjackTableLayout {
   /** One entry per seat, left to right. */
   seats: SeatPlacement[];
 
+  /** Where the dealer's hand sits on the canvas. */
+  dealer: {
+    /** Horizontal centre of the dealer's hand, in canvas px. */
+    cx: number;
+    /** Top edge of the dealer's hand, in canvas px. */
+    top: number;
+  };
+
   emotes: {
     /** How far above the seat's floorY an emote bubble pops, in canvas px. */
     raise: number;
@@ -111,6 +119,8 @@ export const DEFAULT_BLACKJACK_TABLE_LAYOUT: BlackjackTableLayout = {
     { cx: 400, floorY: 428, angle: 0 },
     { cx: 660, floorY: 415, angle: -18 },
   ],
+
+  dealer: { cx: 400, top: 50 },
 
   emotes: {
     raise: 175,
@@ -211,6 +221,7 @@ export function mergeTableLayout(
   return {
     canvas: { ...base.canvas, ...override.canvas },
     seats: (override.seats as SeatPlacement[] | undefined) ?? base.seats,
+    dealer: { ...base.dealer, ...override.dealer },
     emotes: { ...base.emotes, ...override.emotes },
     cards: {
       ...base.cards,
