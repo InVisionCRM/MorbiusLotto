@@ -132,6 +132,35 @@ export interface WheelDeltaOptions {
 }
 
 /**
+ * Runs `fn` inside a savepoint so an expected failure can be caught without
+ * poisoning the surrounding transaction.
+ *
+ * Postgres aborts the entire transaction on any failed statement, and every
+ * later command then returns 25P02 ("current transaction is aborted") until it
+ * unwinds. So catching a duplicate-key violation and carrying on is only safe
+ * if the failure is rolled back first. That matters here because callers may
+ * pass a PoolClient belonging to *their* transaction — swallowing a dedupe hit
+ * without unwinding would break the caller's work, not ours.
+ */
+async function inSavepoint<T>(
+  client: PoolClient,
+  name: string,
+  fn: () => Promise<T>,
+): Promise<T> {
+  await client.query(`SAVEPOINT ${name}`);
+  try {
+    const result = await fn();
+    await client.query(`RELEASE SAVEPOINT ${name}`);
+    return result;
+  } catch (e) {
+    // Best-effort unwind: never let cleanup replace the original error.
+    await client.query(`ROLLBACK TO SAVEPOINT ${name}`).catch(() => {});
+    await client.query(`RELEASE SAVEPOINT ${name}`).catch(() => {});
+    throw e;
+  }
+}
+
+/**
  * Apply a signed spin delta. Idempotent on (reason, ref_type, ref_id) when ref.id is set.
  * If executor is a Pool, a new BEGIN/COMMIT transaction is opened internally.
  * If executor is a PoolClient, the caller's transaction is reused.
@@ -182,19 +211,23 @@ export async function applyWheelSpinDelta(
     try {
       const meta = { ...(metadata ?? {}) } as Record<string, unknown>;
       if (effectiveDelta !== delta) meta.clamped_from = delta;
-      await client.query(
-        `INSERT INTO wheel_spin_ledger
-           (wallet_address, delta, balance_after, reason, ref_type, ref_id, metadata)
-         VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb)`,
-        [
-          addr,
-          effectiveDelta,
-          after,
-          reason,
-          ref?.type ?? null,
-          ref?.id ?? null,
-          Object.keys(meta).length > 0 ? JSON.stringify(meta) : null,
-        ],
+      // Savepointed: a dedupe hit is expected, and must not abort a caller's
+      // transaction on its way to being swallowed below.
+      await inSavepoint(client, 'wheel_spin_ledger_insert', () =>
+        client.query(
+          `INSERT INTO wheel_spin_ledger
+             (wallet_address, delta, balance_after, reason, ref_type, ref_id, metadata)
+           VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb)`,
+          [
+            addr,
+            effectiveDelta,
+            after,
+            reason,
+            ref?.type ?? null,
+            ref?.id ?? null,
+            Object.keys(meta).length > 0 ? JSON.stringify(meta) : null,
+          ],
+        ),
       );
     } catch (e: any) {
       if (e?.code === '23505') {
@@ -272,19 +305,25 @@ export async function applyWheelWagerCredit(
     const after = before + spinsGranted;
 
     try {
-      await client.query(
-        `INSERT INTO wheel_spin_ledger
-           (wallet_address, delta, balance_after, reason, ref_type, ref_id, metadata)
-         VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb)`,
-        [
-          addr,
-          spinsGranted,
-          after,
-          reason,
-          ref.type,
-          ref.id,
-          JSON.stringify({ wager_wei: wagerWei.toString() }),
-        ],
+      // Savepointed for the same reason as applyWheelSpinDelta: this runs on the
+      // caller's transaction when handed a PoolClient (blackjack multi settlement
+      // does exactly that), so a duplicate here would otherwise abort the whole
+      // settle and surface as 25P02 long after the real cause.
+      await inSavepoint(client, 'wheel_wager_ledger_insert', () =>
+        client.query(
+          `INSERT INTO wheel_spin_ledger
+             (wallet_address, delta, balance_after, reason, ref_type, ref_id, metadata)
+           VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb)`,
+          [
+            addr,
+            spinsGranted,
+            after,
+            reason,
+            ref.type,
+            ref.id,
+            JSON.stringify({ wager_wei: wagerWei.toString() }),
+          ],
+        ),
       );
     } catch (e: any) {
       if (e?.code === '23505') {
