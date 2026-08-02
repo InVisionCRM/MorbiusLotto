@@ -19,6 +19,7 @@ import { BlackjackMultiBetActionPanel } from '@/components/BLACKJACK/multi/Black
 import { BlackjackTableSwitcherModal } from '@/components/BLACKJACK/multi/BlackjackTableSwitcherModal';
 import { BlackjackMultiTipDealerControl } from '@/components/BLACKJACK/multi/BlackjackMultiTipDealerControl';
 import { BlackjackMultiDealerArea } from '@/components/BLACKJACK/multi/BlackjackMultiDealerArea';
+import { useBlackjackTableLayout } from '@/components/BLACKJACK/BlackjackTableLayoutContext';
 import {
   BlackjackMultiRoundOverlays,
   BLACKJACK_COLOR_PALETTES,
@@ -1112,6 +1113,7 @@ export default function BlackjackMultiTablePage() {
     return () => ro.disconnect();
   }, []);
   const boardScale = tableWidth > 0 ? tableWidth / 800 : 1;
+  const tableLayout = useBlackjackTableLayout();
 
   if (!tableId) return null;
 
@@ -1236,8 +1238,16 @@ export default function BlackjackMultiTablePage() {
           />
 
           {/* ── Play area ── */}
-          {/* DEALER — centered on 800×450 canvas (half-width − translate centers the hand) */}
-          <div style={{ position: 'absolute', left: 400, top: 50, transform: 'translateX(-50%)' }}>
+          {/* DEALER — placement comes from the table layout (lib/blackjack-table-layout.ts);
+              the translate centers the hand on `cx`. */}
+          <div
+            style={{
+              position: 'absolute',
+              left: tableLayout.dealer.cx,
+              top: tableLayout.dealer.top,
+              transform: 'translateX(-50%)',
+            }}
+          >
             <BlackjackMultiDealerArea
               tableViewState={tableViewState}
               visibleDealerCards={visibleDealerCards}
