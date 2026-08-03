@@ -299,6 +299,8 @@ export interface BJMultiTableState {
   bettingStartedAt: string | null;
   themeKind: 'video' | 'image';
   themeId: string;
+  /** Sparse designer theme (layout/sounds/soundFx) or null for the stock table. */
+  themeConfig?: Record<string, unknown> | null;
   stateVersion?: number;
   viewerCount?: number;
 }

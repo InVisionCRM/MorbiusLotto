@@ -22,6 +22,8 @@
  * node must degrade to a plainer sound or silence, never throw into the game.
  */
 
+import { AudioManager } from '@/hooks/use-audio';
+
 export interface SoundFx {
   /** Data/object URL of an uploaded sample; null means use the event's file pool. */
   sample: string | null;
@@ -103,10 +105,25 @@ export const echoReadText = (fx: SoundFx) =>
 // ── Audio context ──────────────────────────────────────────────────────────
 let _ac: AudioContext | null = null;
 
-/** Shared context, resumed on demand. Returns null where WebAudio is absent. */
+/**
+ * Shared context, resumed on demand. Prefers the app-wide AudioManager context
+ * from hooks/use-audio when it exists: that one carries the iOS silent-buffer
+ * unlock, so FX playback keeps working on mobile instead of waiting for a
+ * second context to be gesture-unlocked. Falls back to an own context (the
+ * standalone designer case). Null where WebAudio is absent.
+ */
 export function audioCtx(): AudioContext | null {
   try {
     if (typeof window === 'undefined') return null;
+    try {
+      const shared = AudioManager.getContext();
+      if (shared && shared.state !== 'closed') {
+        if (shared.state === 'suspended' && shared.resume) void shared.resume();
+        return shared;
+      }
+    } catch {
+      /* AudioManager unavailable — use our own */
+    }
     const Ctor =
       window.AudioContext ||
       (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
@@ -213,7 +230,7 @@ export function playBufferThroughFx(
   fx: SoundFx,
   masterVol: number,
   mul?: number,
-) {
+): AudioBufferSourceNode | null {
   try {
     const src = c.createBufferSource();
     src.buffer = buf;
@@ -330,8 +347,10 @@ export function playBufferThroughFx(
 
     src.start();
     if (trimmed) src.stop(now + dur + 0.02);
+    return src;
   } catch {
     /* audio is presentation-only */
+    return null;
   }
 }
 
@@ -367,6 +386,58 @@ export function playEventWithFx(
   } catch {
     /* audio is presentation-only */
   }
+}
+
+/**
+ * Handle for a play on an exclusive channel: stop() silences it whether the
+ * buffer is still decoding or already sounding. The dealer-voice channel uses
+ * this to keep its stop-the-previous-line behaviour while gaining the FX chain.
+ */
+export interface FxPlayHandle {
+  stop: () => void;
+}
+
+/** Like playEventWithFx, but returns a handle so the caller can cut it off. */
+export function playEventWithFxStoppable(
+  id: string,
+  defaultUrl: string | null,
+  fx: SoundFx,
+  masterVol = 0.8,
+  mul?: number,
+): FxPlayHandle {
+  let cancelled = false;
+  let src: AudioBufferSourceNode | null = null;
+  try {
+    const c = audioCtx();
+    const url = fx.sample || defaultUrl;
+    if (c && url) {
+      firePulse(id);
+      void loadBuffer(url).then((buf) => {
+        if (cancelled) return;
+        if (buf) {
+          src = playBufferThroughFx(c, id, buf, fx, masterVol, mul);
+          return;
+        }
+        if (fx.sample && defaultUrl) {
+          void loadBuffer(defaultUrl).then((fallback) => {
+            if (!cancelled && fallback) src = playBufferThroughFx(c, id, fallback, fx, masterVol, mul);
+          });
+        }
+      });
+    }
+  } catch {
+    /* audio is presentation-only */
+  }
+  return {
+    stop: () => {
+      cancelled = true;
+      try {
+        src?.stop();
+      } catch {
+        /* already ended */
+      }
+    },
+  };
 }
 
 /** Peak-per-column waveform for the envelope canvas, in 0..1. */

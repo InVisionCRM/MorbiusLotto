@@ -45,6 +45,8 @@ import type { SoundLibraryClip } from '@/lib/blackjack-sound-library';
 import { SoundEventTile } from '@/components/BLACKJACK/design/sound/SoundEventTile';
 import { TrimModal, type TrimTarget } from '@/components/BLACKJACK/design/sound/TrimModal';
 import { LibraryModal } from '@/components/BLACKJACK/design/sound/LibraryModal';
+import { useTablePublish } from '@/components/BLACKJACK/design/useTablePublish';
+import type { BlackjackTableThemeConfig } from '@/lib/blackjack-table-theme';
 import '@/components/BLACKJACK/design/sound/sound-designer.css';
 import type { BJMultiSeatState } from '@/lib/websocket-client';
 
@@ -137,6 +139,10 @@ export default function TableDesigner() {
   const [showGuides, setShowGuides] = useState(true);
   const [copied, setCopied] = useState(false);
   const [dragging, setDragging] = useState(false);
+
+  // ── Publish: pick a real table, load its saved theme, save this design ────
+  const publish = useTablePublish();
+  const [publishTableId, setPublishTableId] = useState('');
 
   // ── Sounds ────────────────────────────────────────────────────────────────
   // Two sparse layers, both the shape a saved table theme will carry:
@@ -513,6 +519,53 @@ export default function TableDesigner() {
 
   const changeCount = Object.keys(diff).length;
 
+  /** Hydrates the editor from a saved theme (or resets to stock for null). */
+  const applyLoadedTheme = useCallback(
+    (theme: BlackjackTableThemeConfig | null) => {
+      beginGesture();
+      setLayout(mergeTableLayout(DEFAULT_BLACKJACK_TABLE_LAYOUT, theme?.layout));
+      setSoundOverrides(theme?.sounds ?? {});
+      setSoundFx(theme?.soundFx ?? {});
+      const labels: Record<string, string> = {};
+      for (const [event, pool] of Object.entries(theme?.sounds ?? {})) {
+        if (Array.isArray(pool) && pool.length > 0) {
+          try {
+            labels[event] = decodeURIComponent(pool[0].split('/').pop() ?? 'saved sound');
+          } catch {
+            labels[event] = 'saved sound';
+          }
+        }
+      }
+      setCustomSoundLabels(labels);
+    },
+    [beginGesture],
+  );
+
+  /** The sparse theme this editor currently describes — the diff, reshaped. */
+  const currentThemeConfig = useMemo((): BlackjackTableThemeConfig => {
+    const layoutPart: Record<string, unknown> = {};
+    for (const key of ['seats', 'dealer', 'cards', 'motion', 'emotes'] as const) {
+      if (diff[key] !== undefined) layoutPart[key] = diff[key];
+    }
+    const theme: BlackjackTableThemeConfig = { version: 1 };
+    if (Object.keys(layoutPart).length > 0) theme.layout = layoutPart as BlackjackTableThemeConfig['layout'];
+    if (diff.sounds) theme.sounds = diff.sounds as BlackjackTableThemeConfig['sounds'];
+    if (diff.soundFx) theme.soundFx = diff.soundFx as BlackjackTableThemeConfig['soundFx'];
+    return theme;
+  }, [diff]);
+
+  const handleLoad = useCallback(async () => {
+    if (!publishTableId) return;
+    applyLoadedTheme(await publish.loadTheme(publishTableId));
+  }, [publishTableId, publish, applyLoadedTheme]);
+
+  const handleSave = useCallback(async () => {
+    if (!publishTableId) return;
+    const saved = await publish.saveTheme(publishTableId, currentThemeConfig);
+    // Adopt the uploaded media paths so the design survives the editor too.
+    if (saved) applyLoadedTheme(saved);
+  }, [publishTableId, publish, currentThemeConfig, applyLoadedTheme]);
+
   const copyJson = useCallback(async () => {
     try {
       await navigator.clipboard.writeText(JSON.stringify(diff, null, 2));
@@ -571,6 +624,101 @@ export default function TableDesigner() {
             <input type="checkbox" checked={showGuides} onChange={(e) => setShowGuides(e.target.checked)} />
             Guides
           </label>
+        </div>
+
+        {/* ── Publish bar: this design ↔ a real table ── */}
+        <div
+          style={{
+            display: 'flex',
+            gap: 8,
+            alignItems: 'center',
+            flexWrap: 'wrap',
+            marginBottom: 12,
+            padding: '8px 10px',
+            background: UI.panel,
+            border: `1px solid ${UI.border}`,
+            borderRadius: 8,
+          }}
+        >
+          <span style={{ fontSize: 11, fontWeight: 700 }}>Publish</span>
+          {!publish.address ? (
+            <span style={{ fontSize: 11, color: UI.dim }}>
+              Connect an admin wallet to load or save table themes.
+            </span>
+          ) : (
+            <>
+              <select
+                value={publishTableId}
+                onChange={(e) => setPublishTableId(e.target.value)}
+                style={{
+                  background: UI.raised,
+                  color: UI.text,
+                  border: `1px solid ${UI.border}`,
+                  borderRadius: 6,
+                  padding: '4px 8px',
+                  fontSize: 11,
+                  maxWidth: 260,
+                }}
+              >
+                <option value="">Choose a table…</option>
+                {publish.tables.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.id.slice(0, 8)} · {t.status}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                onClick={() => void handleLoad()}
+                disabled={!publishTableId || publish.status.kind === 'busy'}
+                style={{
+                  background: UI.raised,
+                  border: `1px solid ${UI.border}`,
+                  color: publishTableId ? UI.text : UI.border,
+                  borderRadius: 6,
+                  padding: '4px 10px',
+                  fontSize: 11,
+                  cursor: publishTableId ? 'pointer' : 'default',
+                }}
+              >
+                Load
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleSave()}
+                disabled={!publishTableId || publish.status.kind === 'busy'}
+                style={{
+                  background: publishTableId ? UI.accent : UI.raised,
+                  border: `1px solid ${publishTableId ? UI.accent : UI.border}`,
+                  color: publishTableId ? '#fff' : UI.border,
+                  borderRadius: 6,
+                  padding: '4px 12px',
+                  fontSize: 11,
+                  fontWeight: 700,
+                  cursor: publishTableId ? 'pointer' : 'default',
+                }}
+              >
+                Save to table
+              </button>
+              <span
+                style={{
+                  fontSize: 11,
+                  color:
+                    publish.status.kind === 'error'
+                      ? '#f87171'
+                      : publish.status.kind === 'ok'
+                        ? '#4ade80'
+                        : UI.dim,
+                }}
+              >
+                {publish.status.kind !== 'idle'
+                  ? publish.status.note
+                  : publish.tablesError
+                    ? publish.tablesError
+                    : `${publish.tables.length} table${publish.tables.length === 1 ? '' : 's'}`}
+              </span>
+            </>
+          )}
         </div>
 
         {/* Scaled stage. The wrapper reserves the scaled height so the page flows. */}

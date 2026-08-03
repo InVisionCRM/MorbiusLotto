@@ -19,7 +19,16 @@ import { BlackjackMultiBetActionPanel } from '@/components/BLACKJACK/multi/Black
 import { BlackjackTableSwitcherModal } from '@/components/BLACKJACK/multi/BlackjackTableSwitcherModal';
 import { BlackjackMultiTipDealerControl } from '@/components/BLACKJACK/multi/BlackjackMultiTipDealerControl';
 import { BlackjackMultiDealerArea } from '@/components/BLACKJACK/multi/BlackjackMultiDealerArea';
-import { useBlackjackTableLayout } from '@/components/BLACKJACK/BlackjackTableLayoutContext';
+import { BlackjackTableLayoutProvider } from '@/components/BLACKJACK/BlackjackTableLayoutContext';
+import { DEFAULT_BLACKJACK_TABLE_LAYOUT, mergeTableLayout } from '@/lib/blackjack-table-layout';
+import { sanitizeThemeConfig } from '@/lib/blackjack-table-theme';
+import {
+  fxFor,
+  isFxCustomised,
+  playEventWithFx,
+  playEventWithFxStoppable,
+  type FxPlayHandle,
+} from '@/lib/blackjack-sound-fx';
 import {
   BlackjackMultiRoundOverlays,
   BLACKJACK_COLOR_PALETTES,
@@ -41,6 +50,7 @@ import Image from 'next/image';
 import { BLACKJACK_IMAGE_BACKGROUNDS } from '@/app/BLACKJACK/constants';
 import {
   DEFAULT_BLACKJACK_SOUND_MAP,
+  mergeSoundMap,
   pickSound,
   type BlackjackSoundEventKey,
 } from '@/lib/blackjack-sounds';
@@ -284,6 +294,13 @@ export default function BlackjackMultiTablePage() {
   }, [commitVisualState, finishWithCardExit]);
   const tableViewState = visualState ?? state;
 
+  // Saved designer theme, delivered with table state. Sanitized defensively —
+  // it crossed a websocket and old rows may predate current validation.
+  const themeConfig = useMemo(
+    () => sanitizeThemeConfig(tableViewState?.themeConfig),
+    [tableViewState?.themeConfig],
+  );
+
   useEffect(() => {
     return () => {
       if (cardExitTimeoutRef.current) {
@@ -471,15 +488,44 @@ export default function BlackjackMultiTablePage() {
   // Every table sound is a named event resolving through this map, so a saved
   // table theme can swap any of them (or silence one) without code changes.
   // Per-table overrides plug in here once themes are persisted.
-  const soundMap = DEFAULT_BLACKJACK_SOUND_MAP;
+  // Every table sound resolves through this map; a saved theme swaps pools and
+  // layers per-event FX without code changes.
+  const soundMap = useMemo(
+    () => mergeSoundMap(DEFAULT_BLACKJACK_SOUND_MAP, themeConfig?.sounds),
+    [themeConfig],
+  );
+  const themedVoiceHandleRef = useRef<FxPlayHandle | null>(null);
   const playEventSfx = useCallback((event: BlackjackSoundEventKey, volume?: number) => {
     const path = pickSound(soundMap, event);
-    if (path) playSound(path, volume);
-  }, [soundMap, playSound]);
+    if (!path) return;
+    if (themeConfig?.soundFx && isFxCustomised(themeConfig.soundFx, event)) {
+      // The FX engine bypasses the playSound wrapper, so its gates apply here.
+      if (!soundEnabled || !sfxEnabled) return;
+      playEventWithFx(event, path, fxFor(themeConfig.soundFx, event), volume ?? 0.3);
+      return;
+    }
+    playSound(path, volume);
+  }, [soundMap, themeConfig, soundEnabled, sfxEnabled, playSound]);
   const playEventVoice = useCallback((event: BlackjackSoundEventKey) => {
     const path = pickSound(soundMap, event);
-    if (path) playDealerVoice(path);
-  }, [soundMap, playDealerVoice]);
+    if (!path) return;
+    // One dealer voice at a time, across both channels: a new line cuts off
+    // whichever previous line is still talking, themed or not.
+    themedVoiceHandleRef.current?.stop();
+    themedVoiceHandleRef.current = null;
+    if (themeConfig?.soundFx && isFxCustomised(themeConfig.soundFx, event)) {
+      if (!soundEnabled || !dealerVoiceEnabled) return;
+      if (dealerVoiceRef.current) {
+        try { dealerVoiceRef.current.source.stop(); } catch { /* already stopped */ }
+        dealerVoiceRef.current = null;
+      }
+      themedVoiceHandleRef.current = playEventWithFxStoppable(
+        event, path, fxFor(themeConfig.soundFx, event), 0.5,
+      );
+      return;
+    }
+    playDealerVoice(path);
+  }, [soundMap, themeConfig, soundEnabled, dealerVoiceEnabled, playDealerVoice]);
 
   // Dealer random phrase timer during betting
   const dealerPhraseTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -1129,11 +1175,17 @@ export default function BlackjackMultiTablePage() {
     return () => ro.disconnect();
   }, []);
   const boardScale = tableWidth > 0 ? tableWidth / 800 : 1;
-  const tableLayout = useBlackjackTableLayout();
+  // Table geometry: shipped defaults with the theme's sparse overrides on top.
+  // The provider below hands the same object to every seat/card component.
+  const tableLayout = useMemo(
+    () => mergeTableLayout(DEFAULT_BLACKJACK_TABLE_LAYOUT, themeConfig?.layout),
+    [themeConfig],
+  );
 
   if (!tableId) return null;
 
   return (
+    <BlackjackTableLayoutProvider layout={tableLayout}>
     <GlobalMainNav page="blackjackMulti" showBackArrow backArrowHref="/blackjack-multi" backArrowLabel="Lobby">
       <div
         className="relative min-h-screen h-full w-full text-white"
@@ -1610,6 +1662,7 @@ export default function BlackjackMultiTablePage() {
       </main>
       </div>
     </GlobalMainNav>
+    </BlackjackTableLayoutProvider>
   );
 }
 
