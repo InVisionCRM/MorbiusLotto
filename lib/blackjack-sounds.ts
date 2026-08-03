@@ -48,9 +48,9 @@ export type BlackjackSoundOverrides = Partial<Record<BlackjackSoundEventKey, str
 export const DEFAULT_BLACKJACK_SOUND_MAP: BlackjackSoundMap = {
   cardDeal: ['/BlackJack/sounds/cards.wav'],
   hitKnock: ['/BlackJack/sounds/knock.wav'],
-  click: ['/Poker/PokerSounds/PlayerClickConfirmation.mp3'],
-  opponentJoined: ['/Poker/PokerSounds/OpponentJoined.mp3'],
-  opponentLeft: ['/Poker/PokerSounds/OpponentLeft.mp3'],
+  click: ['/POKER/PokerSounds/PlayerClickConfirmation.mp3'],
+  opponentJoined: ['/POKER/PokerSounds/OpponentJoined.mp3'],
+  opponentLeft: ['/POKER/PokerSounds/OpponentLeft.mp3'],
   voiceBettingOpen: SOUNDS_BETTING_OPEN,
   voiceBettingClosed: SOUNDS_BETTING_CLOSED,
   voiceDealerPhrase: SOUNDS_DEALER_PHRASE,

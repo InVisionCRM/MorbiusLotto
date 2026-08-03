@@ -427,3 +427,186 @@
   font-size: 9.5px;
   color: #eaf6fb;
 }
+
+/* ── modal shell (trimmer + library) ─────────────────────────────────────── */
+.bjsnd-ov {
+  position: fixed;
+  inset: 0;
+  z-index: 3000;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: rgba(2, 6, 12, 0.72);
+  backdrop-filter: blur(3px);
+  padding: 20px;
+}
+.bjsnd-ov.open { display: flex; }
+.bjsnd-trim-card {
+  --cyan: #22d3ee;
+  --cyan-soft: rgba(34, 211, 238, 0.22);
+  --cyan-edge: rgba(34, 211, 238, 0.55);
+  --slate-400: #94a3b8;
+  --slate-500: #64748b;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  width: min(680px, 100%);
+  max-height: 86vh;
+  overflow-y: auto;
+  background: #0b1119;
+  border: 1px solid var(--cyan-soft);
+  border-radius: 16px;
+  padding: 14px 16px 16px;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.65);
+  color: #eaf6fb;
+  font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
+}
+.bjsnd-trim-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+.bjsnd-trim-title {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+.bjsnd-x {
+  margin-left: auto;
+  background: transparent;
+  border: 1px solid var(--cyan-soft);
+  color: var(--slate-400);
+  border-radius: 7px;
+  width: 24px;
+  height: 24px;
+  cursor: pointer;
+  font-size: 11px;
+  line-height: 1;
+}
+.bjsnd-x:hover { color: #eaf6fb; border-color: var(--cyan-edge); }
+.bjsnd-trim-hint {
+  font-size: 11px;
+  color: var(--slate-500);
+  margin: 7px 0 10px;
+  line-height: 1.5;
+}
+
+/* ── trimmer waveform + handles ──────────────────────────────────────────── */
+.bjsnd-trim-wave {
+  position: relative;
+  width: 100%;
+  border-radius: 10px;
+  border: 1px solid var(--cyan-soft);
+  background: rgba(4, 10, 16, 0.92);
+  overflow: hidden;
+  touch-action: none;
+}
+.bjsnd-trim-wave canvas { display: block; width: 100%; height: 150px; }
+.bjsnd-trim-handle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 11px;
+  margin-left: -5.5px;
+  cursor: ew-resize;
+  touch-action: none;
+  background:
+    linear-gradient(#bff7ff, #bff7ff) center / 2px 100% no-repeat;
+}
+.bjsnd-trim-handle::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 11px;
+  height: 22px;
+  transform: translate(-50%, -50%);
+  border-radius: 4px;
+  background: #bff7ff;
+  box-shadow: 0 0 10px rgba(34, 211, 238, 0.8);
+}
+.bjsnd-trim-btns {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+
+/* ── library ─────────────────────────────────────────────────────────────── */
+.bjsnd-lib-bar {
+  display: flex;
+  gap: 7px;
+  flex-wrap: wrap;
+  align-items: center;
+  margin: 8px 0 10px;
+}
+.bjsnd-lib-search {
+  flex: 1;
+  min-width: 130px;
+  background: rgba(4, 10, 16, 0.8);
+  border: 1px solid var(--cyan-soft);
+  border-radius: 9px;
+  color: #eaf6fb;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 8px 10px;
+  outline: none;
+}
+.bjsnd-lib-search::placeholder { color: var(--slate-500); }
+.bjsnd-lib-search:focus { border-color: var(--cyan-edge); }
+.bjsnd-lib-chip {
+  background: rgba(34, 211, 238, 0.08);
+  border: 1px solid var(--cyan-soft);
+  color: var(--slate-400);
+  border-radius: 999px;
+  padding: 5px 11px;
+  font-size: 10.5px;
+  cursor: pointer;
+  transition: 0.15s;
+}
+.bjsnd-lib-chip.on { color: #05202a; background: var(--cyan); border-color: var(--cyan); }
+.bjsnd-lib-chip .cnt { opacity: 0.7; font-family: var(--font-mono); font-size: 9px; }
+.bjsnd-lib-list { max-height: 52vh; overflow-y: auto; }
+.bjsnd-lib-grouphead {
+  font-size: 9.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  color: var(--slate-500);
+  margin: 10px 0 5px;
+  font-weight: 600;
+}
+.bjsnd-lib-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 6px 0;
+  border-bottom: 1px solid rgba(34, 211, 238, 0.1);
+}
+.bjsnd-lib-meta { min-width: 130px; flex: 0 0 auto; }
+.bjsnd-lib-name { font-size: 11.5px; font-weight: 600; }
+.bjsnd-lib-group { font-family: var(--font-mono); font-size: 9px; color: var(--slate-500); }
+.bjsnd-lib-wave {
+  flex: 1;
+  min-width: 0;
+  height: 30px;
+  border-radius: 6px;
+  background: rgba(4, 10, 16, 0.7);
+}
+.bjsnd-lib-empty {
+  font-size: 11px;
+  color: var(--slate-500);
+  text-align: center;
+  padding: 18px 0;
+}
+
+/* ── recording ───────────────────────────────────────────────────────────── */
+.bjsnd-btn.recording {
+  color: #fff;
+  background: #f43f5e;
+  border-color: #f43f5e;
+  animation: bjSndRecPulse 1s ease-in-out infinite;
+}
+@keyframes bjSndRecPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}

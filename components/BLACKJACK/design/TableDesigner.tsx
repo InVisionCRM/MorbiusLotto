@@ -34,13 +34,17 @@ import {
   type BlackjackSoundOverrides,
 } from '@/lib/blackjack-sounds';
 import {
+  decodeUrl,
   fxFor,
   isFxCustomised,
   playEventWithFx,
   type SoundFx,
   type SoundFxMap,
 } from '@/lib/blackjack-sound-fx';
+import type { SoundLibraryClip } from '@/lib/blackjack-sound-library';
 import { SoundEventTile } from '@/components/BLACKJACK/design/sound/SoundEventTile';
+import { TrimModal, type TrimTarget } from '@/components/BLACKJACK/design/sound/TrimModal';
+import { LibraryModal } from '@/components/BLACKJACK/design/sound/LibraryModal';
 import '@/components/BLACKJACK/design/sound/sound-designer.css';
 import type { BJMultiSeatState } from '@/lib/websocket-client';
 
@@ -174,11 +178,101 @@ export default function TableDesigner() {
     [autoPlaySound, previewSound],
   );
 
-  const uploadSound = useCallback((event: BlackjackSoundEventKey, file: File) => {
-    const url = URL.createObjectURL(file);
-    setSoundOverrides((prev) => ({ ...prev, [event]: [url] }));
-    setCustomSoundLabels((prev) => ({ ...prev, [event]: file.name }));
-  }, []);
+  // Trimmer + library. Every acquisition — upload, recording, library pick —
+  // routes through the trimmer before it is saved, so dead air gets cut once
+  // rather than being baked into whatever the table ends up playing.
+  const [trimTarget, setTrimTarget] = useState<TrimTarget | null>(null);
+  const [libraryFor, setLibraryFor] = useState<BlackjackSoundEventKey | null>(null);
+  const [recordingFor, setRecordingFor] = useState<BlackjackSoundEventKey | null>(null);
+  const recRef = useRef<{ recorder: MediaRecorder; stream: MediaStream; chunks: Blob[] } | null>(null);
+  const recStopTimer = useRef<number | null>(null);
+
+  /** Decodes an acquired clip and hands it to the trimmer. */
+  const openTrimmer = useCallback(
+    async (event: BlackjackSoundEventKey, dataUrl: string, label: string) => {
+      const buf = await decodeUrl(dataUrl);
+      if (!buf) {
+        // Undecodable: store as-is rather than losing what the user just picked.
+        setSoundOverrides((prev) => ({ ...prev, [event]: [dataUrl] }));
+        setCustomSoundLabels((prev) => ({ ...prev, [event]: label }));
+        return;
+      }
+      setTrimTarget({ eventKey: event, dataUrl, label, buf });
+    },
+    [],
+  );
+
+  const uploadSound = useCallback(
+    (event: BlackjackSoundEventKey, file: File) => {
+      const fr = new FileReader();
+      fr.onload = () => void openTrimmer(event, String(fr.result), file.name || 'uploaded file');
+      try {
+        fr.readAsDataURL(file);
+      } catch {
+        /* unreadable file — the tile keeps its previous sound */
+      }
+    },
+    [openTrimmer],
+  );
+
+  const finishRecording = useCallback(
+    (event: BlackjackSoundEventKey, chunks: Blob[], mimeType: string) => {
+      if (!chunks.length) return;
+      const fr = new FileReader();
+      fr.onload = () => void openTrimmer(event, String(fr.result), 'recording');
+      try {
+        fr.readAsDataURL(new Blob(chunks, { type: mimeType }));
+      } catch {
+        /* unreadable blob — nothing to save */
+      }
+    },
+    [openTrimmer],
+  );
+
+  /** One recording at a time, auto-stopping at 6s like the slot builder. */
+  const toggleRecord = useCallback(
+    async (event: BlackjackSoundEventKey) => {
+      if (recordingFor) {
+        try {
+          recRef.current?.recorder.stop();
+        } catch {
+          /* already stopped */
+        }
+        return;
+      }
+      try {
+        if (!navigator.mediaDevices?.getUserMedia) return;
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const recorder = new MediaRecorder(stream);
+        const chunks: Blob[] = [];
+        recRef.current = { recorder, stream, chunks };
+        recorder.ondataavailable = (e) => {
+          if (e.data?.size) chunks.push(e.data);
+        };
+        recorder.onstop = () => {
+          if (recStopTimer.current) window.clearTimeout(recStopTimer.current);
+          recStopTimer.current = null;
+          stream.getTracks().forEach((t) => t.stop());
+          recRef.current = null;
+          setRecordingFor(null);
+          finishRecording(event, chunks, recorder.mimeType || 'audio/webm');
+        };
+        recorder.start();
+        setRecordingFor(event);
+        recStopTimer.current = window.setTimeout(() => {
+          try {
+            recorder.stop();
+          } catch {
+            /* already stopped */
+          }
+        }, 6000);
+      } catch {
+        // Mic unavailable or permission denied — Upload and Library still work.
+        setRecordingFor(null);
+      }
+    },
+    [recordingFor, finishRecording],
+  );
 
   const resetSound = useCallback((event: BlackjackSoundEventKey) => {
     setSoundOverrides((prev) => {
@@ -668,6 +762,9 @@ export default function TableDesigner() {
                     }
                     onPlay={() => previewSound(info.key)}
                     onUpload={(file) => uploadSound(info.key, file)}
+                    onOpenLibrary={() => setLibraryFor(info.key)}
+                    onToggleRecord={() => void toggleRecord(info.key)}
+                    recording={recordingFor === info.key}
                     onToggleMute={() =>
                       setSoundOverrides((prev) => {
                         const next = { ...prev };
@@ -1157,6 +1254,50 @@ export default function TableDesigner() {
           </p>
         </div>
       </aside>
+
+      {/* Every acquired clip lands here first; Use / Keep full / cancel decide
+          what actually reaches the event. */}
+      {trimTarget && (
+        <TrimModal
+          target={trimTarget}
+          onCancel={() => setTrimTarget(null)}
+          onApply={(dataUrl, label) => {
+            const key = trimTarget.eventKey as BlackjackSoundEventKey;
+            setSoundOverrides((prev) => ({ ...prev, [key]: [dataUrl] }));
+            setCustomSoundLabels((prev) => ({ ...prev, [key]: label }));
+            setTrimTarget(null);
+          }}
+        />
+      )}
+
+      {libraryFor && (
+        <LibraryModal
+          onClose={() => setLibraryFor(null)}
+          onPick={(clip: SoundLibraryClip) => {
+            const key = libraryFor;
+            setLibraryFor(null);
+            // Fetch to a data URL so the trimmer can decode and bake it like any
+            // other acquisition, rather than special-casing shipped clips.
+            void fetch(clip.file)
+              .then((r) => r.blob())
+              .then(
+                (b) =>
+                  new Promise<string>((res, rej) => {
+                    const fr = new FileReader();
+                    fr.onload = () => res(String(fr.result));
+                    fr.onerror = rej;
+                    fr.readAsDataURL(b);
+                  }),
+              )
+              .then((url) => openTrimmer(key, url, clip.name))
+              .catch(() => {
+                // Fetch failed — point the event straight at the public path.
+                setSoundOverrides((prev) => ({ ...prev, [key]: [clip.file] }));
+                setCustomSoundLabels((prev) => ({ ...prev, [key]: clip.name }));
+              });
+          }}
+        />
+      )}
     </div>
   );
 }
