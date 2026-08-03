@@ -37,6 +37,10 @@ export interface SeatPlacement {
 export interface DealInMotion {
   fromX: number;
   fromY: number;
+  /** Rotation at the start of the flight, in degrees. 0 = flat slide. */
+  fromRot: number;
+  /** Scale at the start of the flight. 1 = full size the whole way. */
+  fromScale: number;
   durationMs: number;
   easing: string;
   /** Extra delay per card index, in ms, so a hand deals out in sequence. */
@@ -150,6 +154,8 @@ export const DEFAULT_BLACKJACK_TABLE_LAYOUT: BlackjackTableLayout = {
     dealIn: {
       fromX: 100,
       fromY: -80,
+      fromRot: 0,
+      fromScale: 1,
       durationMs: 600,
       easing: 'ease-out',
       staggerMs: 250,
@@ -192,6 +198,8 @@ export function layoutToCssVars(layout: BlackjackTableLayout): Record<string, st
 
     '--bj-deal-from-x': `${motion.dealIn.fromX}px`,
     '--bj-deal-from-y': `${motion.dealIn.fromY}px`,
+    '--bj-deal-from-rot': `${motion.dealIn.fromRot}deg`,
+    '--bj-deal-from-scale': String(motion.dealIn.fromScale),
     '--bj-deal-duration': `${motion.dealIn.durationMs}ms`,
     '--bj-deal-easing': motion.dealIn.easing,
 

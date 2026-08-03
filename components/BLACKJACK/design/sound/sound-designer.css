@@ -610,3 +610,20 @@
   0%, 100% { opacity: 1; }
   50% { opacity: 0.6; }
 }
+
+/* ── style preset chips: the way in; modules below fine-tune ─────────────── */
+.bjsnd-preset-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  margin: 0 0 10px;
+}
+.bjsnd-preset-cap {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  color: var(--slate-500);
+  font-weight: 600;
+  margin-right: 2px;
+}

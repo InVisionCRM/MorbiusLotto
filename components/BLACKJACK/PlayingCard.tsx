@@ -62,10 +62,10 @@ const PlayingCard: React.FC<PlayingCardProps> = ({ card, hidden = false, owner, 
 
   // Initial state for new cards: parked at the shoe until the deal animation
   // picks it up, so there is no flash at the resting position first.
-  const { fromX, fromY } = layout.motion.dealIn;
+  const { fromX, fromY, fromRot, fromScale } = layout.motion.dealIn;
   const initialStyle = isNewCard && !exiting ? {
     opacity: 0,
-    transform: `translateX(${fromX}px) translateY(${fromY}px)`,
+    transform: `translateX(${fromX}px) translateY(${fromY}px) rotate(${fromRot}deg) scale(${fromScale})`,
   } : {};
 
   if (hidden) {

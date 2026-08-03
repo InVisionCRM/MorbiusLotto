@@ -42,6 +42,13 @@ import {
   type SoundFxMap,
 } from '@/lib/blackjack-sound-fx';
 import type { SoundLibraryClip } from '@/lib/blackjack-sound-library';
+import { SOUND_FX_PRESETS, fxFromPreset } from '@/lib/blackjack-sound-fx-presets';
+import {
+  CLEAR_OUT_PRESETS,
+  DEAL_IN_PRESETS,
+  activeClearOutPresetId,
+  activeDealInPresetId,
+} from '@/lib/blackjack-motion-presets';
 import { SoundEventTile } from '@/components/BLACKJACK/design/sound/SoundEventTile';
 import { TrimModal, type TrimTarget } from '@/components/BLACKJACK/design/sound/TrimModal';
 import { LibraryModal } from '@/components/BLACKJACK/design/sound/LibraryModal';
@@ -220,6 +227,36 @@ export default function TableDesigner() {
     () => () => {
       if (autoPlayTimer.current) window.clearTimeout(autoPlayTimer.current);
     },
+    [],
+  );
+
+  // ── Deal preview ──────────────────────────────────────────────────────────
+  // Plays the current motion settings on the real table: collect every card,
+  // then deal them back in through the actual card-slide-in path. This is what
+  // makes the Motion tab editable by eye instead of by number.
+  const [dealPreview, setDealPreview] = useState<'exit' | 'enter' | null>(null);
+  const previewTimers = useRef<number[]>([]);
+  const layoutForPreview = useRef(layout);
+  layoutForPreview.current = layout;
+
+  const runDealPreview = useCallback(() => {
+    previewTimers.current.forEach((t) => window.clearTimeout(t));
+    previewTimers.current = [];
+    const m = layoutForPreview.current.motion;
+    setDealPreview('exit');
+    const exitMs =
+      m.clearOut.durationMs + Math.max(m.clearOut.dealerStaggerMs, m.clearOut.playerStaggerMs) * 5 + 80;
+    previewTimers.current.push(
+      window.setTimeout(() => {
+        setDealPreview('enter');
+        const enterMs = m.dealIn.durationMs + m.dealIn.staggerMs * 5 + 150;
+        previewTimers.current.push(window.setTimeout(() => setDealPreview(null), enterMs));
+      }, exitMs),
+    );
+  }, []);
+
+  useEffect(
+    () => () => previewTimers.current.forEach((t) => window.clearTimeout(t)),
     [],
   );
 
@@ -503,6 +540,24 @@ export default function TableDesigner() {
     [state],
   );
 
+  // Card marks for the deal preview: every card at the table is "new" during
+  // the enter phase, so the whole board re-deals through the real animation.
+  const previewNewPlayerCards = useMemo(() => {
+    if (dealPreview !== 'enter') return undefined;
+    const marks: Record<string, Set<number>> = {};
+    state.seats.forEach((seat) => {
+      seat.hands.forEach((hand, hi) => {
+        marks[`${seat.position}-${hi}`] = new Set(hand.cards.map((_, ci) => ci));
+      });
+    });
+    return marks;
+  }, [dealPreview, state]);
+
+  const previewNewDealerCards = useMemo(() => {
+    if (dealPreview !== 'enter') return null;
+    return new Set(state.dealerCards.map((_, i) => i));
+  }, [dealPreview, state]);
+
   /** Only the fields that differ from the shipped defaults — what a table theme would store. */
   const diff = useMemo(() => {
     const base = DEFAULT_BLACKJACK_TABLE_LAYOUT;
@@ -513,7 +568,12 @@ export default function TableDesigner() {
     if (JSON.stringify(layout.motion) !== JSON.stringify(base.motion)) out.motion = layout.motion;
     if (JSON.stringify(layout.emotes) !== JSON.stringify(base.emotes)) out.emotes = layout.emotes;
     if (Object.keys(soundOverrides).length > 0) out.sounds = soundOverrides;
-    if (Object.keys(soundFx).length > 0) out.soundFx = soundFx;
+    // Entries sitting at stock (e.g. after clicking the Dry style) are noise in
+    // a saved theme — only genuinely customised events export.
+    const fxEntries = Object.fromEntries(
+      Object.entries(soundFx).filter(([key]) => isFxCustomised(soundFx, key)),
+    );
+    if (Object.keys(fxEntries).length > 0) out.soundFx = fxEntries;
     return out;
   }, [layout, soundOverrides, soundFx]);
 
@@ -818,11 +878,18 @@ export default function TableDesigner() {
                   onPointerUp={endDrag}
                   onPointerCancel={endDrag}
                 >
-                  <BlackjackMultiDealerArea tableViewState={state} visibleDealerCards={state.dealerCards.length} />
+                  <BlackjackMultiDealerArea
+                    tableViewState={state}
+                    visibleDealerCards={state.dealerCards.length}
+                    cardsExiting={dealPreview === 'exit'}
+                    newDealerCardIndices={previewNewDealerCards}
+                  />
                 </div>
 
                 <BlackjackMultiSeatGrid
                   seats={seats}
+                  cardsExiting={dealPreview === 'exit'}
+                  newPlayerCardByHandKey={previewNewPlayerCards}
                   addressLower={undefined}
                   phase={state.phase}
                   actingSeatPosition={state.actingSeatPosition}
@@ -936,10 +1003,34 @@ export default function TableDesigner() {
             needs real horizontal room, which the 330px side panel cannot give. */}
         {selection.kind === 'sounds' && (
           <div className="bjsnd">
-            <p style={{ fontSize: 11, color: UI.dim, margin: '0 0 10px', lineHeight: 1.5 }}>
-              Click a tile to open its studio — shape the envelope, place it in space, add echo.
-              Hovering a tile previews the animation it plays with.
+            <p style={{ fontSize: 11, color: UI.dim, margin: '0 0 8px', lineHeight: 1.5 }}>
+              Pick a style for the whole table, or click a tile to style one sound — the knobs
+              inside are for fine-tuning after.
             </p>
+            <div className="bjsnd-preset-row" style={{ marginBottom: 12 }}>
+              <span className="bjsnd-preset-cap">Whole table</span>
+              {SOUND_FX_PRESETS.map((preset) => (
+                <button
+                  key={preset.id}
+                  type="button"
+                  title={`${preset.hint} — applies to every event`}
+                  className="bjsnd-btn"
+                  onClick={() => {
+                    setSoundFx((prev) => {
+                      const next: SoundFxMap = {};
+                      for (const info of BLACKJACK_SOUND_EVENT_INFO) {
+                        const sample = fxFor(prev, info.key).sample;
+                        next[info.key] = fxFromPreset(preset, sample);
+                      }
+                      return next;
+                    });
+                    requestAutoPlay('cardDeal');
+                  }}
+                >
+                  {preset.label}
+                </button>
+              ))}
+            </div>
             <div className="bjsnd-grid">
               {BLACKJACK_SOUND_EVENT_INFO.map((info) => {
                 const override = soundOverrides[info.key];
@@ -1311,7 +1402,90 @@ export default function TableDesigner() {
 
         {selection.kind === 'motion' && (
           <>
-            <Section title="Deal in">
+            <Section title="Deal-in style — click one to watch it">
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginBottom: 4 }}>
+                {DEAL_IN_PRESETS.map((p) => {
+                  const active = activeDealInPresetId(layout.motion.dealIn) === p.id;
+                  return (
+                    <button
+                      key={p.id}
+                      type="button"
+                      title={p.hint}
+                      onClick={() => {
+                        beginGesture();
+                        patch((prev) => ({
+                          ...prev,
+                          motion: { ...prev.motion, dealIn: { ...p.motion } },
+                        }));
+                        runDealPreview();
+                      }}
+                      style={{
+                        background: active ? UI.accent : UI.raised,
+                        color: active ? '#fff' : UI.text,
+                        border: `1px solid ${active ? UI.accent : UI.border}`,
+                        borderRadius: 6,
+                        padding: '4px 9px',
+                        fontSize: 11,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      {p.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </Section>
+            <Section title="Collect style">
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginBottom: 4 }}>
+                {CLEAR_OUT_PRESETS.map((p) => {
+                  const active = activeClearOutPresetId(layout.motion.clearOut) === p.id;
+                  return (
+                    <button
+                      key={p.id}
+                      type="button"
+                      title={p.hint}
+                      onClick={() => {
+                        beginGesture();
+                        patch((prev) => ({
+                          ...prev,
+                          motion: { ...prev.motion, clearOut: { ...p.motion } },
+                        }));
+                        runDealPreview();
+                      }}
+                      style={{
+                        background: active ? UI.accent : UI.raised,
+                        color: active ? '#fff' : UI.text,
+                        border: `1px solid ${active ? UI.accent : UI.border}`,
+                        borderRadius: 6,
+                        padding: '4px 9px',
+                        fontSize: 11,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      {p.label}
+                    </button>
+                  );
+                })}
+              </div>
+              <button
+                type="button"
+                onClick={runDealPreview}
+                disabled={dealPreview !== null}
+                style={{
+                  background: UI.raised,
+                  border: `1px solid ${UI.border}`,
+                  color: dealPreview ? UI.dim : UI.text,
+                  borderRadius: 6,
+                  padding: '5px 10px',
+                  fontSize: 11,
+                  cursor: dealPreview ? 'default' : 'pointer',
+                  width: '100%',
+                }}
+              >
+                {dealPreview ? 'Playing…' : '▶ Preview deal on the table'}
+              </button>
+            </Section>
+            <Section title="Deal in — fine-tune">
               <Knob
                 label="From X"
                 value={layout.motion.dealIn.fromX}
@@ -1332,6 +1506,29 @@ export default function TableDesigner() {
                 onGestureStart={beginGesture}
                 onChange={(v) =>
                   patch((p) => ({ ...p, motion: { ...p.motion, dealIn: { ...p.motion.dealIn, fromY: v } } }))
+                }
+              />
+              <Knob
+                label="Spin"
+                value={layout.motion.dealIn.fromRot}
+                min={-180}
+                max={180}
+                suffix="°"
+                onGestureStart={beginGesture}
+                onChange={(v) =>
+                  patch((p) => ({ ...p, motion: { ...p.motion, dealIn: { ...p.motion.dealIn, fromRot: v } } }))
+                }
+              />
+              <Knob
+                label="Start size"
+                value={layout.motion.dealIn.fromScale}
+                min={0.3}
+                max={1.6}
+                step={0.05}
+                suffix="×"
+                onGestureStart={beginGesture}
+                onChange={(v) =>
+                  patch((p) => ({ ...p, motion: { ...p.motion, dealIn: { ...p.motion.dealIn, fromScale: v } } }))
                 }
               />
               <Knob
@@ -1359,7 +1556,7 @@ export default function TableDesigner() {
                 }
               />
             </Section>
-            <Section title="Collect">
+            <Section title="Collect — fine-tune">
               <Knob
                 label="To X"
                 value={layout.motion.clearOut.toX}
@@ -1411,8 +1608,8 @@ export default function TableDesigner() {
               />
             </Section>
             <p style={{ fontSize: 11, color: UI.dim, lineHeight: 1.5 }}>
-              Motion is easier to judge on a live table — the fixtures here are static, so these
-              values are applied but not animated.
+              Click a style above (or ▶ Preview) to watch the cards collect and re-deal with
+              these exact settings.
             </p>
           </>
         )}

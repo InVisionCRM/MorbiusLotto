@@ -56,11 +56,12 @@
    inline by PlayingCard so each card in a hand lands in sequence. */
 @keyframes cardSlideIn {
   0% {
-    transform: translateX(var(--bj-deal-from-x, 100px)) translateY(var(--bj-deal-from-y, -80px));
+    transform: translateX(var(--bj-deal-from-x, 100px)) translateY(var(--bj-deal-from-y, -80px))
+      rotate(var(--bj-deal-from-rot, 0deg)) scale(var(--bj-deal-from-scale, 1));
     opacity: 0;
   }
   100% {
-    transform: translateX(0) translateY(0);
+    transform: translateX(0) translateY(0) rotate(0deg) scale(1);
     opacity: 1;
   }
 }
