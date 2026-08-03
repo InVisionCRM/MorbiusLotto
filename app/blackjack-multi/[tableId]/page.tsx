@@ -38,7 +38,12 @@ import { PlayerProfileModal } from '@/components/shared/PlayerProfileModal';
 import { useBlackjackMultiEmotes } from './useBlackjackMultiEmotes';
 import { BLACKJACK_ADDRESS, MORBIUS_TOKEN_ADDRESS } from '@/lib/contracts';
 import Image from 'next/image';
-import { BLACKJACK_IMAGE_BACKGROUNDS, SOUNDS_BETTING_OPEN, SOUNDS_BETTING_CLOSED, SOUNDS_DEALER_PHRASE, SOUNDS_PLAYER_WINS, SOUNDS_PLAYER_BLACKJACK, SOUNDS_DEALER_WINS, SOUNDS_DEALER_BLACKJACK, SOUNDS_TIP, SOUND_PUSH, pickRandom } from '@/app/BLACKJACK/constants';
+import { BLACKJACK_IMAGE_BACKGROUNDS } from '@/app/BLACKJACK/constants';
+import {
+  DEFAULT_BLACKJACK_SOUND_MAP,
+  pickSound,
+  type BlackjackSoundEventKey,
+} from '@/lib/blackjack-sounds';
 import { useAudio, AudioManager } from '@/hooks/use-audio';
 import { usePlayerStatsEnhanced } from '@/hooks/use-blackjack-stats';
 import { useBlackjackTables } from '@/hooks/use-blackjack-tables';
@@ -463,6 +468,19 @@ export default function BlackjackMultiTablePage() {
     }
   }, [soundEnabled, dealerVoiceEnabled, playSound]);
 
+  // Every table sound is a named event resolving through this map, so a saved
+  // table theme can swap any of them (or silence one) without code changes.
+  // Per-table overrides plug in here once themes are persisted.
+  const soundMap = DEFAULT_BLACKJACK_SOUND_MAP;
+  const playEventSfx = useCallback((event: BlackjackSoundEventKey, volume?: number) => {
+    const path = pickSound(soundMap, event);
+    if (path) playSound(path, volume);
+  }, [soundMap, playSound]);
+  const playEventVoice = useCallback((event: BlackjackSoundEventKey) => {
+    const path = pickSound(soundMap, event);
+    if (path) playDealerVoice(path);
+  }, [soundMap, playDealerVoice]);
+
   // Dealer random phrase timer during betting
   const dealerPhraseTimerRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -549,21 +567,19 @@ export default function BlackjackMultiTablePage() {
     if (soundEnabled) {
       switch (pending.kind) {
         case 'player_blackjack':
-          playDealerVoice(pickRandom(SOUNDS_PLAYER_BLACKJACK));
+          playEventVoice('voicePlayerBlackjack');
           break;
         case 'player_win':
-          playDealerVoice(pickRandom(SOUNDS_PLAYER_WINS));
+          playEventVoice('voicePlayerWins');
           break;
         case 'push':
-          playDealerVoice(SOUND_PUSH);
+          playEventVoice('voicePush');
           break;
         case 'dealer_blackjack':
-          playDealerVoice(pickRandom(SOUNDS_DEALER_BLACKJACK));
+          playEventVoice('voiceDealerBlackjack');
           break;
         case 'dealer_win':
-          if (SOUNDS_DEALER_WINS.length > 0) {
-            playDealerVoice(pickRandom(SOUNDS_DEALER_WINS));
-          }
+          playEventVoice('voiceDealerWins');
           break;
         case 'silent':
           break;
@@ -606,16 +622,16 @@ export default function BlackjackMultiTablePage() {
         (pendingOutcome && pendingOutcome.kind !== 'silent') || recentlyAnnouncedOutcome;
 
       if (!shouldSuppressBettingOpenVoice) {
-        playDealerVoice(pickRandom(SOUNDS_BETTING_OPEN));
+        playEventVoice('voiceBettingOpen');
       }
       // Clear any lingering phrase timer
       if (dealerPhraseTimerRef.current) clearTimeout(dealerPhraseTimerRef.current);
       // Play a random dealer phrase only every 5th hand (quieter table pacing).
       const roundNumber = Number(phaseState.roundNumber ?? 0);
       const shouldPlayMidBetPhrase = roundNumber > 0 && roundNumber % 5 === 0;
-      if (shouldPlayMidBetPhrase && SOUNDS_DEALER_PHRASE.length > 0) {
+      if (shouldPlayMidBetPhrase && soundMap.voiceDealerPhrase.length > 0) {
         dealerPhraseTimerRef.current = setTimeout(() => {
-          playDealerVoice(pickRandom(SOUNDS_DEALER_PHRASE));
+          playEventVoice('voiceDealerPhrase');
         }, 5000 + Math.random() * 4000); // 5–9s into betting
       } else {
         dealerPhraseTimerRef.current = null;
@@ -625,14 +641,14 @@ export default function BlackjackMultiTablePage() {
     // ── Betting closes → dealing: stop any phrase, announce, then deal sound ──
     if (prevPhase === 'betting' && phaseState.phase === 'playing') {
       if (dealerPhraseTimerRef.current) { clearTimeout(dealerPhraseTimerRef.current); dealerPhraseTimerRef.current = null; }
-      playDealerVoice(pickRandom(SOUNDS_BETTING_CLOSED));
+      playEventVoice('voiceBettingClosed');
       // Card deal sound slightly after the voice starts
-      setTimeout(() => playSound('/BlackJack/sounds/cards.wav'), 600);
+      setTimeout(() => playEventSfx('cardDeal'), 600);
     }
 
     // ── Cards dealt sound for non-betting→playing transitions ──
     if (prevPhase !== 'betting' && prevPhase !== 'playing' && phaseState.phase === 'playing') {
-      playSound('/BlackJack/sounds/cards.wav');
+      playEventSfx('cardDeal');
     }
 
     // ── Round completes: outcome voice + win toast — deferred until dealer reveal finishes (flushPendingDealerOutcome) ──
@@ -716,10 +732,10 @@ export default function BlackjackMultiTablePage() {
     for (let i = 0; i < 3; i++) {
       if (!prev[i] && current[i]) {
         // Someone joined
-        if (current[i] !== address?.toLowerCase()) playSound('/Poker/PokerSounds/OpponentJoined.mp3');
+        if (current[i] !== address?.toLowerCase()) playEventSfx('opponentJoined');
       } else if (prev[i] && !current[i]) {
         // Someone left
-        if (prev[i] !== address?.toLowerCase()) playSound('/Poker/PokerSounds/OpponentLeft.mp3');
+        if (prev[i] !== address?.toLowerCase()) playEventSfx('opponentLeft');
       }
     }
     prevSeatAddrsRef.current = current;
@@ -774,14 +790,14 @@ export default function BlackjackMultiTablePage() {
       if (totalCards > 2) {
         dealerRevealTimeoutRef.current = setTimeout(() => {
           setVisibleDealerCards(2);
-          playSound('/BlackJack/sounds/cards.wav');
+          playEventSfx('cardDeal');
 
           let cardIndex = 2;
           const revealNextCard = () => {
             if (cardIndex < totalCards) {
               cardIndex += 1;
               setVisibleDealerCards(cardIndex);
-              playSound('/BlackJack/sounds/cards.wav');
+              playEventSfx('cardDeal');
               dealerRevealTimeoutRef.current = setTimeout(revealNextCard, DEALER_PER_CARD_REVEAL_DELAY_MS);
               return;
             }
@@ -795,7 +811,7 @@ export default function BlackjackMultiTablePage() {
       } else {
         dealerRevealTimeoutRef.current = setTimeout(() => {
           setVisibleDealerCards(totalCards);
-          playSound('/BlackJack/sounds/cards.wav');
+          playEventSfx('cardDeal');
           dealerRevealTimeoutRef.current = setTimeout(() => {
             setIsDealerRevealing(false);
           }, DEALER_POST_REVEAL_DELAY_MS);
@@ -1024,14 +1040,14 @@ export default function BlackjackMultiTablePage() {
 
   const confirmTakeSeat = useCallback(async (pos: number) => {
     if (!wsClient?.isConnected() || !address) return;
-    playSound('/Poker/PokerSounds/PlayerClickConfirmation.mp3');
+    playEventSfx('click');
     try { await wsClient.sendRequest('bj_multi_join_table', { tableId, seatPosition: pos }); }
     catch (e) { setError((e as Error).message); }
   }, [wsClient, tableId, address, playSound]);
 
   const leaveSeat = useCallback(async () => {
     if (!wsClient?.isConnected()) return;
-    playSound('/Poker/PokerSounds/PlayerClickConfirmation.mp3');
+    playEventSfx('click');
     try { await wsClient.sendRequest('bj_multi_leave_table', { tableId }); }
     catch (e) { setError((e as Error).message); }
   }, [wsClient, tableId, playSound]);
@@ -1043,7 +1059,7 @@ export default function BlackjackMultiTablePage() {
       setError(`Bet must be between ${tableMinBetWhole} and ${tableMaxBetWhole} MORBIUS`);
       return;
     }
-    playSound('/Poker/PokerSounds/PlayerClickConfirmation.mp3');
+    playEventSfx('click');
     try {
       await wsClient.sendRequest('bj_multi_place_bet', {
         tableId,
@@ -1062,9 +1078,9 @@ export default function BlackjackMultiTablePage() {
     if (!wsClient?.isConnected()) return;
     // Sound: knock for hit, click confirmation for everything else
     if (action === 'hit') {
-      playSound('/BlackJack/sounds/knock.wav');
+      playEventSfx('hitKnock');
     } else {
-      playSound('/Poker/PokerSounds/PlayerClickConfirmation.mp3');
+      playEventSfx('click');
     }
     try { await wsClient.sendRequest('bj_multi_action', { tableId, action, handIndex: mySeat?.activeHandIndex ?? 0 }); }
     catch (e) { setError((e as Error).message); }
@@ -1073,7 +1089,7 @@ export default function BlackjackMultiTablePage() {
   const tipDealer = useCallback(async () => {
     if (tipAnimating) return;
     if (!wsClient?.isConnected() || !address || myPosition === null) return;
-    playSound('/Poker/PokerSounds/PlayerClickConfirmation.mp3');
+    playEventSfx('click');
     setTipAnimating(true);
     try {
       await wsClient.sendRequest('bj_multi_tip_dealer', {
@@ -1081,7 +1097,7 @@ export default function BlackjackMultiTablePage() {
         amount: (BigInt(2000) * BigInt('1000000000000000000')).toString(),
       });
       // Dealer thanks voice line after tip succeeds
-      playDealerVoice(pickRandom(SOUNDS_TIP));
+      playEventVoice('voiceTipThanks');
       fetchBalance();
     } catch (e) {
       setError((e as Error).message);
@@ -1484,6 +1500,7 @@ export default function BlackjackMultiTablePage() {
           doAction={doAction}
           soundEnabled={soundEnabled}
           playSound={playSound}
+          hitKnockSound={pickSound(soundMap, 'hitKnock') ?? undefined}
           placeBet={placeBet}
           tokenLogoUrl={tableProfile?.logo_url ?? null}
           tokenTicker={tableProfile?.ticker ?? null}

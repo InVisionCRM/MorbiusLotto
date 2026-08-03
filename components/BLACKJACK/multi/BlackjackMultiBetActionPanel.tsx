@@ -192,6 +192,7 @@ export function BlackjackMultiBetActionPanel({
   doAction,
   soundEnabled,
   playSound,
+  hitKnockSound,
   placeBet,
   tokenLogoUrl,
   tokenTicker,
@@ -216,6 +217,8 @@ export function BlackjackMultiBetActionPanel({
   doAction: (action: 'hit' | 'stand' | 'double_down' | 'split') => void;
   soundEnabled: boolean;
   playSound: (path: string, volume?: number) => void;
+  /** Table-theme override for the action-button knock (forwarded to the mobile bar). */
+  hitKnockSound?: string;
   placeBet: () => void;
   tokenLogoUrl?: string | null;
   tokenTicker?: string | null;
@@ -289,6 +292,7 @@ export function BlackjackMultiBetActionPanel({
             lastBetAmount="0"
             soundEnabled={soundEnabled}
             onPlaySfx={playSound}
+            knockSound={hitKnockSound}
             alwaysVisible
             hideDealRow
           />
