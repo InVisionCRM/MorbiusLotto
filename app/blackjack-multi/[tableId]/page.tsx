@@ -1156,7 +1156,6 @@ export default function BlackjackMultiTablePage() {
     kind: (state?.themeKind ?? 'video') as 'video' | 'image',
     id: state?.themeId ?? 'glowingTable',
   });
-  const tableImageSrc = theme.kind === 'image' ? theme.src : BLACKJACK_IMAGE_BACKGROUNDS[0].src;
   const tableProfile = getTableProfile('image', state?.themeId ?? BLACKJACK_IMAGE_BACKGROUNDS[0].id);
 
   // Scale board content to fill the 16:9 container at any size
@@ -1181,6 +1180,11 @@ export default function BlackjackMultiTablePage() {
     () => mergeTableLayout(DEFAULT_BLACKJACK_TABLE_LAYOUT, themeConfig?.layout),
     [themeConfig],
   );
+  // The theme's own table art wins; otherwise the table's configured branded
+  // background, same as before themes existed.
+  const tableImageSrc =
+    tableLayout.table.image ||
+    (theme.kind === 'image' ? theme.src : BLACKJACK_IMAGE_BACKGROUNDS[0].src);
 
   if (!tableId) return null;
 

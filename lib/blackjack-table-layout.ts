@@ -72,6 +72,16 @@ export interface BlackjackTableLayout {
    */
   canvas: { width: number; height: number };
 
+  /**
+   * The table's artwork — the image the whole board is built around. Drawn
+   * cover-fitted across the full canvas, exactly like the live table draws its
+   * branded backgrounds. An empty string means "use the table's configured
+   * branded background" (the pre-theme behaviour).
+   */
+  table: {
+    image: string;
+  };
+
   /** One entry per seat, left to right. */
   seats: SeatPlacement[];
 
@@ -116,6 +126,8 @@ export interface BlackjackTableLayout {
 
 export const DEFAULT_BLACKJACK_TABLE_LAYOUT: BlackjackTableLayout = {
   canvas: { width: 800, height: 450 },
+
+  table: { image: '' },
 
   seats: [
     { cx: 140, floorY: 415, angle: 18 },
@@ -228,6 +240,7 @@ export function mergeTableLayout(
   if (!override) return base;
   return {
     canvas: { ...base.canvas, ...override.canvas },
+    table: { ...base.table, ...override.table },
     seats: (override.seats as SeatPlacement[] | undefined) ?? base.seats,
     dealer: { ...base.dealer, ...override.dealer },
     emotes: { ...base.emotes, ...override.emotes },

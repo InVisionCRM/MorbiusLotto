@@ -60,6 +60,7 @@ import { SoundEventTile } from '@/components/BLACKJACK/design/sound/SoundEventTi
 import { TrimModal, type TrimTarget } from '@/components/BLACKJACK/design/sound/TrimModal';
 import { LibraryModal } from '@/components/BLACKJACK/design/sound/LibraryModal';
 import { useTablePublish } from '@/components/BLACKJACK/design/useTablePublish';
+import { BLACKJACK_IMAGE_BACKGROUNDS, DEFAULT_BLACKJACK_IMAGE_ID } from '@/app/BLACKJACK/constants';
 import type { BlackjackTableThemeConfig } from '@/lib/blackjack-table-theme';
 import '@/components/BLACKJACK/design/sound/sound-designer.css';
 import '@/components/BLACKJACK/design/table-designer.css';
@@ -72,7 +73,12 @@ const CANVAS_H = DEFAULT_BLACKJACK_TABLE_LAYOUT.canvas.height;
 type Selection = { kind: 'seat'; index: number } | { kind: 'dealer' } | null;
 
 /** Which control-deck tab is open. */
-type DeckTab = 'seats' | 'dealer' | 'cards' | 'anim' | 'sound' | 'share' | 'json';
+type DeckTab = 'art' | 'seats' | 'dealer' | 'anim' | 'sound' | 'share' | 'json';
+
+/** What the designer paints when no art has been chosen yet. */
+const DEFAULT_TABLE_ART =
+  BLACKJACK_IMAGE_BACKGROUNDS.find((b) => b.id === DEFAULT_BLACKJACK_IMAGE_ID)?.src ??
+  BLACKJACK_IMAGE_BACKGROUNDS[0].src;
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 
@@ -123,7 +129,7 @@ export default function TableDesigner() {
   const [layout, setLayout] = useState<BlackjackTableLayout>(DEFAULT_BLACKJACK_TABLE_LAYOUT);
   const [scenarioId, setScenarioId] = useState(DESIGN_SCENARIOS[0].id);
   const [selection, setSelection] = useState<Selection>({ kind: 'seat', index: 1 });
-  const [tab, setTab] = useState<DeckTab>('seats');
+  const [tab, setTab] = useState<DeckTab>('art');
   const [showGuides, setShowGuides] = useState(true);
   const [copied, setCopied] = useState(false);
   const [dragging, setDragging] = useState(false);
@@ -509,7 +515,7 @@ export default function TableDesigner() {
     return () => window.removeEventListener('keydown', onKey);
   }, [selection, setSeat, patch, beginGesture, undo, redo]);
 
-  // ── Card back picker ───────────────────────────────────────────────────────
+  // ── Image pickers: table art + card back ──────────────────────────────────
   const backFileRef = useRef<HTMLInputElement>(null);
   const pickCardBack = useCallback(
     (file: File | null) => {
@@ -520,6 +526,29 @@ export default function TableDesigner() {
     },
     [beginGesture, patch],
   );
+
+  const artFileRef = useRef<HTMLInputElement>(null);
+  const setTableArt = useCallback(
+    (src: string) => {
+      beginGesture();
+      patch((p) => ({ ...p, table: { ...p.table, image: src } }));
+    },
+    [beginGesture, patch],
+  );
+  const pickTableArt = useCallback(
+    (file: File | null) => {
+      if (!file) return;
+      setTableArt(URL.createObjectURL(file));
+    },
+    [setTableArt],
+  );
+
+  /** What the stage paints right now: chosen art, or the stock branded table. */
+  const stageArt = layout.table.image || DEFAULT_TABLE_ART;
+  const artIsUpload =
+    layout.table.image.startsWith('blob:') ||
+    layout.table.image.startsWith('data:') ||
+    layout.table.image.startsWith('/uploads');
 
   const scenario = DESIGN_SCENARIOS.find((s) => s.id === scenarioId) ?? DESIGN_SCENARIOS[0];
   const state = scenario.state;
@@ -607,6 +636,7 @@ export default function TableDesigner() {
   const diff = useMemo(() => {
     const base = DEFAULT_BLACKJACK_TABLE_LAYOUT;
     const out: Record<string, unknown> = {};
+    if (JSON.stringify(layout.table) !== JSON.stringify(base.table)) out.table = layout.table;
     if (JSON.stringify(layout.seats) !== JSON.stringify(base.seats)) out.seats = layout.seats;
     if (JSON.stringify(layout.dealer) !== JSON.stringify(base.dealer)) out.dealer = layout.dealer;
     if (JSON.stringify(layout.cards) !== JSON.stringify(base.cards)) out.cards = layout.cards;
@@ -649,7 +679,7 @@ export default function TableDesigner() {
   /** The sparse theme this editor currently describes — the diff, reshaped. */
   const currentThemeConfig = useMemo((): BlackjackTableThemeConfig => {
     const layoutPart: Record<string, unknown> = {};
-    for (const key of ['seats', 'dealer', 'cards', 'motion', 'emotes'] as const) {
+    for (const key of ['table', 'seats', 'dealer', 'cards', 'motion', 'emotes'] as const) {
       if (diff[key] !== undefined) layoutPart[key] = diff[key];
     }
     const theme: BlackjackTableThemeConfig = { version: 1 };
@@ -693,11 +723,9 @@ export default function TableDesigner() {
   const selectedSeat = selection?.kind === 'seat' ? layout.seats[selection.index] : null;
 
   const quickChips: { label: string; tab: DeckTab; sel?: Selection }[] = [
-    { label: 'Seat 1', tab: 'seats', sel: { kind: 'seat', index: 0 } },
-    { label: 'Seat 2', tab: 'seats', sel: { kind: 'seat', index: 1 } },
-    { label: 'Seat 3', tab: 'seats', sel: { kind: 'seat', index: 2 } },
+    { label: 'Table Art', tab: 'art' },
+    { label: 'Seats', tab: 'seats', sel: { kind: 'seat', index: selectedSeatIndex } },
     { label: 'Dealer', tab: 'dealer', sel: { kind: 'dealer' } },
-    { label: 'Cards', tab: 'cards' },
     { label: 'Animations', tab: 'anim' },
     { label: 'Sounds', tab: 'sound' },
   ];
@@ -706,9 +734,9 @@ export default function TableDesigner() {
     {
       label: 'Build',
       tabs: [
+        { id: 'art', label: 'Table Art' },
         { id: 'seats', label: 'Seats' },
         { id: 'dealer', label: 'Dealer' },
-        { id: 'cards', label: 'Cards' },
       ],
     },
     {
@@ -748,8 +776,8 @@ export default function TableDesigner() {
             Table Forge<span className="bjtd-glyph">&#9670;</span>
           </h1>
           <p className="bjtd-tagline">
-            Blackjack table studio &middot; drag seats right on the felt &middot; one-click animation &amp; sound
-            styles &middot; saved per table &middot; played in MORBIUS
+            Upload your table art &middot; build the seats, cards, animations and sounds around it &middot;
+            saved per table &middot; played in MORBIUS
           </p>
         </header>
 
@@ -942,10 +970,65 @@ export default function TableDesigner() {
                 </div>
               )}
 
-              {/* ── CARDS ── */}
-              {tab === 'cards' && (
+              {/* ── TABLE ART ── */}
+              {tab === 'art' && (
                 <div>
-                  <div className="bjtd-ctl">
+                  <p className="bjtd-hint" style={{ marginTop: 0 }}>
+                    <b>Start with your table.</b> Upload your own art or pick a branded table — it fills the
+                    whole board, and everything else (seats, cards, sounds) builds on top of it. The board is
+                    always 16:9, so your image always fits.
+                  </p>
+
+                  <button
+                    type="button"
+                    className="bjtd-art-drop"
+                    onClick={() => artFileRef.current?.click()}
+                  >
+                    <span className="bjtd-art-drop-big">Upload your table art</span>
+                    <span className="bjtd-art-drop-sub">PNG / JPG / WEBP &middot; landscape works best</span>
+                  </button>
+                  <input
+                    ref={artFileRef}
+                    type="file"
+                    accept="image/*"
+                    style={{ display: 'none' }}
+                    onChange={(e) => {
+                      pickTableArt(e.target.files?.[0] ?? null);
+                      e.target.value = '';
+                    }}
+                  />
+
+                  <div className="bjtd-ctl" style={{ margin: '14px 0 6px' }}>
+                    <div className="bjtd-ctl-lbl">
+                      <span>Or pick a branded table</span>
+                      {artIsUpload && <span className="bjtd-val">using your upload</span>}
+                    </div>
+                  </div>
+                  <div className="bjtd-art-grid">
+                    <button
+                      type="button"
+                      className={`bjtd-art-card${layout.table.image === '' ? ' on' : ''}`}
+                      title="Whatever background this table is configured with"
+                      onClick={() => setTableArt('')}
+                    >
+                      <img src={DEFAULT_TABLE_ART} alt="" />
+                      <span className="bjtd-art-nm">Table default</span>
+                    </button>
+                    {BLACKJACK_IMAGE_BACKGROUNDS.map((bg) => (
+                      <button
+                        key={bg.id}
+                        type="button"
+                        className={`bjtd-art-card${layout.table.image === bg.src ? ' on' : ''}`}
+                        title={bg.label}
+                        onClick={() => setTableArt(bg.src)}
+                      >
+                        <img src={bg.src} alt="" loading="lazy" />
+                        <span className="bjtd-art-nm">{bg.label}</span>
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="bjtd-ctl" style={{ margin: '18px 0 0' }}>
                     <div className="bjtd-ctl-lbl">
                       <span>Card back</span>
                     </div>
@@ -989,93 +1072,9 @@ export default function TableDesigner() {
                       />
                     </div>
                     <p className="bjtd-hint">
-                      Shown on every face-down card. Saved with the theme when you hit <b>Save</b> in Save &amp;
-                      Share.
+                      Shown on every face-down card. Everything here saves with the theme when you hit{' '}
+                      <b>Save</b> in Save &amp; Share.
                     </p>
-                  </div>
-                  <div className="bjtd-grid2">
-                    <Knob
-                      label="Stack overlap — dealer"
-                      value={layout.cards.overlap.dealer}
-                      min={-60}
-                      max={20}
-                      suffix="px"
-                      onGestureStart={beginGesture}
-                      onChange={(v) =>
-                        patch((p) => ({ ...p, cards: { ...p.cards, overlap: { ...p.cards.overlap, dealer: v } } }))
-                      }
-                    />
-                    <Knob
-                      label="Stack overlap — players"
-                      value={layout.cards.overlap.player}
-                      min={-60}
-                      max={20}
-                      suffix="px"
-                      onGestureStart={beginGesture}
-                      onChange={(v) =>
-                        patch((p) => ({ ...p, cards: { ...p.cards, overlap: { ...p.cards.overlap, player: v } } }))
-                      }
-                    />
-                  </div>
-                  <div className="bjtd-grid2">
-                    <Knob
-                      label="Dealer card width"
-                      value={layout.cards.sizes.normal.w}
-                      min={40}
-                      max={160}
-                      suffix="px"
-                      onGestureStart={beginGesture}
-                      onChange={(v) =>
-                        patch((p) => ({
-                          ...p,
-                          cards: { ...p.cards, sizes: { ...p.cards.sizes, normal: { ...p.cards.sizes.normal, w: v } } },
-                        }))
-                      }
-                    />
-                    <Knob
-                      label="Dealer card height"
-                      value={layout.cards.sizes.normal.h}
-                      min={56}
-                      max={224}
-                      suffix="px"
-                      onGestureStart={beginGesture}
-                      onChange={(v) =>
-                        patch((p) => ({
-                          ...p,
-                          cards: { ...p.cards, sizes: { ...p.cards.sizes, normal: { ...p.cards.sizes.normal, h: v } } },
-                        }))
-                      }
-                    />
-                  </div>
-                  <div className="bjtd-grid2">
-                    <Knob
-                      label="Seat card width"
-                      value={layout.cards.sizes.small.w}
-                      min={32}
-                      max={120}
-                      suffix="px"
-                      onGestureStart={beginGesture}
-                      onChange={(v) =>
-                        patch((p) => ({
-                          ...p,
-                          cards: { ...p.cards, sizes: { ...p.cards.sizes, small: { ...p.cards.sizes.small, w: v } } },
-                        }))
-                      }
-                    />
-                    <Knob
-                      label="Seat card height"
-                      value={layout.cards.sizes.small.h}
-                      min={44}
-                      max={168}
-                      suffix="px"
-                      onGestureStart={beginGesture}
-                      onChange={(v) =>
-                        patch((p) => ({
-                          ...p,
-                          cards: { ...p.cards, sizes: { ...p.cards.sizes, small: { ...p.cards.sizes.small, h: v } } },
-                        }))
-                      }
-                    />
                   </div>
                 </div>
               )}
@@ -1541,13 +1540,35 @@ export default function TableDesigner() {
                           height: CANVAS_H,
                           transform: `scale(${stageScale})`,
                           transformOrigin: 'top left',
-                          background:
-                            'radial-gradient(ellipse at 50% 35%, #12331f 0%, #0a1f13 60%, #06120b 100%)',
+                          background: '#06120b',
                           border: '1px solid rgba(34,211,238,0.16)',
                           borderRadius: 12,
                           overflow: 'hidden',
                         }}
                       >
+                        {/* The table art itself + the same dark overlay the live
+                            table draws, so the designer shows the real thing. */}
+                        <img
+                          src={stageArt}
+                          alt=""
+                          style={{
+                            position: 'absolute',
+                            inset: 0,
+                            width: '100%',
+                            height: '100%',
+                            objectFit: 'cover',
+                            objectPosition: 'center',
+                            pointerEvents: 'none',
+                          }}
+                        />
+                        <div
+                          style={{
+                            position: 'absolute',
+                            inset: 0,
+                            background: 'linear-gradient(145deg, rgba(0,0,0,0.22), rgba(0,0,0,0.12))',
+                            pointerEvents: 'none',
+                          }}
+                        />
                         {showGuides && (
                           <svg
                             width={CANVAS_W}

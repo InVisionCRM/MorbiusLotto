@@ -158,6 +158,13 @@ export function useTablePublish() {
         out.layout!.cards!.backImage = await uploadFile(file, 'image');
       }
 
+      const tableImage = out.layout?.table?.image;
+      if (typeof tableImage === 'string' && isLocalMedia(tableImage)) {
+        setStatus({ kind: 'busy', note: 'Uploading table art…' });
+        const file = await urlToFile(tableImage, 'table-art');
+        out.layout!.table!.image = await uploadFile(file, 'image');
+      }
+
       return out;
     },
     [uploadFile],
