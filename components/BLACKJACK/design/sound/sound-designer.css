@@ -1,0 +1,429 @@
+/*
+ * Sound designer styling, ported from the slot builder's Sound tab
+ * (public/slot-builder-lab.html) so both studios look and behave the same.
+ *
+ * Colours are hard-coded rather than themed on purpose: this is a tool for
+ * judging the table's sound, and it must not shift when the table's own styling
+ * does — the same reasoning as the Theme Studio's fixed chrome.
+ */
+
+.bjsnd {
+  --cyan: #22d3ee;
+  --cyan-soft: rgba(34, 211, 238, 0.22);
+  --cyan-edge: rgba(34, 211, 238, 0.55);
+  --slate-300: #cbd5e1;
+  --slate-400: #94a3b8;
+  --slate-500: #64748b;
+  --loss: #f43f5e;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+/* ── event tiles ────────────────────────────────────────────────────────────
+   Hovering a tile runs the SAME icon animation it gets when the sound actually
+   fires, so hovering literally previews "what it looks like when this plays". */
+.bjsnd-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
+  gap: 8px;
+}
+.bjsnd-tile {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  padding: 13px 8px 10px;
+  border: 1px solid var(--cyan-soft);
+  background: rgba(6, 16, 25, 0.55);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: 0.15s;
+  text-align: center;
+  min-width: 0;
+  width: 100%;
+}
+.bjsnd-tile:hover {
+  border-color: var(--cyan-edge);
+  box-shadow: 0 0 16px -8px rgba(34, 211, 238, 0.5);
+}
+.bjsnd-tile.playing {
+  border-color: var(--cyan);
+  box-shadow: 0 0 18px -6px rgba(34, 211, 238, 0.65);
+}
+.bjsnd-tile.on {
+  border-color: var(--cyan-edge);
+  background: rgba(34, 211, 238, 0.08);
+}
+.bjsnd-lbl {
+  font-weight: 600;
+  font-size: 11.5px;
+  color: #eaf6fb;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+.bjsnd-tag {
+  font-family: var(--font-mono);
+  font-size: 8.5px;
+  color: var(--slate-500);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+.bjsnd-meta {
+  min-width: 0;
+  max-width: 100%;
+}
+.bjsnd-ico {
+  width: 30px;
+  height: 30px;
+  color: var(--cyan);
+  filter: drop-shadow(0 0 6px rgba(34, 211, 238, 0.4));
+  pointer-events: none;
+}
+.bjsnd-ico svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+.bjsnd-tile-play {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 8px;
+  color: var(--cyan);
+  background: rgba(34, 211, 238, 0.12);
+  border: 1px solid var(--cyan-soft);
+  border-radius: 7px;
+  cursor: pointer;
+  opacity: 0;
+  transition: 0.15s;
+  padding: 0;
+}
+.bjsnd-tile:hover .bjsnd-tile-play,
+.bjsnd-tile.on .bjsnd-tile-play {
+  opacity: 1;
+}
+.bjsnd-tile-play:hover {
+  background: rgba(34, 211, 238, 0.25);
+  border-color: var(--cyan-edge);
+}
+
+/* ── icon animations — each mimics the character of its sound ─────────────── */
+@keyframes bjIcoDrop {
+  0% { transform: translateY(-5px); }
+  55% { transform: translateY(2px) scaleY(0.82); }
+  80% { transform: translateY(-1px); }
+  100% { transform: translateY(0); }
+}
+@keyframes bjIcoBurst {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.35); }
+  100% { transform: scale(1); }
+}
+@keyframes bjIcoCoin {
+  0% { transform: scaleX(1); }
+  25% { transform: scaleX(0.15); }
+  50% { transform: scaleX(1); }
+  75% { transform: scaleX(0.15); }
+  100% { transform: scaleX(1); }
+}
+@keyframes bjIcoBolt {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-2.5px); }
+  40% { transform: translateX(2.5px); }
+  60% { transform: translateX(-1.5px); }
+  80% { transform: translateX(1.5px); }
+}
+@keyframes bjIcoTwinkle {
+  0%, 100% { opacity: 1; transform: scale(1) rotate(0deg); }
+  50% { opacity: 0.55; transform: scale(1.25) rotate(22deg); }
+}
+@keyframes bjIcoPop {
+  0% { transform: scale(1); }
+  35% { transform: scale(0.8); }
+  70% { transform: scale(1.28); }
+  100% { transform: scale(1); }
+}
+@keyframes bjIcoSpin {
+  from { transform: rotate(0); }
+  to { transform: rotate(360deg); }
+}
+@keyframes bjIcoShake {
+  0%, 100% { transform: rotate(0); }
+  15% { transform: rotate(-11deg) scale(1.12); }
+  30% { transform: rotate(9deg) scale(1.18); }
+  45% { transform: rotate(-7deg) scale(1.12); }
+  60% { transform: rotate(5deg); }
+  80% { transform: rotate(-2deg); }
+}
+@keyframes bjIcoTap {
+  0% { transform: scale(1); }
+  40% { transform: scale(0.8); }
+  100% { transform: scale(1); }
+}
+.bjsnd-tile:hover .ico-card, .bjsnd-tile.playing .ico-card { animation: bjIcoDrop 0.55s ease; }
+.bjsnd-tile:hover .ico-burst, .bjsnd-tile.playing .ico-burst { animation: bjIcoBurst 0.55s ease; }
+.bjsnd-tile:hover .ico-chip, .bjsnd-tile.playing .ico-chip { animation: bjIcoCoin 0.8s ease infinite; }
+.bjsnd-tile:hover .ico-knock, .bjsnd-tile.playing .ico-knock { animation: bjIcoBolt 0.45s linear; }
+.bjsnd-tile:hover .ico-spark, .bjsnd-tile.playing .ico-spark { animation: bjIcoTwinkle 0.8s ease infinite; }
+.bjsnd-tile:hover .ico-voice, .bjsnd-tile.playing .ico-voice { animation: bjIcoPop 0.55s ease; }
+.bjsnd-tile:hover .ico-shuffle, .bjsnd-tile.playing .ico-shuffle { animation: bjIcoSpin 0.9s linear infinite; }
+.bjsnd-tile:hover .ico-gem, .bjsnd-tile.playing .ico-gem { animation: bjIcoShake 0.7s ease; }
+.bjsnd-tile:hover .ico-tap, .bjsnd-tile.playing .ico-tap { animation: bjIcoTap 0.35s ease; }
+.bjsnd-tile:hover .ico-door, .bjsnd-tile.playing .ico-door { animation: bjIcoTap 0.35s ease; }
+
+/* ── expanded customise panel ──────────────────────────────────────────────
+   The expanded wrap spans the whole grid and its tile reflows to a horizontal
+   header, so the four modules get full width beneath it. */
+.bjsnd-wrap { min-width: 0; }
+.bjsnd-wrap.expanded { grid-column: 1 / -1; }
+.bjsnd-wrap.expanded .bjsnd-tile {
+  flex-direction: row;
+  justify-content: flex-start;
+  text-align: left;
+  padding: 9px 12px;
+  gap: 10px;
+  border-color: var(--cyan-edge);
+}
+.bjsnd-wrap.expanded .bjsnd-tile .bjsnd-ico { width: 24px; height: 24px; }
+.bjsnd-wrap.expanded .bjsnd-tile .bjsnd-meta {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+.bjsnd-panel {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--cyan-soft);
+}
+.bjsnd-samp-row { margin-bottom: 10px; }
+.bjsnd-samp-status {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--slate-300);
+  margin-bottom: 7px;
+  word-break: break-word;
+}
+.bjsnd-samp-btns {
+  display: flex;
+  gap: 7px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.bjsnd-btn {
+  font-size: 10.5px;
+  color: #cdf5fc;
+  background: rgba(34, 211, 238, 0.1);
+  border: 1px solid var(--cyan-soft);
+  border-radius: 8px;
+  padding: 5px 10px;
+  cursor: pointer;
+  transition: 0.15s;
+}
+.bjsnd-btn:hover {
+  border-color: var(--cyan-edge);
+  background: rgba(34, 211, 238, 0.18);
+}
+.bjsnd-btn.on {
+  color: #05202a;
+  background: var(--cyan);
+  border-color: var(--cyan);
+}
+.bjsnd-reset-lnk {
+  background: none;
+  border: 0;
+  color: var(--slate-500);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  cursor: pointer;
+  padding: 4px 2px;
+  text-decoration: underline;
+  transition: 0.15s;
+}
+.bjsnd-reset-lnk:hover { color: var(--cyan); }
+
+/* ── module grid: envelope / spatial / echo / stereograph, side by side ───── */
+.bjsnd-mod-grid { display: grid; gap: 10px; grid-template-columns: 1fr; }
+@media (min-width: 640px) { .bjsnd-mod-grid { grid-template-columns: 1fr 1fr; } }
+@media (min-width: 1020px) { .bjsnd-mod-grid { grid-template-columns: 1.7fr 1fr 1fr 1fr; } }
+.bjsnd-mod {
+  border: 1px solid var(--cyan-soft);
+  border-radius: 12px;
+  background: rgba(4, 12, 19, 0.5);
+  padding: 9px 10px 10px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.bjsnd-cap {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  color: var(--slate-500);
+  margin: 2px 0 7px;
+  font-weight: 600;
+}
+.bjsnd-read {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.06em;
+  color: var(--slate-400);
+  text-align: center;
+  margin: 2px 0 8px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.bjsnd-fill { flex: 1; }
+.bjsnd-env-cv {
+  display: block;
+  width: 100%;
+  height: 104px;
+  border-radius: 10px;
+  border: 1px solid var(--cyan-soft);
+  background: rgba(4, 10, 16, 0.92);
+  touch-action: none;
+  cursor: crosshair;
+  margin-bottom: 6px;
+}
+
+/* ── spatial pad ───────────────────────────────────────────────────────────
+   X = pan, Y = distance (reverb mix). The pad IS the control; the readout
+   replaces what used to be sliders. */
+.bjsnd-pad {
+  position: relative;
+  width: 100%;
+  max-width: 156px;
+  aspect-ratio: 1;
+  margin: 0 auto 10px;
+  border-radius: 16px;
+  border: 1px solid var(--cyan-soft);
+  background: radial-gradient(circle at 50% 84%, rgba(34, 211, 238, 0.22), rgba(4, 10, 16, 0.94) 72%);
+  overflow: hidden;
+  touch-action: none;
+  cursor: grab;
+}
+.bjsnd-pad:active { cursor: grabbing; }
+.bjsnd-pad-ring {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  border: 1px dashed rgba(34, 211, 238, 0.22);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+.bjsnd-pad-ring.r1 { width: 44%; height: 44%; }
+.bjsnd-pad-ring.r2 { width: 80%; height: 80%; border-color: rgba(34, 211, 238, 0.13); }
+.bjsnd-pad-hline {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 1px;
+  background: rgba(148, 163, 184, 0.16);
+  pointer-events: none;
+}
+.bjsnd-pad-vline {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 1px;
+  background: rgba(148, 163, 184, 0.16);
+  pointer-events: none;
+}
+.bjsnd-axis {
+  position: absolute;
+  font-family: var(--font-mono);
+  font-size: 8px;
+  letter-spacing: 0.12em;
+  color: var(--slate-500);
+  pointer-events: none;
+}
+.bjsnd-axis.ax-x { left: 50%; bottom: 4px; transform: translateX(-50%); }
+.bjsnd-axis.ax-y {
+  left: 5px;
+  top: 50%;
+  transform: translateY(-50%) rotate(-90deg);
+  transform-origin: left center;
+}
+.bjsnd-pad-dot {
+  position: absolute;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #bff7ff, var(--cyan) 60%, #0e7490);
+  box-shadow: 0 0 12px rgba(34, 211, 238, 0.85), 0 0 2px #fff;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+/* ── echo tunnel + stereograph canvases ───────────────────────────────────── */
+.bjsnd-echo-wrap {
+  position: relative;
+  width: 100%;
+  max-width: 150px;
+  margin: 0 auto 6px;
+}
+.bjsnd-echo-wrap .bjsnd-axis.ax-x { bottom: 6px; }
+.bjsnd-echo-wrap .bjsnd-axis.ax-y { left: 7px; }
+.bjsnd-echo-cv { cursor: crosshair; touch-action: none; margin: 0 auto; }
+.bjsnd-echo-cv,
+.bjsnd-gonio-cv {
+  display: block;
+  width: 100%;
+  max-width: 150px;
+  aspect-ratio: 1;
+  margin: 0 auto 8px;
+  border-radius: 14px;
+  border: 1px solid var(--cyan-soft);
+  background: rgba(4, 10, 16, 0.92);
+}
+
+/* ── rotary knobs ─────────────────────────────────────────────────────────── */
+.bjsnd-knob-row {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+.bjsnd-knob-ctl {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-width: 54px;
+}
+.bjsnd-knob {
+  width: 40px;
+  height: 40px;
+  cursor: ns-resize;
+  touch-action: none;
+  color: var(--cyan);
+}
+.bjsnd-knob svg { width: 100%; height: 100%; display: block; }
+.bjsnd-knob .knob-track { stroke: rgba(148, 163, 184, 0.25); }
+.bjsnd-knob .knob-fill { stroke: var(--cyan); }
+.bjsnd-knob .knob-needle { stroke: #eaf6fb; }
+.bjsnd-knob-lbl {
+  font-size: 8.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--slate-500);
+  text-align: center;
+}
+.bjsnd-knob-val {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  color: #eaf6fb;
+}

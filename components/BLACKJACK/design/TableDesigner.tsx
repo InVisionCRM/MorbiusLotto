@@ -33,6 +33,15 @@ import {
   type BlackjackSoundEventKey,
   type BlackjackSoundOverrides,
 } from '@/lib/blackjack-sounds';
+import {
+  fxFor,
+  isFxCustomised,
+  playEventWithFx,
+  type SoundFx,
+  type SoundFxMap,
+} from '@/lib/blackjack-sound-fx';
+import { SoundEventTile } from '@/components/BLACKJACK/design/sound/SoundEventTile';
+import '@/components/BLACKJACK/design/sound/sound-designer.css';
 import type { BJMultiSeatState } from '@/lib/websocket-client';
 
 const UI = {
@@ -126,28 +135,67 @@ export default function TableDesigner() {
   const [dragging, setDragging] = useState(false);
 
   // ── Sounds ────────────────────────────────────────────────────────────────
-  // Sparse overrides on the default event map — same shape a saved table theme
-  // will carry. Uploads are object URLs (local preview until themes persist).
+  // Two sparse layers, both the shape a saved table theme will carry:
+  //   soundOverrides — which file(s) an event plays ([] silences it)
+  //   soundFx        — the per-event FX chain (envelope/spatial/echo)
+  // Uploads are object URLs: local preview until themes are persisted.
   const [soundOverrides, setSoundOverrides] = useState<BlackjackSoundOverrides>({});
-  const soundFileRef = useRef<HTMLInputElement>(null);
-  const soundPickTarget = useRef<BlackjackSoundEventKey | null>(null);
-  const previewRef = useRef<HTMLAudioElement | null>(null);
+  const [soundFx, setSoundFx] = useState<SoundFxMap>({});
+  const [expandedSound, setExpandedSound] = useState<BlackjackSoundEventKey | null>(null);
+  const [playingSound, setPlayingSound] = useState<BlackjackSoundEventKey | null>(null);
+  const [autoPlaySound, setAutoPlaySound] = useState(false);
+  const [customSoundLabels, setCustomSoundLabels] = useState<Record<string, string>>({});
+  const playingTimer = useRef<number | null>(null);
 
-  const previewSound = useCallback((event: BlackjackSoundEventKey) => {
-    const path = pickSound(mergeSoundMap(DEFAULT_BLACKJACK_SOUND_MAP, soundOverrides), event);
-    if (!path) return;
-    previewRef.current?.pause();
-    const audio = new Audio(path);
-    audio.volume = 0.6;
-    previewRef.current = audio;
-    audio.play().catch(() => {});
-  }, [soundOverrides]);
+  const effectiveSoundMap = useMemo(
+    () => mergeSoundMap(DEFAULT_BLACKJACK_SOUND_MAP, soundOverrides),
+    [soundOverrides],
+  );
 
-  const pickSoundFile = useCallback((file: File | null) => {
-    const event = soundPickTarget.current;
-    if (!file || !event) return;
+  /** Plays one event through its FX chain, flashing the tile while it sounds. */
+  const previewSound = useCallback(
+    (event: BlackjackSoundEventKey) => {
+      const path = pickSound(effectiveSoundMap, event);
+      if (!path) return;
+      playEventWithFx(event, path, fxFor(soundFx, event));
+      setPlayingSound(event);
+      if (playingTimer.current) window.clearTimeout(playingTimer.current);
+      playingTimer.current = window.setTimeout(() => setPlayingSound(null), 700);
+    },
+    [effectiveSoundMap, soundFx],
+  );
+
+  /** Applies an FX patch; auto-play re-auditions the event on every tweak. */
+  const patchSoundFx = useCallback(
+    (event: BlackjackSoundEventKey, patch: Partial<SoundFx>) => {
+      setSoundFx((prev) => ({ ...prev, [event]: { ...fxFor(prev, event), ...patch } }));
+      if (autoPlaySound) previewSound(event);
+    },
+    [autoPlaySound, previewSound],
+  );
+
+  const uploadSound = useCallback((event: BlackjackSoundEventKey, file: File) => {
     const url = URL.createObjectURL(file);
     setSoundOverrides((prev) => ({ ...prev, [event]: [url] }));
+    setCustomSoundLabels((prev) => ({ ...prev, [event]: file.name }));
+  }, []);
+
+  const resetSound = useCallback((event: BlackjackSoundEventKey) => {
+    setSoundOverrides((prev) => {
+      const next = { ...prev };
+      delete next[event];
+      return next;
+    });
+    setSoundFx((prev) => {
+      const next = { ...prev };
+      delete next[event];
+      return next;
+    });
+    setCustomSoundLabels((prev) => {
+      const next = { ...prev };
+      delete next[event];
+      return next;
+    });
   }, []);
 
   // ── Undo / redo ────────────────────────────────────────────────────────────
@@ -315,8 +363,9 @@ export default function TableDesigner() {
     if (JSON.stringify(layout.motion) !== JSON.stringify(base.motion)) out.motion = layout.motion;
     if (JSON.stringify(layout.emotes) !== JSON.stringify(base.emotes)) out.emotes = layout.emotes;
     if (Object.keys(soundOverrides).length > 0) out.sounds = soundOverrides;
+    if (Object.keys(soundFx).length > 0) out.soundFx = soundFx;
     return out;
-  }, [layout, soundOverrides]);
+  }, [layout, soundOverrides, soundFx]);
 
   const changeCount = Object.keys(diff).length;
 
@@ -587,7 +636,62 @@ export default function TableDesigner() {
             </BlackjackTableLayoutProvider>
           </div>
         </div>
+
+        {/* Sound studio lives full-width under the table: its four-module grid
+            needs real horizontal room, which the 330px side panel cannot give. */}
+        {selection.kind === 'sounds' && (
+          <div className="bjsnd">
+            <p style={{ fontSize: 11, color: UI.dim, margin: '0 0 10px', lineHeight: 1.5 }}>
+              Click a tile to open its studio — shape the envelope, place it in space, add echo.
+              Hovering a tile previews the animation it plays with.
+            </p>
+            <div className="bjsnd-grid">
+              {BLACKJACK_SOUND_EVENT_INFO.map((info) => {
+                const override = soundOverrides[info.key];
+                const isMuted = Array.isArray(override) && override.length === 0;
+                const hasCustomFile = Array.isArray(override) && override.length > 0;
+                return (
+                  <SoundEventTile
+                    key={info.key}
+                    info={info}
+                    fx={fxFor(soundFx, info.key)}
+                    hasCustomFile={hasCustomFile}
+                    fxTweaked={isFxCustomised(soundFx, info.key)}
+                    isMuted={isMuted}
+                    customLabel={customSoundLabels[info.key]}
+                    autoPlay={autoPlaySound}
+                    expanded={expandedSound === info.key}
+                    playing={playingSound === info.key}
+                    sourceUrl={pickSound(effectiveSoundMap, info.key)}
+                    onToggleExpand={() =>
+                      setExpandedSound((cur) => (cur === info.key ? null : info.key))
+                    }
+                    onPlay={() => previewSound(info.key)}
+                    onUpload={(file) => uploadSound(info.key, file)}
+                    onToggleMute={() =>
+                      setSoundOverrides((prev) => {
+                        const next = { ...prev };
+                        if (isMuted) delete next[info.key];
+                        else next[info.key] = [];
+                        return next;
+                      })
+                    }
+                    onReset={() => resetSound(info.key)}
+                    onToggleAutoPlay={() => setAutoPlaySound((v) => !v)}
+                    onFxChange={(patch) => patchSoundFx(info.key, patch)}
+                    onGestureStart={beginGesture}
+                  />
+                );
+              })}
+            </div>
+            <p style={{ fontSize: 10, color: UI.dim, marginTop: 10, lineHeight: 1.5 }}>
+              Uploads and FX are local previews until saved themes land — that&apos;s when they get
+              stored and heard by everyone at the table.
+            </p>
+          </div>
+        )}
       </div>
+
 
       {/* ── Panel — fine-tuning; the stage is the primary editor ─────────── */}
       <aside
@@ -898,140 +1002,9 @@ export default function TableDesigner() {
         )}
 
         {selection.kind === 'sounds' && (
-          <>
-            <Section title="Table sounds — tap ▶ to hear, swap in your own">
-              <input
-                ref={soundFileRef}
-                type="file"
-                accept="audio/*"
-                style={{ display: 'none' }}
-                onChange={(e) => {
-                  pickSoundFile(e.target.files?.[0] ?? null);
-                  e.target.value = '';
-                }}
-              />
-              {BLACKJACK_SOUND_EVENT_INFO.map((info) => {
-                const override = soundOverrides[info.key];
-                const isCustom = Array.isArray(override) && override.length > 0;
-                const isMuted = Array.isArray(override) && override.length === 0;
-                const defaultPool = DEFAULT_BLACKJACK_SOUND_MAP[info.key];
-                return (
-                  <div
-                    key={info.key}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 6,
-                      padding: '5px 0',
-                      borderBottom: `1px solid ${UI.border}`,
-                    }}
-                  >
-                    <button
-                      type="button"
-                      title="Preview"
-                      onClick={() => previewSound(info.key)}
-                      disabled={isMuted}
-                      style={{
-                        width: 24,
-                        height: 24,
-                        borderRadius: '50%',
-                        border: `1px solid ${UI.border}`,
-                        background: UI.raised,
-                        color: isMuted ? UI.border : UI.text,
-                        cursor: isMuted ? 'default' : 'pointer',
-                        fontSize: 10,
-                        flexShrink: 0,
-                      }}
-                    >
-                      ▶
-                    </button>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 11, fontWeight: 600, color: isMuted ? UI.dim : UI.text }}>
-                        {info.label}
-                        {isCustom && <span style={{ color: UI.selected, marginLeft: 5, fontSize: 9 }}>custom</span>}
-                        {isMuted && <span style={{ color: UI.dim, marginLeft: 5, fontSize: 9 }}>muted</span>}
-                      </div>
-                      <div style={{ fontSize: 9, color: UI.dim, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                        {isCustom ? 'your upload' : isMuted ? info.hint : `${info.hint}${defaultPool.length > 1 ? ` · ${defaultPool.length} variations` : ''}`}
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      title="Swap in your own sound"
-                      onClick={() => {
-                        soundPickTarget.current = info.key;
-                        soundFileRef.current?.click();
-                      }}
-                      style={{
-                        background: UI.raised,
-                        border: `1px solid ${UI.border}`,
-                        color: UI.text,
-                        borderRadius: 5,
-                        padding: '2px 7px',
-                        fontSize: 10,
-                        cursor: 'pointer',
-                        flexShrink: 0,
-                      }}
-                    >
-                      Swap
-                    </button>
-                    <button
-                      type="button"
-                      title={isMuted ? 'Unmute' : 'Mute this sound'}
-                      onClick={() =>
-                        setSoundOverrides((prev) => {
-                          const next = { ...prev };
-                          if (isMuted) delete next[info.key];
-                          else next[info.key] = [];
-                          return next;
-                        })
-                      }
-                      style={{
-                        background: 'transparent',
-                        border: `1px solid ${UI.border}`,
-                        color: isMuted ? UI.selected : UI.dim,
-                        borderRadius: 5,
-                        padding: '2px 6px',
-                        fontSize: 10,
-                        cursor: 'pointer',
-                        flexShrink: 0,
-                      }}
-                    >
-                      {isMuted ? '🔇' : '🔊'}
-                    </button>
-                    {(isCustom || isMuted) && (
-                      <button
-                        type="button"
-                        title="Back to default"
-                        onClick={() =>
-                          setSoundOverrides((prev) => {
-                            const next = { ...prev };
-                            delete next[info.key];
-                            return next;
-                          })
-                        }
-                        style={{
-                          background: 'transparent',
-                          border: 'none',
-                          color: UI.dim,
-                          fontSize: 10,
-                          cursor: 'pointer',
-                          padding: 0,
-                          flexShrink: 0,
-                        }}
-                      >
-                        ↺
-                      </button>
-                    )}
-                  </div>
-                );
-              })}
-            </Section>
-            <p style={{ fontSize: 10, color: UI.dim, lineHeight: 1.5 }}>
-              Swapped sounds are local previews until saved themes land — that&apos;s when uploads get
-              stored and heard by everyone at the table.
-            </p>
-          </>
+          <p style={{ fontSize: 11, color: UI.dim, lineHeight: 1.6 }}>
+            Sound studio is below the table — it needs the full width.
+          </p>
         )}
 
         {selection.kind === 'motion' && (
