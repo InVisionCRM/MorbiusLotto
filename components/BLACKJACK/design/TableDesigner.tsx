@@ -148,6 +148,9 @@ export default function TableDesigner() {
   const [expandedSound, setExpandedSound] = useState<BlackjackSoundEventKey | null>(null);
   const [playingSound, setPlayingSound] = useState<BlackjackSoundEventKey | null>(null);
   const [autoPlaySound, setAutoPlaySound] = useState(false);
+  // Read inside timers, which outlive the render that scheduled them.
+  const autoPlayRef = useRef(autoPlaySound);
+  autoPlayRef.current = autoPlaySound;
   const [customSoundLabels, setCustomSoundLabels] = useState<Record<string, string>>({});
   const playingTimer = useRef<number | null>(null);
 
@@ -156,26 +159,71 @@ export default function TableDesigner() {
     [soundOverrides],
   );
 
+  // Preview reads the sound state through refs, not through the closure. A
+  // change and its audition happen in the same tick, but setState has not
+  // committed yet at that point — reading the closed-over value would audition
+  // the FX from *before* the tweak, so every auto-play would lag one edit
+  // behind.
+  const soundFxRef = useRef(soundFx);
+  soundFxRef.current = soundFx;
+  const soundMapRef = useRef(effectiveSoundMap);
+  soundMapRef.current = effectiveSoundMap;
+
   /** Plays one event through its FX chain, flashing the tile while it sounds. */
-  const previewSound = useCallback(
+  const previewSound = useCallback((event: BlackjackSoundEventKey) => {
+    const path = pickSound(soundMapRef.current, event);
+    if (!path) return;
+    playEventWithFx(event, path, fxFor(soundFxRef.current, event));
+    setPlayingSound(event);
+    if (playingTimer.current) window.clearTimeout(playingTimer.current);
+    playingTimer.current = window.setTimeout(() => setPlayingSound(null), 700);
+  }, []);
+
+  // ── Auto-play pacing ──────────────────────────────────────────────────────
+  // Dragging a pad emits a change per pointer frame. Auditioning each one turns
+  // the studio into a machine gun, so requests are coalesced: wait for the
+  // gesture to settle, then hold a floor between plays. Continuous fiddling
+  // therefore auditions about once every AUTO_PLAY_MIN_MS instead of per frame.
+  const AUTO_PLAY_SETTLE_MS = 260;
+  const AUTO_PLAY_MIN_MS = 1600;
+  const autoPlayTimer = useRef<number | null>(null);
+  const autoPlayPending = useRef<BlackjackSoundEventKey | null>(null);
+  const autoPlayLastAt = useRef(0);
+
+  const requestAutoPlay = useCallback(
     (event: BlackjackSoundEventKey) => {
-      const path = pickSound(effectiveSoundMap, event);
-      if (!path) return;
-      playEventWithFx(event, path, fxFor(soundFx, event));
-      setPlayingSound(event);
-      if (playingTimer.current) window.clearTimeout(playingTimer.current);
-      playingTimer.current = window.setTimeout(() => setPlayingSound(null), 700);
+      if (!autoPlayRef.current) return;
+      // Newest request wins; an already-scheduled play just picks it up.
+      autoPlayPending.current = event;
+      if (autoPlayTimer.current) return;
+      const since = Date.now() - autoPlayLastAt.current;
+      const wait = Math.max(AUTO_PLAY_SETTLE_MS, AUTO_PLAY_MIN_MS - since);
+      autoPlayTimer.current = window.setTimeout(() => {
+        autoPlayTimer.current = null;
+        const key = autoPlayPending.current;
+        autoPlayPending.current = null;
+        if (!key || !autoPlayRef.current) return;
+        autoPlayLastAt.current = Date.now();
+        previewSound(key);
+      }, wait);
     },
-    [effectiveSoundMap, soundFx],
+    [previewSound],
   );
 
-  /** Applies an FX patch; auto-play re-auditions the event on every tweak. */
+  useEffect(
+    () => () => {
+      if (autoPlayTimer.current) window.clearTimeout(autoPlayTimer.current);
+    },
+    [],
+  );
+
+  /** Applies an FX patch, then asks for a (paced) audition. */
   const patchSoundFx = useCallback(
     (event: BlackjackSoundEventKey, patch: Partial<SoundFx>) => {
       setSoundFx((prev) => ({ ...prev, [event]: { ...fxFor(prev, event), ...patch } }));
-      if (autoPlaySound) previewSound(event);
+      requestAutoPlay(event);
     },
-    [autoPlaySound, previewSound],
+    [requestAutoPlay],
   );
 
   // Trimmer + library. Every acquisition — upload, recording, library pick —
@@ -195,11 +243,12 @@ export default function TableDesigner() {
         // Undecodable: store as-is rather than losing what the user just picked.
         setSoundOverrides((prev) => ({ ...prev, [event]: [dataUrl] }));
         setCustomSoundLabels((prev) => ({ ...prev, [event]: label }));
+        requestAutoPlay(event);
         return;
       }
       setTrimTarget({ eventKey: event, dataUrl, label, buf });
     },
-    [],
+    [requestAutoPlay],
   );
 
   const uploadSound = useCallback(
@@ -290,7 +339,8 @@ export default function TableDesigner() {
       delete next[event];
       return next;
     });
-  }, []);
+    requestAutoPlay(event);
+  }, [requestAutoPlay]);
 
   // ── Undo / redo ────────────────────────────────────────────────────────────
   // A gesture (drag start, slider grab, first nudge of a burst) snapshots the
@@ -768,8 +818,12 @@ export default function TableDesigner() {
                     onToggleMute={() =>
                       setSoundOverrides((prev) => {
                         const next = { ...prev };
-                        if (isMuted) delete next[info.key];
-                        else next[info.key] = [];
+                        if (isMuted) {
+                          delete next[info.key];
+                          requestAutoPlay(info.key); // unmuting is worth hearing
+                        } else {
+                          next[info.key] = [];
+                        }
                         return next;
                       })
                     }
@@ -1266,6 +1320,7 @@ export default function TableDesigner() {
             setSoundOverrides((prev) => ({ ...prev, [key]: [dataUrl] }));
             setCustomSoundLabels((prev) => ({ ...prev, [key]: label }));
             setTrimTarget(null);
+            requestAutoPlay(key);
           }}
         />
       )}
@@ -1294,6 +1349,7 @@ export default function TableDesigner() {
                 // Fetch failed — point the event straight at the public path.
                 setSoundOverrides((prev) => ({ ...prev, [key]: [clip.file] }));
                 setCustomSoundLabels((prev) => ({ ...prev, [key]: clip.name }));
+                requestAutoPlay(key);
               });
           }}
         />

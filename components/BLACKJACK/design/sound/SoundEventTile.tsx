@@ -237,7 +237,7 @@ export function SoundEventTile({
               <button
                 type="button"
                 className={`bjsnd-btn${autoPlay ? ' on' : ''}`}
-                title="Replay this sound automatically after every tweak"
+                title="Audition this sound after every change (paced — about once every 1.6s while you keep tweaking)"
                 onClick={onToggleAutoPlay}
               >
                 ↻ Auto-play: {autoPlay ? 'ON' : 'OFF'}
