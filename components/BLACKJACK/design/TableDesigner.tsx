@@ -556,7 +556,10 @@ export default function TableDesigner() {
 
   const handleLoad = useCallback(async () => {
     if (!publishTableId) return;
-    applyLoadedTheme(await publish.loadTheme(publishTableId));
+    const result = await publish.loadTheme(publishTableId);
+    // Only touch the editor on a successful load. `theme: null` there means the
+    // table is genuinely stock; a failed fetch must not wipe unsaved work.
+    if (result.ok) applyLoadedTheme(result.theme);
   }, [publishTableId, publish, applyLoadedTheme]);
 
   const handleSave = useCallback(async () => {

@@ -89,17 +89,26 @@ export function useTablePublish() {
   }, [address, headers]);
 
   const loadTheme = useCallback(
-    async (tableId: string): Promise<BlackjackTableThemeConfig | null> => {
+    // A discriminated result, not a bare theme-or-null: `theme: null` on success
+    // legitimately means "stock table, reset the editor", so a failure that
+    // ALSO returned null would make the caller wipe an unsaved design over a
+    // network hiccup. On `ok: false` the caller must leave the editor alone.
+    async (
+      tableId: string,
+    ): Promise<{ ok: true; theme: BlackjackTableThemeConfig | null } | { ok: false }> => {
       setStatus({ kind: 'busy', note: 'Loading theme…' });
       try {
         const res = await fetch(`/api/admin/bj-multi/tables/${tableId}/theme`, { headers: headers() });
         const data = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
         setStatus({ kind: 'ok', note: data.themeConfig ? 'Theme loaded' : 'Table is stock' });
-        return sanitizeThemeConfig(data.themeConfig);
+        return { ok: true, theme: sanitizeThemeConfig(data.themeConfig) };
       } catch (e) {
-        setStatus({ kind: 'error', note: e instanceof Error ? e.message : 'Load failed' });
-        return null;
+        setStatus({
+          kind: 'error',
+          note: `${e instanceof Error ? e.message : 'Load failed'} — your current design is untouched`,
+        });
+        return { ok: false };
       }
     },
     [headers],
