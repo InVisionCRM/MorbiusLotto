@@ -21,6 +21,8 @@ export interface BlackjackMobileActionBarProps {
   soundEnabled?: boolean;
   /** Play a sound effect via Web Audio API (avoids interrupting background music). When provided, SFX use this instead of new Audio().play() */
   onPlaySfx?: (path: string) => void;
+  /** Override for the action-button knock, so table themes can reskin it. */
+  knockSound?: string;
   /** When true, show on all screen sizes (e.g. when embedded in sidebar Bet tab). Default false = hidden on md+ */
   alwaysVisible?: boolean;
   /** Perfect Pairs side bet (whole MORBIUS, 0-10000). */
@@ -47,6 +49,7 @@ export function BlackjackMobileActionBar({
   lastBetAmount,
   soundEnabled = true,
   onPlaySfx,
+  knockSound = '/BlackJack/sounds/knock.wav',
   alwaysVisible = false,
   perfectPairsBet = 0,
   onPerfectPairsBetChange,
@@ -54,8 +57,8 @@ export function BlackjackMobileActionBar({
 }: BlackjackMobileActionBarProps) {
   const playKnock = () => {
     if (soundEnabled) {
-      if (onPlaySfx) onPlaySfx('/BlackJack/sounds/knock.wav');
-      else new Audio('/BlackJack/sounds/knock.wav').play().catch(() => {});
+      if (onPlaySfx) onPlaySfx(knockSound);
+      else new Audio(knockSound).play().catch(() => {});
     }
   };
 
