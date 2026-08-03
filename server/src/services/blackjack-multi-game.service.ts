@@ -110,6 +110,8 @@ export interface BJMultiTableState {
   bettingStartedAt: string | null;
   themeKind: 'video' | 'image';
   themeId: string;
+  /** Sparse designer theme (layout/sounds/soundFx) or null for the stock table. */
+  themeConfig: Record<string, unknown> | null;
   stateVersion: number;
 }
 
@@ -205,6 +207,29 @@ export class BlackjackMultiGameService {
       [minBet.toString(), maxBet.toString(), themeKind, themeId],
     );
     return { id: result.rows[0].id };
+  }
+
+  /** Reads a table's saved theme; null when the table is stock or missing. */
+  async getTableTheme(tableId: string): Promise<Record<string, unknown> | null> {
+    const r = await this.pool.query(
+      `SELECT theme_config FROM blackjack_multi_tables WHERE id = $1`, [tableId],
+    );
+    if (r.rows.length === 0) throw new Error('Table not found');
+    return r.rows[0].theme_config ?? null;
+  }
+
+  /**
+   * Saves (or clears, with null) a table's theme and pushes fresh state to
+   * everyone seated, so a published look applies mid-session without a reload.
+   */
+  async setTableTheme(tableId: string, themeConfig: Record<string, unknown> | null): Promise<boolean> {
+    const r = await this.pool.query(
+      `UPDATE blackjack_multi_tables SET theme_config = $2 WHERE id = $1`,
+      [tableId, themeConfig === null ? null : JSON.stringify(themeConfig)],
+    );
+    if ((r.rowCount ?? 0) === 0) return false;
+    await this.broadcastTableState(tableId, 'theme_updated');
+    return true;
   }
 
   async deleteTable(tableId: string): Promise<boolean> {
@@ -1308,6 +1333,7 @@ export class BlackjackMultiGameService {
       bettingStartedAt: (round?.status === 'betting' ? round?.created_at?.toISOString?.() : null) ?? null,
       themeKind: (table.theme_kind ?? 'video') as 'video' | 'image',
       themeId: table.theme_id ?? 'glowingTable',
+      themeConfig: table.theme_config ?? null,
       stateVersion: this.bumpStateVersion(tableId),
     };
   }

@@ -22,6 +22,8 @@ function getBackendUrl(): string | null {
 
 const ALLOWED_IMAGE = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'];
 const ALLOWED_VIDEO = ['video/mp4', 'video/webm'];
+const ALLOWED_AUDIO = ['audio/mpeg', 'audio/wav', 'audio/x-wav', 'audio/wave', 'audio/webm', 'audio/ogg', 'audio/mp4'];
+const MAX_SIZE_AUDIO = 10 * 1024 * 1024; // 10MB — trimmed table sounds are far smaller
 const MAX_SIZE_IMAGE = 5 * 1024 * 1024; // 5MB
 const MAX_SIZE_VIDEO = 50 * 1024 * 1024; // 50MB
 
@@ -84,16 +86,16 @@ export async function POST(req: NextRequest) {
 
   const kind = (formData.get('kind') as string)?.toLowerCase() || 'image';
   const purpose = (formData.get('purpose') as string)?.toLowerCase();
-  if (kind !== 'image' && kind !== 'video') {
-    return NextResponse.json({ error: 'kind must be image or video' }, { status: 400 });
+  if (kind !== 'image' && kind !== 'video' && kind !== 'audio') {
+    return NextResponse.json({ error: 'kind must be image, video or audio' }, { status: 400 });
   }
   // Logo uploads are images only; when purpose=logo we save to a dedicated folder (local dev only)
   if (purpose === 'logo' && kind !== 'image') {
     return NextResponse.json({ error: 'Logo must be an image' }, { status: 400 });
   }
 
-  const allowedTypes = kind === 'video' ? ALLOWED_VIDEO : ALLOWED_IMAGE;
-  const maxSize = kind === 'video' ? MAX_SIZE_VIDEO : MAX_SIZE_IMAGE;
+  const allowedTypes = kind === 'video' ? ALLOWED_VIDEO : kind === 'audio' ? ALLOWED_AUDIO : ALLOWED_IMAGE;
+  const maxSize = kind === 'video' ? MAX_SIZE_VIDEO : kind === 'audio' ? MAX_SIZE_AUDIO : MAX_SIZE_IMAGE;
   if (!allowedTypes.includes(file.type)) {
     return NextResponse.json({ error: `Invalid file type. Allowed: ${allowedTypes.join(', ')}` }, { status: 400 });
   }
@@ -101,7 +103,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: `File too large (max ${maxSize / 1024 / 1024}MB)` }, { status: 400 });
   }
 
-  const ext = path.extname(file.name) || (kind === 'video' ? '.mp4' : '.png');
+  const ext = path.extname(file.name) || (kind === 'video' ? '.mp4' : kind === 'audio' ? '.wav' : '.png');
   const base = path.basename(file.name, path.extname(file.name));
   const safeName = `${base.replace(/[^a-zA-Z0-9-_]/g, '_')}_${Date.now()}${ext}`;
 
@@ -110,7 +112,9 @@ export async function POST(req: NextRequest) {
       ? path.join(process.cwd(), 'public', 'BlackJack', 'logos')
       : kind === 'video'
         ? path.join(process.cwd(), 'public', 'BlackJack', 'video table')
-        : path.join(process.cwd(), 'public', 'BlackJack', 'BrandedTable');
+        : kind === 'audio'
+          ? path.join(process.cwd(), 'public', 'BlackJack', 'table-sounds')
+          : path.join(process.cwd(), 'public', 'BlackJack', 'BrandedTable');
   const fullPath = path.join(dir, safeName);
 
   try {
@@ -130,6 +134,8 @@ export async function POST(req: NextRequest) {
       ? `/BlackJack/logos/${encodeURIComponent(safeName)}`
       : kind === 'video'
         ? `/BlackJack/video%20table/${encodeURIComponent(safeName)}`
-        : `/BlackJack/BrandedTable/${encodeURIComponent(safeName)}`;
+        : kind === 'audio'
+          ? `/BlackJack/table-sounds/${encodeURIComponent(safeName)}`
+          : `/BlackJack/BrandedTable/${encodeURIComponent(safeName)}`;
   return NextResponse.json({ path: urlPath });
 }

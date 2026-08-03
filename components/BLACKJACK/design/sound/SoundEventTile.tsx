@@ -16,6 +16,7 @@ import {
   type BlackjackSoundEventKey,
 } from '@/lib/blackjack-sounds';
 import { envReadText, type SoundFx } from '@/lib/blackjack-sound-fx';
+import { SOUND_FX_PRESETS, activeFxPresetId, fxFromPreset } from '@/lib/blackjack-sound-fx-presets';
 import { SoundKnob } from './SoundKnob';
 import { EchoTunnel, EnvelopeCanvas, SpatialPad, Stereograph } from './SoundWidgets';
 
@@ -237,7 +238,7 @@ export function SoundEventTile({
               <button
                 type="button"
                 className={`bjsnd-btn${autoPlay ? ' on' : ''}`}
-                title="Replay this sound automatically after every tweak"
+                title="Audition this sound after every change (paced — about once every 1.6s while you keep tweaking)"
                 onClick={onToggleAutoPlay}
               >
                 ↻ Auto-play: {autoPlay ? 'ON' : 'OFF'}
@@ -282,6 +283,28 @@ export function SoundEventTile({
               Recordings and uploads stay in this browser and this config&rsquo;s JSON — nothing is
               sent anywhere yet.
             </p>
+          </div>
+
+          {/* Named styles first — the knob modules below are for fine-tuning one. */}
+          <div className="bjsnd-preset-row">
+            <span className="bjsnd-preset-cap">Style</span>
+            {SOUND_FX_PRESETS.map((preset) => {
+              const active = activeFxPresetId(fx) === preset.id;
+              return (
+                <button
+                  key={preset.id}
+                  type="button"
+                  title={preset.hint}
+                  className={`bjsnd-btn${active ? ' on' : ''}`}
+                  onClick={() => {
+                    const { sample: _keep, ...rest } = fxFromPreset(preset, fx.sample);
+                    onFxChange(rest);
+                  }}
+                >
+                  {preset.label}
+                </button>
+              );
+            })}
           </div>
 
           <div className="bjsnd-mod-grid">

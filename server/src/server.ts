@@ -180,7 +180,8 @@ app.use(cookieParser());
 const uploadsDir = path.join(process.cwd(), 'uploads');
 const brandedTableDir = path.join(uploadsDir, 'BlackJack', 'BrandedTable');
 const videoTableDir = path.join(uploadsDir, 'BlackJack', 'video table');
-[brandedTableDir, videoTableDir].forEach((d) => {
+const tableSoundsDir = path.join(uploadsDir, 'BlackJack', 'table-sounds');
+[brandedTableDir, videoTableDir, tableSoundsDir].forEach((d) => {
   try {
     fs.mkdirSync(d, { recursive: true });
   } catch {
@@ -197,16 +198,19 @@ app.use('/uploads', express.static(uploadsDir, {
 
 const ALLOWED_IMAGE = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'];
 const ALLOWED_VIDEO = ['video/mp4', 'video/webm'];
+const ALLOWED_AUDIO = ['audio/mpeg', 'audio/wav', 'audio/x-wav', 'audio/wave', 'audio/webm', 'audio/ogg', 'audio/mp4'];
 const MAX_SIZE_IMAGE = 5 * 1024 * 1024;
 const MAX_SIZE_VIDEO = 50 * 1024 * 1024;
 
 const uploadStorage = multer.diskStorage({
   destination: (_req, file, cb) => {
-    const kind = (file.mimetype || '').startsWith('video/') ? 'video' : 'image';
-    cb(null, kind === 'video' ? videoTableDir : brandedTableDir);
+    const mime = file.mimetype || '';
+    if (mime.startsWith('audio/')) { cb(null, tableSoundsDir); return; }
+    cb(null, mime.startsWith('video/') ? videoTableDir : brandedTableDir);
   },
   filename: (_req, file, cb) => {
-    const ext = path.extname(file.originalname) || (file.mimetype?.startsWith('video/') ? '.mp4' : '.png');
+    const ext = path.extname(file.originalname)
+      || (file.mimetype?.startsWith('video/') ? '.mp4' : file.mimetype?.startsWith('audio/') ? '.wav' : '.png');
     const base = path.basename(file.originalname, path.extname(file.originalname));
     const safe = `${base.replace(/[^a-zA-Z0-9-_]/g, '_')}_${Date.now()}${ext}`;
     cb(null, safe);
@@ -217,7 +221,8 @@ const uploadMulter = multer({
   storage: uploadStorage,
   limits: { fileSize: MAX_SIZE_VIDEO },
   fileFilter: (_req, file, cb) => {
-    const allowed = file.mimetype?.startsWith('video/') ? ALLOWED_VIDEO : ALLOWED_IMAGE;
+    const mime = file.mimetype || '';
+    const allowed = mime.startsWith('video/') ? ALLOWED_VIDEO : mime.startsWith('audio/') ? ALLOWED_AUDIO : ALLOWED_IMAGE;
     if (!allowed.includes(file.mimetype || '')) {
       cb(new Error(`Invalid type. Allowed: ${allowed.join(', ')}`));
       return;
@@ -2084,7 +2089,9 @@ async function initializeServices() {
           res.status(400).json({ error: 'Missing or invalid file' });
           return;
         }
-        const kind = (req.body?.kind as string)?.toLowerCase() || (req.file.mimetype?.startsWith('video/') ? 'video' : 'image');
+        const mime = req.file.mimetype || '';
+        const kind = (req.body?.kind as string)?.toLowerCase()
+          || (mime.startsWith('video/') ? 'video' : mime.startsWith('audio/') ? 'audio' : 'image');
         let baseUrl = (process.env.BACKEND_PUBLIC_URL || process.env.RAILWAY_STATIC_URL || '').trim()
           || `${req.protocol}://${req.get('host') || 'localhost'}`;
         if (baseUrl && !/^https?:\/\//i.test(baseUrl)) {
@@ -2092,7 +2099,9 @@ async function initializeServices() {
         }
         const relPath = kind === 'video'
           ? `BlackJack/video%20table/${encodeURIComponent(req.file.filename)}`
-          : `BlackJack/BrandedTable/${encodeURIComponent(req.file.filename)}`;
+          : kind === 'audio'
+            ? `BlackJack/table-sounds/${encodeURIComponent(req.file.filename)}`
+            : `BlackJack/BrandedTable/${encodeURIComponent(req.file.filename)}`;
         const fullUrl = `${baseUrl.replace(/\/$/, '')}/uploads/${relPath}`;
         sendJson(res, { path: fullUrl });
       } catch (err) {
@@ -2292,6 +2301,80 @@ async function initializeServices() {
         res.json({ ok: true });
       } catch (error) {
         logger.error('Error deleting BJ multi table:', error);
+        res.status(500).json({ error: 'Internal server error' });
+      }
+    });
+
+    // ── Per-table designer theme (layout / sounds / sound FX) ──────────────
+    // Presentation only: nothing in this blob is read by game logic, so the
+    // validation below is about hygiene (size, URL shapes), not fairness.
+    const THEME_MAX_BYTES = 256 * 1024;
+    const THEME_TOP_KEYS = new Set(['version', 'layout', 'sounds', 'soundFx']);
+
+    const validateThemeConfig = (raw: unknown): { ok: true; value: Record<string, unknown> } | { ok: false; error: string } => {
+      if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+        return { ok: false, error: 'themeConfig must be an object' };
+      }
+      let bytes: number;
+      try { bytes = Buffer.byteLength(JSON.stringify(raw)); }
+      catch { return { ok: false, error: 'themeConfig is not serializable' }; }
+      if (bytes > THEME_MAX_BYTES) {
+        return { ok: false, error: `themeConfig too large (${bytes} bytes, max ${THEME_MAX_BYTES}). Upload sounds instead of inlining them.` };
+      }
+      const obj = raw as Record<string, unknown>;
+      for (const key of Object.keys(obj)) {
+        if (!THEME_TOP_KEYS.has(key)) return { ok: false, error: `Unknown themeConfig key "${key}"` };
+      }
+      if (obj.sounds != null) {
+        if (typeof obj.sounds !== 'object' || Array.isArray(obj.sounds)) {
+          return { ok: false, error: 'sounds must be an object of event -> path[]' };
+        }
+        for (const [event, pool] of Object.entries(obj.sounds as Record<string, unknown>)) {
+          if (!Array.isArray(pool)) return { ok: false, error: `sounds.${event} must be an array` };
+          for (const entry of pool) {
+            if (typeof entry !== 'string') return { ok: false, error: `sounds.${event} entries must be strings` };
+            // data:/blob: URLs are how the designer previews locally; they are
+            // megabytes inline and blob: is meaningless to other browsers.
+            // Saving requires real uploaded paths.
+            if (!(entry.startsWith('/') || /^https?:\/\//i.test(entry))) {
+              return { ok: false, error: `sounds.${event} contains a non-uploaded URL. Upload custom sounds before saving.` };
+            }
+          }
+        }
+      }
+      return { ok: true, value: obj };
+    };
+
+    app.get('/api/admin/bj-multi/tables/:tableId/theme', async (req, res) => {
+      try {
+        const themeConfig = await bjMultiService.getTableTheme(req.params.tableId);
+        res.json({ themeConfig });
+      } catch (error) {
+        if (error instanceof Error && error.message === 'Table not found') {
+          res.status(404).json({ error: 'Table not found' });
+          return;
+        }
+        logger.error('Error fetching BJ multi table theme:', error);
+        res.status(500).json({ error: 'Internal server error' });
+      }
+    });
+
+    app.put('/api/admin/bj-multi/tables/:tableId/theme', async (req, res) => {
+      try {
+        const { themeConfig } = req.body as { themeConfig?: unknown };
+        if (themeConfig === null) {
+          const cleared = await bjMultiService.setTableTheme(req.params.tableId, null);
+          if (!cleared) { res.status(404).json({ error: 'Table not found' }); return; }
+          res.json({ ok: true, themeConfig: null });
+          return;
+        }
+        const check = validateThemeConfig(themeConfig);
+        if (!check.ok) { res.status(400).json({ error: check.error }); return; }
+        const saved = await bjMultiService.setTableTheme(req.params.tableId, check.value);
+        if (!saved) { res.status(404).json({ error: 'Table not found' }); return; }
+        res.json({ ok: true });
+      } catch (error) {
+        logger.error('Error saving BJ multi table theme:', error);
         res.status(500).json({ error: 'Internal server error' });
       }
     });
