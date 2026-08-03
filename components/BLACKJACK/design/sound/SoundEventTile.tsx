@@ -137,6 +137,9 @@ export function SoundEventTile({
   onToggleExpand,
   onPlay,
   onUpload,
+  onOpenLibrary,
+  onToggleRecord,
+  recording,
   onToggleMute,
   onReset,
   onToggleAutoPlay,
@@ -158,6 +161,10 @@ export function SoundEventTile({
   onToggleExpand: () => void;
   onPlay: () => void;
   onUpload: (file: File) => void;
+  onOpenLibrary: () => void;
+  /** Starts or stops recording for this event; only one runs at a time. */
+  onToggleRecord: () => void;
+  recording: boolean;
   onToggleMute: () => void;
   onReset: () => void;
   onToggleAutoPlay: () => void;
@@ -238,6 +245,16 @@ export function SoundEventTile({
               <button type="button" className="bjsnd-btn" onClick={() => fileRef.current?.click()}>
                 ↑ Upload
               </button>
+              <button
+                type="button"
+                className={`bjsnd-btn${recording ? ' recording' : ''}`}
+                onClick={onToggleRecord}
+              >
+                {recording ? '● Recording… (tap to stop)' : '● Record'}
+              </button>
+              <button type="button" className="bjsnd-btn" onClick={onOpenLibrary}>
+                ♪ Library
+              </button>
               <button type="button" className="bjsnd-btn" onClick={onToggleMute}>
                 {isMuted ? '🔇 Unmute' : '🔊 Mute'}
               </button>
@@ -262,7 +279,8 @@ export function SoundEventTile({
               </button>
             </div>
             <p style={{ fontSize: 10, color: '#64748b', margin: '5px 0 0', lineHeight: 1.5 }}>
-              Uploads stay in this browser and this config&rsquo;s JSON — nothing is sent anywhere yet.
+              Recordings and uploads stay in this browser and this config&rsquo;s JSON — nothing is
+              sent anywhere yet.
             </p>
           </div>
 

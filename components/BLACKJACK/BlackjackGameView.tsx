@@ -386,7 +386,7 @@ export function BlackjackGameView(props: BlackjackGameViewProps) {
                   size="tip"
                   onClick={async () => {
                     if (tipAnimating) return;
-                    playSfx('/Poker/PokerSounds/PlayerClickConfirmation.mp3');
+                    playSfx('/POKER/PokerSounds/PlayerClickConfirmation.mp3');
                     setTipAnimating(true);
                     try {
                       await wsClient.sendRequest('tip_dealer', {

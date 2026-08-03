@@ -390,3 +390,120 @@ export function waveformPeaks(buf: AudioBuffer, columns: number): number[] {
   }
   return out;
 }
+
+// ── Trimming ───────────────────────────────────────────────────────────────
+/**
+ * Leading/trailing silence detection: the first and last samples above a small
+ * threshold, padded by 15ms so a soft attack isn't clipped off. Returns the
+ * whole clip when everything reads as silence rather than guessing.
+ */
+export function suggestTrim(buf: AudioBuffer): { start: number; end: number } {
+  try {
+    const d = buf.getChannelData(0);
+    const n = d.length;
+    const th = 0.03;
+    let i = 0;
+    let j = n - 1;
+    while (i < n && Math.abs(d[i]) < th) i++;
+    while (j > i && Math.abs(d[j]) < th) j--;
+    if (i >= j) return { start: 0, end: 1 };
+    const pad = Math.floor(buf.sampleRate * 0.015);
+    i = Math.max(0, i - pad);
+    j = Math.min(n - 1, j + pad);
+    return { start: i / n, end: (j + 1) / n };
+  } catch {
+    return { start: 0, end: 1 };
+  }
+}
+
+/** Min/max pair per column, for the two-sided trimmer waveform. */
+export function waveformMinMax(buf: AudioBuffer, columns: number): Float32Array {
+  const pk = new Float32Array(columns * 2);
+  try {
+    const d = buf.getChannelData(0);
+    const n = d.length;
+    const step = n / columns;
+    for (let i = 0; i < columns; i++) {
+      const s0 = Math.floor(i * step);
+      const s1 = Math.min(n, Math.floor((i + 1) * step) + 1);
+      let mn = 0;
+      let mx = 0;
+      for (let j = s0; j < s1; j++) {
+        const v = d[j];
+        if (v > mx) mx = v;
+        if (v < mn) mn = v;
+      }
+      pk[i * 2] = mn;
+      pk[i * 2 + 1] = mx;
+    }
+  } catch {
+    /* an undrawable buffer yields a flat line */
+  }
+  return pk;
+}
+
+/** Bakes a sample range to a 16-bit PCM WAV data URL. */
+export function audioBufferToWavDataUrl(buf: AudioBuffer, s0: number, s1: number): string {
+  const ch = Math.min(2, buf.numberOfChannels || 1);
+  const sr = buf.sampleRate;
+  const len = s1 - s0;
+  const dataLen = len * ch * 2;
+  const ab = new ArrayBuffer(44 + dataLen);
+  const dv = new DataView(ab);
+  const wstr = (o: number, s: string) => {
+    for (let i = 0; i < s.length; i++) dv.setUint8(o + i, s.charCodeAt(i));
+  };
+  wstr(0, 'RIFF');
+  dv.setUint32(4, 36 + dataLen, true);
+  wstr(8, 'WAVE');
+  wstr(12, 'fmt ');
+  dv.setUint32(16, 16, true);
+  dv.setUint16(20, 1, true);
+  dv.setUint16(22, ch, true);
+  dv.setUint32(24, sr, true);
+  dv.setUint32(28, sr * ch * 2, true);
+  dv.setUint16(32, ch * 2, true);
+  dv.setUint16(34, 16, true);
+  wstr(36, 'data');
+  dv.setUint32(40, dataLen, true);
+  let off = 44;
+  const chans: Float32Array[] = [];
+  for (let c = 0; c < ch; c++) chans.push(buf.getChannelData(c));
+  for (let i = s0; i < s1; i++) {
+    for (let c = 0; c < ch; c++) {
+      const v = Math.max(-1, Math.min(1, chans[c][i]));
+      dv.setInt16(off, v < 0 ? v * 0x8000 : v * 0x7fff, true);
+      off += 2;
+    }
+  }
+  // Chunked so a long clip doesn't blow the argument limit on String.fromCharCode.
+  const bytes = new Uint8Array(ab);
+  let s = '';
+  const CHUNK = 32768;
+  for (let p = 0; p < bytes.length; p += CHUNK) {
+    s += String.fromCharCode.apply(
+      null,
+      Array.from(bytes.subarray(p, Math.min(bytes.length, p + CHUNK))),
+    );
+  }
+  return `data:audio/wav;base64,${btoa(s)}`;
+}
+
+/** Decodes a data/object URL without touching the shared cache. */
+export async function decodeUrl(url: string): Promise<AudioBuffer | null> {
+  try {
+    const c = audioCtx();
+    if (!c) return null;
+    const ab = await fetch(url).then((r) => r.arrayBuffer());
+    return await c.decodeAudioData(ab);
+  } catch {
+    return null;
+  }
+}
+
+export const fmtDur = (s: number) => {
+  const v = Math.max(0, s || 0);
+  const m = Math.floor(v / 60);
+  const sec = Math.floor(v % 60);
+  return `${m}:${sec < 10 ? '0' : ''}${sec}`;
+};
