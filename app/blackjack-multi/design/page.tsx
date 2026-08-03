@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import TableDesigner from '@/components/BLACKJACK/design/TableDesigner';
 
 export const metadata: Metadata = {
-  title: 'Blackjack table designer',
+  title: 'Table Forge — blackjack table studio',
   robots: { index: false, follow: false },
 };
 

@@ -278,7 +278,12 @@ export function EchoTunnel({
   const fxRef = useRef(fx);
   fxRef.current = fx;
 
-  useEffect(() => registerEchoPulse(id, () => (pulseAt.current = Date.now())), [id]);
+  useEffect(() => {
+    const unregister = registerEchoPulse(id, () => (pulseAt.current = Date.now()));
+    return () => {
+      unregister();
+    };
+  }, [id]);
 
   useEffect(() => {
     const cv = ref.current;
