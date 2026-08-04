@@ -72,8 +72,8 @@ const CANVAS_H = DEFAULT_BLACKJACK_TABLE_LAYOUT.canvas.height;
 /** What's highlighted on the felt; the deck tab tracks it. */
 type Selection = { kind: 'seat'; index: number } | { kind: 'dealer' } | null;
 
-/** Which control-deck tab is open. */
-type DeckTab = 'art' | 'seats' | 'dealer' | 'anim' | 'sound' | 'share' | 'json';
+/** Which step of the flow is open. */
+type DeckTab = 'art' | 'anim' | 'sound' | 'tune' | 'share';
 
 /** What the designer paints when no art has been chosen yet. */
 const DEFAULT_TABLE_ART =
@@ -716,50 +716,45 @@ export default function TableDesigner() {
 
   const selectSeat = useCallback((index: number) => {
     setSelection({ kind: 'seat', index });
-    setTab('seats');
+    setTab('tune');
   }, []);
 
   const selectedSeatIndex = selection?.kind === 'seat' ? selection.index : 1;
   const selectedSeat = selection?.kind === 'seat' ? layout.seats[selection.index] : null;
 
-  const quickChips: { label: string; tab: DeckTab; sel?: Selection }[] = [
-    { label: 'Table Art', tab: 'art' },
-    { label: 'Seats', tab: 'seats', sel: { kind: 'seat', index: selectedSeatIndex } },
-    { label: 'Dealer', tab: 'dealer', sel: { kind: 'dealer' } },
-    { label: 'Animations', tab: 'anim' },
-    { label: 'Sounds', tab: 'sound' },
+  // One numbered path through the studio. A step lights its check the moment
+  // it differs from stock, so you can see at a glance what you've styled.
+  const steps: { id: DeckTab; n: number; label: string; done: boolean }[] = [
+    { id: 'art', n: 1, label: 'Table art', done: diff.table !== undefined || diff.cards !== undefined },
+    { id: 'anim', n: 2, label: 'Animations', done: diff.motion !== undefined },
+    { id: 'sound', n: 3, label: 'Sounds', done: diff.sounds !== undefined || diff.soundFx !== undefined },
+    { id: 'tune', n: 4, label: 'Fine-tune', done: diff.seats !== undefined || diff.dealer !== undefined },
+    { id: 'share', n: 5, label: 'Save', done: false },
   ];
+  const stepIndex = steps.findIndex((s) => s.id === tab);
+  const currentStep = steps[stepIndex];
+  const prevStep = stepIndex > 0 ? steps[stepIndex - 1] : null;
+  const nextStep = stepIndex < steps.length - 1 ? steps[stepIndex + 1] : null;
 
-  const deckGroups: { label: string; tabs: { id: DeckTab; label: string }[] }[] = [
-    {
-      label: 'Build',
-      tabs: [
-        { id: 'art', label: 'Table Art' },
-        { id: 'seats', label: 'Seats' },
-        { id: 'dealer', label: 'Dealer' },
-      ],
-    },
-    {
-      label: 'Style',
-      tabs: [
-        { id: 'anim', label: 'Animations' },
-        { id: 'sound', label: 'Sound' },
-      ],
-    },
-    {
-      label: 'Ship',
-      tabs: [
-        { id: 'share', label: 'Save & Share' },
-        { id: 'json', label: 'JSON' },
-      ],
-    },
-  ];
-
-  const chipOn = (chip: { label: string; tab: DeckTab; sel?: Selection }) => {
-    if (chip.tab !== tab) return false;
-    if (chip.sel?.kind === 'seat') return selection?.kind === 'seat' && selection.index === chip.sel.index;
-    return true;
-  };
+  const stepNav = (
+    <div className="bjtd-step-nav">
+      {prevStep && (
+        <button type="button" className="bjtd-sm-btn" onClick={() => setTab(prevStep.id)}>
+          &larr; {prevStep.label}
+        </button>
+      )}
+      {nextStep && (
+        <button
+          type="button"
+          className="bjtd-sm-btn go"
+          style={{ marginLeft: 'auto' }}
+          onClick={() => setTab(nextStep.id)}
+        >
+          Next: {nextStep.label} &rarr;
+        </button>
+      )}
+    </div>
+  );
 
   return (
     <div className="bjtd">
@@ -776,15 +771,14 @@ export default function TableDesigner() {
             Table Forge<span className="bjtd-glyph">&#9670;</span>
           </h1>
           <p className="bjtd-tagline">
-            Upload your table art &middot; build the seats, cards, animations and sounds around it &middot;
-            saved per table &middot; played in MORBIUS
+            1 pick your table art &middot; 2 card animations &middot; 3 sounds &middot; 4 fine-tune &middot; 5
+            save &mdash; played in MORBIUS
           </p>
         </header>
 
         <div className="bjtd-topbar">
-          <span className="bjtd-pill-btn" style={{ cursor: 'default' }} title="Themes are pure presentation — card values, shuffles and payouts are decided by the server and cannot be touched from here.">
-            <span className="bjtd-dot" />
-            Presentation only &mdash; never the cards
+          <span className="bjtd-tagline" style={{ margin: 0 }}>
+            In a hurry? A preset styles the whole table in one click:
           </span>
           <div className="bjtd-topbar-right">
             <select
@@ -804,42 +798,35 @@ export default function TableDesigner() {
                 </option>
               ))}
             </select>
-            <button type="button" className="bjtd-pill-btn" onClick={() => setTab('share')}>
-              <span className="bjtd-dot" />
-              Save &amp; share
-            </button>
           </div>
         </div>
 
         <div className="bjtd-studio">
-          {/* ── Control deck ──────────────────────────────────────────────── */}
+          {/* ── The five steps ────────────────────────────────────────────── */}
           <div className="bjtd-col-controls">
-            <div className="bjtd-el-toolbar">
-              <span className="bjtd-el-toolbar-lbl">Quick edit</span>
-              {quickChips.map((chip) => (
+            <div className="bjtd-steps">
+              {steps.map((s) => (
                 <button
-                  key={chip.label}
+                  key={s.id}
                   type="button"
-                  className={`bjtd-el-chip${chipOn(chip) ? ' on' : ''}`}
-                  onClick={() => {
-                    setTab(chip.tab);
-                    if (chip.sel !== undefined) setSelection(chip.sel);
-                  }}
+                  className={`bjtd-step${tab === s.id ? ' active' : ''}${s.done ? ' done' : ''}`}
+                  onClick={() => setTab(s.id)}
                 >
-                  <span className="bjtd-dot" />
-                  {chip.label}
+                  <span className="bjtd-step-n">{s.done ? '✓' : s.n}</span>
+                  {s.label}
                 </button>
               ))}
             </div>
 
             <section className="bjtd-panel">
               <div className="bjtd-deck-head">
-                <span className="bjtd-deck-title">Control deck</span>
+                <span className="bjtd-deck-title">
+                  Step {currentStep.n} &middot; {currentStep.label}
+                </span>
                 <span className="bjtd-deck-sub">
                   {changeCount
-                    ? `${changeCount} group${changeCount === 1 ? '' : 's'} changed`
-                    : 'stock table'}{' '}
-                  &mdash; pick a group, then a tab
+                    ? `${changeCount} thing${changeCount === 1 ? '' : 's'} customised`
+                    : 'stock table'}
                 </span>
                 <div className="bjtd-deck-actions" data-history-version={historyVersion}>
                   <button
@@ -874,32 +861,13 @@ export default function TableDesigner() {
                 </div>
               </div>
 
-              <div className="bjtd-tabs">
-                {deckGroups.map((group) => (
-                  <div key={group.label} className="bjtd-tab-group">
-                    <span className="bjtd-tg-label">{group.label}</span>
-                    <div className="bjtd-tg-btns">
-                      {group.tabs.map((t) => (
-                        <button
-                          key={t.id}
-                          type="button"
-                          className={`bjtd-tab-btn${tab === t.id ? ' active' : ''}`}
-                          onClick={() => setTab(t.id)}
-                        >
-                          {t.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              {/* ── SEATS ── */}
-              {tab === 'seats' && (
+              {/* ── FINE-TUNE: where everything sits ── */}
+              {tab === 'tune' && (
                 <div>
                   <p className="bjtd-hint" style={{ marginTop: 0 }}>
-                    <b>Just drag a seat on the felt</b> — the &#10227; handle above it tilts it, arrow keys
-                    nudge it. The sliders here are for exact numbers.
+                    <b>Just drag things on the felt</b> — seats and the dealer&apos;s hand move where you drop
+                    them, the &#10227; handle tilts a seat, arrow keys nudge (&#8679; = &times;10). The sliders
+                    here are only for exact numbers.
                   </p>
                   <div className="bjtd-ctl" style={{ marginTop: 12 }}>
                     <div className="bjtd-seg">
@@ -913,60 +881,64 @@ export default function TableDesigner() {
                           Seat {i + 1}
                         </button>
                       ))}
+                      <button
+                        type="button"
+                        className={selection?.kind === 'dealer' ? 'on' : ''}
+                        onClick={() => setSelection({ kind: 'dealer' })}
+                      >
+                        Dealer
+                      </button>
                     </div>
                   </div>
-                  <Knob
-                    label="Across"
-                    value={layout.seats[selectedSeatIndex].cx}
-                    min={0}
-                    max={CANVAS_W}
-                    onGestureStart={beginGesture}
-                    onChange={(v) => setSeat(selectedSeatIndex, 'cx', v)}
-                  />
-                  <Knob
-                    label="Down"
-                    value={layout.seats[selectedSeatIndex].floorY}
-                    min={0}
-                    max={CANVAS_H}
-                    onGestureStart={beginGesture}
-                    onChange={(v) => setSeat(selectedSeatIndex, 'floorY', v)}
-                  />
-                  <Knob
-                    label="Tilt"
-                    value={layout.seats[selectedSeatIndex].angle}
-                    min={-45}
-                    max={45}
-                    suffix="&deg;"
-                    onGestureStart={beginGesture}
-                    onChange={(v) => setSeat(selectedSeatIndex, 'angle', v)}
-                  />
-                </div>
-              )}
-
-              {/* ── DEALER ── */}
-              {tab === 'dealer' && (
-                <div>
-                  <p className="bjtd-hint" style={{ marginTop: 0 }}>
-                    <b>Drag the dealer&apos;s hand on the felt</b> to place it — sliders for exact numbers.
-                  </p>
-                  <div style={{ marginTop: 12 }}>
-                    <Knob
-                      label="Across"
-                      value={layout.dealer.cx}
-                      min={0}
-                      max={CANVAS_W}
-                      onGestureStart={beginGesture}
-                      onChange={(v) => patch((p) => ({ ...p, dealer: { ...p.dealer, cx: v } }))}
-                    />
-                    <Knob
-                      label="Down"
-                      value={layout.dealer.top}
-                      min={0}
-                      max={CANVAS_H}
-                      onGestureStart={beginGesture}
-                      onChange={(v) => patch((p) => ({ ...p, dealer: { ...p.dealer, top: v } }))}
-                    />
-                  </div>
+                  {selection?.kind === 'dealer' ? (
+                    <>
+                      <Knob
+                        label="Across"
+                        value={layout.dealer.cx}
+                        min={0}
+                        max={CANVAS_W}
+                        onGestureStart={beginGesture}
+                        onChange={(v) => patch((p) => ({ ...p, dealer: { ...p.dealer, cx: v } }))}
+                      />
+                      <Knob
+                        label="Down"
+                        value={layout.dealer.top}
+                        min={0}
+                        max={CANVAS_H}
+                        onGestureStart={beginGesture}
+                        onChange={(v) => patch((p) => ({ ...p, dealer: { ...p.dealer, top: v } }))}
+                      />
+                    </>
+                  ) : (
+                    <>
+                      <Knob
+                        label="Across"
+                        value={layout.seats[selectedSeatIndex].cx}
+                        min={0}
+                        max={CANVAS_W}
+                        onGestureStart={beginGesture}
+                        onChange={(v) => setSeat(selectedSeatIndex, 'cx', v)}
+                      />
+                      <Knob
+                        label="Down"
+                        value={layout.seats[selectedSeatIndex].floorY}
+                        min={0}
+                        max={CANVAS_H}
+                        onGestureStart={beginGesture}
+                        onChange={(v) => setSeat(selectedSeatIndex, 'floorY', v)}
+                      />
+                      <Knob
+                        label="Tilt"
+                        value={layout.seats[selectedSeatIndex].angle}
+                        min={-45}
+                        max={45}
+                        suffix="&deg;"
+                        onGestureStart={beginGesture}
+                        onChange={(v) => setSeat(selectedSeatIndex, 'angle', v)}
+                      />
+                    </>
+                  )}
+                  {stepNav}
                 </div>
               )}
 
@@ -1072,10 +1044,10 @@ export default function TableDesigner() {
                       />
                     </div>
                     <p className="bjtd-hint">
-                      Shown on every face-down card. Everything here saves with the theme when you hit{' '}
-                      <b>Save</b> in Save &amp; Share.
+                      Shown on every face-down card. Everything here saves with the theme in step 5.
                     </p>
                   </div>
+                  {stepNav}
                 </div>
               )}
 
@@ -1322,6 +1294,7 @@ export default function TableDesigner() {
                       </div>
                     </div>
                   </details>
+                  {stepNav}
                 </div>
               )}
 
@@ -1404,9 +1377,10 @@ export default function TableDesigner() {
                     })}
                   </div>
                   <p className="bjtd-hint">
-                    Uploads and styles are local previews until you save the theme in <b>Save &amp; Share</b> —
-                    that&apos;s when they get stored and heard by everyone at the table.
+                    Uploads and styles are local previews until you save in step 5 — that&apos;s when they get
+                    stored and heard by everyone at the table.
                   </p>
+                  {stepNav}
                 </div>
               )}
 
@@ -1473,28 +1447,27 @@ export default function TableDesigner() {
                       </div>
                     </div>
                   )}
-                </div>
-              )}
-
-              {/* ── JSON ── */}
-              {tab === 'json' && (
-                <div>
-                  <p className="bjtd-hint" style={{ marginTop: 0 }}>
-                    The complete theme — only what differs from the stock table. This is exactly the shape a
-                    saved table theme carries.
-                  </p>
-                  <textarea
-                    className="bjtd-json-ta"
-                    readOnly
-                    spellCheck={false}
-                    value={changeCount ? JSON.stringify(diff, null, 2) : '// unchanged from the stock table'}
-                    style={{ marginTop: 10 }}
-                  />
-                  <div className="bjtd-btn-row">
-                    <button type="button" className="bjtd-sm-btn" onClick={copyJson}>
-                      {copied ? 'Copied' : 'Copy JSON'}
-                    </button>
-                  </div>
+                  <details style={{ marginTop: 16 }}>
+                    <summary
+                      className="bjtd-ctl-lbl"
+                      style={{ cursor: 'pointer', display: 'flex', gap: 8, listStyle: 'none' }}
+                    >
+                      <span>For nerds: the theme as JSON &#9662;</span>
+                    </summary>
+                    <textarea
+                      className="bjtd-json-ta"
+                      readOnly
+                      spellCheck={false}
+                      value={changeCount ? JSON.stringify(diff, null, 2) : '// unchanged from the stock table'}
+                      style={{ marginTop: 10 }}
+                    />
+                    <div className="bjtd-btn-row">
+                      <button type="button" className="bjtd-sm-btn" onClick={copyJson}>
+                        {copied ? 'Copied' : 'Copy JSON'}
+                      </button>
+                    </div>
+                  </details>
+                  {stepNav}
                 </div>
               )}
             </section>
@@ -1629,7 +1602,7 @@ export default function TableDesigner() {
                           }}
                           onPointerDown={(e) => {
                             setSelection({ kind: 'dealer' });
-                            setTab('dealer');
+                            setTab('tune');
                             const orig = { ...layoutRef.current.dealer };
                             beginDrag(e, (dx, dy) =>
                               patch((p) => ({
