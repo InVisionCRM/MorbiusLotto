@@ -140,6 +140,23 @@ const envOrigins = (process.env.FRONTEND_URL || '')
   .map((o) => o.trim())
   .filter(Boolean);
 const allowedOrigins = [...new Set([...DEFAULT_ORIGINS, ...envOrigins])];
+
+// Vercel PREVIEW deployments live on per-branch subdomains, so a fixed origin
+// list can never name them — which silently CORS-blocked every direct backend
+// call from previews (fairness seed panel, chip-game plays). Match this
+// project's preview URL shape; override the pattern with PREVIEW_ORIGIN_REGEX,
+// or set it empty to disable preview origins entirely.
+const previewOriginRegex: RegExp | null = (() => {
+  const raw =
+    process.env.PREVIEW_ORIGIN_REGEX ??
+    '^https://(morbius-lotto|morbiuslotto)-[a-z0-9-]+-kyles-projects-77613069\\.vercel\\.app$';
+  if (!raw.trim()) return null;
+  try {
+    return new RegExp(raw);
+  } catch {
+    return null;
+  }
+})();
 app.use(helmet({
   crossOriginResourcePolicy: { policy: 'cross-origin' },
   crossOriginOpenerPolicy: false,
@@ -148,6 +165,7 @@ app.use(cors({
   origin: (origin, cb) => {
     if (!origin) return cb(null, true);
     if (allowedOrigins.includes(origin)) return cb(null, true);
+    if (previewOriginRegex?.test(origin)) return cb(null, true);
     // Allow any localhost origin in development
     if (/^https?:\/\/localhost(:\d+)?$/.test(origin)) return cb(null, true);
     return cb(null, false);

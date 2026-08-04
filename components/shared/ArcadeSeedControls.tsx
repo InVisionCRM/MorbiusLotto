@@ -53,14 +53,17 @@ export function ArcadeSeedControls({ open }: { open: boolean }) {
       setState(s)
       setDraftSeed(s.clientSeed)
     } catch (e) {
-      // Say what actually happened. The old copy blamed the wallet for every
-      // failure — including server errors — which sent connected, signed-in
-      // players hunting for a connection problem that didn't exist.
-      const status = (e as Error & { status?: number })?.status
+      // Say what actually happened — and SHOW the underlying response, so a
+      // report of this error names the real failure instead of inviting
+      // guesses. The old copy blamed the wallet for every failure.
+      const err = e as Error & { status?: number }
+      const detail = err?.message ? ` (${err.message})` : ''
       setError(
-        status === 401
+        err?.status === 401
           ? 'Sign in with your wallet to view your seed — the sign-in prompt may have been dismissed.'
-          : 'Could not load your seed just now — it’s not a wallet problem. Retry in a moment.',
+          : err?.status === 429
+            ? 'Rate limited — too many requests from your connection right now (autoplay counts). Wait a minute, then Retry.'
+            : `Could not load your seed just now — it’s not a wallet problem.${detail} Retry in a moment.`,
       )
     }
   }, [])
