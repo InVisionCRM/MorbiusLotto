@@ -373,7 +373,7 @@ export function BlackjackMultiSeat({
                       )}
 
                       {/* Card fan */}
-                      <div className="relative flex">
+                      <div className="relative flex bj-hand-player">
                         {hand.cards.map((c, ci) => {
                           const nk = newPlayerCardByHandKey?.[`${position}-${hi}`];
                           const isNewCard = nk ? nk.has(ci) : false;

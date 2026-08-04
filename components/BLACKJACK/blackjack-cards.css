@@ -23,6 +23,19 @@
   box-shadow: var(--bj-card-shadow-hover, 0 6px 12px rgba(0, 0, 0, 0.4));
 }
 
+/* ── Hand pitch ───────────────────────────────────────────────────────────
+   3D lean of a whole hand so cards look like they lie ON table art drawn in
+   perspective. Applied to the stack, not per card, so it never fights the
+   deal/collect animations. 0deg (the default) is an identity transform. */
+.bj-hand-dealer {
+  transform: perspective(700px) rotateX(var(--bj-card-pitch-dealer, 0deg));
+  transform-origin: center bottom;
+}
+.bj-hand-player {
+  transform: perspective(700px) rotateX(var(--bj-card-pitch-player, 0deg));
+  transform-origin: center bottom;
+}
+
 /* ── Stacking ─────────────────────────────────────────────────────────────
    Applied to every card after the first, pulling it back over its neighbour. */
 @media (min-width: 641px) {

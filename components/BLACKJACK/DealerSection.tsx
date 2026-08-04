@@ -45,7 +45,7 @@ export default function DealerSection({
 }: DealerSectionProps) {
   return (
     <>
-      <div className="flex">
+      <div className="flex bj-hand-dealer">
         <DealerCardsRow
           cards={cards}
           visibleCards={visibleCards}

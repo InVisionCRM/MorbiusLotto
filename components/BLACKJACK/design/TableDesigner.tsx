@@ -56,6 +56,12 @@ import {
   soundStyleForTablePreset,
   tablePresetById,
 } from '@/lib/blackjack-table-presets';
+import {
+  CARD_ANGLE_PRESETS,
+  CARD_FX_PRESETS,
+  activeCardAnglePresetId,
+  activeCardFxPresetId,
+} from '@/lib/blackjack-card-presets';
 import { SoundEventTile } from '@/components/BLACKJACK/design/sound/SoundEventTile';
 import { TrimModal, type TrimTarget } from '@/components/BLACKJACK/design/sound/TrimModal';
 import { LibraryModal } from '@/components/BLACKJACK/design/sound/LibraryModal';
@@ -73,7 +79,7 @@ const CANVAS_H = DEFAULT_BLACKJACK_TABLE_LAYOUT.canvas.height;
 type Selection = { kind: 'seat'; index: number } | { kind: 'dealer' } | null;
 
 /** Which step of the flow is open. */
-type DeckTab = 'art' | 'anim' | 'sound' | 'tune' | 'share';
+type DeckTab = 'art' | 'cards' | 'anim' | 'sound' | 'tune' | 'share';
 
 /** What the designer paints when no art has been chosen yet. */
 const DEFAULT_TABLE_ART =
@@ -725,11 +731,12 @@ export default function TableDesigner() {
   // One numbered path through the studio. A step lights its check the moment
   // it differs from stock, so you can see at a glance what you've styled.
   const steps: { id: DeckTab; n: number; label: string; done: boolean }[] = [
-    { id: 'art', n: 1, label: 'Table art', done: diff.table !== undefined || diff.cards !== undefined },
-    { id: 'anim', n: 2, label: 'Animations', done: diff.motion !== undefined },
-    { id: 'sound', n: 3, label: 'Sounds', done: diff.sounds !== undefined || diff.soundFx !== undefined },
-    { id: 'tune', n: 4, label: 'Fine-tune', done: diff.seats !== undefined || diff.dealer !== undefined },
-    { id: 'share', n: 5, label: 'Save', done: false },
+    { id: 'art', n: 1, label: 'Table art', done: diff.table !== undefined },
+    { id: 'cards', n: 2, label: 'Cards', done: diff.cards !== undefined },
+    { id: 'anim', n: 3, label: 'Animations', done: diff.motion !== undefined },
+    { id: 'sound', n: 4, label: 'Sounds', done: diff.sounds !== undefined || diff.soundFx !== undefined },
+    { id: 'tune', n: 5, label: 'Fine-tune', done: diff.seats !== undefined || diff.dealer !== undefined },
+    { id: 'share', n: 6, label: 'Save', done: false },
   ];
   const stepIndex = steps.findIndex((s) => s.id === tab);
   const currentStep = steps[stepIndex];
@@ -771,7 +778,7 @@ export default function TableDesigner() {
             Table Forge<span className="bjtd-glyph">&#9670;</span>
           </h1>
           <p className="bjtd-tagline">
-            1 pick your table art &middot; 2 card animations &middot; 3 sounds &middot; 4 fine-tune &middot; 5
+            1 table art &middot; 2 cards &middot; 3 animations &middot; 4 sounds &middot; 5 fine-tune &middot; 6
             save &mdash; played in MORBIUS
           </p>
         </header>
@@ -1000,6 +1007,84 @@ export default function TableDesigner() {
                     ))}
                   </div>
 
+                  {stepNav}
+                </div>
+              )}
+
+              {/* ── CARDS: make them sit right on YOUR art ── */}
+              {tab === 'cards' && (
+                <div>
+                  <p className="bjtd-hint" style={{ marginTop: 0 }}>
+                    <b>Make the cards sit on your table.</b> Most table art is drawn at an angle, not straight
+                    down — pick the lean that matches yours and the hands tilt into the scene. Then dress the
+                    cards with an effect and your own card back.
+                  </p>
+
+                  <div className="bjtd-ctl" style={{ margin: '12px 0 6px' }}>
+                    <div className="bjtd-ctl-lbl">
+                      <span>Card angle</span>
+                    </div>
+                  </div>
+                  <div className="bjtd-mech-grid">
+                    {CARD_ANGLE_PRESETS.map((p) => {
+                      const active = activeCardAnglePresetId(layout.cards.pitch) === p.id;
+                      return (
+                        <button
+                          key={p.id}
+                          type="button"
+                          title={p.hint}
+                          className={`bjtd-mech-card${active ? ' on' : ''}`}
+                          style={{ '--m-pitch': `${p.pitch.player}deg` } as React.CSSProperties}
+                          onClick={() => {
+                            beginGesture();
+                            patch((prev) => ({
+                              ...prev,
+                              cards: { ...prev.cards, pitch: { ...p.pitch } },
+                            }));
+                          }}
+                        >
+                          <span className="bjtd-mini">
+                            <span className="bjtd-mini-card tilt" />
+                          </span>
+                          <span className="bjtd-mech-nm">{p.label}</span>
+                          <span className="bjtd-mech-dsc">{p.hint}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <div className="bjtd-ctl" style={{ margin: '16px 0 6px' }}>
+                    <div className="bjtd-ctl-lbl">
+                      <span>Card effect</span>
+                    </div>
+                  </div>
+                  <div className="bjtd-mech-grid">
+                    {CARD_FX_PRESETS.map((p) => {
+                      const active = activeCardFxPresetId(layout.cards.restShadow) === p.id;
+                      return (
+                        <button
+                          key={p.id}
+                          type="button"
+                          title={p.hint}
+                          className={`bjtd-mech-card${active ? ' on' : ''}`}
+                          onClick={() => {
+                            beginGesture();
+                            patch((prev) => ({
+                              ...prev,
+                              cards: { ...prev.cards, restShadow: p.restShadow, hoverShadow: p.hoverShadow },
+                            }));
+                          }}
+                        >
+                          <span className="bjtd-mini">
+                            <span className="bjtd-mini-card" style={{ boxShadow: p.restShadow }} />
+                          </span>
+                          <span className="bjtd-mech-nm">{p.label}</span>
+                          <span className="bjtd-mech-dsc">{p.hint}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+
                   <div className="bjtd-ctl" style={{ margin: '18px 0 0' }}>
                     <div className="bjtd-ctl-lbl">
                       <span>Card back</span>
@@ -1043,10 +1128,50 @@ export default function TableDesigner() {
                         onChange={(e) => pickCardBack(e.target.files?.[0] ?? null)}
                       />
                     </div>
-                    <p className="bjtd-hint">
-                      Shown on every face-down card. Everything here saves with the theme in step 5.
-                    </p>
+                    <p className="bjtd-hint">Shown on every face-down card.</p>
                   </div>
+
+                  <details style={{ marginTop: 16 }}>
+                    <summary
+                      className="bjtd-ctl-lbl"
+                      style={{ cursor: 'pointer', display: 'flex', gap: 8, listStyle: 'none' }}
+                    >
+                      <span>Fine-tune the lean &#9662;</span>
+                    </summary>
+                    <div style={{ marginTop: 10 }}>
+                      <Knob
+                        label="Dealer hand lean"
+                        value={layout.cards.pitch.dealer}
+                        min={0}
+                        max={60}
+                        suffix="&deg;"
+                        onGestureStart={beginGesture}
+                        onChange={(v) =>
+                          patch((p) => ({
+                            ...p,
+                            cards: { ...p.cards, pitch: { ...p.cards.pitch, dealer: v } },
+                          }))
+                        }
+                      />
+                      <Knob
+                        label="Player hands lean"
+                        value={layout.cards.pitch.player}
+                        min={0}
+                        max={60}
+                        suffix="&deg;"
+                        onGestureStart={beginGesture}
+                        onChange={(v) =>
+                          patch((p) => ({
+                            ...p,
+                            cards: { ...p.cards, pitch: { ...p.cards.pitch, player: v } },
+                          }))
+                        }
+                      />
+                      <p className="bjtd-hint">
+                        The dealer sits deeper in the scene, so a smaller dealer lean usually looks right.
+                      </p>
+                    </div>
+                  </details>
                   {stepNav}
                 </div>
               )}

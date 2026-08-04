@@ -610,6 +610,11 @@
     opacity: 0;
   }
 }
+/* Angle-preset mini: the card leans by the preset's own player pitch. */
+.bjtd-mini-card.tilt {
+  transform: perspective(110px) rotateX(var(--m-pitch, 0deg));
+  transform-origin: center bottom;
+}
 @media (prefers-reduced-motion: reduce) {
   .bjtd-mini-card.in,
   .bjtd-mini-card.out {
