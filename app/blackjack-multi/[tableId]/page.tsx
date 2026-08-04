@@ -68,7 +68,6 @@ import { ProvablyFairClientSeedModal } from '@/components/shared/ProvablyFairCli
 import { generateHexClientSeed } from '@/lib/generate-client-seed';
 import { loadStoredClientSeed, saveStoredClientSeed } from '@/lib/provably-fair-client-seed-storage';
 import { BlackjackMultiRecentHands } from '@/components/BLACKJACK/multi/BlackjackMultiRecentHands';
-import { ProvablyFairStrip } from '@/components/shared/ProvablyFairStrip';
 
 /** Must match server BJ_MULTI_AFK_KICK_AFTER — shown in seat UI */
 const AFK_TIMEOUTS_BEFORE_KICK = 3;
@@ -1530,16 +1529,6 @@ export default function BlackjackMultiTablePage() {
           preload="auto"
         />
       </div>
-
-      {/* Always-visible fairness bar, Stake-style — the popup is for editing. */}
-      {!isFullscreen && (
-        <ProvablyFairStrip
-          clientSeed={multiClientSeed}
-          serverSeedHash={tableViewState?.serverSeedHash ?? null}
-          nonce={tableViewState?.roundNumber ?? null}
-          onOpenPanel={() => setProvablyFairOpen(true)}
-        />
-      )}
 
       <div className="min-w-0 w-full flex-1 min-h-0 flex flex-col mt-2">
         <TableTokenProfileCard

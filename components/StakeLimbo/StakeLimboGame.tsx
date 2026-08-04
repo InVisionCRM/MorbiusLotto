@@ -25,7 +25,6 @@ import { formatChips } from '@/lib/format-poker-chips'
 import { GameWalletModal } from '@/components/shared/GameWalletModal'
 import { probeSiweSession } from '@/lib/api-auth'
 import { useBigWin } from '@/contexts/big-win-context'
-import { ArcadeFairnessStrip } from '@/components/shared/ArcadeFairnessStrip'
 import { SessionChart, type SessionPoint } from '@/components/arcade2/SessionChart'
 import { FloatingPanel } from '@/components/arcade2/FloatingPanel'
 import { LimboInfoTabs } from './LimboInfoTabs'
@@ -678,9 +677,6 @@ export function StakeLimboGame() {
           </div>
         </div>
       </div>
-
-      {/* Always-visible fairness bar — active seed pair + commitment. */}
-      <ArcadeFairnessStrip onOpenPanel={() => setFairnessOpen(true)} />
 
       {/* ───────── Session chart + info tabs ───────── */}
       <div className="mt-4 space-y-4">

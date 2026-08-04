@@ -42,7 +42,6 @@ import { formatChips } from '@/lib/format-poker-chips'
 import { GameWalletModal } from '@/components/shared/GameWalletModal'
 import { probeSiweSession } from '@/lib/api-auth'
 import { useBigWin } from '@/contexts/big-win-context'
-import { ArcadeFairnessStrip } from '@/components/shared/ArcadeFairnessStrip'
 import PlinkoGame from '@/components/PLINKO/PlinkoGame'
 import type { RiskLevel } from '@/app/PLINKO/types'
 import { PlinkoInfoTabs } from './PlinkoInfoTabs'
@@ -747,9 +746,6 @@ export function StakePlinkoGame() {
 
         </div>
       </div>
-
-      {/* Always-visible fairness bar — active seed pair + commitment. */}
-      <ArcadeFairnessStrip onOpenPanel={() => setFairnessOpen(true)} />
 
       {/* ───────── Session chart + info tabs (chart/tabs forked from /PLINKO) ─────────
           The session chart is a draggable floating widget (FloatingPanel) on all

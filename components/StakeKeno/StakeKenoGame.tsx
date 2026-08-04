@@ -42,7 +42,6 @@ import { formatChips } from '@/lib/format-poker-chips'
 import { GameWalletModal } from '@/components/shared/GameWalletModal'
 import { probeSiweSession } from '@/lib/api-auth'
 import { useBigWin } from '@/contexts/big-win-context'
-import { ArcadeFairnessStrip } from '@/components/shared/ArcadeFairnessStrip'
 import { kenoAudio } from './keno-audio'
 import { KenoBoard } from './KenoBoard'
 import { KenoHotNumbers } from './KenoHotNumbers'
@@ -777,9 +776,6 @@ export function StakeKenoGame() {
           />
         </div>
       </div>
-
-      {/* Always-visible fairness bar — active seed pair + commitment. */}
-      <ArcadeFairnessStrip onOpenPanel={() => setFairnessOpen(true)} />
 
       {/* ───────── History ───────── */}
       {address && (

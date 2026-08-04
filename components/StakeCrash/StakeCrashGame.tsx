@@ -36,7 +36,6 @@ import { CrashRulesModal } from './CrashRulesModal';
 import { CrashInfoTabs } from './CrashInfoTabs';
 import { usePokerChipBalance } from '@/hooks/use-poker-chip-balance';
 import { GameWalletModal } from '@/components/shared/GameWalletModal';
-import { ArcadeFairnessStrip } from '@/components/shared/ArcadeFairnessStrip';
 import { ReplayConfirmOverlay } from '@/components/share/ReplayConfirmOverlay';
 import { probeSiweSession } from '@/lib/api-auth';
 import {
@@ -353,13 +352,6 @@ export function StakeCrashGame() {
           </Panel>
         </Group>
       </main>
-
-      {/* Always-visible fairness bar — active seed pair + commitment. */}
-      <div className="bg-[#06070a] px-3 pt-4 sm:px-6">
-        <div className="mx-auto w-full max-w-5xl">
-          <ArcadeFairnessStrip onOpenPanel={() => setFairnessOpen(true)} />
-        </div>
-      </div>
 
       {/* Extras below the game: recent / leaderboard / my rounds / how to play */}
       <div className="portrait:hidden landscape:block bg-[#06070a] px-3 pb-16 pt-4 sm:px-6">
