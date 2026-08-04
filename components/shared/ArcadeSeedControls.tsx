@@ -52,8 +52,16 @@ export function ArcadeSeedControls({ open }: { open: boolean }) {
       const s = await fetchActiveSeed()
       setState(s)
       setDraftSeed(s.clientSeed)
-    } catch {
-      setError('Connect your wallet to view your provably-fair seed.')
+    } catch (e) {
+      // Say what actually happened. The old copy blamed the wallet for every
+      // failure — including server errors — which sent connected, signed-in
+      // players hunting for a connection problem that didn't exist.
+      const status = (e as Error & { status?: number })?.status
+      setError(
+        status === 401
+          ? 'Sign in with your wallet to view your seed — the sign-in prompt may have been dismissed.'
+          : 'Could not load your seed just now — it’s not a wallet problem. Retry in a moment.',
+      )
     }
   }, [])
 
@@ -168,7 +176,14 @@ export function ArcadeSeedControls({ open }: { open: boolean }) {
         !error && <div className="text-xs text-slate-500">Loading seed…</div>
       )}
 
-      {error && <p className="text-sm text-red-400">{error}</p>}
+      {error && (
+        <div className="flex flex-wrap items-center gap-3">
+          <p className="text-sm text-red-400">{error}</p>
+          <Button size="sm" variant="outline" onClick={() => void load()} disabled={busy}>
+            Retry
+          </Button>
+        </div>
+      )}
     </section>
   )
 }
