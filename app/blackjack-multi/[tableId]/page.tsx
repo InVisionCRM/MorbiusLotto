@@ -66,6 +66,8 @@ import { VOICE_BLACKJACK_TUTORIAL_URL } from '@/lib/how-to-video-urls';
 import { ConfirmActionCard } from '@/components/shared/ConfirmActionCard';
 import { ProvablyFairClientSeedModal } from '@/components/shared/ProvablyFairClientSeedModal';
 import { generateHexClientSeed } from '@/lib/generate-client-seed';
+import { loadStoredClientSeed, saveStoredClientSeed } from '@/lib/provably-fair-client-seed-storage';
+import { BlackjackMultiRecentHands } from '@/components/BLACKJACK/multi/BlackjackMultiRecentHands';
 
 /** Must match server BJ_MULTI_AFK_KICK_AFTER — shown in seat UI */
 const AFK_TIMEOUTS_BEFORE_KICK = 3;
@@ -186,7 +188,15 @@ export default function BlackjackMultiTablePage() {
   const [pendingSeatPos, setPendingSeatPos] = useState<number | null>(null);
   const [tipNotification, setTipNotification] = useState<{ name: string } | null>(null);
   const [tipAnimating, setTipAnimating] = useState(false);
-  const [multiClientSeed, setMultiClientSeed] = useState(() => generateHexClientSeed());
+  // One persistent blackjack seed per browser, shared with single-player, so
+  // "your seed" is a stable identity instead of rerolling on every page load.
+  const [multiClientSeed, setMultiClientSeedState] = useState(
+    () => loadStoredClientSeed('blackjack') ?? generateHexClientSeed(),
+  );
+  const setMultiClientSeed = useCallback((next: string) => {
+    setMultiClientSeedState(next);
+    saveStoredClientSeed('blackjack', next);
+  }, []);
   const [provablyFairOpen, setProvablyFairOpen] = useState(false);
   const [tableSwitcherOpen, setTableSwitcherOpen] = useState(false);
   const wsClientRef = useRef<BlackjackWebSocketClient | null>(null);
@@ -1654,7 +1664,11 @@ export default function BlackjackMultiTablePage() {
         onOpenChange={setProvablyFairOpen}
         value={multiClientSeed}
         onChange={setMultiClientSeed}
-      />
+        serverSeedHash={tableViewState?.serverSeedHash ?? null}
+        nonce={tableViewState?.roundNumber ?? null}
+      >
+        <BlackjackMultiRecentHands address={address} />
+      </ProvablyFairClientSeedModal>
 
       <BlackjackTableSwitcherModal
         open={tableSwitcherOpen}

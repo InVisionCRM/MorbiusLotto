@@ -33,6 +33,20 @@ export function registerVerifyRoutes({
     }
   });
 
+  // A player's recent completed multiplayer hands, so the table UI can offer
+  // "verify this hand" links — each id feeds /api/game/:gameId/verify above.
+  app.get('/api/bj-multi/player/:address/recent-rounds', async (req, res) => {
+    try {
+      const { address } = req.params;
+      const limit = Math.min(parseInt(String(req.query.limit)) || 15, 50);
+      const rounds = await dbService.getBlackjackMultiPlayerRecentRounds(address, limit);
+      sendJson(res, { rounds });
+    } catch (error) {
+      logger.error('Error fetching multi recent rounds:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
   app.get('/api/game/:gameId/hands', async (req, res) => {
     try {
       const { gameId } = req.params;
