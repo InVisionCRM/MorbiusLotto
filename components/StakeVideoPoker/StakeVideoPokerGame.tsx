@@ -25,6 +25,7 @@ import { Button } from '@/components/ui/button';
 import { usePokerChipBalance } from '@/hooks/use-poker-chip-balance';
 import { formatChips } from '@/lib/format-poker-chips';
 import { GameWalletModal } from '@/components/shared/GameWalletModal';
+import { ArcadeFairnessStrip } from '@/components/shared/ArcadeFairnessStrip';
 import { probeSiweSession } from '@/lib/api-auth';
 import { useBigWin } from '@/contexts/big-win-context';
 import { SessionChart, type SessionPoint } from '@/components/arcade2/SessionChart';
@@ -526,6 +527,9 @@ export function StakeVideoPokerGame() {
           </Card>
         </div>
       </div>
+
+      {/* Always-visible fairness bar — active seed pair + commitment. */}
+      <ArcadeFairnessStrip onOpenPanel={() => setFairnessOpen(true)} />
 
       {/* ───────── Session chart + paytable / info ───────── */}
       <div className="mt-4 space-y-4">
