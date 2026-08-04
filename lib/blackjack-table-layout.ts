@@ -72,6 +72,16 @@ export interface BlackjackTableLayout {
    */
   canvas: { width: number; height: number };
 
+  /**
+   * The table's artwork — the image the whole board is built around. Drawn
+   * cover-fitted across the full canvas, exactly like the live table draws its
+   * branded backgrounds. An empty string means "use the table's configured
+   * branded background" (the pre-theme behaviour).
+   */
+  table: {
+    image: string;
+  };
+
   /** One entry per seat, left to right. */
   seats: SeatPlacement[];
 
@@ -97,6 +107,12 @@ export interface BlackjackTableLayout {
     mobileBreakpointPx: number;
     overlap: CardOverlap;
     mobileOverlap: CardOverlap;
+    /**
+     * 3D lean of each hand, in degrees; 0 = flat against the screen. Table art
+     * is often drawn in perspective rather than straight top-down, so tilting
+     * the card stacks to match keeps them looking like they lie ON the table.
+     */
+    pitch: { dealer: number; player: number };
     restShadow: string;
     hoverShadow: string;
     /** Image shown on the back of a face-down card. */
@@ -116,6 +132,8 @@ export interface BlackjackTableLayout {
 
 export const DEFAULT_BLACKJACK_TABLE_LAYOUT: BlackjackTableLayout = {
   canvas: { width: 800, height: 450 },
+
+  table: { image: '' },
 
   seats: [
     { cx: 140, floorY: 415, angle: 18 },
@@ -142,6 +160,7 @@ export const DEFAULT_BLACKJACK_TABLE_LAYOUT: BlackjackTableLayout = {
     mobileBreakpointPx: 640,
     overlap: { dealer: -15, player: -25 },
     mobileOverlap: { dealer: -12, player: -18 },
+    pitch: { dealer: 0, player: 0 },
     restShadow: '0 2px 4px rgba(0, 0, 0, 0.2)',
     hoverShadow: '0 6px 12px rgba(0, 0, 0, 0.4)',
     backImage: '/Pulse Branding/Logo/ball.png',
@@ -189,6 +208,9 @@ export function layoutToCssVars(layout: BlackjackTableLayout): Record<string, st
     '--bj-card-overlap-dealer-mobile': `${cards.mobileOverlap.dealer}px`,
     '--bj-card-overlap-player-mobile': `${cards.mobileOverlap.player}px`,
 
+    '--bj-card-pitch-dealer': `${cards.pitch.dealer}deg`,
+    '--bj-card-pitch-player': `${cards.pitch.player}deg`,
+
     '--bj-card-mobile-w': `${cards.mobileSize.w}px`,
     '--bj-card-mobile-h': `${cards.mobileSize.h}px`,
     '--bj-card-radius': cards.radius,
@@ -228,6 +250,7 @@ export function mergeTableLayout(
   if (!override) return base;
   return {
     canvas: { ...base.canvas, ...override.canvas },
+    table: { ...base.table, ...override.table },
     seats: (override.seats as SeatPlacement[] | undefined) ?? base.seats,
     dealer: { ...base.dealer, ...override.dealer },
     emotes: { ...base.emotes, ...override.emotes },
@@ -238,6 +261,7 @@ export function mergeTableLayout(
       mobileSize: { ...base.cards.mobileSize, ...override.cards?.mobileSize },
       overlap: { ...base.cards.overlap, ...override.cards?.overlap },
       mobileOverlap: { ...base.cards.mobileOverlap, ...override.cards?.mobileOverlap },
+      pitch: { ...base.cards.pitch, ...override.cards?.pitch },
     },
     motion: {
       dealIn: { ...base.motion.dealIn, ...override.motion?.dealIn },

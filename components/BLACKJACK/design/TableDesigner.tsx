@@ -1,18 +1,20 @@
 'use client';
 
 /**
- * Blackjack table designer.
+ * Table Forge — the blackjack table designer.
  *
- * Renders the real seat and dealer components against fixture state, inside a
- * BlackjackTableLayoutProvider driven by this editor. The editing model is
- * direct manipulation, same spirit as the slot builder: grab a seat or the
- * dealer and drag it, drag the tilt handle to rotate a seat, click the card
- * back to swap its art. The side panel is for fine-tuning, not the primary
- * way in.
+ * Structured to feel like the slot builder (public/slot-builder-lab.html):
+ * a top-bar of whole-table presets, a quick-edit toolbar, a grouped control
+ * deck on the left (Build / Style / Ship), and a pinned live table on the
+ * right rendered from the real seat and dealer components against fixture
+ * state. Every choice leads with a named style — mech-cards with a live
+ * example, one-click sound styles — and the sliders sit behind a
+ * "fine-tune" fold for afterwards.
  *
- * Like the Theme Studio, the chrome is styled with fixed inline colours rather
- * than app classes: it is a tool for judging the table, so it must not shift
- * when the table's own styling does.
+ * The editing model is direct manipulation: grab a seat or the dealer and
+ * drag it on the felt, drag the tilt handle to rotate a seat. Everything
+ * here is presentation only — nothing the designer stores can change the
+ * cards, the shuffle, or a payout.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -49,38 +51,44 @@ import {
   activeClearOutPresetId,
   activeDealInPresetId,
 } from '@/lib/blackjack-motion-presets';
+import {
+  BLACKJACK_TABLE_PRESETS,
+  soundStyleForTablePreset,
+  tablePresetById,
+} from '@/lib/blackjack-table-presets';
+import {
+  CARD_ANGLE_PRESETS,
+  CARD_FX_PRESETS,
+  activeCardAnglePresetId,
+  activeCardFxPresetId,
+} from '@/lib/blackjack-card-presets';
 import { SoundEventTile } from '@/components/BLACKJACK/design/sound/SoundEventTile';
 import { TrimModal, type TrimTarget } from '@/components/BLACKJACK/design/sound/TrimModal';
 import { LibraryModal } from '@/components/BLACKJACK/design/sound/LibraryModal';
 import { useTablePublish } from '@/components/BLACKJACK/design/useTablePublish';
+import { BLACKJACK_IMAGE_BACKGROUNDS, DEFAULT_BLACKJACK_IMAGE_ID } from '@/app/BLACKJACK/constants';
 import type { BlackjackTableThemeConfig } from '@/lib/blackjack-table-theme';
 import '@/components/BLACKJACK/design/sound/sound-designer.css';
+import '@/components/BLACKJACK/design/table-designer.css';
 import type { BJMultiSeatState } from '@/lib/websocket-client';
-
-const UI = {
-  bg: '#0b0f14',
-  panel: '#0f151c',
-  border: '#1f2933',
-  raised: '#161e27',
-  text: '#e6edf3',
-  dim: '#8b98a5',
-  accent: '#4493f8',
-  selected: '#f0b429',
-} as const;
 
 const CANVAS_W = DEFAULT_BLACKJACK_TABLE_LAYOUT.canvas.width;
 const CANVAS_H = DEFAULT_BLACKJACK_TABLE_LAYOUT.canvas.height;
 
-type Selection =
-  | { kind: 'seat'; index: number }
-  | { kind: 'dealer' }
-  | { kind: 'cards' }
-  | { kind: 'motion' }
-  | { kind: 'sounds' };
+/** What's highlighted on the felt; the deck tab tracks it. */
+type Selection = { kind: 'seat'; index: number } | { kind: 'dealer' } | null;
+
+/** Which step of the flow is open. */
+type DeckTab = 'art' | 'cards' | 'anim' | 'sound' | 'tune' | 'share';
+
+/** What the designer paints when no art has been chosen yet. */
+const DEFAULT_TABLE_ART =
+  BLACKJACK_IMAGE_BACKGROUNDS.find((b) => b.id === DEFAULT_BLACKJACK_IMAGE_ID)?.src ??
+  BLACKJACK_IMAGE_BACKGROUNDS[0].src;
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 
-/** One editable number, rendered as a slider plus a readout. */
+/** One editable number: label, slider, live mono readout. */
 function Knob({
   label,
   value,
@@ -101,8 +109,14 @@ function Knob({
   onGestureStart: () => void;
 }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-      <label style={{ width: 78, fontSize: 11, color: UI.dim }}>{label}</label>
+    <div className="bjtd-ctl">
+      <div className="bjtd-ctl-lbl">
+        <span>{label}</span>
+        <span className="bjtd-val">
+          {Math.round(value * 100) / 100}
+          {suffix}
+        </span>
+      </div>
       <input
         type="range"
         min={min}
@@ -112,29 +126,7 @@ function Knob({
         onPointerDown={onGestureStart}
         onKeyDown={onGestureStart}
         onChange={(e) => onChange(Number(e.target.value))}
-        style={{ flex: 1, accentColor: UI.accent, height: 16 }}
       />
-      <span
-        style={{
-          width: 52,
-          textAlign: 'right',
-          fontSize: 10,
-          fontVariantNumeric: 'tabular-nums',
-          color: UI.text,
-        }}
-      >
-        {Math.round(value * 100) / 100}
-        {suffix}
-      </span>
-    </div>
-  );
-}
-
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <div style={{ marginBottom: 14 }}>
-      <div style={{ fontSize: 11, fontWeight: 700, marginBottom: 6, color: UI.text }}>{title}</div>
-      {children}
     </div>
   );
 }
@@ -143,6 +135,7 @@ export default function TableDesigner() {
   const [layout, setLayout] = useState<BlackjackTableLayout>(DEFAULT_BLACKJACK_TABLE_LAYOUT);
   const [scenarioId, setScenarioId] = useState(DESIGN_SCENARIOS[0].id);
   const [selection, setSelection] = useState<Selection>({ kind: 'seat', index: 1 });
+  const [tab, setTab] = useState<DeckTab>('art');
   const [showGuides, setShowGuides] = useState(true);
   const [copied, setCopied] = useState(false);
   const [dragging, setDragging] = useState(false);
@@ -223,9 +216,22 @@ export default function TableDesigner() {
     [previewSound],
   );
 
+  // Clicking a named style should always be heard, auto-play toggle or not —
+  // that's the whole point of a one-click style. Deferred one beat so the
+  // setState it follows has committed by the time the refs are read.
+  const auditionTimer = useRef<number | null>(null);
+  const auditionSoon = useCallback(
+    (event: BlackjackSoundEventKey) => {
+      if (auditionTimer.current) window.clearTimeout(auditionTimer.current);
+      auditionTimer.current = window.setTimeout(() => previewSound(event), 320);
+    },
+    [previewSound],
+  );
+
   useEffect(
     () => () => {
       if (autoPlayTimer.current) window.clearTimeout(autoPlayTimer.current);
+      if (auditionTimer.current) window.clearTimeout(auditionTimer.current);
     },
     [],
   );
@@ -233,7 +239,7 @@ export default function TableDesigner() {
   // ── Deal preview ──────────────────────────────────────────────────────────
   // Plays the current motion settings on the real table: collect every card,
   // then deal them back in through the actual card-slide-in path. This is what
-  // makes the Motion tab editable by eye instead of by number.
+  // makes the animation styles pickable by eye instead of by number.
   const [dealPreview, setDealPreview] = useState<'exit' | 'enter' | null>(null);
   const previewTimers = useRef<number[]>([]);
   const layoutForPreview = useRef(layout);
@@ -419,7 +425,7 @@ export default function TableDesigner() {
   }, []);
 
   // ── Stage scaling ──────────────────────────────────────────────────────────
-  // The logical canvas is 800×450; scale it to fill the available width so the
+  // The logical canvas is 800×450; scale it to fill the preview column so the
   // table is big enough to actually work on. Drag math divides by this scale.
   const wrapRef = useRef<HTMLDivElement>(null);
   const [stageScale, setStageScale] = useState(1);
@@ -489,7 +495,7 @@ export default function TableDesigner() {
       }
       if (!e.key.startsWith('Arrow')) return;
       const sel = selection;
-      if (sel.kind !== 'seat' && sel.kind !== 'dealer') return;
+      if (!sel) return;
       e.preventDefault();
       const now = Date.now();
       if (now - lastNudge.current > 800) beginGesture();
@@ -515,7 +521,7 @@ export default function TableDesigner() {
     return () => window.removeEventListener('keydown', onKey);
   }, [selection, setSeat, patch, beginGesture, undo, redo]);
 
-  // ── Card back picker ───────────────────────────────────────────────────────
+  // ── Image pickers: table art + card back ──────────────────────────────────
   const backFileRef = useRef<HTMLInputElement>(null);
   const pickCardBack = useCallback(
     (file: File | null) => {
@@ -526,6 +532,29 @@ export default function TableDesigner() {
     },
     [beginGesture, patch],
   );
+
+  const artFileRef = useRef<HTMLInputElement>(null);
+  const setTableArt = useCallback(
+    (src: string) => {
+      beginGesture();
+      patch((p) => ({ ...p, table: { ...p.table, image: src } }));
+    },
+    [beginGesture, patch],
+  );
+  const pickTableArt = useCallback(
+    (file: File | null) => {
+      if (!file) return;
+      setTableArt(URL.createObjectURL(file));
+    },
+    [setTableArt],
+  );
+
+  /** What the stage paints right now: chosen art, or the stock branded table. */
+  const stageArt = layout.table.image || DEFAULT_TABLE_ART;
+  const artIsUpload =
+    layout.table.image.startsWith('blob:') ||
+    layout.table.image.startsWith('data:') ||
+    layout.table.image.startsWith('/uploads');
 
   const scenario = DESIGN_SCENARIOS.find((s) => s.id === scenarioId) ?? DESIGN_SCENARIOS[0];
   const state = scenario.state;
@@ -558,10 +587,62 @@ export default function TableDesigner() {
     return new Set(state.dealerCards.map((_, i) => i));
   }, [dealPreview, state]);
 
+  // ── Whole-table presets ────────────────────────────────────────────────────
+  // A preset speaks for the motion block and the whole-table sound style; seat
+  // placement, card art and uploaded clips are the user's and survive it.
+  const applyTablePreset = useCallback(
+    (id: string) => {
+      const preset = tablePresetById(id);
+      if (!preset) return;
+      beginGesture();
+      const merged = mergeTableLayout(DEFAULT_BLACKJACK_TABLE_LAYOUT, preset.layout);
+      setLayout((prev) => ({ ...prev, motion: merged.motion }));
+      const style = soundStyleForTablePreset(preset);
+      setSoundFx((prev) => {
+        const next: SoundFxMap = {};
+        for (const info of BLACKJACK_SOUND_EVENT_INFO) {
+          next[info.key] = fxFromPreset(style, fxFor(prev, info.key).sample);
+        }
+        return next;
+      });
+      runDealPreview();
+      auditionSoon('cardDeal');
+    },
+    [beginGesture, runDealPreview, auditionSoon],
+  );
+
+  /** Which whole-table preset the current state exactly matches, if any. */
+  const activeTablePresetId = useMemo(() => {
+    for (const preset of BLACKJACK_TABLE_PRESETS) {
+      const merged = mergeTableLayout(DEFAULT_BLACKJACK_TABLE_LAYOUT, preset.layout);
+      if (JSON.stringify(layout.motion) !== JSON.stringify(merged.motion)) continue;
+      const style = soundStyleForTablePreset(preset);
+      const want = JSON.stringify({ ...fxFromPreset(style, null), sample: null });
+      const allMatch = BLACKJACK_SOUND_EVENT_INFO.every(
+        (info) => JSON.stringify({ ...fxFor(soundFx, info.key), sample: null }) === want,
+      );
+      if (allMatch) return preset.id;
+    }
+    return null;
+  }, [layout.motion, soundFx]);
+
+  /** Which sound style all events share (highlights the row in the Sound tab). */
+  const activeWholeTableStyleId = useMemo(() => {
+    for (const style of SOUND_FX_PRESETS) {
+      const want = JSON.stringify({ ...fxFromPreset(style, null), sample: null });
+      const allMatch = BLACKJACK_SOUND_EVENT_INFO.every(
+        (info) => JSON.stringify({ ...fxFor(soundFx, info.key), sample: null }) === want,
+      );
+      if (allMatch) return style.id;
+    }
+    return null;
+  }, [soundFx]);
+
   /** Only the fields that differ from the shipped defaults — what a table theme would store. */
   const diff = useMemo(() => {
     const base = DEFAULT_BLACKJACK_TABLE_LAYOUT;
     const out: Record<string, unknown> = {};
+    if (JSON.stringify(layout.table) !== JSON.stringify(base.table)) out.table = layout.table;
     if (JSON.stringify(layout.seats) !== JSON.stringify(base.seats)) out.seats = layout.seats;
     if (JSON.stringify(layout.dealer) !== JSON.stringify(base.dealer)) out.dealer = layout.dealer;
     if (JSON.stringify(layout.cards) !== JSON.stringify(base.cards)) out.cards = layout.cards;
@@ -604,7 +685,7 @@ export default function TableDesigner() {
   /** The sparse theme this editor currently describes — the diff, reshaped. */
   const currentThemeConfig = useMemo((): BlackjackTableThemeConfig => {
     const layoutPart: Record<string, unknown> = {};
-    for (const key of ['seats', 'dealer', 'cards', 'motion', 'emotes'] as const) {
+    for (const key of ['table', 'seats', 'dealer', 'cards', 'motion', 'emotes'] as const) {
       if (diff[key] !== undefined) layoutPart[key] = diff[key];
     }
     const theme: BlackjackTableThemeConfig = { version: 1 };
@@ -639,1023 +720,1174 @@ export default function TableDesigner() {
     }
   }, [diff]);
 
-  const isSel = (s: Selection) =>
-    s.kind === selection.kind && (s.kind !== 'seat' || s.index === (selection as { index: number }).index);
+  const selectSeat = useCallback((index: number) => {
+    setSelection({ kind: 'seat', index });
+    setTab('tune');
+  }, []);
 
-  const selectedSeat = selection.kind === 'seat' ? layout.seats[selection.index] : null;
+  const selectedSeatIndex = selection?.kind === 'seat' ? selection.index : 1;
+  const selectedSeat = selection?.kind === 'seat' ? layout.seats[selection.index] : null;
+
+  // One numbered path through the studio. A step lights its check the moment
+  // it differs from stock, so you can see at a glance what you've styled.
+  const steps: { id: DeckTab; n: number; label: string; done: boolean }[] = [
+    { id: 'art', n: 1, label: 'Table art', done: diff.table !== undefined },
+    { id: 'cards', n: 2, label: 'Cards', done: diff.cards !== undefined },
+    { id: 'anim', n: 3, label: 'Animations', done: diff.motion !== undefined },
+    { id: 'sound', n: 4, label: 'Sounds', done: diff.sounds !== undefined || diff.soundFx !== undefined },
+    { id: 'tune', n: 5, label: 'Fine-tune', done: diff.seats !== undefined || diff.dealer !== undefined },
+    { id: 'share', n: 6, label: 'Save', done: false },
+  ];
+  const stepIndex = steps.findIndex((s) => s.id === tab);
+  const currentStep = steps[stepIndex];
+  const prevStep = stepIndex > 0 ? steps[stepIndex - 1] : null;
+  const nextStep = stepIndex < steps.length - 1 ? steps[stepIndex + 1] : null;
+
+  const stepNav = (
+    <div className="bjtd-step-nav">
+      {prevStep && (
+        <button type="button" className="bjtd-sm-btn" onClick={() => setTab(prevStep.id)}>
+          &larr; {prevStep.label}
+        </button>
+      )}
+      {nextStep && (
+        <button
+          type="button"
+          className="bjtd-sm-btn go"
+          style={{ marginLeft: 'auto' }}
+          onClick={() => setTab(nextStep.id)}
+        >
+          Next: {nextStep.label} &rarr;
+        </button>
+      )}
+    </div>
+  );
 
   return (
-    <div
-      style={{
-        display: 'flex',
-        minHeight: '100vh',
-        background: UI.bg,
-        color: UI.text,
-        fontFamily: 'ui-sans-serif, system-ui, -apple-system, sans-serif',
-      }}
-    >
-      {/* ── Stage ─────────────────────────────────────────────────────────── */}
-      <div style={{ flex: 1, padding: 20, minWidth: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, marginBottom: 10, flexWrap: 'wrap' }}>
-          <h1 style={{ fontSize: 16, fontWeight: 700, margin: 0 }}>Blackjack table designer</h1>
-          <span style={{ fontSize: 12, color: UI.dim }}>
-            Drag pieces to move them · drag the ⟳ handle to tilt a seat · arrow keys nudge (⇧ = ×10) · Ctrl+Z undoes
+    <div className="bjtd">
+      {/* React hoists these into <head>; same faces the slot builder uses. */}
+      <link rel="preconnect" href="https://fonts.googleapis.com" />
+      <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+      <link
+        rel="stylesheet"
+        href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap"
+      />
+      <div className="bjtd-wrap">
+        <header className="bjtd-header">
+          <h1 className="bjtd-title">
+            Table Forge<span className="bjtd-glyph">&#9670;</span>
+          </h1>
+          <p className="bjtd-tagline">
+            1 table art &middot; 2 cards &middot; 3 animations &middot; 4 sounds &middot; 5 fine-tune &middot; 6
+            save &mdash; played in MORBIUS
+          </p>
+        </header>
+
+        <div className="bjtd-topbar">
+          <span className="bjtd-tagline" style={{ margin: 0 }}>
+            In a hurry? A preset styles the whole table in one click:
           </span>
-        </div>
-
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12, alignItems: 'center' }}>
-          {DESIGN_SCENARIOS.map((s) => (
-            <button
-              key={s.id}
-              type="button"
-              title={s.description}
-              onClick={() => setScenarioId(s.id)}
-              style={{
-                background: s.id === scenarioId ? UI.accent : UI.raised,
-                color: s.id === scenarioId ? '#fff' : UI.text,
-                border: `1px solid ${s.id === scenarioId ? UI.accent : UI.border}`,
-                borderRadius: 6,
-                padding: '4px 10px',
-                fontSize: 11,
-                cursor: 'pointer',
-              }}
+          <div className="bjtd-topbar-right">
+            <select
+              className="bjtd-preset-sel"
+              aria-label="Table preset"
+              value={activeTablePresetId ?? 'custom'}
+              onChange={(e) => applyTablePreset(e.target.value)}
             >
-              {s.name}
-            </button>
-          ))}
-          <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: UI.dim, marginLeft: 4 }}>
-            <input type="checkbox" checked={showGuides} onChange={(e) => setShowGuides(e.target.checked)} />
-            Guides
-          </label>
-        </div>
-
-        {/* ── Publish bar: this design ↔ a real table ── */}
-        <div
-          style={{
-            display: 'flex',
-            gap: 8,
-            alignItems: 'center',
-            flexWrap: 'wrap',
-            marginBottom: 12,
-            padding: '8px 10px',
-            background: UI.panel,
-            border: `1px solid ${UI.border}`,
-            borderRadius: 8,
-          }}
-        >
-          <span style={{ fontSize: 11, fontWeight: 700 }}>Publish</span>
-          {!publish.address ? (
-            <span style={{ fontSize: 11, color: UI.dim }}>
-              Connect an admin wallet to load or save table themes.
-            </span>
-          ) : (
-            <>
-              <select
-                value={publishTableId}
-                onChange={(e) => setPublishTableId(e.target.value)}
-                style={{
-                  background: UI.raised,
-                  color: UI.text,
-                  border: `1px solid ${UI.border}`,
-                  borderRadius: 6,
-                  padding: '4px 8px',
-                  fontSize: 11,
-                  maxWidth: 260,
-                }}
-              >
-                <option value="">Choose a table…</option>
-                {publish.tables.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.id.slice(0, 8)} · {t.status}
-                  </option>
-                ))}
-              </select>
-              <button
-                type="button"
-                onClick={() => void handleLoad()}
-                disabled={!publishTableId || publish.status.kind === 'busy'}
-                style={{
-                  background: UI.raised,
-                  border: `1px solid ${UI.border}`,
-                  color: publishTableId ? UI.text : UI.border,
-                  borderRadius: 6,
-                  padding: '4px 10px',
-                  fontSize: 11,
-                  cursor: publishTableId ? 'pointer' : 'default',
-                }}
-              >
-                Load
-              </button>
-              <button
-                type="button"
-                onClick={() => void handleSave()}
-                disabled={!publishTableId || publish.status.kind === 'busy'}
-                style={{
-                  background: publishTableId ? UI.accent : UI.raised,
-                  border: `1px solid ${publishTableId ? UI.accent : UI.border}`,
-                  color: publishTableId ? '#fff' : UI.border,
-                  borderRadius: 6,
-                  padding: '4px 12px',
-                  fontSize: 11,
-                  fontWeight: 700,
-                  cursor: publishTableId ? 'pointer' : 'default',
-                }}
-              >
-                Save to table
-              </button>
-              <span
-                style={{
-                  fontSize: 11,
-                  color:
-                    publish.status.kind === 'error'
-                      ? '#f87171'
-                      : publish.status.kind === 'ok'
-                        ? '#4ade80'
-                        : UI.dim,
-                }}
-              >
-                {publish.status.kind !== 'idle'
-                  ? publish.status.note
-                  : publish.tablesError
-                    ? publish.tablesError
-                    : `${publish.tables.length} table${publish.tables.length === 1 ? '' : 's'}`}
-              </span>
-            </>
-          )}
-        </div>
-
-        {/* Scaled stage. The wrapper reserves the scaled height so the page flows. */}
-        <div ref={wrapRef} style={{ width: '100%' }}>
-          <div style={{ width: CANVAS_W * stageScale, height: CANVAS_H * stageScale, position: 'relative' }}>
-            <BlackjackTableLayoutProvider layout={layout}>
-              <div
-                className="blackjack-table"
-                style={{
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  width: CANVAS_W,
-                  height: CANVAS_H,
-                  transform: `scale(${stageScale})`,
-                  transformOrigin: 'top left',
-                  background: 'radial-gradient(ellipse at 50% 35%, #12331f 0%, #0a1f13 60%, #06120b 100%)',
-                  border: `1px solid ${UI.border}`,
-                  borderRadius: 12,
-                  overflow: 'hidden',
-                }}
-              >
-                {showGuides && (
-                  <svg
-                    width={CANVAS_W}
-                    height={CANVAS_H}
-                    style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 40 }}
-                  >
-                    <line
-                      x1={CANVAS_W / 2}
-                      y1={0}
-                      x2={CANVAS_W / 2}
-                      y2={CANVAS_H}
-                      stroke="rgba(255,255,255,0.12)"
-                      strokeDasharray="4 6"
-                    />
-                    {selectedSeat && (
-                      <text
-                        x={selectedSeat.cx}
-                        y={clamp(selectedSeat.floorY + 22, 14, CANVAS_H - 4)}
-                        textAnchor="middle"
-                        fill={UI.selected}
-                        fontSize={11}
-                        fontFamily="ui-monospace, monospace"
-                      >
-                        {Math.round(selectedSeat.cx)}, {Math.round(selectedSeat.floorY)} · {Math.round(selectedSeat.angle)}°
-                      </text>
-                    )}
-                    {selection.kind === 'dealer' && (
-                      <text
-                        x={layout.dealer.cx}
-                        y={clamp(layout.dealer.top - 8, 14, CANVAS_H - 4)}
-                        textAnchor="middle"
-                        fill={UI.selected}
-                        fontSize={11}
-                        fontFamily="ui-monospace, monospace"
-                      >
-                        {Math.round(layout.dealer.cx)}, {Math.round(layout.dealer.top)}
-                      </text>
-                    )}
-                  </svg>
-                )}
-
-                {/* Dealer — same placement rule as the live table; draggable here. */}
-                <div
-                  style={{
-                    position: 'absolute',
-                    left: layout.dealer.cx,
-                    top: layout.dealer.top,
-                    transform: 'translateX(-50%)',
-                    outline:
-                      selection.kind === 'dealer'
-                        ? `2px solid ${UI.selected}`
-                        : '1px dashed rgba(255,255,255,0.12)',
-                    outlineOffset: 6,
-                    borderRadius: 6,
-                    cursor: dragging ? 'grabbing' : 'grab',
-                    touchAction: 'none',
-                  }}
-                  onPointerDown={(e) => {
-                    setSelection({ kind: 'dealer' });
-                    const orig = { ...layoutRef.current.dealer };
-                    beginDrag(e, (dx, dy) =>
-                      patch((p) => ({
-                        ...p,
-                        dealer: {
-                          cx: clamp(Math.round(orig.cx + dx), 0, CANVAS_W),
-                          top: clamp(Math.round(orig.top + dy), 0, CANVAS_H),
-                        },
-                      })),
-                    );
-                  }}
-                  onPointerMove={onDragMove}
-                  onPointerUp={endDrag}
-                  onPointerCancel={endDrag}
-                >
-                  <BlackjackMultiDealerArea
-                    tableViewState={state}
-                    visibleDealerCards={state.dealerCards.length}
-                    cardsExiting={dealPreview === 'exit'}
-                    newDealerCardIndices={previewNewDealerCards}
-                  />
-                </div>
-
-                <BlackjackMultiSeatGrid
-                  seats={seats}
-                  cardsExiting={dealPreview === 'exit'}
-                  newPlayerCardByHandKey={previewNewPlayerCards}
-                  addressLower={undefined}
-                  phase={state.phase}
-                  actingSeatPosition={state.actingSeatPosition}
-                  myPosition={null}
-                  wsConnected
-                  afkTimeoutsBeforeKick={3}
-                  myBalanceLabel=""
-                  showOutcomeLabel={false}
-                  turnStartedAt={null}
-                  bettingStartedAt={null}
-                  onTakeSeat={() => {}}
-                  onOpenProfile={() => {}}
-                />
-
-                {/* Seat grab surfaces — cover the whole seat column, above the seats. */}
-                {layout.seats.map((s, i) => (
-                  <div
-                    key={i}
-                    role="button"
-                    aria-label={`Select seat ${i + 1}`}
-                    onPointerDown={(e) => {
-                      setSelection({ kind: 'seat', index: i });
-                      const orig = { ...layoutRef.current.seats[i] };
-                      beginDrag(e, (dx, dy) => {
-                        setSeat(i, 'cx', clamp(Math.round(orig.cx + dx), 0, CANVAS_W));
-                        setSeat(i, 'floorY', clamp(Math.round(orig.floorY + dy), 0, CANVAS_H));
-                      });
-                    }}
-                    onPointerMove={onDragMove}
-                    onPointerUp={endDrag}
-                    onPointerCancel={endDrag}
-                    style={{
-                      position: 'absolute',
-                      left: s.cx - 65,
-                      top: s.floorY - 155,
-                      width: 130,
-                      height: 165,
-                      borderRadius: 10,
-                      border: isSel({ kind: 'seat', index: i })
-                        ? `2px solid ${UI.selected}`
-                        : '1px dashed rgba(255,255,255,0.12)',
-                      cursor: dragging ? 'grabbing' : 'grab',
-                      touchAction: 'none',
-                      zIndex: 45,
-                    }}
-                  >
-                    <span
-                      style={{
-                        position: 'absolute',
-                        top: -20,
-                        left: '50%',
-                        transform: 'translateX(-50%)',
-                        fontSize: 10,
-                        fontWeight: 700,
-                        color: isSel({ kind: 'seat', index: i }) ? UI.selected : 'rgba(255,255,255,0.45)',
-                        background: 'rgba(0,0,0,0.55)',
-                        padding: '2px 8px',
-                        borderRadius: 999,
-                        whiteSpace: 'nowrap',
-                      }}
-                    >
-                      Seat {i + 1}
-                    </span>
-                  </div>
-                ))}
-
-                {/* Tilt handle for the selected seat — drag sideways to rotate. */}
-                {selectedSeat && (
-                  <div
-                    title="Drag sideways to tilt the seat"
-                    onPointerDown={(e) => {
-                      const sel = selection as { kind: 'seat'; index: number };
-                      const origAngle = layoutRef.current.seats[sel.index].angle;
-                      beginDrag(e, (dx) =>
-                        setSeat(sel.index, 'angle', clamp(Math.round(origAngle + dx * 0.4), -45, 45)),
-                      );
-                    }}
-                    onPointerMove={onDragMove}
-                    onPointerUp={endDrag}
-                    onPointerCancel={endDrag}
-                    style={{
-                      position: 'absolute',
-                      left: selectedSeat.cx - 14,
-                      top: selectedSeat.floorY - 195,
-                      width: 28,
-                      height: 28,
-                      borderRadius: '50%',
-                      background: UI.selected,
-                      color: '#1a1200',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      fontSize: 15,
-                      fontWeight: 800,
-                      cursor: 'ew-resize',
-                      touchAction: 'none',
-                      zIndex: 46,
-                      boxShadow: '0 2px 10px rgba(0,0,0,0.5)',
-                      userSelect: 'none',
-                    }}
-                  >
-                    ⟳
-                  </div>
-                )}
-              </div>
-            </BlackjackTableLayoutProvider>
+              {activeTablePresetId === null && (
+                <option value="custom" disabled>
+                  Preset: Custom
+                </option>
+              )}
+              {BLACKJACK_TABLE_PRESETS.map((p) => (
+                <option key={p.id} value={p.id} title={p.hint}>
+                  Preset: {p.label}
+                </option>
+              ))}
+            </select>
           </div>
         </div>
 
-        {/* Sound studio lives full-width under the table: its four-module grid
-            needs real horizontal room, which the 330px side panel cannot give. */}
-        {selection.kind === 'sounds' && (
-          <div className="bjsnd">
-            <p style={{ fontSize: 11, color: UI.dim, margin: '0 0 8px', lineHeight: 1.5 }}>
-              Pick a style for the whole table, or click a tile to style one sound — the knobs
-              inside are for fine-tuning after.
-            </p>
-            <div className="bjsnd-preset-row" style={{ marginBottom: 12 }}>
-              <span className="bjsnd-preset-cap">Whole table</span>
-              {SOUND_FX_PRESETS.map((preset) => (
+        <div className="bjtd-studio">
+          {/* ── The five steps ────────────────────────────────────────────── */}
+          <div className="bjtd-col-controls">
+            <div className="bjtd-steps">
+              {steps.map((s) => (
                 <button
-                  key={preset.id}
+                  key={s.id}
                   type="button"
-                  title={`${preset.hint} — applies to every event`}
-                  className="bjsnd-btn"
-                  onClick={() => {
-                    setSoundFx((prev) => {
-                      const next: SoundFxMap = {};
-                      for (const info of BLACKJACK_SOUND_EVENT_INFO) {
-                        const sample = fxFor(prev, info.key).sample;
-                        next[info.key] = fxFromPreset(preset, sample);
-                      }
-                      return next;
-                    });
-                    requestAutoPlay('cardDeal');
-                  }}
+                  className={`bjtd-step${tab === s.id ? ' active' : ''}${s.done ? ' done' : ''}`}
+                  onClick={() => setTab(s.id)}
                 >
-                  {preset.label}
+                  <span className="bjtd-step-n">{s.done ? '✓' : s.n}</span>
+                  {s.label}
                 </button>
               ))}
             </div>
-            <div className="bjsnd-grid">
-              {BLACKJACK_SOUND_EVENT_INFO.map((info) => {
-                const override = soundOverrides[info.key];
-                const isMuted = Array.isArray(override) && override.length === 0;
-                const hasCustomFile = Array.isArray(override) && override.length > 0;
-                return (
-                  <SoundEventTile
-                    key={info.key}
-                    info={info}
-                    fx={fxFor(soundFx, info.key)}
-                    hasCustomFile={hasCustomFile}
-                    fxTweaked={isFxCustomised(soundFx, info.key)}
-                    isMuted={isMuted}
-                    customLabel={customSoundLabels[info.key]}
-                    autoPlay={autoPlaySound}
-                    expanded={expandedSound === info.key}
-                    playing={playingSound === info.key}
-                    sourceUrl={pickSound(effectiveSoundMap, info.key)}
-                    onToggleExpand={() =>
-                      setExpandedSound((cur) => (cur === info.key ? null : info.key))
-                    }
-                    onPlay={() => previewSound(info.key)}
-                    onUpload={(file) => uploadSound(info.key, file)}
-                    onOpenLibrary={() => setLibraryFor(info.key)}
-                    onToggleRecord={() => void toggleRecord(info.key)}
-                    recording={recordingFor === info.key}
-                    onToggleMute={() =>
-                      setSoundOverrides((prev) => {
-                        const next = { ...prev };
-                        if (isMuted) {
-                          delete next[info.key];
-                          requestAutoPlay(info.key); // unmuting is worth hearing
-                        } else {
-                          next[info.key] = [];
-                        }
-                        return next;
-                      })
-                    }
-                    onReset={() => resetSound(info.key)}
-                    onToggleAutoPlay={() => setAutoPlaySound((v) => !v)}
-                    onFxChange={(patch) => patchSoundFx(info.key, patch)}
-                    onGestureStart={beginGesture}
-                  />
-                );
-              })}
-            </div>
-            <p style={{ fontSize: 10, color: UI.dim, marginTop: 10, lineHeight: 1.5 }}>
-              Uploads and FX are local previews until saved themes land — that&apos;s when they get
-              stored and heard by everyone at the table.
-            </p>
-          </div>
-        )}
-      </div>
 
-
-      {/* ── Panel — fine-tuning; the stage is the primary editor ─────────── */}
-      <aside
-        style={{
-          width: 330,
-          flexShrink: 0,
-          background: UI.panel,
-          borderLeft: `1px solid ${UI.border}`,
-          padding: 16,
-          overflowY: 'auto',
-          maxHeight: '100vh',
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 12 }}>
-          <strong style={{ fontSize: 13 }}>Fine-tune</strong>
-          <span style={{ fontSize: 11, color: UI.dim }}>
-            {changeCount ? `${changeCount} group${changeCount === 1 ? '' : 's'} changed` : 'default'}
-          </span>
-          <div style={{ marginLeft: 'auto', display: 'flex', gap: 4 }} data-history-version={historyVersion}>
-            <button
-              type="button"
-              onClick={undo}
-              disabled={past.current.length === 0}
-              title="Undo (Ctrl+Z)"
-              style={{
-                background: 'transparent',
-                border: `1px solid ${UI.border}`,
-                color: past.current.length ? UI.text : UI.border,
-                borderRadius: 6,
-                padding: '3px 8px',
-                fontSize: 11,
-                cursor: past.current.length ? 'pointer' : 'default',
-              }}
-            >
-              ↩ Undo
-            </button>
-            <button
-              type="button"
-              onClick={redo}
-              disabled={future.current.length === 0}
-              title="Redo (Ctrl+Shift+Z)"
-              style={{
-                background: 'transparent',
-                border: `1px solid ${UI.border}`,
-                color: future.current.length ? UI.text : UI.border,
-                borderRadius: 6,
-                padding: '3px 8px',
-                fontSize: 11,
-                cursor: future.current.length ? 'pointer' : 'default',
-              }}
-            >
-              ↪
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                beginGesture();
-                setLayout(DEFAULT_BLACKJACK_TABLE_LAYOUT);
-              }}
-              style={{
-                background: 'transparent',
-                border: `1px solid ${UI.border}`,
-                color: UI.dim,
-                borderRadius: 6,
-                padding: '3px 8px',
-                fontSize: 11,
-                cursor: 'pointer',
-              }}
-            >
-              Reset
-            </button>
-          </div>
-        </div>
-
-        <div style={{ display: 'flex', gap: 4, marginBottom: 14, flexWrap: 'wrap' }}>
-          {([
-            { label: 'Seat 1', sel: { kind: 'seat', index: 0 } as Selection },
-            { label: 'Seat 2', sel: { kind: 'seat', index: 1 } as Selection },
-            { label: 'Seat 3', sel: { kind: 'seat', index: 2 } as Selection },
-            { label: 'Dealer', sel: { kind: 'dealer' } as Selection },
-            { label: 'Cards', sel: { kind: 'cards' } as Selection },
-            { label: 'Sounds', sel: { kind: 'sounds' } as Selection },
-            { label: 'Motion', sel: { kind: 'motion' } as Selection },
-          ]).map(({ label, sel }) => (
-            <button
-              key={label}
-              type="button"
-              onClick={() => setSelection(sel)}
-              style={{
-                background: isSel(sel) ? UI.accent : 'transparent',
-                color: isSel(sel) ? '#fff' : UI.dim,
-                border: `1px solid ${isSel(sel) ? UI.accent : UI.border}`,
-                borderRadius: 6,
-                padding: '4px 9px',
-                fontSize: 11,
-                cursor: 'pointer',
-              }}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-
-        {selection.kind === 'seat' && (
-          <Section title={`Seat ${selection.index + 1} — or just drag it on the table`}>
-            <Knob
-              label="Across"
-              value={layout.seats[selection.index].cx}
-              min={0}
-              max={CANVAS_W}
-              onGestureStart={beginGesture}
-              onChange={(v) => setSeat(selection.index, 'cx', v)}
-            />
-            <Knob
-              label="Down"
-              value={layout.seats[selection.index].floorY}
-              min={0}
-              max={CANVAS_H}
-              onGestureStart={beginGesture}
-              onChange={(v) => setSeat(selection.index, 'floorY', v)}
-            />
-            <Knob
-              label="Tilt"
-              value={layout.seats[selection.index].angle}
-              min={-45}
-              max={45}
-              suffix="°"
-              onGestureStart={beginGesture}
-              onChange={(v) => setSeat(selection.index, 'angle', v)}
-            />
-          </Section>
-        )}
-
-        {selection.kind === 'dealer' && (
-          <Section title="Dealer — or just drag it on the table">
-            <Knob
-              label="Across"
-              value={layout.dealer.cx}
-              min={0}
-              max={CANVAS_W}
-              onGestureStart={beginGesture}
-              onChange={(v) => patch((p) => ({ ...p, dealer: { ...p.dealer, cx: v } }))}
-            />
-            <Knob
-              label="Down"
-              value={layout.dealer.top}
-              min={0}
-              max={CANVAS_H}
-              onGestureStart={beginGesture}
-              onChange={(v) => patch((p) => ({ ...p, dealer: { ...p.dealer, top: v } }))}
-            />
-          </Section>
-        )}
-
-        {selection.kind === 'cards' && (
-          <>
-            <Section title="Card back">
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                { }
-                <img
-                  src={layout.cards.backImage}
-                  alt="Card back"
-                  width={44}
-                  height={62}
-                  style={{
-                    borderRadius: 6,
-                    objectFit: 'cover',
-                    border: `1px solid ${UI.border}`,
-                    background: '#0a2540',
-                  }}
-                />
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <section className="bjtd-panel">
+              <div className="bjtd-deck-head">
+                <span className="bjtd-deck-title">
+                  Step {currentStep.n} &middot; {currentStep.label}
+                </span>
+                <span className="bjtd-deck-sub">
+                  {changeCount
+                    ? `${changeCount} thing${changeCount === 1 ? '' : 's'} customised`
+                    : 'stock table'}
+                </span>
+                <div className="bjtd-deck-actions" data-history-version={historyVersion}>
                   <button
                     type="button"
-                    onClick={() => backFileRef.current?.click()}
-                    style={{
-                      background: UI.raised,
-                      border: `1px solid ${UI.border}`,
-                      color: UI.text,
-                      borderRadius: 6,
-                      padding: '4px 10px',
-                      fontSize: 11,
-                      cursor: 'pointer',
-                    }}
+                    className="bjtd-sm-btn tiny"
+                    onClick={undo}
+                    disabled={past.current.length === 0}
+                    title="Undo (Ctrl+Z)"
                   >
-                    Choose image…
+                    &#8617; Undo
                   </button>
                   <button
                     type="button"
+                    className="bjtd-sm-btn tiny"
+                    onClick={redo}
+                    disabled={future.current.length === 0}
+                    title="Redo (Ctrl+Shift+Z)"
+                  >
+                    &#8618;
+                  </button>
+                  <button
+                    type="button"
+                    className="bjtd-sm-btn tiny"
+                    title="Back to the stock table"
                     onClick={() => {
                       beginGesture();
-                      patch((p) => ({
-                        ...p,
-                        cards: { ...p.cards, backImage: DEFAULT_BLACKJACK_TABLE_LAYOUT.cards.backImage },
-                      }));
-                    }}
-                    style={{
-                      background: 'transparent',
-                      border: 'none',
-                      color: UI.dim,
-                      fontSize: 10,
-                      cursor: 'pointer',
-                      textAlign: 'left',
-                      padding: 0,
+                      setLayout(DEFAULT_BLACKJACK_TABLE_LAYOUT);
                     }}
                   >
-                    reset to default
+                    Reset
                   </button>
                 </div>
-                <input
-                  ref={backFileRef}
-                  type="file"
-                  accept="image/*"
-                  style={{ display: 'none' }}
-                  onChange={(e) => pickCardBack(e.target.files?.[0] ?? null)}
-                />
               </div>
-              <p style={{ fontSize: 10, color: UI.dim, marginTop: 6, lineHeight: 1.5 }}>
-                Local preview only for now — a picked image lives in this tab until saved themes land
-                (that&apos;s when it gets uploaded and shared).
-              </p>
-            </Section>
-            <Section title="Stacking">
-              <Knob
-                label="Dealer"
-                value={layout.cards.overlap.dealer}
-                min={-60}
-                max={20}
-                suffix="px"
-                onGestureStart={beginGesture}
-                onChange={(v) =>
-                  patch((p) => ({ ...p, cards: { ...p.cards, overlap: { ...p.cards.overlap, dealer: v } } }))
-                }
-              />
-              <Knob
-                label="Player"
-                value={layout.cards.overlap.player}
-                min={-60}
-                max={20}
-                suffix="px"
-                onGestureStart={beginGesture}
-                onChange={(v) =>
-                  patch((p) => ({ ...p, cards: { ...p.cards, overlap: { ...p.cards.overlap, player: v } } }))
-                }
-              />
-            </Section>
-            <Section title="Card size (dealer)">
-              <Knob
-                label="Width"
-                value={layout.cards.sizes.normal.w}
-                min={40}
-                max={160}
-                suffix="px"
-                onGestureStart={beginGesture}
-                onChange={(v) =>
-                  patch((p) => ({
-                    ...p,
-                    cards: { ...p.cards, sizes: { ...p.cards.sizes, normal: { ...p.cards.sizes.normal, w: v } } },
-                  }))
-                }
-              />
-              <Knob
-                label="Height"
-                value={layout.cards.sizes.normal.h}
-                min={56}
-                max={224}
-                suffix="px"
-                onGestureStart={beginGesture}
-                onChange={(v) =>
-                  patch((p) => ({
-                    ...p,
-                    cards: { ...p.cards, sizes: { ...p.cards.sizes, normal: { ...p.cards.sizes.normal, h: v } } },
-                  }))
-                }
-              />
-            </Section>
-            <Section title="Card size (seats)">
-              <Knob
-                label="Width"
-                value={layout.cards.sizes.small.w}
-                min={32}
-                max={120}
-                suffix="px"
-                onGestureStart={beginGesture}
-                onChange={(v) =>
-                  patch((p) => ({
-                    ...p,
-                    cards: { ...p.cards, sizes: { ...p.cards.sizes, small: { ...p.cards.sizes.small, w: v } } },
-                  }))
-                }
-              />
-              <Knob
-                label="Height"
-                value={layout.cards.sizes.small.h}
-                min={44}
-                max={168}
-                suffix="px"
-                onGestureStart={beginGesture}
-                onChange={(v) =>
-                  patch((p) => ({
-                    ...p,
-                    cards: { ...p.cards, sizes: { ...p.cards.sizes, small: { ...p.cards.sizes.small, h: v } } },
-                  }))
-                }
-              />
-            </Section>
-          </>
-        )}
 
-        {selection.kind === 'sounds' && (
-          <p style={{ fontSize: 11, color: UI.dim, lineHeight: 1.6 }}>
-            Sound studio is below the table — it needs the full width.
-          </p>
-        )}
+              {/* ── FINE-TUNE: where everything sits ── */}
+              {tab === 'tune' && (
+                <div>
+                  <p className="bjtd-hint" style={{ marginTop: 0 }}>
+                    <b>Just drag things on the felt</b> — seats and the dealer&apos;s hand move where you drop
+                    them, the &#10227; handle tilts a seat, arrow keys nudge (&#8679; = &times;10). The sliders
+                    here are only for exact numbers.
+                  </p>
+                  <div className="bjtd-ctl" style={{ marginTop: 12 }}>
+                    <div className="bjtd-seg">
+                      {[0, 1, 2].map((i) => (
+                        <button
+                          key={i}
+                          type="button"
+                          className={selection?.kind === 'seat' && selection.index === i ? 'on' : ''}
+                          onClick={() => setSelection({ kind: 'seat', index: i })}
+                        >
+                          Seat {i + 1}
+                        </button>
+                      ))}
+                      <button
+                        type="button"
+                        className={selection?.kind === 'dealer' ? 'on' : ''}
+                        onClick={() => setSelection({ kind: 'dealer' })}
+                      >
+                        Dealer
+                      </button>
+                    </div>
+                  </div>
+                  {selection?.kind === 'dealer' ? (
+                    <>
+                      <Knob
+                        label="Across"
+                        value={layout.dealer.cx}
+                        min={0}
+                        max={CANVAS_W}
+                        onGestureStart={beginGesture}
+                        onChange={(v) => patch((p) => ({ ...p, dealer: { ...p.dealer, cx: v } }))}
+                      />
+                      <Knob
+                        label="Down"
+                        value={layout.dealer.top}
+                        min={0}
+                        max={CANVAS_H}
+                        onGestureStart={beginGesture}
+                        onChange={(v) => patch((p) => ({ ...p, dealer: { ...p.dealer, top: v } }))}
+                      />
+                    </>
+                  ) : (
+                    <>
+                      <Knob
+                        label="Across"
+                        value={layout.seats[selectedSeatIndex].cx}
+                        min={0}
+                        max={CANVAS_W}
+                        onGestureStart={beginGesture}
+                        onChange={(v) => setSeat(selectedSeatIndex, 'cx', v)}
+                      />
+                      <Knob
+                        label="Down"
+                        value={layout.seats[selectedSeatIndex].floorY}
+                        min={0}
+                        max={CANVAS_H}
+                        onGestureStart={beginGesture}
+                        onChange={(v) => setSeat(selectedSeatIndex, 'floorY', v)}
+                      />
+                      <Knob
+                        label="Tilt"
+                        value={layout.seats[selectedSeatIndex].angle}
+                        min={-45}
+                        max={45}
+                        suffix="&deg;"
+                        onGestureStart={beginGesture}
+                        onChange={(v) => setSeat(selectedSeatIndex, 'angle', v)}
+                      />
+                    </>
+                  )}
+                  {stepNav}
+                </div>
+              )}
 
-        {selection.kind === 'motion' && (
-          <>
-            <Section title="Deal-in style — click one to watch it">
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginBottom: 4 }}>
-                {DEAL_IN_PRESETS.map((p) => {
-                  const active = activeDealInPresetId(layout.motion.dealIn) === p.id;
-                  return (
+              {/* ── TABLE ART ── */}
+              {tab === 'art' && (
+                <div>
+                  <p className="bjtd-hint" style={{ marginTop: 0 }}>
+                    <b>Start with your table.</b> Upload your own art or pick a branded table — it fills the
+                    whole board, and everything else (seats, cards, sounds) builds on top of it. The board is
+                    always 16:9, so your image always fits.
+                  </p>
+
+                  <button
+                    type="button"
+                    className="bjtd-art-drop"
+                    onClick={() => artFileRef.current?.click()}
+                  >
+                    <span className="bjtd-art-drop-big">Upload your table art</span>
+                    <span className="bjtd-art-drop-sub">PNG / JPG / WEBP &middot; landscape works best</span>
+                  </button>
+                  <input
+                    ref={artFileRef}
+                    type="file"
+                    accept="image/*"
+                    style={{ display: 'none' }}
+                    onChange={(e) => {
+                      pickTableArt(e.target.files?.[0] ?? null);
+                      e.target.value = '';
+                    }}
+                  />
+
+                  <div className="bjtd-ctl" style={{ margin: '14px 0 6px' }}>
+                    <div className="bjtd-ctl-lbl">
+                      <span>Or pick a branded table</span>
+                      {artIsUpload && <span className="bjtd-val">using your upload</span>}
+                    </div>
+                  </div>
+                  <div className="bjtd-art-grid">
                     <button
-                      key={p.id}
                       type="button"
-                      title={p.hint}
-                      onClick={() => {
-                        beginGesture();
-                        patch((prev) => ({
-                          ...prev,
-                          motion: { ...prev.motion, dealIn: { ...p.motion } },
-                        }));
-                        runDealPreview();
-                      }}
-                      style={{
-                        background: active ? UI.accent : UI.raised,
-                        color: active ? '#fff' : UI.text,
-                        border: `1px solid ${active ? UI.accent : UI.border}`,
-                        borderRadius: 6,
-                        padding: '4px 9px',
-                        fontSize: 11,
-                        cursor: 'pointer',
-                      }}
+                      className={`bjtd-art-card${layout.table.image === '' ? ' on' : ''}`}
+                      title="Whatever background this table is configured with"
+                      onClick={() => setTableArt('')}
                     >
-                      {p.label}
+                      <img src={DEFAULT_TABLE_ART} alt="" />
+                      <span className="bjtd-art-nm">Table default</span>
                     </button>
-                  );
-                })}
-              </div>
-            </Section>
-            <Section title="Collect style">
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginBottom: 4 }}>
-                {CLEAR_OUT_PRESETS.map((p) => {
-                  const active = activeClearOutPresetId(layout.motion.clearOut) === p.id;
-                  return (
-                    <button
-                      key={p.id}
-                      type="button"
-                      title={p.hint}
-                      onClick={() => {
-                        beginGesture();
-                        patch((prev) => ({
-                          ...prev,
-                          motion: { ...prev.motion, clearOut: { ...p.motion } },
-                        }));
-                        runDealPreview();
-                      }}
-                      style={{
-                        background: active ? UI.accent : UI.raised,
-                        color: active ? '#fff' : UI.text,
-                        border: `1px solid ${active ? UI.accent : UI.border}`,
-                        borderRadius: 6,
-                        padding: '4px 9px',
-                        fontSize: 11,
-                        cursor: 'pointer',
-                      }}
-                    >
-                      {p.label}
-                    </button>
-                  );
-                })}
-              </div>
-              <button
-                type="button"
-                onClick={runDealPreview}
-                disabled={dealPreview !== null}
-                style={{
-                  background: UI.raised,
-                  border: `1px solid ${UI.border}`,
-                  color: dealPreview ? UI.dim : UI.text,
-                  borderRadius: 6,
-                  padding: '5px 10px',
-                  fontSize: 11,
-                  cursor: dealPreview ? 'default' : 'pointer',
-                  width: '100%',
-                }}
-              >
-                {dealPreview ? 'Playing…' : '▶ Preview deal on the table'}
-              </button>
-            </Section>
-            <Section title="Deal in — fine-tune">
-              <Knob
-                label="From X"
-                value={layout.motion.dealIn.fromX}
-                min={-400}
-                max={400}
-                suffix="px"
-                onGestureStart={beginGesture}
-                onChange={(v) =>
-                  patch((p) => ({ ...p, motion: { ...p.motion, dealIn: { ...p.motion.dealIn, fromX: v } } }))
-                }
-              />
-              <Knob
-                label="From Y"
-                value={layout.motion.dealIn.fromY}
-                min={-400}
-                max={400}
-                suffix="px"
-                onGestureStart={beginGesture}
-                onChange={(v) =>
-                  patch((p) => ({ ...p, motion: { ...p.motion, dealIn: { ...p.motion.dealIn, fromY: v } } }))
-                }
-              />
-              <Knob
-                label="Spin"
-                value={layout.motion.dealIn.fromRot}
-                min={-180}
-                max={180}
-                suffix="°"
-                onGestureStart={beginGesture}
-                onChange={(v) =>
-                  patch((p) => ({ ...p, motion: { ...p.motion, dealIn: { ...p.motion.dealIn, fromRot: v } } }))
-                }
-              />
-              <Knob
-                label="Start size"
-                value={layout.motion.dealIn.fromScale}
-                min={0.3}
-                max={1.6}
-                step={0.05}
-                suffix="×"
-                onGestureStart={beginGesture}
-                onChange={(v) =>
-                  patch((p) => ({ ...p, motion: { ...p.motion, dealIn: { ...p.motion.dealIn, fromScale: v } } }))
-                }
-              />
-              <Knob
-                label="Duration"
-                value={layout.motion.dealIn.durationMs}
-                min={100}
-                max={2000}
-                step={25}
-                suffix="ms"
-                onGestureStart={beginGesture}
-                onChange={(v) =>
-                  patch((p) => ({ ...p, motion: { ...p.motion, dealIn: { ...p.motion.dealIn, durationMs: v } } }))
-                }
-              />
-              <Knob
-                label="Stagger"
-                value={layout.motion.dealIn.staggerMs}
-                min={0}
-                max={800}
-                step={10}
-                suffix="ms"
-                onGestureStart={beginGesture}
-                onChange={(v) =>
-                  patch((p) => ({ ...p, motion: { ...p.motion, dealIn: { ...p.motion.dealIn, staggerMs: v } } }))
-                }
-              />
-            </Section>
-            <Section title="Collect — fine-tune">
-              <Knob
-                label="To X"
-                value={layout.motion.clearOut.toX}
-                min={-400}
-                max={400}
-                suffix="px"
-                onGestureStart={beginGesture}
-                onChange={(v) =>
-                  patch((p) => ({ ...p, motion: { ...p.motion, clearOut: { ...p.motion.clearOut, toX: v } } }))
-                }
-              />
-              <Knob
-                label="To Y"
-                value={layout.motion.clearOut.toY}
-                min={-400}
-                max={400}
-                suffix="px"
-                onGestureStart={beginGesture}
-                onChange={(v) =>
-                  patch((p) => ({ ...p, motion: { ...p.motion, clearOut: { ...p.motion.clearOut, toY: v } } }))
-                }
-              />
-              <Knob
-                label="Scale"
-                value={layout.motion.clearOut.scale}
-                min={0}
-                max={2}
-                step={0.05}
-                suffix="×"
-                onGestureStart={beginGesture}
-                onChange={(v) =>
-                  patch((p) => ({ ...p, motion: { ...p.motion, clearOut: { ...p.motion.clearOut, scale: v } } }))
-                }
-              />
-              <Knob
-                label="Duration"
-                value={layout.motion.clearOut.durationMs}
-                min={100}
-                max={2000}
-                step={25}
-                suffix="ms"
-                onGestureStart={beginGesture}
-                onChange={(v) =>
-                  patch((p) => ({
-                    ...p,
-                    motion: { ...p.motion, clearOut: { ...p.motion.clearOut, durationMs: v } },
-                  }))
-                }
-              />
-            </Section>
-            <p style={{ fontSize: 11, color: UI.dim, lineHeight: 1.5 }}>
-              Click a style above (or ▶ Preview) to watch the cards collect and re-deal with
-              these exact settings.
-            </p>
-          </>
-        )}
+                    {BLACKJACK_IMAGE_BACKGROUNDS.map((bg) => (
+                      <button
+                        key={bg.id}
+                        type="button"
+                        className={`bjtd-art-card${layout.table.image === bg.src ? ' on' : ''}`}
+                        title={bg.label}
+                        onClick={() => setTableArt(bg.src)}
+                      >
+                        <img src={bg.src} alt="" loading="lazy" />
+                        <span className="bjtd-art-nm">{bg.label}</span>
+                      </button>
+                    ))}
+                  </div>
 
-        <div style={{ borderTop: `1px solid ${UI.border}`, paddingTop: 12, marginTop: 8 }}>
-          <div style={{ display: 'flex', alignItems: 'center', marginBottom: 6 }}>
-            <span style={{ fontSize: 11, fontWeight: 700 }}>Overrides</span>
-            <button
-              type="button"
-              onClick={copyJson}
-              style={{
-                marginLeft: 'auto',
-                background: UI.raised,
-                border: `1px solid ${UI.border}`,
-                color: UI.text,
-                borderRadius: 6,
-                padding: '3px 9px',
-                fontSize: 11,
-                cursor: 'pointer',
-              }}
-            >
-              {copied ? 'Copied' : 'Copy JSON'}
-            </button>
+                  {stepNav}
+                </div>
+              )}
+
+              {/* ── CARDS: make them sit right on YOUR art ── */}
+              {tab === 'cards' && (
+                <div>
+                  <p className="bjtd-hint" style={{ marginTop: 0 }}>
+                    <b>Make the cards sit on your table.</b> Most table art is drawn at an angle, not straight
+                    down — pick the lean that matches yours and the hands tilt into the scene. Then dress the
+                    cards with an effect and your own card back.
+                  </p>
+
+                  <div className="bjtd-ctl" style={{ margin: '12px 0 6px' }}>
+                    <div className="bjtd-ctl-lbl">
+                      <span>Card angle</span>
+                    </div>
+                  </div>
+                  <div className="bjtd-mech-grid">
+                    {CARD_ANGLE_PRESETS.map((p) => {
+                      const active = activeCardAnglePresetId(layout.cards.pitch) === p.id;
+                      return (
+                        <button
+                          key={p.id}
+                          type="button"
+                          title={p.hint}
+                          className={`bjtd-mech-card${active ? ' on' : ''}`}
+                          style={{ '--m-pitch': `${p.pitch.player}deg` } as React.CSSProperties}
+                          onClick={() => {
+                            beginGesture();
+                            patch((prev) => ({
+                              ...prev,
+                              cards: { ...prev.cards, pitch: { ...p.pitch } },
+                            }));
+                          }}
+                        >
+                          <span className="bjtd-mini">
+                            <span className="bjtd-mini-card tilt" />
+                          </span>
+                          <span className="bjtd-mech-nm">{p.label}</span>
+                          <span className="bjtd-mech-dsc">{p.hint}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <div className="bjtd-ctl" style={{ margin: '16px 0 6px' }}>
+                    <div className="bjtd-ctl-lbl">
+                      <span>Card effect</span>
+                    </div>
+                  </div>
+                  <div className="bjtd-mech-grid">
+                    {CARD_FX_PRESETS.map((p) => {
+                      const active = activeCardFxPresetId(layout.cards.restShadow) === p.id;
+                      return (
+                        <button
+                          key={p.id}
+                          type="button"
+                          title={p.hint}
+                          className={`bjtd-mech-card${active ? ' on' : ''}`}
+                          onClick={() => {
+                            beginGesture();
+                            patch((prev) => ({
+                              ...prev,
+                              cards: { ...prev.cards, restShadow: p.restShadow, hoverShadow: p.hoverShadow },
+                            }));
+                          }}
+                        >
+                          <span className="bjtd-mini">
+                            <span className="bjtd-mini-card" style={{ boxShadow: p.restShadow }} />
+                          </span>
+                          <span className="bjtd-mech-nm">{p.label}</span>
+                          <span className="bjtd-mech-dsc">{p.hint}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <div className="bjtd-ctl" style={{ margin: '18px 0 0' }}>
+                    <div className="bjtd-ctl-lbl">
+                      <span>Card back</span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                      <img
+                        src={layout.cards.backImage}
+                        alt="Card back"
+                        width={44}
+                        height={62}
+                        style={{
+                          borderRadius: 6,
+                          objectFit: 'cover',
+                          border: '1px solid rgba(34,211,238,0.25)',
+                          background: '#0a2540',
+                        }}
+                      />
+                      <div className="bjtd-btn-row" style={{ marginTop: 0 }}>
+                        <button type="button" className="bjtd-sm-btn" onClick={() => backFileRef.current?.click()}>
+                          Upload image
+                        </button>
+                        <button
+                          type="button"
+                          className="bjtd-sm-btn"
+                          onClick={() => {
+                            beginGesture();
+                            patch((p) => ({
+                              ...p,
+                              cards: { ...p.cards, backImage: DEFAULT_BLACKJACK_TABLE_LAYOUT.cards.backImage },
+                            }));
+                          }}
+                        >
+                          Reset
+                        </button>
+                      </div>
+                      <input
+                        ref={backFileRef}
+                        type="file"
+                        accept="image/*"
+                        style={{ display: 'none' }}
+                        onChange={(e) => pickCardBack(e.target.files?.[0] ?? null)}
+                      />
+                    </div>
+                    <p className="bjtd-hint">Shown on every face-down card.</p>
+                  </div>
+
+                  <details style={{ marginTop: 16 }}>
+                    <summary
+                      className="bjtd-ctl-lbl"
+                      style={{ cursor: 'pointer', display: 'flex', gap: 8, listStyle: 'none' }}
+                    >
+                      <span>Fine-tune the lean &#9662;</span>
+                    </summary>
+                    <div style={{ marginTop: 10 }}>
+                      <Knob
+                        label="Dealer hand lean"
+                        value={layout.cards.pitch.dealer}
+                        min={0}
+                        max={60}
+                        suffix="&deg;"
+                        onGestureStart={beginGesture}
+                        onChange={(v) =>
+                          patch((p) => ({
+                            ...p,
+                            cards: { ...p.cards, pitch: { ...p.cards.pitch, dealer: v } },
+                          }))
+                        }
+                      />
+                      <Knob
+                        label="Player hands lean"
+                        value={layout.cards.pitch.player}
+                        min={0}
+                        max={60}
+                        suffix="&deg;"
+                        onGestureStart={beginGesture}
+                        onChange={(v) =>
+                          patch((p) => ({
+                            ...p,
+                            cards: { ...p.cards, pitch: { ...p.cards.pitch, player: v } },
+                          }))
+                        }
+                      />
+                      <p className="bjtd-hint">
+                        The dealer sits deeper in the scene, so a smaller dealer lean usually looks right.
+                      </p>
+                    </div>
+                  </details>
+                  {stepNav}
+                </div>
+              )}
+
+              {/* ── ANIMATIONS ── */}
+              {tab === 'anim' && (
+                <div>
+                  <p className="bjtd-hint" style={{ marginTop: 0 }}>
+                    <b>Pick a dealing style.</b> Each card shows a live example — click one and the real table
+                    re-deals with it. Fine-tune knobs are underneath if a style is almost right.
+                  </p>
+                  <div className="bjtd-ctl" style={{ margin: '12px 0 6px' }}>
+                    <div className="bjtd-ctl-lbl">
+                      <span>Cards dealt in</span>
+                    </div>
+                  </div>
+                  <div className="bjtd-mech-grid">
+                    {DEAL_IN_PRESETS.map((p) => {
+                      const active = activeDealInPresetId(layout.motion.dealIn) === p.id;
+                      const m = p.motion;
+                      return (
+                        <button
+                          key={p.id}
+                          type="button"
+                          title={p.hint}
+                          className={`bjtd-mech-card${active ? ' on' : ''}`}
+                          style={
+                            {
+                              '--m-x': `${clamp(m.fromX * 0.22, -70, 70)}px`,
+                              '--m-y': `${clamp(m.fromY * 0.22, -60, 60)}px`,
+                              '--m-rot': `${m.fromRot}deg`,
+                              '--m-scale': String(m.fromScale),
+                              '--m-ease': m.easing,
+                              '--m-loop': `${Math.max(2000, m.durationMs * 2 + 1400)}ms`,
+                              '--m-lag': `${Math.min(m.staggerMs, 400)}ms`,
+                            } as React.CSSProperties
+                          }
+                          onClick={() => {
+                            beginGesture();
+                            patch((prev) => ({ ...prev, motion: { ...prev.motion, dealIn: { ...m } } }));
+                            runDealPreview();
+                          }}
+                        >
+                          <span className="bjtd-mini">
+                            <span className="bjtd-mini-card in two" />
+                            <span className="bjtd-mini-card in" />
+                          </span>
+                          <span className="bjtd-mech-nm">{p.label}</span>
+                          <span className="bjtd-mech-dsc">{p.hint}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <div className="bjtd-ctl" style={{ margin: '16px 0 6px' }}>
+                    <div className="bjtd-ctl-lbl">
+                      <span>Cards collected</span>
+                    </div>
+                  </div>
+                  <div className="bjtd-mech-grid">
+                    {CLEAR_OUT_PRESETS.map((p) => {
+                      const active = activeClearOutPresetId(layout.motion.clearOut) === p.id;
+                      const m = p.motion;
+                      return (
+                        <button
+                          key={p.id}
+                          type="button"
+                          title={p.hint}
+                          className={`bjtd-mech-card${active ? ' on' : ''}`}
+                          style={
+                            {
+                              '--m-x': `${clamp(m.toX * 0.22, -70, 70)}px`,
+                              '--m-y': `${clamp(m.toY * 0.22, -60, 60)}px`,
+                              '--m-scale': String(m.scale),
+                              '--m-ease': m.easing,
+                              '--m-loop': `${Math.max(2000, m.durationMs * 2 + 1400)}ms`,
+                              '--m-lag': `${Math.min(Math.max(m.dealerStaggerMs, m.playerStaggerMs), 400)}ms`,
+                            } as React.CSSProperties
+                          }
+                          onClick={() => {
+                            beginGesture();
+                            patch((prev) => ({ ...prev, motion: { ...prev.motion, clearOut: { ...m } } }));
+                            runDealPreview();
+                          }}
+                        >
+                          <span className="bjtd-mini">
+                            <span className="bjtd-mini-card out two" />
+                            <span className="bjtd-mini-card out" />
+                          </span>
+                          <span className="bjtd-mech-nm">{p.label}</span>
+                          <span className="bjtd-mech-dsc">{p.hint}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <details style={{ marginTop: 16 }}>
+                    <summary
+                      className="bjtd-ctl-lbl"
+                      style={{ cursor: 'pointer', display: 'flex', gap: 8, listStyle: 'none' }}
+                    >
+                      <span>Fine-tune the current styles &#9662;</span>
+                    </summary>
+                    <div style={{ marginTop: 10 }}>
+                      <div className="bjtd-grid2">
+                        <Knob
+                          label="Deal — from across"
+                          value={layout.motion.dealIn.fromX}
+                          min={-400}
+                          max={400}
+                          suffix="px"
+                          onGestureStart={beginGesture}
+                          onChange={(v) =>
+                            patch((p) => ({ ...p, motion: { ...p.motion, dealIn: { ...p.motion.dealIn, fromX: v } } }))
+                          }
+                        />
+                        <Knob
+                          label="Deal — from above"
+                          value={layout.motion.dealIn.fromY}
+                          min={-400}
+                          max={400}
+                          suffix="px"
+                          onGestureStart={beginGesture}
+                          onChange={(v) =>
+                            patch((p) => ({ ...p, motion: { ...p.motion, dealIn: { ...p.motion.dealIn, fromY: v } } }))
+                          }
+                        />
+                        <Knob
+                          label="Deal — spin"
+                          value={layout.motion.dealIn.fromRot}
+                          min={-180}
+                          max={180}
+                          suffix="&deg;"
+                          onGestureStart={beginGesture}
+                          onChange={(v) =>
+                            patch((p) => ({
+                              ...p,
+                              motion: { ...p.motion, dealIn: { ...p.motion.dealIn, fromRot: v } },
+                            }))
+                          }
+                        />
+                        <Knob
+                          label="Deal — start size"
+                          value={layout.motion.dealIn.fromScale}
+                          min={0.3}
+                          max={1.6}
+                          step={0.05}
+                          suffix="&times;"
+                          onGestureStart={beginGesture}
+                          onChange={(v) =>
+                            patch((p) => ({
+                              ...p,
+                              motion: { ...p.motion, dealIn: { ...p.motion.dealIn, fromScale: v } },
+                            }))
+                          }
+                        />
+                        <Knob
+                          label="Deal — speed"
+                          value={layout.motion.dealIn.durationMs}
+                          min={100}
+                          max={2000}
+                          step={25}
+                          suffix="ms"
+                          onGestureStart={beginGesture}
+                          onChange={(v) =>
+                            patch((p) => ({
+                              ...p,
+                              motion: { ...p.motion, dealIn: { ...p.motion.dealIn, durationMs: v } },
+                            }))
+                          }
+                        />
+                        <Knob
+                          label="Deal — gap between cards"
+                          value={layout.motion.dealIn.staggerMs}
+                          min={0}
+                          max={800}
+                          step={10}
+                          suffix="ms"
+                          onGestureStart={beginGesture}
+                          onChange={(v) =>
+                            patch((p) => ({
+                              ...p,
+                              motion: { ...p.motion, dealIn: { ...p.motion.dealIn, staggerMs: v } },
+                            }))
+                          }
+                        />
+                        <Knob
+                          label="Collect — across"
+                          value={layout.motion.clearOut.toX}
+                          min={-400}
+                          max={400}
+                          suffix="px"
+                          onGestureStart={beginGesture}
+                          onChange={(v) =>
+                            patch((p) => ({
+                              ...p,
+                              motion: { ...p.motion, clearOut: { ...p.motion.clearOut, toX: v } },
+                            }))
+                          }
+                        />
+                        <Knob
+                          label="Collect — up/down"
+                          value={layout.motion.clearOut.toY}
+                          min={-400}
+                          max={400}
+                          suffix="px"
+                          onGestureStart={beginGesture}
+                          onChange={(v) =>
+                            patch((p) => ({
+                              ...p,
+                              motion: { ...p.motion, clearOut: { ...p.motion.clearOut, toY: v } },
+                            }))
+                          }
+                        />
+                        <Knob
+                          label="Collect — end size"
+                          value={layout.motion.clearOut.scale}
+                          min={0}
+                          max={2}
+                          step={0.05}
+                          suffix="&times;"
+                          onGestureStart={beginGesture}
+                          onChange={(v) =>
+                            patch((p) => ({
+                              ...p,
+                              motion: { ...p.motion, clearOut: { ...p.motion.clearOut, scale: v } },
+                            }))
+                          }
+                        />
+                        <Knob
+                          label="Collect — speed"
+                          value={layout.motion.clearOut.durationMs}
+                          min={100}
+                          max={2000}
+                          step={25}
+                          suffix="ms"
+                          onGestureStart={beginGesture}
+                          onChange={(v) =>
+                            patch((p) => ({
+                              ...p,
+                              motion: { ...p.motion, clearOut: { ...p.motion.clearOut, durationMs: v } },
+                            }))
+                          }
+                        />
+                      </div>
+                    </div>
+                  </details>
+                  {stepNav}
+                </div>
+              )}
+
+              {/* ── SOUND ── */}
+              {tab === 'sound' && (
+                <div className="bjsnd">
+                  <p className="bjtd-hint" style={{ marginTop: 0, marginBottom: 12 }}>
+                    <b>Pick a sound style</b> — it re-voices every table event at once and plays a taste.
+                    Click a tile to restyle, replace, record or mute one sound. Audio is pure presentation —
+                    it never touches the cards.
+                  </p>
+                  <div className="bjsnd-preset-row" style={{ marginBottom: 12 }}>
+                    <span className="bjsnd-preset-cap">Whole table</span>
+                    {SOUND_FX_PRESETS.map((preset) => (
+                      <button
+                        key={preset.id}
+                        type="button"
+                        title={`${preset.hint} — applies to every event`}
+                        className={`bjsnd-btn${activeWholeTableStyleId === preset.id ? ' on' : ''}`}
+                        onClick={() => {
+                          setSoundFx((prev) => {
+                            const next: SoundFxMap = {};
+                            for (const info of BLACKJACK_SOUND_EVENT_INFO) {
+                              const sample = fxFor(prev, info.key).sample;
+                              next[info.key] = fxFromPreset(preset, sample);
+                            }
+                            return next;
+                          });
+                          auditionSoon('cardDeal');
+                        }}
+                      >
+                        {preset.label}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="bjsnd-grid">
+                    {BLACKJACK_SOUND_EVENT_INFO.map((info) => {
+                      const override = soundOverrides[info.key];
+                      const isMuted = Array.isArray(override) && override.length === 0;
+                      const hasCustomFile = Array.isArray(override) && override.length > 0;
+                      return (
+                        <SoundEventTile
+                          key={info.key}
+                          info={info}
+                          fx={fxFor(soundFx, info.key)}
+                          hasCustomFile={hasCustomFile}
+                          fxTweaked={isFxCustomised(soundFx, info.key)}
+                          isMuted={isMuted}
+                          customLabel={customSoundLabels[info.key]}
+                          autoPlay={autoPlaySound}
+                          expanded={expandedSound === info.key}
+                          playing={playingSound === info.key}
+                          sourceUrl={pickSound(effectiveSoundMap, info.key)}
+                          onToggleExpand={() =>
+                            setExpandedSound((cur) => (cur === info.key ? null : info.key))
+                          }
+                          onPlay={() => previewSound(info.key)}
+                          onUpload={(file) => uploadSound(info.key, file)}
+                          onOpenLibrary={() => setLibraryFor(info.key)}
+                          onToggleRecord={() => void toggleRecord(info.key)}
+                          recording={recordingFor === info.key}
+                          onToggleMute={() =>
+                            setSoundOverrides((prev) => {
+                              const next = { ...prev };
+                              if (isMuted) {
+                                delete next[info.key];
+                                requestAutoPlay(info.key); // unmuting is worth hearing
+                              } else {
+                                next[info.key] = [];
+                              }
+                              return next;
+                            })
+                          }
+                          onReset={() => resetSound(info.key)}
+                          onToggleAutoPlay={() => setAutoPlaySound((v) => !v)}
+                          onFxChange={(patchFx) => patchSoundFx(info.key, patchFx)}
+                          onGestureStart={beginGesture}
+                        />
+                      );
+                    })}
+                  </div>
+                  <p className="bjtd-hint">
+                    Uploads and styles are local previews until you save in step 5 — that&apos;s when they get
+                    stored and heard by everyone at the table.
+                  </p>
+                  {stepNav}
+                </div>
+              )}
+
+              {/* ── SAVE & SHARE ── */}
+              {tab === 'share' && (
+                <div>
+                  <p className="bjtd-hint" style={{ marginTop: 0 }}>
+                    <b>Save this design to a real table.</b> Everything — seats, cards, animations, sounds — is
+                    stored with the table, and every player who joins it sees and hears your design.
+                  </p>
+                  {!publish.address ? (
+                    <p className="bjtd-msg dim" style={{ marginTop: 14 }}>
+                      Connect an admin wallet on the site to load or save table themes.
+                    </p>
+                  ) : (
+                    <div style={{ marginTop: 14 }}>
+                      <div className="bjtd-ctl">
+                        <div className="bjtd-ctl-lbl">
+                          <span>Table</span>
+                          <span className="bjtd-val">
+                            {publish.tables.length} table{publish.tables.length === 1 ? '' : 's'}
+                          </span>
+                        </div>
+                        <select
+                          className="bjtd-sel"
+                          style={{ width: '100%' }}
+                          value={publishTableId}
+                          onChange={(e) => setPublishTableId(e.target.value)}
+                        >
+                          <option value="">Choose a table&hellip;</option>
+                          {publish.tables.map((t) => (
+                            <option key={t.id} value={t.id}>
+                              {t.id.slice(0, 8)} &middot; {t.status}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="bjtd-btn-row">
+                        <button
+                          type="button"
+                          className="bjtd-sm-btn go"
+                          onClick={() => void handleSave()}
+                          disabled={!publishTableId || publish.status.kind === 'busy'}
+                        >
+                          Save to table
+                        </button>
+                        <button
+                          type="button"
+                          className="bjtd-sm-btn"
+                          onClick={() => void handleLoad()}
+                          disabled={!publishTableId || publish.status.kind === 'busy'}
+                        >
+                          Load saved theme
+                        </button>
+                      </div>
+                      <div
+                        className={`bjtd-msg ${
+                          publish.status.kind === 'error' ? 'err' : publish.status.kind === 'ok' ? 'ok' : 'dim'
+                        }`}
+                      >
+                        {publish.status.kind !== 'idle'
+                          ? publish.status.note
+                          : (publish.tablesError ?? '')}
+                      </div>
+                    </div>
+                  )}
+                  <details style={{ marginTop: 16 }}>
+                    <summary
+                      className="bjtd-ctl-lbl"
+                      style={{ cursor: 'pointer', display: 'flex', gap: 8, listStyle: 'none' }}
+                    >
+                      <span>For nerds: the theme as JSON &#9662;</span>
+                    </summary>
+                    <textarea
+                      className="bjtd-json-ta"
+                      readOnly
+                      spellCheck={false}
+                      value={changeCount ? JSON.stringify(diff, null, 2) : '// unchanged from the stock table'}
+                      style={{ marginTop: 10 }}
+                    />
+                    <div className="bjtd-btn-row">
+                      <button type="button" className="bjtd-sm-btn" onClick={copyJson}>
+                        {copied ? 'Copied' : 'Copy JSON'}
+                      </button>
+                    </div>
+                  </details>
+                  {stepNav}
+                </div>
+              )}
+            </section>
           </div>
-          <pre
-            style={{
-              background: UI.bg,
-              border: `1px solid ${UI.border}`,
-              borderRadius: 6,
-              padding: 8,
-              fontSize: 10,
-              lineHeight: 1.45,
-              maxHeight: 200,
-              overflow: 'auto',
-              margin: 0,
-              color: UI.dim,
-            }}
-          >
-            {changeCount ? JSON.stringify(diff, null, 2) : '// unchanged from defaults'}
-          </pre>
-          <p style={{ fontSize: 10, color: UI.dim, marginTop: 8, lineHeight: 1.5 }}>
-            Only what differs from the shipped layout. This is the shape a saved table theme will
-            carry once themes are persisted per table.
-          </p>
+
+          {/* ── Live table — pinned preview ───────────────────────────────── */}
+          <div className="bjtd-col-preview">
+            <div className="bjtd-sticky">
+              <section className="bjtd-panel bjtd-board-panel">
+                <div className="bjtd-board-hud">
+                  {DESIGN_SCENARIOS.map((s) => (
+                    <button
+                      key={s.id}
+                      type="button"
+                      title={s.description}
+                      className={`bjtd-scn-chip${s.id === scenarioId ? ' on' : ''}`}
+                      onClick={() => setScenarioId(s.id)}
+                    >
+                      {s.name}
+                    </button>
+                  ))}
+                  <label className="bjtd-chk">
+                    <input
+                      type="checkbox"
+                      checked={showGuides}
+                      onChange={(e) => setShowGuides(e.target.checked)}
+                    />
+                    Guides
+                  </label>
+                </div>
+
+                {/* Scaled stage. The wrapper reserves the scaled height so the page flows. */}
+                <div ref={wrapRef} style={{ width: '100%' }}>
+                  <div style={{ width: CANVAS_W * stageScale, height: CANVAS_H * stageScale, position: 'relative' }}>
+                    <BlackjackTableLayoutProvider layout={layout}>
+                      <div
+                        className="blackjack-table"
+                        style={{
+                          position: 'absolute',
+                          top: 0,
+                          left: 0,
+                          width: CANVAS_W,
+                          height: CANVAS_H,
+                          transform: `scale(${stageScale})`,
+                          transformOrigin: 'top left',
+                          background: '#06120b',
+                          border: '1px solid rgba(34,211,238,0.16)',
+                          borderRadius: 12,
+                          overflow: 'hidden',
+                        }}
+                      >
+                        {/* The table art itself + the same dark overlay the live
+                            table draws, so the designer shows the real thing. */}
+                        <img
+                          src={stageArt}
+                          alt=""
+                          style={{
+                            position: 'absolute',
+                            inset: 0,
+                            width: '100%',
+                            height: '100%',
+                            objectFit: 'cover',
+                            objectPosition: 'center',
+                            pointerEvents: 'none',
+                          }}
+                        />
+                        <div
+                          style={{
+                            position: 'absolute',
+                            inset: 0,
+                            background: 'linear-gradient(145deg, rgba(0,0,0,0.22), rgba(0,0,0,0.12))',
+                            pointerEvents: 'none',
+                          }}
+                        />
+                        {showGuides && (
+                          <svg
+                            width={CANVAS_W}
+                            height={CANVAS_H}
+                            style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 40 }}
+                          >
+                            <line
+                              x1={CANVAS_W / 2}
+                              y1={0}
+                              x2={CANVAS_W / 2}
+                              y2={CANVAS_H}
+                              stroke="rgba(255,255,255,0.12)"
+                              strokeDasharray="4 6"
+                            />
+                            {selectedSeat && (
+                              <text
+                                x={selectedSeat.cx}
+                                y={clamp(selectedSeat.floorY + 22, 14, CANVAS_H - 4)}
+                                textAnchor="middle"
+                                fill="#f0b429"
+                                fontSize={11}
+                                fontFamily="ui-monospace, monospace"
+                              >
+                                {Math.round(selectedSeat.cx)}, {Math.round(selectedSeat.floorY)} &middot;{' '}
+                                {Math.round(selectedSeat.angle)}&deg;
+                              </text>
+                            )}
+                            {selection?.kind === 'dealer' && (
+                              <text
+                                x={layout.dealer.cx}
+                                y={clamp(layout.dealer.top - 8, 14, CANVAS_H - 4)}
+                                textAnchor="middle"
+                                fill="#f0b429"
+                                fontSize={11}
+                                fontFamily="ui-monospace, monospace"
+                              >
+                                {Math.round(layout.dealer.cx)}, {Math.round(layout.dealer.top)}
+                              </text>
+                            )}
+                          </svg>
+                        )}
+
+                        {/* Dealer — same placement rule as the live table; draggable here. */}
+                        <div
+                          style={{
+                            position: 'absolute',
+                            left: layout.dealer.cx,
+                            top: layout.dealer.top,
+                            transform: 'translateX(-50%)',
+                            outline:
+                              selection?.kind === 'dealer'
+                                ? '2px solid #f0b429'
+                                : '1px dashed rgba(255,255,255,0.12)',
+                            outlineOffset: 6,
+                            borderRadius: 6,
+                            cursor: dragging ? 'grabbing' : 'grab',
+                            touchAction: 'none',
+                          }}
+                          onPointerDown={(e) => {
+                            setSelection({ kind: 'dealer' });
+                            setTab('tune');
+                            const orig = { ...layoutRef.current.dealer };
+                            beginDrag(e, (dx, dy) =>
+                              patch((p) => ({
+                                ...p,
+                                dealer: {
+                                  cx: clamp(Math.round(orig.cx + dx), 0, CANVAS_W),
+                                  top: clamp(Math.round(orig.top + dy), 0, CANVAS_H),
+                                },
+                              })),
+                            );
+                          }}
+                          onPointerMove={onDragMove}
+                          onPointerUp={endDrag}
+                          onPointerCancel={endDrag}
+                        >
+                          <BlackjackMultiDealerArea
+                            tableViewState={state}
+                            visibleDealerCards={state.dealerCards.length}
+                            cardsExiting={dealPreview === 'exit'}
+                            newDealerCardIndices={previewNewDealerCards}
+                          />
+                        </div>
+
+                        <BlackjackMultiSeatGrid
+                          seats={seats}
+                          cardsExiting={dealPreview === 'exit'}
+                          newPlayerCardByHandKey={previewNewPlayerCards}
+                          addressLower={undefined}
+                          phase={state.phase}
+                          actingSeatPosition={state.actingSeatPosition}
+                          myPosition={null}
+                          wsConnected
+                          afkTimeoutsBeforeKick={3}
+                          myBalanceLabel=""
+                          showOutcomeLabel={false}
+                          turnStartedAt={null}
+                          bettingStartedAt={null}
+                          onTakeSeat={() => {}}
+                          onOpenProfile={() => {}}
+                        />
+
+                        {/* Seat grab surfaces — cover the whole seat column, above the seats. */}
+                        {layout.seats.map((s, i) => (
+                          <div
+                            key={i}
+                            role="button"
+                            aria-label={`Select seat ${i + 1}`}
+                            onPointerDown={(e) => {
+                              selectSeat(i);
+                              const orig = { ...layoutRef.current.seats[i] };
+                              beginDrag(e, (dx, dy) => {
+                                setSeat(i, 'cx', clamp(Math.round(orig.cx + dx), 0, CANVAS_W));
+                                setSeat(i, 'floorY', clamp(Math.round(orig.floorY + dy), 0, CANVAS_H));
+                              });
+                            }}
+                            onPointerMove={onDragMove}
+                            onPointerUp={endDrag}
+                            onPointerCancel={endDrag}
+                            style={{
+                              position: 'absolute',
+                              left: s.cx - 65,
+                              top: s.floorY - 155,
+                              width: 130,
+                              height: 165,
+                              borderRadius: 10,
+                              border:
+                                selection?.kind === 'seat' && selection.index === i
+                                  ? '2px solid #f0b429'
+                                  : '1px dashed rgba(255,255,255,0.12)',
+                              cursor: dragging ? 'grabbing' : 'grab',
+                              touchAction: 'none',
+                              zIndex: 45,
+                            }}
+                          >
+                            <span
+                              style={{
+                                position: 'absolute',
+                                top: -20,
+                                left: '50%',
+                                transform: 'translateX(-50%)',
+                                fontSize: 10,
+                                fontWeight: 700,
+                                color:
+                                  selection?.kind === 'seat' && selection.index === i
+                                    ? '#f0b429'
+                                    : 'rgba(255,255,255,0.45)',
+                                background: 'rgba(0,0,0,0.55)',
+                                padding: '2px 8px',
+                                borderRadius: 999,
+                                whiteSpace: 'nowrap',
+                              }}
+                            >
+                              Seat {i + 1}
+                            </span>
+                          </div>
+                        ))}
+
+                        {/* Tilt handle for the selected seat — drag sideways to rotate. */}
+                        {selectedSeat && selection?.kind === 'seat' && (
+                          <div
+                            title="Drag sideways to tilt the seat"
+                            onPointerDown={(e) => {
+                              const idx = selection.index;
+                              const origAngle = layoutRef.current.seats[idx].angle;
+                              beginDrag(e, (dx) =>
+                                setSeat(idx, 'angle', clamp(Math.round(origAngle + dx * 0.4), -45, 45)),
+                              );
+                            }}
+                            onPointerMove={onDragMove}
+                            onPointerUp={endDrag}
+                            onPointerCancel={endDrag}
+                            style={{
+                              position: 'absolute',
+                              left: selectedSeat.cx - 14,
+                              top: selectedSeat.floorY - 195,
+                              width: 28,
+                              height: 28,
+                              borderRadius: '50%',
+                              background: '#f0b429',
+                              color: '#1a1200',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              fontSize: 15,
+                              fontWeight: 800,
+                              cursor: 'ew-resize',
+                              touchAction: 'none',
+                              zIndex: 46,
+                              boxShadow: '0 2px 10px rgba(0,0,0,0.5)',
+                              userSelect: 'none',
+                            }}
+                          >
+                            &#10227;
+                          </div>
+                        )}
+                      </div>
+                    </BlackjackTableLayoutProvider>
+                  </div>
+                </div>
+              </section>
+
+              <div className="bjtd-actions">
+                <button
+                  type="button"
+                  className="bjtd-btn-glow"
+                  onClick={runDealPreview}
+                  disabled={dealPreview !== null}
+                >
+                  {dealPreview ? 'Dealing…' : 'Deal preview'}
+                  <span className="bjtd-btn-sub">collects &amp; re-deals with your animation styles</span>
+                </button>
+              </div>
+              <p className="bjtd-edit-hint">
+                Drag a <b>seat</b> or the <b>dealer</b> right on the felt &mdash; clicking one opens its
+                settings. Arrow keys nudge (&#8679; = &times;10) &middot; Ctrl+Z undoes.
+              </p>
+            </div>
+          </div>
         </div>
-      </aside>
+      </div>
 
       {/* Every acquired clip lands here first; Use / Keep full / cancel decide
           what actually reaches the event. */}

@@ -295,6 +295,8 @@ export interface BJMultiTableState {
   actingSeatPosition: number | null;
   phase: 'waiting' | 'betting' | 'playing' | 'dealer_turn' | 'completed';
   roundNumber: number;
+  /** Provably-fair commitment (0x-prefixed SHA-256 of the round's server seed). */
+  serverSeedHash?: string | null;
   turnStartedAt: string | null;
   bettingStartedAt: string | null;
   themeKind: 'video' | 'image';

@@ -2221,6 +2221,28 @@ export class DatabaseService implements MoneyDatabaseQueries {
   }
 
   /** Multiplayer blackjack: one row per player per round (used as history `id` for verify links). */
+  /**
+   * A player's recent completed multiplayer hands — each row's `id` is the
+   * round-seat id the public verifier accepts (`/BLACKJACK/verify?gameId=`).
+   */
+  async getBlackjackMultiPlayerRecentRounds(address: string, limit: number): Promise<any[]> {
+    const addr = typeof address === 'string' ? address.trim().toLowerCase() : '';
+    if (!addr) return [];
+    const result = await this.pool.query(
+      `SELECT rs.id, rs.seat_position, rs.result, rs.payout, rs.bet_amount,
+              r.round_number, r.table_id, r.created_at
+       FROM blackjack_multi_round_seats rs
+       JOIN blackjack_multi_rounds r ON r.id = rs.round_id
+       WHERE LOWER(rs.player_address) = $1
+         AND r.status = 'completed'
+         AND rs.result IS NOT NULL
+       ORDER BY r.created_at DESC
+       LIMIT $2`,
+      [addr, Math.min(Math.max(limit, 1), 50)],
+    );
+    return result.rows;
+  }
+
   async getBlackjackMultiRoundSeatWithRound(seatId: string): Promise<{ seat: any; round: any } | null> {
     const id = typeof seatId === 'string' ? seatId.trim() : seatId;
     if (!id) return null;

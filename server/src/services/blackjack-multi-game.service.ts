@@ -106,6 +106,8 @@ export interface BJMultiTableState {
   actingSeatPosition: number | null;
   phase: 'waiting' | 'betting' | 'playing' | 'dealer_turn' | 'completed';
   roundNumber: number;
+  /** Provably-fair commitment (0x-prefixed SHA-256 of the round's server seed). */
+  serverSeedHash: string | null;
   turnStartedAt: string | null;
   bettingStartedAt: string | null;
   themeKind: 'video' | 'image';
@@ -1329,6 +1331,11 @@ export class BlackjackMultiGameService {
       actingSeatPosition: round?.acting_seat_position ?? null,
       phase: (table.status as BJMultiTableState['phase']),
       roundNumber: round?.round_number ?? 0,
+      // The provably-fair commitment for the current round, shown in the
+      // fairness panel while the round runs. The plaintext seed stays hidden
+      // until the round completes (it lives in the same row; only the hash is
+      // ever put on the wire here).
+      serverSeedHash: round?.server_seed_hash ? `0x${round.server_seed_hash}` : null,
       turnStartedAt: round?.turn_started_at?.toISOString?.() ?? null,
       bettingStartedAt: (round?.status === 'betting' ? round?.created_at?.toISOString?.() : null) ?? null,
       themeKind: (table.theme_kind ?? 'video') as 'video' | 'image',

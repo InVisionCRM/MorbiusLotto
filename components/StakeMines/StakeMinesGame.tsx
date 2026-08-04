@@ -33,6 +33,8 @@ import { useBigWin } from '@/contexts/big-win-context'
 import { formatChips } from '@/lib/format-poker-chips'
 import { GameWalletModal } from '@/components/shared/GameWalletModal'
 import { probeSiweSession } from '@/lib/api-auth'
+import { SessionChart, type SessionPoint } from '@/components/arcade2/SessionChart'
+import { FloatingPanel } from '@/components/arcade2/FloatingPanel'
 import { MinesBoard, type MinesCellState } from './MinesBoard'
 import { MinesInfoTabs } from './MinesInfoTabs'
 import { MinesFairnessModal } from './MinesFairnessModal'
@@ -99,6 +101,8 @@ export function StakeMinesGame() {
 
   const [history, setHistory] = useState<MinesHistoryRound[]>([])
   const [historyLoading, setHistoryLoading] = useState(false)
+  // Live ROI chart data — one point per settled round (bust or cashout).
+  const [session, setSession] = useState<SessionPoint[]>([])
 
   // Replay: a staged past cashout (confirm overlay) + a flag while re-watching.
   // Replays only re-render the round's final board — no server call, no balance,
@@ -304,6 +308,7 @@ export function StakeMinesGame() {
           minesAudio.playBust()
           setPhase('busted')
           setLastFinalizedId(roundId)
+          setSession((prev) => [...prev, { drop: prev.length + 1, bet: roundBet, profit: -roundBet }])
           setHistory((prev) =>
             [
               {
@@ -355,6 +360,7 @@ export function StakeMinesGame() {
       minesAudio.playCashout()
       setPhase('cashed')
       setLastFinalizedId(roundId)
+      setSession((prev) => [...prev, { drop: prev.length + 1, bet: roundBet, profit: res.payout - roundBet }])
       setHistory((prev) =>
         [
           {
@@ -705,6 +711,20 @@ export function StakeMinesGame() {
           <MinesInfoTabs rounds={history} loading={historyLoading} onVerify={openVerify} onReplay={handleReplay} />
         </div>
       )}
+
+      {/* Draggable mini session chart — same ROI chart as the other arcade games. */}
+      <FloatingPanel title="Session" storageKey="mines2.sessionChart.pos">
+        <SessionChart
+          gameName="Mines"
+          points={session}
+          unitLabel="Rounds"
+          bare
+          allTimeLoader={async () => {
+            const rounds = await fetchMinesHistory(365)
+            return [...rounds].reverse().map((r, i) => ({ drop: i + 1, bet: r.bet, profit: r.payout - r.bet }))
+          }}
+        />
+      </FloatingPanel>
 
       <MinesRulesModal open={rulesOpen} onOpenChange={setRulesOpen} />
       <MinesFairnessModal
