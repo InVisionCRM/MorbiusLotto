@@ -66,6 +66,14 @@ export const DEFAULT_BET_LIMITS = {
    */
   ultimate_holdem: { min: 100, max: 5_000 },
   caribbean_stud: { min: 100, max: 5_000 },
+  /**
+   * The blackjack variants (Spanish 21, Double Exposure, Pontoon, Free Bet).
+   * Top payout is modest — a Pontoon at 2:1 — so this sits with the other
+   * table games rather than down with the big-multiplier poker ones. The cap
+   * is per HAND: a split or double multiplies what's on the felt, the way it
+   * does at a real table.
+   */
+  blackjack_variants: { min: 100, max: 10_000 },
 } as const satisfies Record<string, BetLimits>;
 
 export type GameLimitKey = keyof typeof DEFAULT_BET_LIMITS;
@@ -100,6 +108,7 @@ export const GAME_LIMIT_LABELS: Record<GameLimitKey, string> = {
   video_poker: 'Video Poker',
   ultimate_holdem: "Ultimate Texas Hold'em",
   caribbean_stud: 'Caribbean Stud',
+  blackjack_variants: 'Blackjack variants (per hand)',
 };
 
 /** Absolute sanity bounds an admin-set limit can never escape. */
