@@ -593,7 +593,7 @@ export function TheFloor() {
         <h2>
           THE <em>FLOOR</em>
         </h2>
-        <span className="sub">26 games, one chip</span>
+        <span className="sub">{FLOOR_GAMES.length} games, one chip</span>
         <div className="pills">
           {FLOOR_FILTERS.map((p) => (
             <button
