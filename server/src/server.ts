@@ -57,6 +57,7 @@ import { applyPokerChipDelta, getPokerChipBalance, setWeeklyDropWagerHook, setWe
 import { WeeklyDropService } from './services/weekly-drop.service';
 import { registerDropRoutes } from './routes/drop.routes';
 import { BlackjackMultiGameService } from './services/blackjack-multi-game.service';
+import { CrapsMultiGameService } from './services/craps-multi-game.service';
 import { ChainAnalyticsService } from './services/chain-analytics.service';
 import { InstantLotteryService } from './services/instant-lottery.service';
 import { MerkleDropsService } from './services/merkle-drops.service';
@@ -382,6 +383,9 @@ async function initializeServices() {
     // Initialize multiplayer blackjack service
     const bjMultiService = new BlackjackMultiGameService(dbService, pfService);
 
+    // Shared craps felt — one throw settles the whole rail.
+    const crapsMultiService = new CrapsMultiGameService(dbService, pfService);
+
     // Initialize WebSocket service. authService is passed last so WS upgrades
     // can read the SIWE session cookie and skip the EIP-712 challenge for
     // already-signed-in users (eliminates the second in-game wallet popup).
@@ -415,6 +419,11 @@ async function initializeServices() {
 
     // Wire BJ multi broadcast callback
     bjMultiService.setBroadcastCallback((tableId) => wsService.broadcastBJMultiTableState(tableId));
+
+    // Shared craps: hand the service to the socket layer (which starts its
+    // betting-window / shooter watchdog) and wire state pushes back the other way.
+    wsService.setCrapsMultiService(crapsMultiService);
+    crapsMultiService.setBroadcastCallback((tableId) => wsService.broadcastCrapsMultiTableState(tableId));
 
     // Wire wheel-spin balance changes → wallet-targeted WS event so the
     // floating wheel launcher in the browser updates instantly when a spin

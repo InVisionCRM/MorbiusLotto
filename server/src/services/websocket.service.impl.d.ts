@@ -154,6 +154,13 @@ export declare class WebSocketService {
     shutdown(): void;
     /** Broadcast current BJ multi table state to room. */
     broadcastBJMultiTableState(tableId: string): Promise<void>;
+    /**
+     * Wire in the shared-craps service after construction; also starts its
+     * betting-window / shooter watchdog.
+     */
+    setCrapsMultiService(service: unknown): void;
+    /** Broadcast current shared-craps table state to everyone watching the felt. */
+    broadcastCrapsMultiTableState(tableId: string): Promise<void>;
     /** Timer tick: check for expired turns and betting timeouts across all active BJ multi tables. */
     private tickBJMultiTimers;
     private handleBJMultiListTables;
