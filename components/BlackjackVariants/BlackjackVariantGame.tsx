@@ -1,8 +1,8 @@
 'use client';
 
 /**
- * BlackjackVariantGame — one felt for Spanish 21, Double Exposure, Pontoon and
- * Free Bet Blackjack.
+ * BlackjackVariantGame — one felt for Spanish 21, Double Exposure, Pontoon,
+ * Free Bet Blackjack and Blackjack Switch.
  *
  * Deep-Sea Neon: #050E16 abyss, cyan #22D3EE chrome, amber wins, rose losses.
  *
@@ -40,6 +40,7 @@ import {
   bjActionLabel,
   bjNaturalLabel,
   bjOutcomeLabel,
+  bjSuperMatchLabel,
   dealBj,
   fetchBjActive,
   fetchBjHistory,
@@ -50,6 +51,8 @@ import {
   type BjHandView,
   type BjHistoryRound,
   type BjInfo,
+  type BjStage,
+  type BjSuperMatch,
   type BjVariant,
   type BjVariantRules,
 } from '@/lib/blackjack-variants-client';
@@ -82,6 +85,11 @@ export function BlackjackVariantGame({ variant }: { variant: BjVariant }) {
   const [freeSplit, setFreeSplit] = useState(false);
   const [dealerCards, setDealerCards] = useState<number[]>([]);
   const [dealerTotal, setDealerTotal] = useState<number | null>(null);
+  const [stage, setStage] = useState<BjStage>('play');
+  // Blackjack Switch's Super Match side bet.
+  const [superMatch, setSuperMatch] = useState(false);
+  const [sideResult, setSideResult] = useState<BjSuperMatch | null>(null);
+  const [sidePayout, setSidePayout] = useState(0);
   const [results, setResults] = useState<BjHandResult[] | null>(null);
   const [committed, setCommitted] = useState(0);
   const [totalPayout, setTotalPayout] = useState(0);
@@ -165,6 +173,8 @@ export function BlackjackVariantGame({ variant }: { variant: BjVariant }) {
         setDealerCards(active.dealerCards);
         setDealerTotal(null);
         setResults(null);
+        setStage(active.stage ?? 'play');
+        setSuperMatch((active.sideBet ?? 0) > 0);
         setPhase('acting');
       })
       .catch(() => {});
@@ -214,6 +224,8 @@ export function BlackjackVariantGame({ variant }: { variant: BjVariant }) {
       totalPayout: number;
       committed: number;
       chipBalance?: string;
+      sideResult?: BjSuperMatch | null;
+      sidePayout?: number;
     }) => {
       setHands(r.hands);
       setDealerCards(r.dealerCards);
@@ -223,6 +235,9 @@ export function BlackjackVariantGame({ variant }: { variant: BjVariant }) {
       setCommitted(r.committed);
       setActiveHand(null);
       setLegalActions([]);
+      setStage('play');
+      setSideResult(r.sideResult ?? null);
+      setSidePayout(r.sidePayout ?? 0);
       setPhase('settled');
       if (r.chipBalance) {
         try {
@@ -259,11 +274,15 @@ export function BlackjackVariantGame({ variant }: { variant: BjVariant }) {
     setDealerTotal(null);
     setDealerCards([]);
     setHands([]);
+    setSideResult(null);
+    setSidePayout(0);
     setPhase('dealing');
     try {
       const r = await dealBj({
         variant,
         bet: stake,
+        // Only Switch offers it; the server ignores it elsewhere.
+        superMatch: rules?.switchHands && superMatch ? true : undefined,
         clientSeed: clientSeed.trim() || undefined,
       });
       setRoundId(r.roundId);
@@ -279,6 +298,7 @@ export function BlackjackVariantGame({ variant }: { variant: BjVariant }) {
       setFreeSplit(!!r.freeSplit);
       setDealerCards(r.dealerCards);
       setCommitted(r.committed);
+      setStage(r.stage ?? 'play');
       if (r.chipBalance) {
         try {
           setBalance(BigInt(r.chipBalance.split('.')[0] || '0'));
@@ -291,7 +311,7 @@ export function BlackjackVariantGame({ variant }: { variant: BjVariant }) {
       setPhase('idle');
       handleErr(e);
     }
-  }, [betting, info, bet, balance, clientSeed, clampBet, handleErr, variant, bankSettled]);
+  }, [betting, info, bet, balance, clientSeed, clampBet, handleErr, variant, bankSettled, rules, superMatch]);
 
   // -------------------------------------------------------------- actions
   const act = useCallback(
@@ -312,6 +332,7 @@ export function BlackjackVariantGame({ variant }: { variant: BjVariant }) {
         setFreeSplit(!!r.freeSplit);
         setDealerCards(r.dealerCards);
         setCommitted(r.committed);
+        setStage(r.stage ?? 'play');
         if (r.chipBalance) {
           try {
             setBalance(BigInt(r.chipBalance.split('.')[0] || '0'));
@@ -372,7 +393,9 @@ export function BlackjackVariantGame({ variant }: { variant: BjVariant }) {
   if (phase === 'idle') feltMsg = 'Set your bet and deal';
   else if (phase === 'dealing') feltMsg = 'Dealing…';
   else if (phase === 'working') feltMsg = 'Working…';
-  else if (settled && dealerTotal != null) {
+  else if (stage === 'switch') {
+    feltMsg = 'Trade the second card of each hand, or keep them as dealt';
+  } else if (settled && dealerTotal != null) {
     feltMsg = `Dealer ${dealerTotal}${dealerTotal > 21 ? ' — bust' : ''}`;
   } else if (rules?.dealerFullyHidden) {
     feltMsg = 'The dealer’s hand stays down until you’re finished';
@@ -481,6 +504,40 @@ export function BlackjackVariantGame({ variant }: { variant: BjVariant }) {
                   Max
                 </button>
               </div>
+
+              {/* Switch posts the bet on BOTH hands, so a deal costs twice what
+                  was typed. Say it here rather than letting the balance say it. */}
+              {rules?.switchHands && (
+                <>
+                  <button
+                    type="button"
+                    disabled={!betting}
+                    onClick={() => setSuperMatch((v) => !v)}
+                    className="flex w-full items-center justify-between rounded-xl border border-cyan-950 bg-[#0a1a26]/50 px-3 py-2.5 text-left transition-colors hover:border-cyan-500/40 disabled:opacity-50"
+                  >
+                    <span className="text-[12.5px] text-slate-300">
+                      Super Match <span className="text-slate-500">(= bet)</span>
+                    </span>
+                    <span
+                      className={`relative h-[22px] w-[38px] flex-none rounded-full transition-colors ${
+                        superMatch ? 'bg-cyan-400' : 'bg-slate-500/25'
+                      }`}
+                    >
+                      <span
+                        className={`absolute top-[2px] h-[18px] w-[18px] rounded-full transition-all ${
+                          superMatch ? 'left-[18px] bg-[#04141b]' : 'left-[2px] bg-slate-300'
+                        }`}
+                      />
+                    </span>
+                  </button>
+                  <div className="flex items-center justify-between px-1 pt-1 text-[11px]">
+                    <span className="uppercase tracking-wide text-slate-500">To deal</span>
+                    <span className="arc-mono tabular-nums text-amber-300">
+                      {(clampBet(bet) * (superMatch ? 3 : 2)).toLocaleString()} MORBIUS
+                    </span>
+                  </div>
+                </>
+              )}
             </div>
           </Card>
 
@@ -515,6 +572,27 @@ export function BlackjackVariantGame({ variant }: { variant: BjVariant }) {
                       <span className="arc-mono ml-auto text-slate-300">
                         {mult === 1.5 ? '3:2' : `${mult}:1`}
                       </span>
+                    </div>
+                  ))}
+                </>
+              )}
+
+              {info?.superMatchPay && (
+                <>
+                  <div className="mt-2 text-[10.5px] uppercase tracking-[0.1em] text-slate-500">
+                    Super Match (your four opening cards)
+                  </div>
+                  {(
+                    [
+                      ['Four of a kind', info.superMatchPay.four_of_a_kind],
+                      ['Two pair', info.superMatchPay.two_pair],
+                      ['Three of a kind', info.superMatchPay.three_of_a_kind],
+                      ['Pair', info.superMatchPay.pair],
+                    ] as Array<[string, number]>
+                  ).map(([label, mult]) => (
+                    <div key={label} className="flex items-center text-xs text-slate-400">
+                      <span>{label}</span>
+                      <span className="arc-mono ml-auto text-slate-300">{mult}:1</span>
                     </div>
                   ))}
                 </>
@@ -655,6 +733,7 @@ export function BlackjackVariantGame({ variant }: { variant: BjVariant }) {
                           {hands.length > 1 ? `Hand ${i + 1}` : 'Your hand'}
                           <span className="text-cyan-300"> · {h.total}</span>
                           {h.soft && <span className="text-slate-600"> soft</span>}
+                          {h.switched && <span className="text-amber-300"> · switched</span>}
                         </div>
                         <div className="flex justify-center gap-1.5 sm:gap-2.5">
                           {h.cards.map((c, ci) => (
@@ -745,6 +824,23 @@ export function BlackjackVariantGame({ variant }: { variant: BjVariant }) {
               )}
             </div>
           </Card>
+
+          {/* Super Match settles on its own terms, so it gets its own line
+              rather than disappearing into the round's net. */}
+          {settled && sideResult && (
+            <Card className="flex items-center justify-between border-0 bg-[#07131F] px-4 py-2.5 ring-1 ring-inset ring-cyan-950/70">
+              <span className="text-xs uppercase tracking-wide text-slate-500">
+                Super Match · {bjSuperMatchLabel(sideResult)}
+              </span>
+              <span
+                className={`arc-mono text-sm font-bold tabular-nums ${
+                  sidePayout > 0 ? 'text-amber-300' : 'text-slate-600'
+                }`}
+              >
+                {sidePayout > 0 ? `+${sidePayout.toLocaleString()}` : 'no pay'}
+              </span>
+            </Card>
+          )}
 
           {/* Actions — pinned to a bottom bar on mobile. */}
           <div className="fixed inset-x-0 bottom-0 z-40 border-t border-cyan-950/70 bg-[#07131F]/95 p-3 backdrop-blur-sm lg:static lg:z-auto lg:border-0 lg:bg-transparent lg:p-0 lg:backdrop-blur-none">

@@ -15,8 +15,31 @@
 import { apiFetchJson } from '@/lib/api-auth';
 import { getApiUrlOptional } from '@/lib/api-urls';
 
-export type BjVariant = 'spanish21' | 'double_exposure' | 'pontoon' | 'free_bet';
-export type BjAction = 'hit' | 'stand' | 'double' | 'split' | 'surrender';
+export type BjVariant =
+  | 'spanish21'
+  | 'double_exposure'
+  | 'pontoon'
+  | 'free_bet'
+  | 'switch';
+export type BjAction =
+  | 'hit'
+  | 'stand'
+  | 'double'
+  | 'split'
+  | 'surrender'
+  /** Blackjack Switch's opening decision — trade the second cards, or don't. */
+  | 'switch'
+  | 'keep';
+
+/** Where a round is: still owed a trade-or-keep, or in ordinary play. */
+export type BjStage = 'switch' | 'play';
+
+export type BjSuperMatch =
+  | 'four_of_a_kind'
+  | 'two_pair'
+  | 'three_of_a_kind'
+  | 'pair'
+  | 'none';
 
 export type BjHandOutcome =
   | 'win'
@@ -58,6 +81,7 @@ export interface BjVariantRules {
   freeDoubleOn: number[];
   freeSplit: boolean;
   fiveCardTrick: number | null;
+  switchHands: boolean;
   bonuses: BjBonusPay | null;
   maxSplits: number;
   highlights: string[];
@@ -67,6 +91,8 @@ export interface BjInfo {
   minBet: number;
   maxBet: number;
   rules: BjVariantRules;
+  /** Super Match odds — present only on the variant that offers it. */
+  superMatchPay: Record<BjSuperMatch, number> | null;
   singleDeck: boolean;
   variants: Array<{ key: BjVariant; name: string; blurb: string }>;
 }
@@ -80,6 +106,8 @@ export interface BjHandView {
   soft: boolean;
   doubled: boolean;
   fromSplit: boolean;
+  /** This hand's second card came from the other hand (Switch). */
+  switched: boolean;
   done: boolean;
   surrendered: boolean;
   busted: boolean;
@@ -99,6 +127,8 @@ export interface BjHandResult {
 /** The live shape of a round mid-play. */
 export interface BjRoundLive {
   settled: false;
+  stage?: BjStage;
+  sideBet?: number;
   hands: BjHandView[];
   activeHand: number | null;
   legalActions: BjAction[];
@@ -113,6 +143,9 @@ export interface BjRoundLive {
 /** The shape once the dealer has played and everything is paid. */
 export interface BjRoundSettled {
   settled: true;
+  stage?: BjStage;
+  sideResult?: BjSuperMatch | null;
+  sidePayout?: number;
   hands: BjHandView[];
   activeHand: null;
   legalActions: [];
@@ -145,6 +178,8 @@ export interface BjActiveRound {
   hands: BjHandView[];
   activeHand: number | null;
   splitCount: number;
+  stage: BjStage;
+  sideBet: number;
   dealerCards: number[];
   legalActions: BjAction[];
   freeDouble: boolean;
@@ -164,6 +199,9 @@ export interface BjHistoryRound {
   results: BjHandResult[] | null;
   totalPayout: number;
   dealerTotal: number | null;
+  sideBet: number;
+  sidePayout: number;
+  sideResult: BjSuperMatch | null;
   won: boolean;
   createdAt: string;
 }
@@ -257,8 +295,28 @@ export function bjActionLabel(action: BjAction, rules?: BjVariantRules | null): 
       return 'Split';
     case 'surrender':
       return 'Surrender';
+    case 'switch':
+      return 'Switch';
+    case 'keep':
+      return 'Keep';
     default:
       return action;
+  }
+}
+
+/** Player-facing name for a Super Match result. */
+export function bjSuperMatchLabel(r: BjSuperMatch | null | undefined): string {
+  switch (r) {
+    case 'four_of_a_kind':
+      return 'Four of a kind';
+    case 'three_of_a_kind':
+      return 'Three of a kind';
+    case 'two_pair':
+      return 'Two pair';
+    case 'pair':
+      return 'Pair';
+    default:
+      return 'No match';
   }
 }
 
@@ -294,6 +352,8 @@ export async function fetchBjActive(variant: BjVariant): Promise<BjActiveRound |
 export async function dealBj(args: {
   variant: BjVariant;
   bet: number;
+  /** Blackjack Switch's Super Match side bet; true sizes it to the main bet. */
+  superMatch?: boolean | number;
   clientSeed?: string;
 }): Promise<BjDealResult> {
   return apiFetchJson<BjDealResult>('/api/arcade/blackjack-variants/deal', {

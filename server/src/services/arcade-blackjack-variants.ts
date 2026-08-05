@@ -33,10 +33,18 @@
 
 import { betLimits } from '../lib/game-limits';
 
-export type BjVariant = 'spanish21' | 'double_exposure' | 'pontoon' | 'free_bet';
+export type BjVariant =
+  | 'spanish21'
+  | 'double_exposure'
+  | 'pontoon'
+  | 'free_bet'
+  | 'switch';
 
-/** What the player can do with the hand in front of them. */
-export type BjAction = 'hit' | 'stand' | 'double' | 'split' | 'surrender';
+/**
+ * What the player can do. `switch` and `keep` belong to Blackjack Switch's
+ * opening decision and are never legal once ordinary play has started.
+ */
+export type BjAction = 'hit' | 'stand' | 'double' | 'split' | 'surrender' | 'switch' | 'keep';
 
 export type BjHandOutcome =
   | 'win'
@@ -104,6 +112,12 @@ export interface BjRules {
   freeSplit: boolean;
   /** Five cards without busting pays this profit multiple and beats all but a natural. */
   fiveCardTrick: number | null;
+  /**
+   * Two hands dealt side by side with one chance to swap their second cards
+   * (Blackjack Switch). The bet is posted on BOTH hands, so a deal costs twice
+   * what the player typed.
+   */
+  switchHands: boolean;
   /** Bonus paytable for long 21s and 6-7-8 / 7-7-7 (Spanish 21). */
   bonuses: BjBonusPay | null;
   /** How many times a hand may be split. */
@@ -135,6 +149,7 @@ const SPANISH21: BjRules = {
   freeDoubleOn: [],
   freeSplit: false,
   fiveCardTrick: null,
+  switchHands: false,
   bonuses: {
     fiveCard21: 1.5,
     sixCard21: 2,
@@ -176,6 +191,7 @@ const DOUBLE_EXPOSURE: BjRules = {
   freeDoubleOn: [],
   freeSplit: false,
   fiveCardTrick: null,
+  switchHands: false,
   bonuses: null,
   maxSplits: 1,
   referenceEdgeBp: 69,
@@ -208,6 +224,7 @@ const PONTOON: BjRules = {
   freeDoubleOn: [],
   freeSplit: false,
   fiveCardTrick: 2,
+  switchHands: false,
   bonuses: null,
   maxSplits: 1,
   referenceEdgeBp: 34,
@@ -241,6 +258,7 @@ const FREE_BET: BjRules = {
   freeDoubleOn: [9, 10, 11],
   freeSplit: true,
   fiveCardTrick: null,
+  switchHands: false,
   bonuses: null,
   maxSplits: 3,
   referenceEdgeBp: 104,
@@ -252,11 +270,48 @@ const FREE_BET: BjRules = {
   ],
 };
 
+
+const SWITCH: BjRules = {
+  key: 'switch',
+  name: 'Blackjack Switch',
+  blurb: 'Two hands, and one chance to trade their second cards.',
+  removedRanks: [],
+  hitsSoft17: true,
+  dealerExposed: false,
+  dealerFullyHidden: false,
+  // Being able to move a card between hands is enormous, so the natural drops
+  // to even money and a dealer 22 stops losing — those two rules are the price.
+  naturalPays: 1,
+  dealerWinsTies: false,
+  player21AlwaysWins: false,
+  naturalBeatsNatural: false,
+  pushOnDealerTotal: 22,
+  surrender: false,
+  minStand: 0,
+  doubleOn: null,
+  doubleAnyCards: false,
+  freeDoubleOn: [],
+  freeSplit: false,
+  fiveCardTrick: null,
+  switchHands: true,
+  bonuses: null,
+  maxSplits: 1,
+  referenceEdgeBp: 58,
+  highlights: [
+    'Two hands, and your bet is posted on both',
+    'Swap the second card of each hand — once, before you play',
+    'A 21 made by switching is a 21, not a blackjack',
+    'Blackjack pays even money',
+    'A dealer 22 pushes against every live hand',
+  ],
+};
+
 export const BJ_VARIANTS: Record<BjVariant, BjRules> = {
   spanish21: SPANISH21,
   double_exposure: DOUBLE_EXPOSURE,
   pontoon: PONTOON,
   free_bet: FREE_BET,
+  switch: SWITCH,
 };
 
 export const BJ_VARIANT_KEYS: BjVariant[] = [
@@ -264,6 +319,7 @@ export const BJ_VARIANT_KEYS: BjVariant[] = [
   'double_exposure',
   'pontoon',
   'free_bet',
+  'switch',
 ];
 
 export function isBjVariant(v: unknown): v is BjVariant {
@@ -347,6 +403,12 @@ export interface BjHand {
   doubled: boolean;
   /** This hand came out of a split. */
   fromSplit: boolean;
+  /**
+   * This hand's second card was swapped in from the other hand (Switch). A
+   * two-card 21 made that way counts as an ordinary 21, not a natural — which
+   * is the rule that stops the swap from manufacturing blackjacks.
+   */
+  switched: boolean;
   /** The player is finished with this hand. */
   done: boolean;
   surrendered: boolean;
@@ -360,6 +422,7 @@ export function bjNewHand(cards: number[], bet: number, fromSplit = false): BjHa
     freeBet: 0,
     doubled: false,
     fromSplit,
+    switched: false,
     done: false,
     surrendered: false,
     busted: false,
@@ -564,7 +627,7 @@ export function bjSettleHand(
   const freeStaked = hand.freeBet;
   const t = bjHandTotal(hand.cards);
   const dealer = bjHandTotal(dealerCards);
-  const playerNatural = bjIsNatural(hand.cards) && !hand.fromSplit;
+  const playerNatural = bjIsNatural(hand.cards) && !hand.fromSplit && !hand.switched;
   const dealerNatural = bjIsNatural(dealerCards);
 
   const settle = (
@@ -673,6 +736,68 @@ export function bjSettleRound(
   };
 }
 
+
+// ── Blackjack Switch ────────────────────────────────────────────────────────
+
+/**
+ * Swap the SECOND card of each hand — the whole game in one move.
+ *
+ * Both hands are marked `switched`, because the rule that keeps the game
+ * honest is that a 21 assembled this way pays as a 21 and not as a blackjack.
+ * Marking both (rather than only the ones that changed) is deliberate: after a
+ * swap neither hand is the hand it was dealt.
+ */
+export function bjSwitchHands(hands: BjHand[]): void {
+  if (hands.length !== 2) throw new Error('Switch needs exactly two hands');
+  if (hands[0].cards.length !== 2 || hands[1].cards.length !== 2) {
+    throw new Error('Switch happens before either hand draws');
+  }
+  const a = hands[0].cards[1];
+  hands[0].cards[1] = hands[1].cards[1];
+  hands[1].cards[1] = a;
+  hands[0].switched = true;
+  hands[1].switched = true;
+}
+
+export type BjSuperMatch = 'four_of_a_kind' | 'two_pair' | 'three_of_a_kind' | 'pair' | 'none';
+
+/**
+ * Super Match — the Blackjack Switch side bet, scored on the FOUR cards the
+ * player is dealt before any swap. NET odds.
+ */
+export const BJ_SUPER_MATCH_PAY: Record<BjSuperMatch, number> = {
+  four_of_a_kind: 40,
+  two_pair: 8,
+  three_of_a_kind: 5,
+  pair: 1,
+  none: 0,
+};
+
+/** Score the four opening cards for Super Match. */
+export function bjSuperMatch(cards: number[]): BjSuperMatch {
+  if (cards.length !== 4) return 'none';
+  const counts = new Map<number, number>();
+  for (const c of cards) {
+    const r = bjRank(c);
+    counts.set(r, (counts.get(r) ?? 0) + 1);
+  }
+  const shape = [...counts.values()].sort((a, b) => b - a);
+  if (shape[0] === 4) return 'four_of_a_kind';
+  if (shape[0] === 3) return 'three_of_a_kind';
+  // Two pair outranks three of a kind on this paytable, but a hand can't be
+  // both — check it after trips so the shape comparison stays unambiguous.
+  if (shape[0] === 2 && shape[1] === 2) return 'two_pair';
+  if (shape[0] === 2) return 'pair';
+  return 'none';
+}
+
+/** Gross chips returned on a Super Match stake (the stake included). */
+export function bjSuperMatchPayout(stake: number, result: BjSuperMatch): number {
+  if (stake <= 0) return 0;
+  const mult = BJ_SUPER_MATCH_PAY[result];
+  return mult > 0 ? stake + stake * mult : 0;
+}
+
 // ── Validation ──────────────────────────────────────────────────────────────
 
 export interface BjValidation {
@@ -717,6 +842,7 @@ export function bjVariantInfo(rules: BjRules) {
     freeDoubleOn: rules.freeDoubleOn,
     freeSplit: rules.freeSplit,
     fiveCardTrick: rules.fiveCardTrick,
+    switchHands: rules.switchHands,
     bonuses: rules.bonuses,
     maxSplits: rules.maxSplits,
     highlights: rules.highlights,

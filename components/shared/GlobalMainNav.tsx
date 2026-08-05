@@ -151,6 +151,7 @@ const OTHER_GAMES: readonly OtherGameNavItem[] = [
   { label: 'Double Exposure', href: '/double-exposure', icon: 'cards' },
   { label: 'Pontoon', href: '/pontoon', icon: 'cards' },
   { label: 'Free Bet Blackjack', href: '/free-bet-blackjack', icon: 'cards' },
+  { label: 'Blackjack Switch', href: '/blackjack-switch', icon: 'cards' },
   { label: 'Caribbean Stud', href: '/caribbean-stud', icon: 'cards' },
   { label: 'Greed Dice', href: '/greed-dice', icon: 'dice' },
   { label: 'Cipher', href: '/cipher', icon: 'grid' },

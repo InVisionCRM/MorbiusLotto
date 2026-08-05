@@ -1,18 +1,21 @@
 /**
- * arcade-blackjack-variants.routes.ts — Spanish 21, Double Exposure, Pontoon
- * and Free Bet Blackjack.
+ * arcade-blackjack-variants.routes.ts — Spanish 21, Double Exposure, Pontoon,
+ * Free Bet Blackjack and Blackjack Switch.
  *
  * Endpoints:
  *   GET  /api/arcade/blackjack-variants/info?variant=      — public: rules + limits
  *   GET  /api/arcade/blackjack-variants/active?variant=    — caller's live round
  *   POST /api/arcade/blackjack-variants/deal               — debit the bet, deal
- *   POST /api/arcade/blackjack-variants/action             — hit/stand/double/split/surrender
+ *   POST /api/arcade/blackjack-variants/action             — hit/stand/double/
+ *                                                            split/surrender, plus
+ *                                                            switch/keep for the
+ *                                                            Switch opening trade
  *   GET  /api/arcade/blackjack-variants/history?variant=   — caller's settled rounds
  *   GET  /api/arcade/blackjack-variants/recent             — public feed
  *   GET  /api/arcade/blackjack-variants/leaderboard        — public: top by net
  *   GET  /api/arcade/blackjack-variants/verify/:id         — public: seeds + recipe
  *
- * One route module for four games. The rules come from the variant record, and
+ * One route module for five games. The rules come from the variant record, and
  * at settle time they come from the variant stored ON THE ROW — never from the
  * request — so a round can't be dealt on one paytable and paid on another.
  *
@@ -35,6 +38,7 @@ import { SESSION_COOKIE_NAME } from '../middleware/require-auth';
 import { applyPokerChipDelta } from '../services/poker-chip-wallet';
 import { ProvablyFairService } from '../services/provably-fair.service';
 import {
+  BJ_SUPER_MATCH_PAY,
   BJ_VARIANTS,
   BJ_VARIANT_KEYS,
   bjDeckFor,
@@ -48,6 +52,9 @@ import {
   bjRules,
   bjSettleRound,
   bjSplitIsFree,
+  bjSuperMatch,
+  bjSuperMatchPayout,
+  bjSwitchHands,
   bjVariantInfo,
   validateBjBet,
   type BjAction,
@@ -64,7 +71,17 @@ interface RegisterArcadeBlackjackVariantsRoutesOptions {
 }
 
 const pf = new ProvablyFairService();
-const ALL_ACTIONS: BjAction[] = ['hit', 'stand', 'double', 'split', 'surrender'];
+const ALL_ACTIONS: BjAction[] = [
+  'hit',
+  'stand',
+  'double',
+  'split',
+  'surrender',
+  // Blackjack Switch's opening decision. Legal only while stage === 'switch',
+  // which is checked against the ROW, not the request.
+  'switch',
+  'keep',
+];
 
 /** Resolve the wallet linked to a Telegram `initData` payload, or null. */
 async function walletFromInitData(
@@ -105,10 +122,13 @@ function handView(h: BjHand) {
     soft: t.soft,
     doubled: h.doubled,
     fromSplit: h.fromSplit,
+    switched: h.switched,
     done: h.done,
     surrendered: h.surrendered,
     busted: h.busted,
-    isNatural: bjIsNatural(h.cards) && !h.fromSplit,
+    // A switched two-card 21 is a 21, not a natural — the rule that stops
+    // the swap from manufacturing blackjacks.
+    isNatural: bjIsNatural(h.cards) && !h.fromSplit && !h.switched,
   };
 }
 
@@ -116,12 +136,23 @@ function handView(h: BjHand) {
 async function lockRound(client: PoolClient, roundId: string) {
   const r = await client.query(
     `SELECT id, wallet_address, variant, bet, committed, hands, active_hand,
-            split_count, dealer_cards, deck, deck_cursor, status,
+            split_count, dealer_cards, deck, deck_cursor, status, stage,
+            side_bet, side_payout,
             server_seed, server_seed_hash, client_seed, nonce
        FROM arcade_blackjack_variant_rounds WHERE id = $1 FOR UPDATE`,
     [roundId],
   );
   return r.rows.length > 0 ? r.rows[0] : null;
+}
+
+/**
+ * The four cards Super Match is scored on: the two hands as they were DEALT.
+ * Taken from the front of each hand so a later hit or a swap can't change what
+ * the side bet was already decided on.
+ */
+function openingFour(hands: BjHand[]): number[] {
+  if (hands.length < 2) return [];
+  return [...hands[0].cards.slice(0, 2), ...hands[1].cards.slice(0, 2)];
 }
 
 /** Index of the next hand still awaiting a decision, or null when all are done. */
@@ -184,6 +215,9 @@ export function registerArcadeBlackjackVariantsRoutes({
       minBet: l.min,
       maxBet: l.max,
       rules: bjVariantInfo(rules),
+      // Only Blackjack Switch offers it, but sending it unconditionally keeps
+      // the client from having to special-case a variant it may not know yet.
+      superMatchPay: rules.switchHands ? BJ_SUPER_MATCH_PAY : null,
       // Single deck, and the client says so rather than quoting a multi-deck
       // return this game does not have. See the service file header.
       singleDeck: true,
@@ -208,7 +242,7 @@ export function registerArcadeBlackjackVariantsRoutes({
 
       const r = await pool.query(
         `SELECT id, bet, committed, hands, active_hand, split_count, dealer_cards,
-                server_seed_hash, client_seed, nonce
+                stage, side_bet, server_seed_hash, client_seed, nonce
            FROM arcade_blackjack_variant_rounds
           WHERE wallet_address = $1 AND variant = $2 AND status = 'active'
           ORDER BY created_at DESC
@@ -220,6 +254,7 @@ export function registerArcadeBlackjackVariantsRoutes({
       const row = r.rows[0];
       const hands = row.hands as BjHand[];
       const active = row.active_hand === null ? null : Number(row.active_hand);
+      const stage = (row.stage as 'switch' | 'play') ?? 'play';
       return res.json({
         ok: true,
         active: {
@@ -227,15 +262,22 @@ export function registerArcadeBlackjackVariantsRoutes({
           variant: rules.key,
           bet: Number(row.bet),
           committed: Number(row.committed),
+          sideBet: Number(row.side_bet ?? 0),
+          stage,
           hands: hands.map(handView),
           activeHand: active,
           splitCount: Number(row.split_count),
           dealerCards: visibleDealer(rules, row.dealer_cards as number[], false),
           legalActions:
-            active === null ? [] : bjLegalActions(rules, hands[active], Number(row.split_count)),
+            stage === 'switch'
+              ? (['switch', 'keep'] as BjAction[])
+              : active === null
+                ? []
+                : bjLegalActions(rules, hands[active], Number(row.split_count)),
           freeDouble:
-            active !== null && bjDoubleIsFree(rules, hands[active]),
-          freeSplit: active !== null && bjSplitIsFree(rules, hands[active]),
+            stage === 'play' && active !== null && bjDoubleIsFree(rules, hands[active]),
+          freeSplit:
+            stage === 'play' && active !== null && bjSplitIsFree(rules, hands[active]),
           serverSeedHash: row.server_seed_hash,
           clientSeed: row.client_seed,
           nonce: Number(row.nonce),
@@ -264,6 +306,9 @@ export function registerArcadeBlackjackVariantsRoutes({
     deck: number[],
     cursor: number,
     committed: number,
+    sideBet = 0,
+    sideResult: string | null = null,
+    sidePayout = 0,
   ) {
     // The dealer only draws when at least one hand can still be beaten. With
     // every hand busted or surrendered there is nothing to resolve, and
@@ -274,7 +319,10 @@ export function registerArcadeBlackjackVariantsRoutes({
       ? bjPlayDealer(rules, dealerStart, deck, cursor)
       : { cards: dealerStart, cursor };
 
-    const settlement = bjSettleRound(rules, hands, played.cards);
+    // The Super Match side bet settles alongside the hands but on its own
+    // terms — it was scored on the opening four cards and doesn't care how the
+    // round was played.
+    const settlement = bjSettleRound(rules, hands, played.cards, sideBet, sidePayout);
     const totalPayout = settlement.totalPayout;
 
     await client.query(
@@ -282,6 +330,7 @@ export function registerArcadeBlackjackVariantsRoutes({
           SET hands = $1::jsonb, active_hand = NULL, dealer_cards = $2::jsonb,
               deck_cursor = $3, results = $4::jsonb, total_payout = $5,
               dealer_total = $6, won = $7, committed = $8,
+              side_result = $10, side_payout = $11,
               status = 'settled', settled_at = NOW()
         WHERE id = $9`,
       [
@@ -294,6 +343,8 @@ export function registerArcadeBlackjackVariantsRoutes({
         totalPayout > committed,
         committed,
         roundId,
+        sideResult,
+        sidePayout,
       ],
     );
 
@@ -308,7 +359,14 @@ export function registerArcadeBlackjackVariantsRoutes({
       );
     }
 
-    return { settlement, dealerCards: played.cards, totalPayout, chipBalance };
+    return {
+      settlement,
+      dealerCards: played.cards,
+      totalPayout,
+      chipBalance,
+      sideResult,
+      sidePayout,
+    };
   }
 
   // -------------------------------------------------------------------------
@@ -339,19 +397,50 @@ export function registerArcadeBlackjackVariantsRoutes({
       const shuffled = pf.fisherYatesShuffle(serverSeed, clientSeed, nonce);
       const deck = bjDeckFor(rules, shuffled);
 
-      // Real dealing order: player, dealer, player, dealer.
-      const playerCards = [deck[0], deck[2]];
-      const dealerCards = [deck[1], deck[3]];
-      let cursor = 4;
-
       const roundId = crypto.randomUUID();
-      const hands: BjHand[] = [bjNewHand(playerCards, bet)];
+      let hands: BjHand[];
+      let dealerCards: number[];
+      let cursor: number;
+      let stage: 'switch' | 'play' = 'play';
+      let sideBet = 0;
+      let playerStake = bet;
 
-      // A natural needs no decisions, and neither does a 21 — the round goes
-      // straight to the dealer.
-      const opening = bjHandTotal(playerCards);
-      const noDecisions = opening.total === 21;
-      if (noDecisions) hands[0].done = true;
+      if (rules.switchHands) {
+        // Blackjack Switch: two boxes, dealt across then the dealer, and the
+        // bet is posted on BOTH — so a deal costs twice what the player typed.
+        hands = [
+          bjNewHand([deck[0], deck[2]], bet),
+          bjNewHand([deck[1], deck[3]], bet),
+        ];
+        dealerCards = [deck[4], deck[5]];
+        cursor = 6;
+        stage = 'switch';
+        playerStake = bet * 2;
+
+        // Super Match is optional and rides on the four opening cards. `true`
+        // sizes it to the bet, matching how the other side bets on the site
+        // work; a number sizes it explicitly, inside the table limits.
+        const rawSide = req.body?.superMatch;
+        if (rawSide === true) sideBet = bet;
+        else if (rawSide != null && rawSide !== '') {
+          const sv = validateBjBet(rawSide);
+          if (!sv.ok) return res.status(400).json({ ok: false, error: sv.error });
+          sideBet = sv.bet;
+        }
+        playerStake += sideBet;
+      } else {
+        // Real dealing order: player, dealer, player, dealer.
+        hands = [bjNewHand([deck[0], deck[2]], bet)];
+        dealerCards = [deck[1], deck[3]];
+        cursor = 4;
+      }
+
+      // A 21 needs no decisions — that hand goes straight to the showdown.
+      // Switch still owes the player their trade-or-keep, so it never skips.
+      for (const h of hands) {
+        if (bjHandTotal(h.cards).total === 21) h.done = true;
+      }
+      const noDecisions = stage === 'play' && hands.every((h) => h.done);
 
       let response: Record<string, unknown> = {};
       try {
@@ -359,7 +448,7 @@ export function registerArcadeBlackjackVariantsRoutes({
           const chipBalance = await applyPokerChipDelta(
             client,
             wallet,
-            BigInt(-bet),
+            BigInt(-playerStake),
             'arcade_blackjack_variants_bet',
             { type: 'arcade_blackjack_variants', id: roundId },
           );
@@ -367,18 +456,19 @@ export function registerArcadeBlackjackVariantsRoutes({
           await client.query(
             `INSERT INTO arcade_blackjack_variant_rounds
                (id, wallet_address, variant, bet, committed, hands, active_hand,
-                split_count, dealer_cards, deck, deck_cursor, status,
+                split_count, dealer_cards, deck, deck_cursor, status, stage,
+                side_bet,
                 server_seed, server_seed_hash, client_seed, nonce)
              VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, 0, $8::jsonb, $9::jsonb,
-                     $10, 'active', $11, $12, $13, $14)`,
+                     $10, 'active', $15, $16, $11, $12, $13, $14)`,
             [
               roundId,
               wallet.toLowerCase(),
               rules.key,
               bet,
-              bet,
+              playerStake,
               JSON.stringify(hands),
-              noDecisions ? null : 0,
+              noDecisions || stage === 'switch' ? null : 0,
               JSON.stringify(dealerCards),
               JSON.stringify(deck),
               cursor,
@@ -386,6 +476,8 @@ export function registerArcadeBlackjackVariantsRoutes({
               serverSeedHash,
               clientSeed,
               nonce,
+              stage,
+              sideBet,
             ],
           );
 
@@ -399,7 +491,7 @@ export function registerArcadeBlackjackVariantsRoutes({
               dealerCards,
               deck,
               cursor,
-              bet,
+              playerStake,
             );
             response = {
               settled: true,
@@ -411,21 +503,25 @@ export function registerArcadeBlackjackVariantsRoutes({
               dealerTotal: done.settlement.dealerTotal,
               dealerBusted: done.settlement.dealerBusted,
               totalPayout: done.totalPayout,
-              committed: bet,
-              won: done.totalPayout > bet,
+              committed: playerStake,
+              won: done.totalPayout > playerStake,
+              stage: 'play',
               serverSeed,
               chipBalance: (done.chipBalance ?? chipBalance).toString(),
             };
           } else {
+            const swapping = stage === 'switch';
             response = {
               settled: false,
+              stage,
               hands: hands.map(handView),
-              activeHand: 0,
-              legalActions: bjLegalActions(rules, hands[0], 0),
-              freeDouble: bjDoubleIsFree(rules, hands[0]),
-              freeSplit: bjSplitIsFree(rules, hands[0]),
+              activeHand: swapping ? null : 0,
+              legalActions: swapping ? ['switch', 'keep'] : bjLegalActions(rules, hands[0], 0),
+              freeDouble: !swapping && bjDoubleIsFree(rules, hands[0]),
+              freeSplit: !swapping && bjSplitIsFree(rules, hands[0]),
               dealerCards: visibleDealer(rules, dealerCards, false),
-              committed: bet,
+              committed: playerStake,
+              sideBet,
               chipBalance: chipBalance.toString(),
             };
           }
@@ -505,7 +601,90 @@ export function registerArcadeBlackjackVariantsRoutes({
         let cursor = Number(row.deck_cursor);
         let splitCount = Number(row.split_count);
         let committed = Number(row.committed);
+        const stage = (row.stage as 'switch' | 'play') ?? 'play';
+        const sideBet = Number(row.side_bet ?? 0);
         const idx = row.active_hand === null ? null : Number(row.active_hand);
+
+        // ── Blackjack Switch's opening decision ──────────────────────────
+        // Trade the second cards, or keep them. Either way no chips move and
+        // the round drops into ordinary play on the first hand.
+        if (stage === 'switch') {
+          if (action !== 'switch' && action !== 'keep') {
+            response = {
+              status: 400,
+              body: {
+                ok: false,
+                error: 'Trade the second cards or keep them first.',
+                legalActions: ['switch', 'keep'],
+              },
+            };
+            return;
+          }
+          if (action === 'switch') bjSwitchHands(hands);
+
+          // A 21 either hand is now holding needs no decisions.
+          for (const h of hands) {
+            if (bjHandTotal(h.cards).total === 21) h.done = true;
+          }
+          const first = nextActiveHand(hands);
+
+          if (first === null) {
+            const sideResult = sideBet > 0 ? bjSuperMatch(openingFour(hands)) : null;
+            const sidePayout = sideResult ? bjSuperMatchPayout(sideBet, sideResult) : 0;
+            const done = await finishRound(
+              client, rules, roundId, wallet, hands, dealerCards, deck, cursor,
+              committed, sideBet, sideResult, sidePayout,
+            );
+            response = {
+              status: 200,
+              body: {
+                ok: true, roundId, action, settled: true, stage: 'play',
+                variant: rules.key,
+                hands: hands.map(handView), activeHand: null, legalActions: [],
+                dealerCards: done.dealerCards, results: done.settlement.hands,
+                dealerTotal: done.settlement.dealerTotal,
+                dealerBusted: done.settlement.dealerBusted,
+                totalPayout: done.totalPayout, committed,
+                won: done.totalPayout > committed,
+                sideResult, sidePayout,
+                serverSeed: row.server_seed,
+                ...(done.chipBalance !== null
+                  ? { chipBalance: done.chipBalance.toString() }
+                  : {}),
+              },
+            };
+            return;
+          }
+
+          await client.query(
+            `UPDATE arcade_blackjack_variant_rounds
+                SET hands = $1::jsonb, active_hand = $2, stage = 'play'
+              WHERE id = $3`,
+            [JSON.stringify(hands), first, roundId],
+          );
+          response = {
+            status: 200,
+            body: {
+              ok: true, roundId, action, settled: false, stage: 'play',
+              variant: rules.key,
+              hands: hands.map(handView), activeHand: first,
+              legalActions: bjLegalActions(rules, hands[first], splitCount),
+              freeDouble: bjDoubleIsFree(rules, hands[first]),
+              freeSplit: bjSplitIsFree(rules, hands[first]),
+              dealerCards: visibleDealer(rules, dealerCards, false),
+              committed,
+            },
+          };
+          return;
+        }
+
+        if (action === 'switch' || action === 'keep') {
+          response = {
+            status: 400,
+            body: { ok: false, error: 'The cards are already in play.' },
+          };
+          return;
+        }
 
         if (idx === null || !hands[idx]) {
           response = { status: 409, body: { ok: false, error: 'No hand is waiting on you.' } };
@@ -593,6 +772,8 @@ export function registerArcadeBlackjackVariantsRoutes({
         const next = nextActiveHand(hands);
 
         if (next === null) {
+          const sideResult = sideBet > 0 ? bjSuperMatch(openingFour(hands)) : null;
+          const sidePayout = sideResult ? bjSuperMatchPayout(sideBet, sideResult) : 0;
           const done = await finishRound(
             client,
             rules,
@@ -603,6 +784,9 @@ export function registerArcadeBlackjackVariantsRoutes({
             deck,
             cursor,
             committed,
+            sideBet,
+            sideResult,
+            sidePayout,
           );
           response = {
             status: 200,
@@ -622,6 +806,8 @@ export function registerArcadeBlackjackVariantsRoutes({
               totalPayout: done.totalPayout,
               committed,
               won: done.totalPayout > committed,
+              sideResult,
+              sidePayout,
               serverSeed: row.server_seed,
               ...(done.chipBalance !== null || chipBalance !== null
                 ? { chipBalance: (done.chipBalance ?? chipBalance)!.toString() }
@@ -697,7 +883,8 @@ export function registerArcadeBlackjackVariantsRoutes({
 
       const r = await pool.query(
         `SELECT id, variant, bet, committed, hands, dealer_cards, results,
-                total_payout, dealer_total, won, created_at
+                total_payout, dealer_total, won, side_bet, side_payout,
+                side_result, created_at
            FROM arcade_blackjack_variant_rounds
           WHERE ${where}
           ORDER BY created_at DESC
@@ -716,6 +903,9 @@ export function registerArcadeBlackjackVariantsRoutes({
           results: row.results,
           totalPayout: Number(row.total_payout),
           dealerTotal: row.dealer_total === null ? null : Number(row.dealer_total),
+          sideBet: Number(row.side_bet ?? 0),
+          sidePayout: Number(row.side_payout ?? 0),
+          sideResult: (row.side_result as string | null) ?? null,
           won: !!row.won,
           createdAt: row.created_at,
         })),
@@ -811,6 +1001,7 @@ export function registerArcadeBlackjackVariantsRoutes({
       const r = await pool.query(
         `SELECT id, variant, bet, committed, hands, dealer_cards, deck, deck_cursor,
                 results, total_payout, dealer_total, won, status,
+                side_bet, side_payout, side_result,
                 server_seed, server_seed_hash, client_seed, nonce,
                 created_at, settled_at
            FROM arcade_blackjack_variant_rounds WHERE id = $1`,
@@ -837,6 +1028,9 @@ export function registerArcadeBlackjackVariantsRoutes({
         results: row.results,
         totalPayout: Number(row.total_payout),
         dealerTotal: row.dealer_total === null ? null : Number(row.dealer_total),
+        sideBet: Number(row.side_bet ?? 0),
+        sidePayout: Number(row.side_payout ?? 0),
+        sideResult: (row.side_result as string | null) ?? null,
         won: !!row.won,
         status: row.status,
         serverSeedHash: row.server_seed_hash,
@@ -852,8 +1046,12 @@ export function registerArcadeBlackjackVariantsRoutes({
             ? `, then every card of rank ${removed.join(', ')} is removed (${52 - removed.length * 4} left).`
             : '.') +
           ' rank = (idx % 13) + 1 (1 = Ace, 11/12/13 = J/Q/K); suit = floor(idx / 13). ' +
-          'Dealing order is player, dealer, player, dealer — deck[0,2] to the player and ' +
-          'deck[1,3] to the dealer — and every further card comes off the front in order.',
+          (rules?.switchHands
+            ? 'Two boxes: hand 1 = deck[0,2], hand 2 = deck[1,3], dealer = deck[4,5]. ' +
+              'A switch trades the SECOND card of each hand before either draws.'
+            : 'Dealing order is player, dealer, player, dealer — deck[0,2] to the player and ' +
+              'deck[1,3] to the dealer.') +
+          ' Every further card comes off the front of the deck in order.',
       });
     } catch (err) {
       logger.error('[arcade-bj-variants] verify failed', { error: (err as Error)?.message });

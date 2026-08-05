@@ -94,6 +94,7 @@ const CARDS_TABLE_LINKS: SbLinkItem[] = [
   { icon: '👁', label: 'Double Exposure', href: '/double-exposure' },
   { icon: '🂫', label: 'Pontoon', href: '/pontoon' },
   { icon: '🆓', label: 'Free Bet BJ', href: '/free-bet-blackjack' },
+  { icon: '⇄', label: 'Blackjack Switch', href: '/blackjack-switch' },
   { icon: '♦', label: 'Caribbean Stud', href: '/caribbean-stud' },
   { icon: '🖥', label: 'Video Poker', href: '/video-poker' },
 ];

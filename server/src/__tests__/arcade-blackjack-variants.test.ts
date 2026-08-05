@@ -14,6 +14,7 @@
  */
 
 import {
+  BJ_SUPER_MATCH_PAY,
   BJ_VARIANTS,
   BJ_VARIANT_KEYS,
   bjBonusMultiplier,
@@ -32,6 +33,9 @@ import {
   bjSettleHand,
   bjSettleRound,
   bjSplitIsFree,
+  bjSuperMatch,
+  bjSuperMatchPayout,
+  bjSwitchHands,
   validateBjBet,
   type BjHand,
 } from '../services/arcade-blackjack-variants';
@@ -50,6 +54,7 @@ const SPANISH = BJ_VARIANTS.spanish21;
 const EXPOSURE = BJ_VARIANTS.double_exposure;
 const PONTOON = BJ_VARIANTS.pontoon;
 const FREEBET = BJ_VARIANTS.free_bet;
+const SWITCH = BJ_VARIANTS.switch;
 
 /** A finished player hand, ready to settle. */
 function hand(cards: number[], bet = 100, extra: Partial<BjHand> = {}): BjHand {
@@ -523,10 +528,115 @@ describe('bjSettleRound', () => {
   });
 });
 
+
+describe('Blackjack Switch — the swap', () => {
+  const twoHands = () => [
+    bjNewHand([card(1, H), card(6, D)], 100), // A♥ 6♦
+    bjNewHand([card(13, C), card(5, S)], 100), // K♣ 5♠
+  ];
+
+  it('trades the second card of each hand', () => {
+    const hs = twoHands();
+    bjSwitchHands(hs);
+    expect(hs[0].cards).toEqual([card(1, H), card(5, S)]);
+    expect(hs[1].cards).toEqual([card(13, C), card(6, D)]);
+  });
+
+  it('marks both hands as switched', () => {
+    const hs = twoHands();
+    bjSwitchHands(hs);
+    expect(hs[0].switched).toBe(true);
+    expect(hs[1].switched).toBe(true);
+  });
+
+  it('refuses to swap after a hand has drawn', () => {
+    const hs = twoHands();
+    hs[0].cards.push(card(4, C));
+    expect(() => bjSwitchHands(hs)).toThrow();
+  });
+
+  it('refuses to swap anything but two hands', () => {
+    expect(() => bjSwitchHands([bjNewHand([card(1, H), card(6, D)], 100)])).toThrow();
+  });
+});
+
+describe('Blackjack Switch — a switched 21 is not a blackjack', () => {
+  it('pays a dealt natural even money', () => {
+    const s = bjSettleHand(SWITCH, hand([ACE(H), KING(D)]), [KING(C), card(9, S)]);
+    expect(s.outcome).toBe('blackjack');
+    expect(s.payout).toBe(200); // even money, not 3:2
+  });
+
+  it('pays a SWITCHED 21 as an ordinary win', () => {
+    // The rule that stops the swap from manufacturing blackjacks.
+    const s = bjSettleHand(
+      SWITCH,
+      hand([ACE(H), KING(D)], 100, { switched: true }),
+      [KING(C), card(9, S)],
+    );
+    expect(s.outcome).toBe('win');
+    expect(s.payout).toBe(200);
+  });
+
+  it('lets a switched 21 lose to a dealer natural', () => {
+    const s = bjSettleHand(
+      SWITCH,
+      hand([ACE(H), KING(D)], 100, { switched: true }),
+      [ACE(C), card(12, S)],
+    );
+    expect(s.outcome).toBe('loss');
+  });
+});
+
+describe('Blackjack Switch — the dealer 22 push', () => {
+  it('pushes a live hand', () => {
+    const s = bjSettleHand(SWITCH, hand([KING(H), card(9, D)]), [KING(C), card(5, S), card(7, H)]);
+    expect(s.outcome).toBe('push');
+    expect(s.payout).toBe(100);
+  });
+
+  it('does not rescue a bust', () => {
+    const s = bjSettleHand(SWITCH, hand([KING(H), card(9, D), card(5, C)]), [
+      KING(C), card(5, S), card(7, H),
+    ]);
+    expect(s.outcome).toBe('bust');
+  });
+
+  it('still pays a dealt natural against a dealer 22', () => {
+    const s = bjSettleHand(SWITCH, hand([ACE(H), KING(D)]), [KING(C), card(5, S), card(7, H)]);
+    expect(s.outcome).toBe('blackjack');
+    expect(s.payout).toBe(200);
+  });
+});
+
+describe('Super Match', () => {
+  it('scores the four opening cards', () => {
+    expect(bjSuperMatch([card(8, H), card(8, D), card(3, C), card(9, S)])).toBe('pair');
+    expect(bjSuperMatch([card(8, H), card(8, D), card(3, C), card(3, S)])).toBe('two_pair');
+    expect(bjSuperMatch([card(8, H), card(8, D), card(8, C), card(9, S)])).toBe('three_of_a_kind');
+    expect(bjSuperMatch([card(8, H), card(8, D), card(8, C), card(8, S)])).toBe('four_of_a_kind');
+    expect(bjSuperMatch([card(2, H), card(5, D), card(9, C), card(12, S)])).toBe('none');
+  });
+
+  it('pays the posted odds, stake included', () => {
+    expect(BJ_SUPER_MATCH_PAY.four_of_a_kind).toBe(40);
+    expect(bjSuperMatchPayout(100, 'four_of_a_kind')).toBe(4100);
+    expect(bjSuperMatchPayout(100, 'two_pair')).toBe(900);
+    expect(bjSuperMatchPayout(100, 'pair')).toBe(200);
+    expect(bjSuperMatchPayout(100, 'none')).toBe(0);
+    expect(bjSuperMatchPayout(0, 'four_of_a_kind')).toBe(0);
+  });
+
+  it('needs exactly four cards', () => {
+    expect(bjSuperMatch([card(8, H), card(8, D), card(8, C)])).toBe('none');
+  });
+});
+
 describe('variant lookup and bet validation', () => {
   it('resolves known variants and refuses unknown ones', () => {
     expect(bjRules('spanish21')?.key).toBe('spanish21');
     expect(bjRules('pontoon')?.key).toBe('pontoon');
+    expect(bjRules('switch')?.key).toBe('switch');
     // No silent default — settling on the wrong paytable is the failure to avoid.
     expect(bjRules('not_a_game')).toBeNull();
     expect(bjRules(undefined)).toBeNull();
