@@ -86,6 +86,7 @@ const CARDS_TABLE_LINKS: SbLinkItem[] = [
   { icon: '🎡', label: 'Roulette', href: '/roulette2' },
   { icon: '🀄', label: 'Baccarat', href: '/baccarat' },
   { icon: '🎲', label: 'Craps', href: '/craps' },
+  { icon: '🎲', label: 'Multiplayer Craps', href: '/craps/multi' },
   { icon: '🐉', label: 'Dragon Tiger', href: '/dragon-tiger' },
   { icon: '🃏', label: 'Three Card', href: '/three-card-poker' },
   { icon: '🀄', label: 'Pai Gow', href: '/pai-gow-poker' },
