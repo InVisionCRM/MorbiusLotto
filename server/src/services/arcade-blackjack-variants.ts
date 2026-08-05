@@ -489,6 +489,20 @@ export function bjLegalActions(
   return out;
 }
 
+/**
+ * What one "unit" of this hand is worth, for sizing a later double or split.
+ *
+ * Normally that is simply what the player put up. But a Free Bet SPLIT hand is
+ * entirely the house's money — the player's own stake on it is zero — so
+ * reading `bet` alone would size the next decision at nothing, silently
+ * handing out a further free bet and letting a paid double cost the player
+ * nothing. Falling back to the house's stake keeps every later decision priced
+ * at the unit the hand is actually playing for.
+ */
+export function bjStakeUnit(hand: BjHand): number {
+  return hand.bet > 0 ? hand.bet : hand.freeBet;
+}
+
 /** True when the house buys this double instead of the player (Free Bet). */
 export function bjDoubleIsFree(rules: BjRules, hand: BjHand): boolean {
   if (rules.freeDoubleOn.length === 0) return false;

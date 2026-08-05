@@ -52,6 +52,7 @@ import {
   bjRules,
   bjSettleRound,
   bjSplitIsFree,
+  bjStakeUnit,
   bjSuperMatch,
   bjSuperMatchPayout,
   bjSwitchHands,
@@ -436,9 +437,11 @@ export function registerArcadeBlackjackVariantsRoutes({
       }
 
       // A 21 needs no decisions — that hand goes straight to the showdown.
-      // Switch still owes the player their trade-or-keep, so it never skips.
+      // Switch still owes the player their trade-or-keep, so it never skips;
+      // its flags are recomputed once the swap decision is made, because a swap
+      // can take a hand out of 21 again.
       for (const h of hands) {
-        if (bjHandTotal(h.cards).total === 21) h.done = true;
+        h.done = bjHandTotal(h.cards).total === 21;
       }
       const noDecisions = stage === 'play' && hands.every((h) => h.done);
 
@@ -622,9 +625,14 @@ export function registerArcadeBlackjackVariantsRoutes({
           }
           if (action === 'switch') bjSwitchHands(hands);
 
-          // A 21 either hand is now holding needs no decisions.
+          // Recompute `done` from scratch rather than only setting it. A swap
+          // can turn a hand that was 21 at the deal into a non-21 that DOES owe
+          // the player a decision, and a stale flag would freeze that hand and
+          // send a live 16 straight to the dealer. Both hands still hold
+          // exactly two cards here, so neither can be busted or surrendered and
+          // "is it 21" is the whole question.
           for (const h of hands) {
-            if (bjHandTotal(h.cards).total === 21) h.done = true;
+            h.done = bjHandTotal(h.cards).total === 21;
           }
           const first = nextActiveHand(hands);
 
@@ -712,20 +720,23 @@ export function registerArcadeBlackjackVariantsRoutes({
           hand.surrendered = true;
           hand.done = true;
         } else if (action === 'double') {
+          // Size off the stake UNIT, not hand.bet: a free-split hand carries no
+          // player stake at all, and doubling it must still cost a real unit.
+          const unit = bjStakeUnit(hand);
           if (bjDoubleIsFree(rules, hand)) {
             // The house puts the chips up. Nothing leaves the player's wallet,
             // and `committed` deliberately does not move.
-            hand.freeBet += hand.bet;
+            hand.freeBet += unit;
           } else {
             chipBalance = await applyPokerChipDelta(
               client,
               wallet,
-              BigInt(-hand.bet),
+              BigInt(-unit),
               'arcade_blackjack_variants_bet',
               { type: 'arcade_blackjack_variants', id: roundId },
             );
-            committed += hand.bet;
-            hand.bet *= 2;
+            committed += unit;
+            hand.bet += unit;
           }
           hand.doubled = true;
           hand.cards.push(deck[cursor++]);
@@ -735,7 +746,7 @@ export function registerArcadeBlackjackVariantsRoutes({
           hand.done = true;
         } else if (action === 'split') {
           const free = bjSplitIsFree(rules, hand);
-          const stake = hand.bet;
+          const stake = bjStakeUnit(hand);
           if (!free) {
             chipBalance = await applyPokerChipDelta(
               client,
@@ -752,7 +763,11 @@ export function registerArcadeBlackjackVariantsRoutes({
           hand.fromSplit = true;
           hand.cards.push(deck[cursor++]);
 
-          const newHand = bjNewHand([second, deck[cursor++]], stake, true);
+          // A FREE split hand is entirely the house's money: the player's own
+          // stake on it is ZERO. Giving it a player stake as well would have
+          // settlement return chips that were never put up — paying the house's
+          // side of the bet to the player on every win and push.
+          const newHand = bjNewHand([second, deck[cursor++]], free ? 0 : stake, true);
           if (free) newHand.freeBet = stake;
 
           splitCount += 1;

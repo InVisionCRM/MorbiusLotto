@@ -33,6 +33,7 @@ import {
   bjSettleHand,
   bjSettleRound,
   bjSplitIsFree,
+  bjStakeUnit,
   bjSuperMatch,
   bjSuperMatchPayout,
   bjSwitchHands,
@@ -483,6 +484,70 @@ describe('Free Bet — the house’s chips are the house’s', () => {
   });
 });
 
+
+describe('Free Bet — a free split hand is the house\'s money, not the player\'s', () => {
+  // Regression: the split hand used to be created with BOTH a player stake and
+  // the house's free stake, so settlement returned chips the player had never
+  // put up — paying out the house's own side of the bet on every win and push.
+  const freeSplitHand = (extra: Partial<BjHand> = {}) =>
+    hand([card(8, C), card(9, S)], 0, { freeBet: 100, fromSplit: true, ...extra });
+
+  it('carries no player stake at all', () => {
+    const h = freeSplitHand();
+    expect(h.bet).toBe(0);
+    expect(h.freeBet).toBe(100);
+  });
+
+  it('pays one stake in winnings and returns nothing else', () => {
+    const s = bjSettleHand(FREEBET, freeSplitHand(), [KING(C), card(6, S)]); // 16
+    expect(s.outcome).toBe('win');
+    // The player risked nothing on this hand, so they collect the winnings on
+    // the house's chips and NOT the house's chips themselves.
+    expect(s.payout).toBe(100);
+    expect(s.staked).toBe(0);
+  });
+
+  it('returns nothing on a push, because nothing was put up', () => {
+    const s = bjSettleHand(FREEBET, freeSplitHand(), [KING(C), card(7, S)]); // 17
+    expect(s.outcome).toBe('push');
+    expect(s.payout).toBe(0);
+  });
+
+  it('costs the player nothing on a loss', () => {
+    const s = bjSettleHand(FREEBET, freeSplitHand(), [KING(C), card(10, S)]); // 20
+    expect(s.outcome).toBe('loss');
+    expect(s.payout).toBe(0);
+    expect(s.staked).toBe(0);
+  });
+
+  it('keeps a free split out of the round\'s committed total', () => {
+    const dealer = [KING(C), card(7, S)]; // 17
+    const r = bjSettleRound(FREEBET, [
+      hand([card(8, H), KING(D)], 100), // the original, paid hand — 18, wins
+      freeSplitHand(),
+    ], dealer);
+    // Only the player's own 100 was ever at risk.
+    expect(r.committed).toBe(100);
+  });
+});
+
+describe('bjStakeUnit — sizing a decision on a hand with no player stake', () => {
+  it('uses the player stake when there is one', () => {
+    expect(bjStakeUnit(hand([card(8, H), card(9, D)], 250))).toBe(250);
+  });
+
+  it('falls back to the house stake on a free split hand', () => {
+    // Without this, doubling a free-split hand would be sized at zero — a
+    // second free bet handed out by accident, and a paid double costing the
+    // player nothing.
+    expect(bjStakeUnit(hand([card(8, H), card(9, D)], 0, { freeBet: 250 }))).toBe(250);
+  });
+
+  it('is zero only when the hand carries nothing at all', () => {
+    expect(bjStakeUnit(hand([card(8, H), card(9, D)], 0))).toBe(0);
+  });
+});
+
 describe('bjSettleRound', () => {
   it('adds up a split round and counts only the player’s money as committed', () => {
     const dealer = [KING(C), card(7, S)]; // 17
@@ -547,6 +612,27 @@ describe('Blackjack Switch — the swap', () => {
     bjSwitchHands(hs);
     expect(hs[0].switched).toBe(true);
     expect(hs[1].switched).toBe(true);
+  });
+
+
+  it('frees a hand that a swap turns OUT of 21', () => {
+    // Regression: a hand dealt a two-card 21 was marked done at the deal. If a
+    // swap then took it down to 16, the stale flag froze it and sent a live
+    // hand straight to the dealer with no decision. Recomputing after the swap
+    // is what keeps that from happening.
+    const hs = [
+      bjNewHand([ACE(H), KING(D)], 100), // 21 at the deal
+      bjNewHand([card(5, C), card(6, S)], 100), // 11
+    ];
+    for (const h of hs) if (bjHandTotal(h.cards).total === 21) h.done = true;
+    expect(hs[0].done).toBe(true);
+
+    bjSwitchHands(hs);
+    // A♥ + 6♠ = 17, and 5♣ + K♦ = 15 — neither is 21 any more.
+    for (const h of hs) h.done = bjHandTotal(h.cards).total === 21;
+    expect(hs[0].done).toBe(false);
+    expect(hs[1].done).toBe(false);
+    expect(bjLegalActions(SWITCH, hs[0], 0)).toContain('stand');
   });
 
   it('refuses to swap after a hand has drawn', () => {
