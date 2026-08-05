@@ -27,6 +27,14 @@ import { probeSiweSession } from '@/lib/api-auth'
 import { useBigWin } from '@/contexts/big-win-context'
 import { SessionChart, type SessionPoint } from '@/components/arcade2/SessionChart'
 import { FloatingPanel } from '@/components/arcade2/FloatingPanel'
+import { AutoBetPanel } from '@/components/shared/AutoBetPanel'
+import { useAutoBetStrategy } from '@/hooks/use-auto-bet-strategy'
+import {
+  defaultStrategy,
+  stopReasonLabel,
+  type AutoBetStrategy,
+  type SettledRound,
+} from '@/lib/auto-bet-strategy'
 import { DiceInfoTabs } from './DiceInfoTabs'
 import { DiceFairnessModal } from './DiceFairnessModal'
 import { DiceRulesModal } from './DiceRulesModal'
@@ -48,7 +56,8 @@ import {
 const HISTORY_LIMIT = 25
 const MAX_IN_FLIGHT = 8
 const AUTO_INTERVAL_MS = 250
-const AUTO_COUNTS = [10, 25, 50, 100] as const
+/** "∞" for the fast path, which counts down rather than running unbounded. */
+const UNBOUNDED_AUTO = 100_000
 const RECENT_LIMIT = 10
 const TARGET_PRESETS_X100 = [2500, 5000, 7500] as const
 
@@ -81,8 +90,9 @@ export function StakeDiceGame() {
   const [noChips, setNoChips] = useState(false)
 
   const [mode, setMode] = useState<'manual' | 'auto'>('manual')
-  const [autoCount, setAutoCount] = useState<number>(25)
   const [autoLeft, setAutoLeft] = useState<number | null>(null)
+  const [strategy, setStrategy] = useState<AutoBetStrategy>(() => defaultStrategy(10))
+  const [strategyNote, setStrategyNote] = useState<string | null>(null)
 
   const [fairnessOpen, setFairnessOpen] = useState(false)
   const [rulesOpen, setRulesOpen] = useState(false)
@@ -198,10 +208,15 @@ export function StakeDiceGame() {
     }
   }, [])
 
-  /** Fire one independent roll. Returns false when the loop should stop. */
-  const rollOnce = useCallback(async (): Promise<boolean> => {
-    if (inFlight.current >= MAX_IN_FLIGHT || !info) return true
-    const stake = clampBet(bet)
+  /**
+   * Fire one roll. Returns the settled round, or null when the loop should
+   * stop. `stakeOverride` lets the strategy loop stake what it decided rather
+   * than whatever is in the bet field.
+   */
+  const rollOnce = useCallback(async (stakeOverride?: number): Promise<SettledRound | null> => {
+    if (!info) return null
+    if (inFlight.current >= MAX_IN_FLIGHT) return { bet: 0, payout: 0 }
+    const stake = clampBet(stakeOverride ?? bet)
     const target = clampTarget(targetX100)
     setBet(stake)
     setTargetX100(target)
@@ -222,7 +237,7 @@ export function StakeDiceGame() {
         bet: stake,
         targetX100: target,
       })
-      if (!mounted.current) return false
+      if (!mounted.current) return null
       const profit = res.payout - res.bet
       reportWin({ game: 'Dice', bet: res.bet, payout: res.payout })
       if (profit > 0) diceAudio.playWin()
@@ -251,9 +266,9 @@ export function StakeDiceGame() {
           ...prev,
         ].slice(0, HISTORY_LIMIT),
       )
-      return true
+      return { bet: res.bet, payout: res.payout }
     } catch (e) {
-      if (!mounted.current) return false
+      if (!mounted.current) return null
       const msg = (e as Error)?.message ?? ''
       if (/Not enough chips|insufficient|402/i.test(msg)) {
         setError('Not enough MORBIUS for that bet.')
@@ -263,7 +278,7 @@ export function StakeDiceGame() {
       } else {
         setError(serverDetail(msg) ?? 'Could not play the roll. Try again.')
       }
-      return false
+      return null
     } finally {
       inFlight.current -= 1
     }
@@ -280,8 +295,8 @@ export function StakeDiceGame() {
     if (inFlight.current < MAX_IN_FLIGHT) {
       autoLeftRef.current = left - 1
       setAutoLeft(left - 1)
-      void rollOnce().then((ok) => {
-        if (!ok) stopAuto()
+      void rollOnce().then((settled) => {
+        if (!settled) stopAuto()
       })
     }
     if (autoLeftRef.current != null && autoLeftRef.current > 0) {
@@ -291,12 +306,49 @@ export function StakeDiceGame() {
     }
   }, [rollOnce, stopAuto])
 
-  const startAuto = useCallback(() => {
-    if (autoLeftRef.current != null) return
-    autoLeftRef.current = autoCount
-    setAutoLeft(autoCount)
-    autoTick()
-  }, [autoCount, autoTick])
+  const startAuto = useCallback(
+    (count: number) => {
+      if (autoLeftRef.current != null) return
+      autoLeftRef.current = count
+      setAutoLeft(count)
+      autoTick()
+    },
+    [autoTick],
+  )
+
+  const betLimits = useMemo(() => ({ min: minBet, max: maxBet }), [minBet, maxBet])
+
+  // ── Strategy autoplay ────────────────────────────────────────────────────
+  // Serialized (one bet at a time) because each outcome sizes the next stake.
+  // Plain autoplay keeps the fast pipelined path above.
+  const strat = useAutoBetStrategy({
+    strategy,
+    limits: betLimits,
+    intervalMs: AUTO_INTERVAL_MS,
+    placeBet: useCallback(
+      async (stake: number) => {
+        const settled = await rollOnce(stake)
+        // bet === 0 is rollOnce's "skipped, in-flight full" sentinel; it can't
+        // happen on a serialized run, and counting it would corrupt the tally.
+        if (!settled || settled.bet === 0) return null
+        return settled
+      },
+      [rollOnce],
+    ),
+    onStop: useCallback((reason, state) => {
+      setStrategyNote(stopReasonLabel(reason, state.profit))
+    }, []),
+  })
+
+  // Show the stake the strategy is about to place, so escalation is visible.
+  useEffect(() => {
+    if (strat.running) setBet(strat.run.nextBet)
+  }, [strat.running, strat.run.nextBet])
+
+  // The bet field is the strategy's base bet while idle — one number to set.
+  useEffect(() => {
+    if (!strat.running) setStrategy((s) => (s.baseBet === bet ? s : { ...s, baseBet: bet }))
+  }, [bet, strat.running])
 
   const openVerify = useCallback((id: string | null) => {
     setVerifyTarget(id)
@@ -311,7 +363,7 @@ export function StakeDiceGame() {
     })
   }, [])
 
-  const autoRunning = autoLeft != null
+  const autoRunning = autoLeft != null || strat.running
   const busy = autoRunning || replaying
 
   // ── Replay a past roll: stage the confirm overlay, then re-show the exact
@@ -457,27 +509,17 @@ export function StakeDiceGame() {
           </div>
 
           {mode === 'auto' && (
-            <div className="space-y-1.5">
-              <label className="text-xs uppercase tracking-wide text-slate-500">Number of rolls</label>
-              <div className="grid grid-cols-4 gap-2">
-                {AUTO_COUNTS.map((n) => (
-                  <button
-                    key={n}
-                    type="button"
-                    disabled={autoRunning}
-                    onClick={() => setAutoCount(n)}
-                    className={[
-                      'arc-mono rounded-md py-1.5 text-xs tabular-nums transition-colors',
-                      autoCount === n
-                        ? 'bg-cyan-500/15 text-cyan-300 ring-1 ring-cyan-500/50'
-                        : 'text-slate-500 ring-1 ring-cyan-950 hover:text-slate-300',
-                    ].join(' ')}
-                  >
-                    {n}
-                  </button>
-                ))}
-              </div>
-            </div>
+            <>
+              <AutoBetPanel
+                strategy={strategy}
+                onChange={setStrategy}
+                disabled={autoRunning}
+                status={strat.running ? strat.run : null}
+              />
+              {!strat.running && strategyNote && (
+                <p className="text-xs text-slate-400">{strategyNote}</p>
+              )}
+            </>
           )}
 
           {/* Action button: pinned to a fixed bottom bar on mobile (Roll/Start/Stop always
@@ -495,19 +537,30 @@ export function StakeDiceGame() {
           ) : autoRunning ? (
             <Button
               type="button"
-              onClick={stopAuto}
+              onClick={() => {
+                stopAuto()
+                strat.stop()
+              }}
               className="arc-display h-12 w-full bg-rose-500 text-base font-bold uppercase tracking-widest text-[#1B0308] hover:bg-rose-400"
             >
-              Stop · {autoLeft} left
+              {strat.running
+                ? `Stop · bet ${strat.run.betsPlaced}`
+                : `Stop · ${autoLeft} left`}
             </Button>
           ) : (
             <Button
               type="button"
               disabled={!info || replaying}
-              onClick={startAuto}
+              onClick={() => {
+                setStrategyNote(null)
+                // Flat betting with no stop conditions keeps the fast pipelined
+                // loop; anything the strategy actually decides must serialize.
+                if (strat.active) strat.start()
+                else startAuto(strategy.bets ?? UNBOUNDED_AUTO)
+              }}
               className="arc-display h-12 w-full bg-cyan-500 text-base font-bold uppercase tracking-widest text-[#03121B] shadow-[0_0_24px_-6px_rgba(34,211,238,0.8)] hover:bg-cyan-400 disabled:opacity-50"
             >
-              Start auto ({autoCount})
+              Start auto{strategy.bets ? ` (${strategy.bets})` : ''}
             </Button>
           )}
           </div>

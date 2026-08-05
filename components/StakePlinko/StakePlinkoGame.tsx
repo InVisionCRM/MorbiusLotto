@@ -24,7 +24,7 @@
  *     prepended live as balls settle.
  */
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useAccount } from 'wagmi'
 import { Volume2, VolumeX, Play, X } from 'lucide-react'
 import { Card } from '@/components/ui/card'
@@ -47,6 +47,14 @@ import type { RiskLevel } from '@/app/PLINKO/types'
 import { PlinkoInfoTabs } from './PlinkoInfoTabs'
 import { SessionChart, type SessionPoint } from '@/components/arcade2/SessionChart'
 import { FloatingPanel } from '@/components/arcade2/FloatingPanel'
+import { AutoBetPanel } from '@/components/shared/AutoBetPanel'
+import { useAutoBetStrategy } from '@/hooks/use-auto-bet-strategy'
+import {
+  defaultStrategy,
+  stopReasonLabel,
+  type AutoBetStrategy,
+  type SettledRound,
+} from '@/lib/auto-bet-strategy'
 import { PlinkoFairnessModal } from './PlinkoFairnessModal'
 import { PlinkoRulesModal } from './PlinkoRulesModal'
 import { plinkoAudio } from './plinko-audio'
@@ -67,7 +75,8 @@ import {
 const HISTORY_LIMIT = 25
 const MAX_IN_FLIGHT = 8
 const AUTO_INTERVAL_MS = 250
-const AUTO_COUNTS = [10, 25, 50, 100] as const
+/** "∞" for the fast path, which counts down rather than running unbounded. */
+const UNBOUNDED_AUTO = 100_000
 const RECENT_LIMIT = 10
 
 /** "402 Payment Required: Not enough chips." → "Not enough chips." */
@@ -117,8 +126,9 @@ export function StakePlinkoGame() {
   const [noChips, setNoChips] = useState(false)
 
   const [mode, setMode] = useState<'manual' | 'auto'>('manual')
-  const [autoCount, setAutoCount] = useState<number>(25)
   const [autoLeft, setAutoLeft] = useState<number | null>(null)
+  const [strategy, setStrategy] = useState<AutoBetStrategy>(() => defaultStrategy(10))
+  const [strategyNote, setStrategyNote] = useState<string | null>(null)
 
   const [fairnessOpen, setFairnessOpen] = useState(false)
   const [rulesOpen, setRulesOpen] = useState(false)
@@ -239,11 +249,15 @@ export function StakePlinkoGame() {
     }
   }, [])
 
-  /** Fire one independent bet. Returns false when the loop should stop. */
-  const dropBall = useCallback(async (): Promise<boolean> => {
-    if (inFlight.current >= MAX_IN_FLIGHT) return true
+  /**
+   * Fire one ball. Returns the settled round, or null when the loop should
+   * stop. `stakeOverride` lets the strategy loop stake what it decided rather
+   * than whatever is in the bet field.
+   */
+  const dropBall = useCallback(async (stakeOverride?: number): Promise<SettledRound | null> => {
+    if (inFlight.current >= MAX_IN_FLIGHT) return { bet: 0, payout: 0 }
     plinkoAudio.init()
-    const stake = clampBet(bet)
+    const stake = clampBet(stakeOverride ?? bet)
     setBet(stake)
     setError(null)
     setNoChips(false)
@@ -253,7 +267,7 @@ export function StakePlinkoGame() {
         risk,
         bet: stake,
       })
-      if (!mounted.current) return false
+      if (!mounted.current) return null
       // NB: the balance is deliberately NOT updated here. The bet is already
       // settled server-side, but on screen we hold the change until the ball
       // lands (handleScore) so the balance moves with the result, not the drop.
@@ -290,9 +304,9 @@ export function StakePlinkoGame() {
       airborne.current += 1
       armReconcile()
       plinkoAudio.playDrop()
-      return true
+      return { bet: res.bet, payout: res.payout }
     } catch (e) {
-      if (!mounted.current) return false
+      if (!mounted.current) return null
       const msg = (e as Error)?.message ?? ''
       if (/NO_CHIPS|Not enough chips|402/i.test(msg)) {
         setError('Not enough MORBIUS for that bet.')
@@ -302,7 +316,7 @@ export function StakePlinkoGame() {
       } else {
         setError(serverDetail(msg) ?? 'Could not drop the ball. Try again.')
       }
-      return false
+      return null
     } finally {
       inFlight.current -= 1
     }
@@ -321,8 +335,8 @@ export function StakePlinkoGame() {
     if (inFlight.current < MAX_IN_FLIGHT) {
       autoLeftRef.current = left - 1
       setAutoLeft(left - 1)
-      void dropBall().then((ok) => {
-        if (!ok) stopAuto()
+      void dropBall().then((settled) => {
+        if (!settled) stopAuto()
       })
     }
     if (autoLeftRef.current != null && autoLeftRef.current > 0) {
@@ -332,12 +346,52 @@ export function StakePlinkoGame() {
     }
   }, [dropBall, stopAuto])
 
-  const startAuto = useCallback(() => {
-    if (autoLeftRef.current != null) return
-    autoLeftRef.current = autoCount
-    setAutoLeft(autoCount)
-    autoTick()
-  }, [autoCount, autoTick])
+  const startAuto = useCallback(
+    (count: number) => {
+      if (autoLeftRef.current != null) return
+      autoLeftRef.current = count
+      setAutoLeft(count)
+      autoTick()
+    },
+    [autoTick],
+  )
+
+  const betLimits = useMemo(
+    () => ({ min: bounds.minBet, max: bounds.maxBet }),
+    [bounds.minBet, bounds.maxBet],
+  )
+
+  // ── Strategy autoplay ────────────────────────────────────────────────────
+  // Serialized (one bet at a time) because each outcome sizes the next stake.
+  // Plain autoplay keeps the fast pipelined path above.
+  const strat = useAutoBetStrategy({
+    strategy,
+    limits: betLimits,
+    intervalMs: AUTO_INTERVAL_MS,
+    placeBet: useCallback(
+      async (stake: number) => {
+        const settled = await dropBall(stake)
+        // bet === 0 is the "skipped, in-flight full" sentinel; it can't happen
+        // on a serialized run, and counting it would corrupt the tally.
+        if (!settled || settled.bet === 0) return null
+        return settled
+      },
+      [dropBall],
+    ),
+    onStop: useCallback((reason, state) => {
+      setStrategyNote(stopReasonLabel(reason, state.profit))
+    }, []),
+  })
+
+  // Show the stake the strategy is about to place, so escalation is visible.
+  useEffect(() => {
+    if (strat.running) setBet(strat.run.nextBet)
+  }, [strat.running, strat.run.nextBet])
+
+  // The bet field is the strategy's base bet while idle — one number to set.
+  useEffect(() => {
+    if (!strat.running) setStrategy((s) => (s.baseBet === bet ? s : { ...s, baseBet: bet }))
+  }, [bet, strat.running])
 
   /** Lands feed the recent-results strip + session chart (server data rode along on the ball). */
   const handleScore = useCallback(
@@ -444,7 +498,7 @@ export function StakePlinkoGame() {
     setMuted(!muted)
   }
 
-  const autoRunning = autoLeft != null
+  const autoRunning = autoLeft != null || strat.running
   const maxWinX100 = multipliers?.[risk]?.[0] ?? 0
   const boardRisk = PLINKO_RISK_TO_BOARD[risk]
 
@@ -570,27 +624,17 @@ export function StakePlinkoGame() {
           </div>
 
           {mode === 'auto' && (
-            <div className="space-y-1.5">
-              <label className="text-xs uppercase tracking-wide text-slate-500">Number of balls</label>
-              <div className="grid grid-cols-4 gap-2">
-                {AUTO_COUNTS.map((n) => (
-                  <button
-                    key={n}
-                    type="button"
-                    disabled={autoRunning}
-                    onClick={() => setAutoCount(n)}
-                    className={[
-                      'arc-mono rounded-md py-1.5 text-xs tabular-nums transition-colors',
-                      autoCount === n
-                        ? 'bg-cyan-500/15 text-cyan-300 ring-1 ring-cyan-500/50'
-                        : 'text-slate-500 ring-1 ring-cyan-950 hover:text-slate-300',
-                    ].join(' ')}
-                  >
-                    {n}
-                  </button>
-                ))}
-              </div>
-            </div>
+            <>
+              <AutoBetPanel
+                strategy={strategy}
+                onChange={setStrategy}
+                disabled={autoRunning}
+                status={strat.running ? strat.run : null}
+              />
+              {!strat.running && strategyNote && (
+                <p className="text-xs text-slate-400">{strategyNote}</p>
+              )}
+            </>
           )}
 
           <div className="flex items-center justify-between text-xs text-slate-500">
@@ -621,18 +665,27 @@ export function StakePlinkoGame() {
           ) : autoRunning ? (
             <Button
               type="button"
-              onClick={stopAuto}
+              onClick={() => {
+                stopAuto()
+                strat.stop()
+              }}
               className="arc-display h-12 w-full bg-rose-500 text-base font-bold uppercase tracking-widest text-[#1B0308] hover:bg-rose-400"
             >
-              Stop · {autoLeft} left
+              {strat.running ? `Stop · bet ${strat.run.betsPlaced}` : `Stop · ${autoLeft} left`}
             </Button>
           ) : (
             <Button
               type="button"
-              onClick={startAuto}
+              onClick={() => {
+                setStrategyNote(null)
+                // Flat betting with no stop conditions keeps the fast pipelined
+                // loop; anything the strategy actually decides must serialize.
+                if (strat.active) strat.start()
+                else startAuto(strategy.bets ?? UNBOUNDED_AUTO)
+              }}
               className="arc-display h-12 w-full bg-cyan-500 text-base font-bold uppercase tracking-widest text-[#03121B] shadow-[0_0_24px_-6px_rgba(34,211,238,0.8)] hover:bg-cyan-400"
             >
-              Start auto ({autoCount})
+              Start auto{strategy.bets ? ` (${strategy.bets})` : ''}
             </Button>
           )}
           </div>
