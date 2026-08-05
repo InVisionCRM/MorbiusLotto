@@ -30,6 +30,10 @@ import { CrapsTable } from '@/components/craps/CrapsTable';
 import { CrapsDice } from '@/components/craps/CrapsDice';
 import { CrapsChipRail } from '@/components/craps/CrapsChipRail';
 import { CrapsMultiRail } from '@/components/craps/multi/CrapsMultiRail';
+import { crapsMultiFaqs } from '@/components/craps/multi/crapsMultiFaqs';
+import { ArcadeFAQ } from '@/components/arcade2/ArcadeFAQ';
+import { TableFeltControls, useTableFelt } from '@/components/shared/TableFeltControls';
+import { tableAudio } from '@/lib/table-audio';
 import {
   CRAPS_MULTI_EVENTS,
   clearCrapsMultiBet,
@@ -61,6 +65,13 @@ export default function CrapsMultiTablePage() {
   const [busy, setBusy] = useState(false);
   const [activeChip, setActiveChip] = useState(25);
   const [nowMs, setNowMs] = useState(() => Date.now());
+  const felt = useTableFelt();
+  // The last throw we have already sounded, so a re-render never replays it.
+  const soundedRollRef = useRef<string | null>(null);
+  // This viewer's own winnings from the latest throw, mirrored into a ref so
+  // the roll-sound effect can read it without taking the seat as a dependency
+  // (which would re-fire the sound whenever anything else about the seat moved).
+  const mySeatWinRef = useRef<number>(0);
 
   const stateRef = useRef<CrapsMultiTableState | null>(null);
   stateRef.current = state;
@@ -113,7 +124,33 @@ export default function CrapsMultiTablePage() {
     return () => clearInterval(id);
   }, []);
 
+  // Sound the throw the TABLE last made, not the one this client asked for:
+  // every seat should hear the dice, including the seven that just emptied the
+  // felt, and only the shooter sends a roll request.
+  useEffect(() => {
+    const roll = state?.lastRoll;
+    if (!roll || soundedRollRef.current === roll.rollId) return;
+    const first = soundedRollRef.current === null;
+    soundedRollRef.current = roll.rollId;
+    // Don't replay the table's history on arrival — only throws made while
+    // we're watching.
+    if (first) return;
+
+    tableAudio.init();
+    tableAudio.playDiceRoll();
+    setTimeout(() => {
+      if (roll.isSevenOut) tableAudio.playSevenOut();
+      else if (roll.isPoint) tableAudio.playPointMade();
+      else if ((mySeatWinRef.current ?? 0) > 0) tableAudio.playWin();
+      if (roll.dicePassed) setTimeout(() => tableAudio.playDicePass(), 420);
+    }, 340);
+  }, [state?.lastRoll]);
+
   const mySeat = useMemo(() => crapsSeatOf(state, address), [state, address]);
+  useEffect(() => {
+    mySeatWinRef.current = mySeat?.lastWin ?? 0;
+  }, [mySeat?.lastWin]);
+
   const iAmShooter = !!mySeat?.isShooter;
   const secondsLeft = crapsClockRemaining(state, nowMs);
   const bettingOpen = state?.status === 'betting';
@@ -147,6 +184,8 @@ export default function CrapsMultiTablePage() {
 
   const placeBet = useCallback((type: BetType, amount: number) => {
     if (!mySeat) { setError('Take a seat before betting.'); return; }
+    tableAudio.init();
+    tableAudio.playChip();
     void guard(() => placeCrapsMultiBet(ws!, tableId, type, amount));
   }, [guard, ws, tableId, mySeat]);
 
@@ -155,6 +194,7 @@ export default function CrapsMultiTablePage() {
   }, [guard, ws, tableId]);
 
   const throwDice = useCallback(() => {
+    tableAudio.init();
     void guard(() => rollCrapsMulti(ws!, tableId));
   }, [guard, ws, tableId]);
 
@@ -190,6 +230,7 @@ export default function CrapsMultiTablePage() {
                 {state.viewerCount} watching
               </span>
             )}
+            <TableFeltControls felt={felt} />
             <span
               className={cn(
                 'h-2 w-2 rounded-full',
@@ -435,6 +476,10 @@ export default function CrapsMultiTablePage() {
             </Card>
           </div>
         </div>
+        {/* The questions a shared felt raises that a solo game never does. */}
+        <section className="mt-6">
+          <ArcadeFAQ items={crapsMultiFaqs} accent="#86EFAC" />
+        </section>
       </main>
     </div>
   );

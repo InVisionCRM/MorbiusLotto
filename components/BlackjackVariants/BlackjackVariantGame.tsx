@@ -32,6 +32,8 @@ import { probeSiweSession } from '@/lib/api-auth';
 import { useBigWin } from '@/contexts/big-win-context';
 import { TableFeltControls, useTableFelt } from '@/components/shared/TableFeltControls';
 import { tableAudio } from '@/lib/table-audio';
+import { ArcadeFAQ } from '@/components/arcade2/ArcadeFAQ';
+import { blackjackVariantFaqs } from './blackjackVariantFaqs';
 import { SessionChart, type SessionPoint } from '@/components/arcade2/SessionChart';
 import { FloatingPanel } from '@/components/arcade2/FloatingPanel';
 import { TableCard, TableCardStyles } from '@/components/shared/TableCard';
@@ -979,6 +981,11 @@ export function BlackjackVariantGame({ variant }: { variant: BjVariant }) {
           await refetchBalance();
         }}
       />
+
+      {/* Everything a player would otherwise only learn by losing. */}
+      <section className="mt-6">
+        <ArcadeFAQ items={blackjackVariantFaqs(variant)} accent="#22D3EE" />
+      </section>
 
       <TableCardStyles />
     </div>

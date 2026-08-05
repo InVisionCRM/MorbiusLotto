@@ -38,6 +38,8 @@ import { TableFairnessModal, type DeckSlice } from '@/components/shared/TableFai
 import { TableHandHistory, type TableHistoryRow } from '@/components/shared/TableHandHistory';
 import { TableFeltControls, useTableFelt } from '@/components/shared/TableFeltControls';
 import { tableAudio } from '@/lib/table-audio';
+import { ArcadeFAQ } from '@/components/arcade2/ArcadeFAQ';
+import { ultimateHoldemFaqs } from './ultimateHoldemFaqs';
 import { categoryName, oddsLabel } from '@/lib/playing-cards';
 import {
   actUth,
@@ -902,6 +904,11 @@ export function UltimateHoldemGame() {
           await refetchBalance();
         }}
       />
+
+      {/* Everything a player would otherwise only learn by losing. */}
+      <section className="mt-6">
+        <ArcadeFAQ items={ultimateHoldemFaqs} accent="#A78BFA" />
+      </section>
 
       <TableCardStyles />
     </div>

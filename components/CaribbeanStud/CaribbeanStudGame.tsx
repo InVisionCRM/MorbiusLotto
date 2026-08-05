@@ -37,6 +37,8 @@ import { TableFairnessModal, type DeckSlice } from '@/components/shared/TableFai
 import { TableHandHistory, type TableHistoryRow } from '@/components/shared/TableHandHistory';
 import { TableFeltControls, useTableFelt } from '@/components/shared/TableFeltControls';
 import { tableAudio } from '@/lib/table-audio';
+import { ArcadeFAQ } from '@/components/arcade2/ArcadeFAQ';
+import { caribbeanStudFaqs } from './caribbeanStudFaqs';
 import { categoryName, oddsLabel } from '@/lib/playing-cards';
 import {
   csResultLabel,
@@ -815,6 +817,11 @@ export function CaribbeanStudGame() {
           await refetchBalance();
         }}
       />
+
+      {/* Everything a player would otherwise only learn by losing. */}
+      <section className="mt-6">
+        <ArcadeFAQ items={caribbeanStudFaqs} accent="#38BDF8" />
+      </section>
 
       <TableCardStyles />
     </div>
