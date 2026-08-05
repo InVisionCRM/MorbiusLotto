@@ -17,6 +17,7 @@
 import crypto from 'crypto';
 import type { Express, Request, Response } from 'express';
 import { logger } from '../utils/logger';
+import { betLimits } from '../lib/game-limits';
 import { verifyTelegramInitData } from '../services/telegram.service';
 import { SESSION_COOKIE_NAME } from '../middleware/require-auth';
 import { getPokerChipBalance, applyPokerChipDelta } from '../services/poker-chip-wallet';
@@ -38,8 +39,6 @@ interface RegisterVideoPokerRoutesOptions {
   authService: AuthService;
 }
 
-const MIN_BET = 10;
-const MAX_BET = 2000;
 const pf = new ProvablyFairService();
 
 interface DrawOutcome {
@@ -94,8 +93,8 @@ export function registerVideoPokerRoutes({
   app.get('/api/video-poker/paytable', (_req: Request, res: Response) => {
     res.json({
       ok: true,
-      minBet: MIN_BET,
-      maxBet: MAX_BET,
+      minBet: betLimits('video_poker').min,
+      maxBet: betLimits('video_poker').max,
       paytable: VIDEO_POKER_PAYTABLE,
       names: VIDEO_POKER_CATEGORY_NAME,
       order: VIDEO_POKER_PAYING_ORDER,
@@ -113,10 +112,12 @@ export function registerVideoPokerRoutes({
       }
 
       const bet = Math.floor(Number(req.body?.bet));
-      if (!Number.isFinite(bet) || bet < MIN_BET || bet > MAX_BET) {
-        return res
-          .status(400)
-          .json({ ok: false, error: `Bet must be between ${MIN_BET} and ${MAX_BET} chips.` });
+      const limits = betLimits('video_poker');
+      if (!Number.isFinite(bet) || bet < limits.min || bet > limits.max) {
+        return res.status(400).json({
+          ok: false,
+          error: `Bet must be between ${limits.min.toLocaleString()} and ${limits.max.toLocaleString()} chips.`,
+        });
       }
 
       const serverSeed = pf.generateServerSeed();

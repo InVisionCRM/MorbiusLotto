@@ -23,6 +23,7 @@
 import crypto from 'crypto';
 import type { Express, Request, Response } from 'express';
 import { logger } from '../utils/logger';
+import { betLimits } from '../lib/game-limits';
 import { verifyTelegramInitData } from '../services/telegram.service';
 import { SESSION_COOKIE_NAME } from '../middleware/require-auth';
 import { applyPokerChipDelta, getPokerChipBalance } from '../services/poker-chip-wallet';
@@ -126,6 +127,22 @@ export function registerArcadeCrapsRoutes({
     }
     return wallet.toLowerCase();
   }
+
+  // ─── GET /api/arcade/craps/info — public table limits ───────────────────
+  // Craps shipped without any limits; the client needs to render the same
+  // numbers the server enforces, and admins need a key in the registry to
+  // change them. The max is PER ZONE and applies to the running total on that
+  // zone (see the /bet handler).
+  app.get('/api/arcade/craps/info', (_req: Request, res: Response) => {
+    const l = betLimits('craps');
+    res.json({
+      ok: true,
+      minBet: l.min,
+      maxBet: l.max,
+      maxBetScope: 'per_zone',
+      note: 'The maximum applies to the total resting on any one betting zone.',
+    });
+  });
 
   // ─── POST /api/arcade/craps/session — create ────────────────────────────
   app.post('/api/arcade/craps/session', async (req: Request, res: Response) => {
@@ -279,6 +296,12 @@ export function registerArcadeCrapsRoutes({
       if (!Number.isFinite(amount) || amount <= 0) {
         return res.status(400).json({ ok: false, error: 'Amount must be positive.' });
       }
+      const limits = betLimits('craps');
+      if (amount < limits.min) {
+        return res
+          .status(400)
+          .json({ ok: false, error: `Minimum bet is ${limits.min.toLocaleString()} chips.` });
+      }
 
       const updated = await dbService.withTransaction(async (client) => {
         const r = await client.query(
@@ -293,6 +316,12 @@ export function registerArcadeCrapsRoutes({
         const bets: CrapsBets = row.bets as CrapsBets;
 
         if (!canPlaceBet(type, phase)) throw new Error('LOCKED');
+
+        // The cap applies to the TOTAL resting on this zone, not to one chip:
+        // craps bets accumulate, so checking only `amount` would let a player
+        // click their way past the limit one chip at a time.
+        const resting = Number(bets[type] || 0);
+        if (resting + amount > limits.max) throw new Error('OVER_MAX');
 
         // Debit chips first — throws 'Insufficient poker chips' on overdraft.
         const chipBalance = await applyPokerChipDelta(
@@ -318,6 +347,12 @@ export function registerArcadeCrapsRoutes({
       if (msg === 'NOT_FOUND') return res.status(404).json({ ok: false, error: 'Session not found.' });
       if (msg === 'CLOSED') return res.status(400).json({ ok: false, error: 'Session is closed.' });
       if (msg === 'LOCKED') return res.status(400).json({ ok: false, error: 'This bet is locked while the point is on.' });
+      if (msg === 'OVER_MAX') {
+        return res.status(400).json({
+          ok: false,
+          error: `Table max is ${betLimits('craps').max.toLocaleString()} chips on any one bet.`,
+        });
+      }
       if (/insufficient/i.test(msg)) return res.status(400).json({ ok: false, error: 'Not enough chips.' });
       logger.error('[arcade-craps] bet failed', { error: msg });
       return res.status(500).json({ ok: false, error: 'Could not place the bet.' });
