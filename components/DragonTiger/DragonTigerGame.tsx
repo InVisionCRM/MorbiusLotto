@@ -20,7 +20,7 @@
  * HUD, the felt duel, a win/loss/push banner, then the info tabs.
  */
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useAccount } from 'wagmi'
 import { Volume2, VolumeX } from 'lucide-react'
 import { Card } from '@/components/ui/card'
@@ -31,6 +31,14 @@ import { formatChips } from '@/lib/format-poker-chips'
 import { GameWalletModal } from '@/components/shared/GameWalletModal'
 import { probeSiweSession } from '@/lib/api-auth'
 import { useBigWin } from '@/contexts/big-win-context'
+import { AutoBetPanel } from '@/components/shared/AutoBetPanel'
+import { useAutoBetStrategy } from '@/hooks/use-auto-bet-strategy'
+import {
+  defaultStrategy,
+  stopReasonLabel,
+  type AutoBetStrategy,
+  type SettledRound,
+} from '@/lib/auto-bet-strategy'
 import { DragonTigerInfoTabs } from './DragonTigerInfoTabs'
 import { DragonTigerFairnessModal } from './DragonTigerFairnessModal'
 import { DragonTigerRulesModal } from './DragonTigerRulesModal'
@@ -57,9 +65,8 @@ const DEAL_DELAY_MS = 360
 const FLIP_GAP_MS = 480
 const SETTLE_DELAY_MS = 520
 const CHIP_ADDS = [100, 500, 1000] as const
-/** Auto play (serialized): repeat the current zone bet N times, one full
- *  deal/reveal at a time, pausing between rounds. */
-const AUTO_COUNTS = [10, 25, 50, 100] as const
+/** Auto play (serialized): the shared strategy loop repeats the current zone
+ *  bet, one full deal/reveal at a time, pausing between rounds. */
 const AUTO_GAP_MS = 700 // pause after a round settles before the next deal
 
 type Pick = 'dragon' | 'tie' | 'tiger'
@@ -116,8 +123,12 @@ export function DragonTigerGame() {
   const [pick, setPick] = useState<Pick>('dragon')
 
   const [mode, setMode] = useState<'manual' | 'auto'>('manual')
-  const [autoCount, setAutoCount] = useState<number>(25)
   const [autoLeft, setAutoLeft] = useState<number | null>(null)
+  const [strategy, setStrategy] = useState<AutoBetStrategy>(() => defaultStrategy(10))
+  const [strategyNote, setStrategyNote] = useState<string | null>(null)
+  // Read inside the stop callback, which outlives the render that armed it.
+  const strategyRef = useRef(strategy)
+  strategyRef.current = strategy
 
   // Round state for the felt: cards revealed one at a time as we pace the reveal.
   const [dragonCard, setDragonCard] = useState<number | null>(null)
@@ -151,6 +162,8 @@ export function DragonTigerGame() {
   const timers = useRef<ReturnType<typeof setTimeout>[]>([])
   const boardRef = useRef<HTMLDivElement | null>(null)
   const autoLeftRef = useRef<number | null>(null)
+  // stopAuto is defined before the strategy hook, so it reaches it through a ref.
+  const stratStopRef = useRef<(() => void) | null>(null)
   const autoTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   // Resolver fired once a round fully settles, so the serialized auto loop can
   // wait for the reveal/settle animation before pacing the next deal.
@@ -226,6 +239,8 @@ export function DragonTigerGame() {
     (n: number) => Math.min(maxBet, Math.max(minBet, Math.floor(n || 0))),
     [minBet, maxBet],
   )
+  // Memoized: the strategy hook re-syncs whenever this identity changes.
+  const betLimits = useMemo(() => ({ min: minBet, max: maxBet }), [minBet, maxBet])
 
   const after = useCallback((ms: number, fn: () => void) => {
     const t = setTimeout(() => {
@@ -343,13 +358,14 @@ export function DragonTigerGame() {
 
   /**
    * Play one full round (place bet → await server → pace the reveal → settle).
-   * Resolves to `true` once the round has fully settled, or `false` if it could
-   * not be placed (insufficient chips / auth / error) — the serialized auto loop
-   * uses that to decide whether to continue.
+   * Resolves to the settled round (total staked / total returned) once the
+   * reveal has finished, or `null` if it could not be placed (insufficient
+   * chips / auth / error) — the strategy loop uses that to decide whether to
+   * continue. `stakeOverride` lets the strategy size the stake itself.
    */
-  const playRound = useCallback(async (): Promise<boolean> => {
-    if (busy || replaying || !info) return false
-    const stake = clampBet(bet)
+  const playRound = useCallback(async (stakeOverride?: number): Promise<SettledRound | null> => {
+    if (busy || replaying || !info) return null
+    const stake = clampBet(stakeOverride ?? bet)
     setBet(stake)
     setError(null)
     setNoChips(false)
@@ -377,7 +393,7 @@ export function DragonTigerGame() {
 
     try {
       const res = await playDragonTiger({ bets })
-      if (!mounted.current) return false
+      if (!mounted.current) return null
       setLastRound(res)
       // Resolve when settle() runs at the end of the paced reveal.
       const settled = new Promise<void>((resolve) => {
@@ -385,9 +401,12 @@ export function DragonTigerGame() {
       })
       runReveal(res)
       await settled
-      return mounted.current
+      if (!mounted.current) return null
+      // Totals, not the single zone: a round can stake several zones and each
+      // pays separately, so the strategy tallies profit off the round's sums.
+      return { bet: res.totalBet, payout: res.totalPayout }
     } catch (e) {
-      if (!mounted.current) return false
+      if (!mounted.current) return null
       const msg = (e as Error)?.message ?? ''
       setBusy(false)
       setPhase('idle')
@@ -400,7 +419,7 @@ export function DragonTigerGame() {
       } else {
         setError(serverDetail(msg) ?? 'Could not play the round. Try again.')
       }
-      return false
+      return null
     }
   }, [busy, replaying, info, bet, pick, clampBet, runReveal])
 
@@ -452,50 +471,50 @@ export function DragonTigerGame() {
   const stopAuto = useCallback(() => {
     autoLeftRef.current = null
     setAutoLeft(null)
+    stratStopRef.current?.()
     if (autoTimer.current) {
       clearTimeout(autoTimer.current)
       autoTimer.current = null
     }
   }, [])
 
-  /**
-   * Serialized auto loop: play one round, wait for it to fully settle, pause
-   * briefly, then fire the next — until the count is exhausted, Stop is pressed,
-   * the wallet can't cover the bet, or an error occurs.
-   */
-  const runAuto = useCallback(async () => {
-    while (mounted.current && autoLeftRef.current != null && autoLeftRef.current > 0) {
-      const ok = await playRound()
-      if (!mounted.current || autoLeftRef.current == null) return // stopped / unmounted
-      if (!ok) {
-        stopAuto()
-        return
-      }
-      const left = (autoLeftRef.current ?? 0) - 1
-      autoLeftRef.current = left
-      setAutoLeft(left)
-      if (left <= 0) {
-        stopAuto()
-        return
-      }
-      // Pause between rounds (interruptible by Stop / unmount).
-      await new Promise<void>((resolve) => {
-        autoTimer.current = setTimeout(() => {
-          autoTimer.current = null
-          resolve()
-        }, AUTO_GAP_MS)
-      })
-    }
-  }, [playRound, stopAuto])
+  // Strategy autoplay. This game was already serialized (each deal awaits its
+  // full reveal + settle), so the shared hook replaces the bespoke loop
+  // outright — there is no fast pipelined path to preserve here.
+  const strat = useAutoBetStrategy({
+    strategy,
+    limits: betLimits,
+    intervalMs: AUTO_GAP_MS,
+    placeBet: useCallback((stake: number) => playRound(stake), [playRound]),
+    onStop: useCallback((reason, state) => {
+      setStrategyNote(stopReasonLabel(reason, state.profit))
+      // Restore the CONFIGURED base bet. The bet field mirrors the escalating
+      // stake while a run goes; without this the last escalated stake would
+      // become the new base — a martingale that ended at 320 would start the
+      // next run (and the next manual bet) at 320 instead of 10.
+      setBet(strategyRef.current.baseBet)
+    }, []),
+  })
+
+  stratStopRef.current = strat.stop
+
+  // Show the stake the strategy is about to place, so escalation is visible.
+  useEffect(() => {
+    if (strat.running) setBet(strat.run.nextBet)
+  }, [strat.running, strat.run.nextBet])
+
+  // The bet field is the strategy's base bet while idle — one number to set.
+  useEffect(() => {
+    if (!strat.running) setStrategy((s) => (s.baseBet === bet ? s : { ...s, baseBet: bet }))
+  }, [bet, strat.running])
 
   const startAuto = useCallback(() => {
-    if (autoLeftRef.current != null || busy || replaying) return
-    autoLeftRef.current = autoCount
-    setAutoLeft(autoCount)
-    void runAuto()
-  }, [autoCount, busy, replaying, runAuto])
+    if (strat.running || busy || replaying) return
+    setStrategyNote(null)
+    strat.start()
+  }, [strat, busy, replaying])
 
-  const autoRunning = autoLeft != null
+  const autoRunning = strat.running
 
   // HUD readouts derive from lastRound once settled.
   const settled = phase === 'settled' && lastRound != null
@@ -564,27 +583,17 @@ export function DragonTigerGame() {
           </div>
 
           {mode === 'auto' && (
-            <div className="space-y-1.5">
-              <span className="text-xs uppercase tracking-wide text-slate-500">Number of rounds</span>
-              <div className="grid grid-cols-4 gap-2">
-                {AUTO_COUNTS.map((n) => (
-                  <button
-                    key={n}
-                    type="button"
-                    disabled={autoRunning}
-                    onClick={() => setAutoCount(n)}
-                    className={[
-                      'arc-mono rounded-md py-1.5 text-xs tabular-nums transition-colors',
-                      autoCount === n
-                        ? 'bg-cyan-500/15 text-cyan-300 ring-1 ring-cyan-500/50'
-                        : 'text-slate-500 ring-1 ring-cyan-950 hover:text-slate-300',
-                    ].join(' ')}
-                  >
-                    {n}
-                  </button>
-                ))}
-              </div>
-            </div>
+            <>
+              <AutoBetPanel
+                strategy={strategy}
+                onChange={setStrategy}
+                disabled={autoRunning}
+                status={strat.running ? strat.run : null}
+              />
+              {!strat.running && strategyNote && (
+                <p className="text-xs text-slate-400">{strategyNote}</p>
+              )}
+            </>
           )}
 
           {/* Bet on — single-selection (Dragon / Tie / Tiger) */}
@@ -853,7 +862,7 @@ export function DragonTigerGame() {
               onClick={stopAuto}
               className="arc-display h-14 w-full bg-rose-500 text-base font-bold uppercase tracking-widest text-[#1B0308] hover:bg-rose-400"
             >
-              Stop · {autoLeft} left
+              Stop · bet {strat.run.betsPlaced}
             </Button>
           ) : (
             <Button
@@ -862,7 +871,7 @@ export function DragonTigerGame() {
               onClick={startAuto}
               className="arc-display h-14 w-full bg-cyan-500 text-base font-bold uppercase tracking-widest text-[#03121B] shadow-[0_0_24px_-6px_rgba(34,211,238,0.8)] hover:bg-cyan-400 disabled:opacity-50"
             >
-              Start auto ({autoCount})
+              Start auto{strategy.bets ? ` (${strategy.bets})` : ''}
             </Button>
           )}
           </div>

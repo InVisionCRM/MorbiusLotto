@@ -93,6 +93,9 @@ export function StakeDiceGame() {
   const [autoLeft, setAutoLeft] = useState<number | null>(null)
   const [strategy, setStrategy] = useState<AutoBetStrategy>(() => defaultStrategy(10))
   const [strategyNote, setStrategyNote] = useState<string | null>(null)
+  // Read inside the stop callback, which outlives the render that armed it.
+  const strategyRef = useRef(strategy)
+  strategyRef.current = strategy
 
   const [fairnessOpen, setFairnessOpen] = useState(false)
   const [rulesOpen, setRulesOpen] = useState(false)
@@ -337,6 +340,11 @@ export function StakeDiceGame() {
     ),
     onStop: useCallback((reason, state) => {
       setStrategyNote(stopReasonLabel(reason, state.profit))
+      // Restore the CONFIGURED base bet. The bet field mirrors the escalating
+      // stake while a run goes; without this the last escalated stake would
+      // become the new base — a martingale that ended at 320 would start the
+      // next run (and the next manual bet) at 320 instead of 10.
+      setBet(strategyRef.current.baseBet)
     }, []),
   })
 

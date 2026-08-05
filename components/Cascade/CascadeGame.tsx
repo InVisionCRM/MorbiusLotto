@@ -28,6 +28,14 @@ import { GameWalletModal } from '@/components/shared/GameWalletModal'
 import { probeSiweSession } from '@/lib/api-auth'
 import { useBigWin } from '@/contexts/big-win-context'
 import { SessionChart, type SessionPoint } from '@/components/arcade2/SessionChart'
+import { AutoBetPanel } from '@/components/shared/AutoBetPanel'
+import { useAutoBetStrategy } from '@/hooks/use-auto-bet-strategy'
+import {
+  defaultStrategy,
+  stopReasonLabel,
+  type AutoBetStrategy,
+  type SettledRound,
+} from '@/lib/auto-bet-strategy'
 import { FloatingPanel } from '@/components/arcade2/FloatingPanel'
 import { ReplayConfirmOverlay } from '@/components/share/ReplayConfirmOverlay'
 import { CascadeInfoTabs } from './CascadeInfoTabs'
@@ -82,9 +90,8 @@ interface TileState {
   extra: TileExtra
 }
 
-/** Auto play (serialized): repeat the current bet N times, one full cascade at a time. */
-const AUTO_COUNTS = [10, 25, 50, 100] as const
-const AUTO_GAP_MS = 650 // pause after a cascade settles before the next drop
+/** Pause after a cascade settles before the next auto round fires. */
+const AUTO_GAP_MS = 650
 
 function emptyBoard(): Board {
   return Array.from({ length: ROWS }, () => new Array<number | null>(COLS).fill(null))
@@ -137,8 +144,12 @@ export function CascadeGame() {
   const [settled, setSettled] = useState(false)
 
   const [mode, setMode] = useState<'manual' | 'auto'>('manual')
-  const [autoCount, setAutoCount] = useState<number>(25)
   const [autoLeft, setAutoLeft] = useState<number | null>(null)
+  const [strategy, setStrategy] = useState<AutoBetStrategy>(() => defaultStrategy(10))
+  const [strategyNote, setStrategyNote] = useState<string | null>(null)
+  // Read inside the stop callback, which outlives the render that armed it.
+  const strategyRef = useRef(strategy)
+  strategyRef.current = strategy
 
   const [session, setSession] = useState<SessionPoint[]>([])
   const [error, setError] = useState<string | null>(null)
@@ -164,6 +175,8 @@ export function CascadeGame() {
   // Auto loop bookkeeping. autoActiveRef gates the run; autoTimer holds the
   // inter-round pause; settleResolve releases the loop once a cascade finishes.
   const autoActiveRef = useRef(false)
+  // stopAuto is defined before the strategy hook, so it reaches it through a ref.
+  const stratStopRef = useRef<(() => void) | null>(null)
   const autoTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const settleResolve = useRef<(() => void) | null>(null)
 
@@ -245,6 +258,8 @@ export function CascadeGame() {
     (n: number) => Math.min(maxBet, Math.max(minBet, Math.floor(n || 0))),
     [minBet, maxBet],
   )
+  // Memoized: the strategy hook re-syncs whenever this identity changes.
+  const betLimits = useMemo(() => ({ min: minBet, max: maxBet }), [minBet, maxBet])
 
   const setHud = useCallback((multX100: number, comboX100: number, win: number | null) => {
     setHudMultX100(multX100)
@@ -368,13 +383,13 @@ export function CascadeGame() {
     [later, setHud, reportWin],
   )
 
-  const drop = useCallback(async (): Promise<'ok' | 'stop'> => {
-    if (busy || !info) return 'stop'
-    const stake = clampBet(bet)
+  const drop = useCallback(async (stakeOverride?: number): Promise<SettledRound | null> => {
+    if (busy || !info) return null
+    const stake = clampBet(stakeOverride ?? bet)
     if (balance != null && BigInt(stake) > balance) {
       setError('Not enough MORBIUS for that bet.')
       setNoChips(true)
-      return 'stop'
+      return null
     }
     setBet(stake)
     setError(null)
@@ -391,16 +406,16 @@ export function CascadeGame() {
         bet: stake,
         volatility,
       })
-      if (!mounted.current) return 'stop'
+      if (!mounted.current) return null
       // Resolve once the replay's finish() runs (full cascade animation done).
       const settledPromise = new Promise<void>((resolve) => {
         settleResolve.current = resolve
       })
       replay(res)
       await settledPromise
-      return mounted.current ? 'ok' : 'stop'
+      return mounted.current ? { bet: res.bet, payout: res.payout } : null
     } catch (e) {
-      if (!mounted.current) return 'stop'
+      if (!mounted.current) return null
       setBusy(false)
       const msg = (e as Error)?.message ?? ''
       if (/Not enough chips|insufficient|402/i.test(msg)) {
@@ -411,56 +426,57 @@ export function CascadeGame() {
       } else {
         setError(serverDetail(msg) ?? 'Could not play the round. Try again.')
       }
-      return 'stop'
+      return null
     }
   }, [busy, info, bet, balance, clampBet, volatility, replay, clearTimers, setHud])
 
   const stopAuto = useCallback(() => {
     autoActiveRef.current = false
     setAutoLeft(null)
+    stratStopRef.current?.()
     if (autoTimer.current) {
       clearTimeout(autoTimer.current)
       autoTimer.current = null
     }
   }, [])
 
-  /**
-   * Serialized auto loop: drop once, await the full cascade animation, pause
-   * briefly, then fire the next — until the count is exhausted, Stop is pressed,
-   * the wallet can't cover the bet, or an error occurs. Repeats the current bet.
-   */
-  const runAuto = useCallback(async () => {
-    let left = autoCount
-    autoActiveRef.current = true
-    setAutoLeft(left)
-    while (mounted.current && autoActiveRef.current && left > 0) {
-      const r = await drop()
-      if (!mounted.current || !autoActiveRef.current) return
-      if (r === 'stop') {
-        stopAuto()
-        return
-      }
-      left -= 1
-      setAutoLeft(left)
-      if (left <= 0) {
-        stopAuto()
-        return
-      }
-      await new Promise<void>((resolve) => {
-        autoTimer.current = setTimeout(() => {
-          autoTimer.current = null
-          resolve()
-        }, AUTO_GAP_MS)
-      })
-    }
-  }, [autoCount, drop, stopAuto])
+  // Strategy autoplay. This game was already serialized (each drop awaits its
+  // full cascade animation), so the shared hook replaces the bespoke loop
+  // outright — there is no fast pipelined path to preserve here.
+  const strat = useAutoBetStrategy({
+    strategy,
+    limits: betLimits,
+    intervalMs: AUTO_GAP_MS,
+    placeBet: useCallback((stake: number) => drop(stake), [drop]),
+    onStop: useCallback((reason, state) => {
+      setStrategyNote(stopReasonLabel(reason, state.profit))
+      // Restore the CONFIGURED base bet. The bet field mirrors the escalating
+      // stake while a run goes; without this the last escalated stake would
+      // become the new base — a martingale that ended at 320 would start the
+      // next run (and the next manual bet) at 320 instead of 10.
+      setBet(strategyRef.current.baseBet)
+    }, []),
+  })
+
+  stratStopRef.current = strat.stop
+
+  // Show the stake the strategy is about to place, so escalation is visible.
+  useEffect(() => {
+    if (strat.running) setBet(strat.run.nextBet)
+  }, [strat.running, strat.run.nextBet])
+
+  // The bet field is the strategy's base bet while idle — one number to set.
+  useEffect(() => {
+    if (!strat.running) setStrategy((s) => (s.baseBet === bet ? s : { ...s, baseBet: bet }))
+  }, [bet, strat.running])
 
   const startAuto = useCallback(() => {
-    if (autoActiveRef.current || busy) return
-    void runAuto()
-  }, [busy, runAuto])
+    if (strat.running || busy) return
+    setStrategyNote(null)
+    strat.start()
+  }, [strat, busy])
 
-  const autoRunning = autoLeft != null
+  const autoRunning = strat.running
 
   const openVerify = useCallback((id: string | null) => {
     setVerifyTarget(id)
@@ -582,27 +598,17 @@ export function CascadeGame() {
           </div>
 
           {mode === 'auto' && (
-            <div className="space-y-1.5">
-              <label className="text-xs uppercase tracking-wide text-slate-500">Number of drops</label>
-              <div className="grid grid-cols-4 gap-2">
-                {AUTO_COUNTS.map((n) => (
-                  <button
-                    key={n}
-                    type="button"
-                    disabled={autoRunning}
-                    onClick={() => setAutoCount(n)}
-                    className={[
-                      'arc-mono rounded-md py-1.5 text-xs tabular-nums transition-colors',
-                      autoCount === n
-                        ? 'bg-cyan-500/15 text-cyan-300 ring-1 ring-cyan-500/50'
-                        : 'text-slate-500 ring-1 ring-cyan-950 hover:text-slate-300',
-                    ].join(' ')}
-                  >
-                    {n}
-                  </button>
-                ))}
-              </div>
-            </div>
+            <>
+              <AutoBetPanel
+                strategy={strategy}
+                onChange={setStrategy}
+                disabled={autoRunning}
+                status={strat.running ? strat.run : null}
+              />
+              {!strat.running && strategyNote && (
+                <p className="text-xs text-slate-400">{strategyNote}</p>
+              )}
+            </>
           )}
 
           {/* Volatility */}
@@ -874,7 +880,7 @@ export function CascadeGame() {
               onClick={stopAuto}
               className="arc-display h-14 w-full bg-rose-500 text-base font-bold uppercase tracking-widest text-[#1B0308] hover:bg-rose-400"
             >
-              Stop · {autoLeft} left
+              Stop · bet {strat.run.betsPlaced}
             </Button>
           ) : (
             <Button
@@ -883,7 +889,7 @@ export function CascadeGame() {
               onClick={startAuto}
               className="arc-display h-14 w-full bg-cyan-500 text-base font-bold uppercase tracking-widest text-[#03121B] shadow-[0_0_24px_-6px_rgba(34,211,238,0.8)] hover:bg-cyan-400 disabled:opacity-50"
             >
-              Start auto ({autoCount})
+              Start auto{strategy.bets ? ` (${strategy.bets})` : ''}
             </Button>
           )}
           </div>
