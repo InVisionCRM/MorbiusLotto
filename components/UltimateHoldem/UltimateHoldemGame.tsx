@@ -36,6 +36,8 @@ import { FloatingPanel } from '@/components/arcade2/FloatingPanel';
 import { TableCard, TableCardStyles } from '@/components/shared/TableCard';
 import { TableFairnessModal, type DeckSlice } from '@/components/shared/TableFairnessModal';
 import { TableHandHistory, type TableHistoryRow } from '@/components/shared/TableHandHistory';
+import { TableFeltControls, useTableFelt } from '@/components/shared/TableFeltControls';
+import { tableAudio } from '@/lib/table-audio';
 import { categoryName, oddsLabel } from '@/lib/playing-cards';
 import {
   actUth,
@@ -76,6 +78,7 @@ const STAGE_COPY: Record<UthStage, string> = {
 export function UltimateHoldemGame() {
   const { address } = useAccount();
   const { reportWin } = useBigWin();
+  const felt = useTableFelt();
 
   const [info, setInfo] = useState<UthInfo | null>(null);
   const [ante, setAnte] = useState<number>(500);
@@ -228,6 +231,9 @@ export function UltimateHoldemGame() {
     setError(null);
     setNoChips(false);
     setSettlement(null);
+    // First real gesture of the hand — safe place to open the audio context.
+    tableAudio.init();
+    tableAudio.playChip();
     setDealerCards([]);
     setBoard([]);
     setHandPlay(0);
@@ -271,10 +277,17 @@ export function UltimateHoldemGame() {
         // A check: the street advances and the server hands over the newly
         // earned board cards. Nothing has been staked.
         if (!isUthSettled(r)) {
+          const revealed = r.board.length - board.length;
           setStage(r.stage);
           setBoard(r.board);
           setLegalActions(r.legalActions);
           setPhase('acting');
+          // Betting Play commits chips; checking doesn't. Either way the new
+          // board cards land one after another.
+          if (action !== 'check') tableAudio.playCommit();
+          for (let i = 0; i < Math.max(0, revealed); i++) {
+            setTimeout(() => tableAudio.playDeal(), i * 100);
+          }
           return;
         }
 
@@ -296,6 +309,21 @@ export function UltimateHoldemGame() {
         const net = r.totalPayout - r.committed;
         reportWin({ game: "Ultimate Texas Hold'em", bet: r.committed, payout: r.totalPayout });
         if (net > 0) winFx();
+
+        tableAudio.playFlip();
+        setTimeout(() => {
+          if (net > 0) {
+            // The Blind pays up to 500:1 here, so a genuinely big hand gets
+            // more than the ordinary win cue.
+            if (r.committed > 0 && r.totalPayout >= r.committed * 5) tableAudio.playBigWin();
+            else tableAudio.playWin();
+            if (r.tripsPayout && r.tripsPayout > 0) setTimeout(() => tableAudio.playBonus(), 260);
+          } else if (net === 0) {
+            tableAudio.playPush();
+          } else {
+            tableAudio.playLose();
+          }
+        }, 340);
 
         setHistory((prev) =>
           [
@@ -335,7 +363,10 @@ export function UltimateHoldemGame() {
         handleErr(e);
       }
     },
-    [roundId, phase, winFx, handleErr, reportWin],
+    // `board` is read to work out how many cards this street newly turned over,
+    // so it has to be a dependency — without it the count would be measured
+    // against a stale board and the deal ticks would drift.
+    [roundId, phase, board, winFx, handleErr, reportWin],
   );
 
   const openVerify = useCallback((id: string | null) => {
@@ -397,6 +428,10 @@ export function UltimateHoldemGame() {
         {/* ───────── Control rail ───────── */}
         <div className="order-2 space-y-3.5 lg:order-1 lg:sticky lg:top-20 lg:h-fit">
           <Card className="space-y-3.5 border-0 bg-[#07131F] p-4 ring-1 ring-inset ring-cyan-950/70">
+            <div className="flex items-center justify-between gap-2">
+              <TableFeltControls felt={felt} />
+            </div>
+
             <div className="flex items-center justify-between gap-2">
               <span className="text-xs uppercase tracking-wide text-slate-500">Balance</span>
               <div className="flex items-center gap-2">
@@ -636,6 +671,7 @@ export function UltimateHoldemGame() {
                         key={i}
                         cardIdx={revealed ? dealerCards[i] : undefined}
                         faceDown={!revealed}
+                        back={felt.back}
                         win={revealed && settlement?.winSide === 'dealer'}
                       />
                     ))}
@@ -679,7 +715,7 @@ export function UltimateHoldemGame() {
                 <div className="flex justify-center gap-2.5">
                   {holeCards.length > 0
                     ? holeCards.map((c, i) => (
-                        <TableCard key={i} cardIdx={c} win={settlement?.winSide === 'player'} />
+                        <TableCard key={i} cardIdx={c} back={felt.back} win={settlement?.winSide === 'player'} />
                       ))
                     : [0, 1].map((i) => <TableCard key={i} placeholder />)}
                 </div>
