@@ -30,6 +30,7 @@ import { registerArcadeThreeCardPokerRoutes } from './routes/arcade-three-card-p
 import { registerArcadePaiGowPokerRoutes } from './routes/arcade-pai-gow-poker.routes';
 import { registerArcadeUltimateHoldemRoutes } from './routes/arcade-ultimate-holdem.routes';
 import { registerArcadeCaribbeanStudRoutes } from './routes/arcade-caribbean-stud.routes';
+import { registerArcadeBlackjackVariantsRoutes } from './routes/arcade-blackjack-variants.routes';
 import { registerArcadeGreedDiceRoutes } from './routes/arcade-greed-dice.routes';
 import { registerArcadeCipherRoutes } from './routes/arcade-cipher.routes';
 import { registerArcadeCrapsRoutes } from './routes/arcade-craps.routes';
@@ -518,6 +519,7 @@ async function initializeServices() {
     registerArcadePaiGowPokerRoutes({ app, dbService, authService });
     registerArcadeUltimateHoldemRoutes({ app, dbService, authService });
     registerArcadeCaribbeanStudRoutes({ app, dbService, authService });
+    registerArcadeBlackjackVariantsRoutes({ app, dbService, authService });
     registerArcadeGreedDiceRoutes({ app, dbService, authService });
     registerArcadeCipherRoutes({ app, dbService, authService });
     registerArcadeCrapsRoutes({ app, dbService, authService });

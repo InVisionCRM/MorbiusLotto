@@ -12,7 +12,12 @@
  * `placeholder` draws the dashed empty seat used before a deal.
  */
 
-import { cardRankLabel, cardSuitGlyph, cardIsRed } from '@/lib/playing-cards';
+import {
+  cardRankLabel,
+  cardSuitGlyph,
+  cardIsRed,
+  type CardEncoding,
+} from '@/lib/playing-cards';
 
 export interface TableCardProps {
   cardIdx?: number;
@@ -27,6 +32,12 @@ export interface TableCardProps {
   placeholder?: boolean;
   /** Card width. Defaults to the standard felt size. */
   width?: string;
+  /**
+   * Which rank reading applies to `cardIdx`. The poker and blackjack families
+   * disagree about index 0 (a Two versus an Ace), so a blackjack felt must say
+   * so or every card renders one rank off. See lib/playing-cards.ts.
+   */
+  encoding?: CardEncoding;
 }
 
 const DEFAULT_WIDTH = 'clamp(44px, 12vw, 58px)';
@@ -39,6 +50,7 @@ export function TableCard({
   dim,
   placeholder,
   width = DEFAULT_WIDTH,
+  encoding = 'poker',
 }: TableCardProps) {
   const box: React.CSSProperties = { width, aspectRatio: '5 / 7' };
   const dealCls = deal ? 'tbl-card-deal' : '';
@@ -82,10 +94,10 @@ export function TableCard({
         border: '0.5px solid rgba(0,0,0,.3)',
         boxShadow: '0 3px 8px -3px rgba(0,0,0,.6)',
       }}
-      aria-label={`${cardRankLabel(cardIdx)} ${cardSuitGlyph(cardIdx)}`}
+      aria-label={`${cardRankLabel(cardIdx, encoding)} ${cardSuitGlyph(cardIdx)}`}
     >
       <span className="leading-none" style={{ fontSize: 'clamp(13px,3.4vw,17px)' }}>
-        {cardRankLabel(cardIdx)}
+        {cardRankLabel(cardIdx, encoding)}
       </span>
       <span className="leading-[1.1]" style={{ fontSize: 'clamp(16px,4.6vw,24px)' }}>
         {cardSuitGlyph(cardIdx)}

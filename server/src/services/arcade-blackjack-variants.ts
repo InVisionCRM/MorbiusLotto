@@ -78,8 +78,16 @@ export interface BjRules {
   naturalPays: number;
   /** The dealer takes every tie (Double Exposure, Pontoon). */
   dealerWinsTies: boolean;
-  /** A player 21 beats a dealer 21, and a player natural beats a dealer one. */
+  /** A player 21 beats a dealer 21 on any number of cards (Spanish 21). */
   player21AlwaysWins: boolean;
+  /**
+   * A player natural beats a dealer natural. Separate from the rule above
+   * because Double Exposure takes every other tie but still lets a blackjack
+   * beat a blackjack — that single exception is the standard rule and it is
+   * worth real money, so it gets its own switch rather than riding on the
+   * "your 21 always wins" flag Spanish 21 uses.
+   */
+  naturalBeatsNatural: boolean;
   /** Dealer total that PUSHES live hands instead of losing (Free Bet: 22). */
   pushOnDealerTotal: number | null;
   /** Late surrender is on the table. */
@@ -118,6 +126,7 @@ const SPANISH21: BjRules = {
   dealerWinsTies: false,
   // The rule that makes the missing 10s survivable: your 21 always wins.
   player21AlwaysWins: true,
+  naturalBeatsNatural: true,
   pushOnDealerTotal: null,
   surrender: true,
   minStand: 0,
@@ -158,6 +167,7 @@ const DOUBLE_EXPOSURE: BjRules = {
   naturalPays: 1,
   dealerWinsTies: true,
   player21AlwaysWins: false,
+  naturalBeatsNatural: true,
   pushOnDealerTotal: null,
   surrender: false,
   minStand: 0,
@@ -188,6 +198,7 @@ const PONTOON: BjRules = {
   naturalPays: 2,
   dealerWinsTies: true,
   player21AlwaysWins: false,
+  naturalBeatsNatural: false,
   pushOnDealerTotal: null,
   surrender: false,
   // You cannot stick below 15 — the game forces you to keep twisting into it.
@@ -205,7 +216,7 @@ const PONTOON: BjRules = {
     'A Pontoon (ace + ten-value) pays 2:1',
     'Five cards without busting pays 2:1 and beats everything but a Pontoon',
     'You can’t stick below 15',
-    'The dealer wins every tie',
+    'The dealer wins every tie — a Pontoon included',
   ],
 };
 
@@ -220,6 +231,7 @@ const FREE_BET: BjRules = {
   naturalPays: 1.5,
   dealerWinsTies: false,
   player21AlwaysWins: false,
+  naturalBeatsNatural: false,
   // What pays for all those free bets: a dealer 22 doesn't lose, it pushes.
   pushOnDealerTotal: 22,
   surrender: false,
@@ -592,7 +604,7 @@ export function bjSettleHand(
   const bonus = bonusMult * staked;
 
   if (playerNatural) {
-    if (dealerNatural && !rules.player21AlwaysWins) {
+    if (dealerNatural && !rules.player21AlwaysWins && !rules.naturalBeatsNatural) {
       return rules.dealerWinsTies ? settle('loss', -1) : settle('push', 0);
     }
     return settle('blackjack', rules.naturalPays);
@@ -696,6 +708,7 @@ export function bjVariantInfo(rules: BjRules) {
     naturalPays: rules.naturalPays,
     dealerWinsTies: rules.dealerWinsTies,
     player21AlwaysWins: rules.player21AlwaysWins,
+    naturalBeatsNatural: rules.naturalBeatsNatural,
     pushOnDealerTotal: rules.pushOnDealerTotal,
     surrender: rules.surrender,
     minStand: rules.minStand,

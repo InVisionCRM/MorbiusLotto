@@ -67,6 +67,8 @@ export type PokerChipLedgerReason =
   | 'arcade_ultimate_holdem_payout'
   | 'arcade_caribbean_stud_bet'
   | 'arcade_caribbean_stud_payout'
+  | 'arcade_blackjack_variants_bet'
+  | 'arcade_blackjack_variants_payout'
   | 'keno_bet'
   | 'keno_payout'
   | 'plinko_bet'

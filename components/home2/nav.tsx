@@ -90,6 +90,10 @@ const CARDS_TABLE_LINKS: SbLinkItem[] = [
   { icon: '🃏', label: 'Three Card', href: '/three-card-poker' },
   { icon: '🀄', label: 'Pai Gow', href: '/pai-gow-poker' },
   { icon: '♥', label: "Ultimate Hold'em", href: '/ultimate-holdem' },
+  { icon: '♠', label: 'Spanish 21', href: '/spanish-21' },
+  { icon: '👁', label: 'Double Exposure', href: '/double-exposure' },
+  { icon: '🂫', label: 'Pontoon', href: '/pontoon' },
+  { icon: '🆓', label: 'Free Bet BJ', href: '/free-bet-blackjack' },
   { icon: '♦', label: 'Caribbean Stud', href: '/caribbean-stud' },
   { icon: '🖥', label: 'Video Poker', href: '/video-poker' },
 ];

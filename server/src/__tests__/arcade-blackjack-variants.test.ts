@@ -267,12 +267,18 @@ describe('Spanish 21 — your 21 always wins', () => {
     expect(s.payout).toBe(250);
   });
 
-  it('does NOT give that rule to the other games', () => {
+  it('does NOT give the always-wins rule to the other games', () => {
+    // Free Bet has no such rule, so blackjack vs blackjack is an ordinary push.
     const push = bjSettleHand(FREEBET, hand([ACE(H), KING(D)]), [ACE(C), card(12, S)]);
     expect(push.outcome).toBe('push');
-    // Double Exposure takes ties, but a player natural still beats a dealer one.
-    const exposure = bjSettleHand(EXPOSURE, hand([ACE(H), KING(D)]), [ACE(C), card(12, S)]);
-    expect(exposure.outcome).toBe('loss');
+
+    // A drawn 21 against a dealer's drawn 21 pushes rather than winning.
+    const drawn = bjSettleHand(FREEBET, hand([card(7, H), card(7, D), card(7, C)]), [
+      card(7, S),
+      card(5, H),
+      card(9, D),
+    ]);
+    expect(drawn.outcome).toBe('push');
   });
 });
 
@@ -347,6 +353,22 @@ describe('Double Exposure — you pay for the view', () => {
   it('still pays a straight win', () => {
     const s = bjSettleHand(EXPOSURE, hand([KING(H), card(10, D)]), [KING(C), card(9, S)]);
     expect(s.payout).toBe(200);
+  });
+
+  it('makes blackjack the one tie the dealer does not take', () => {
+    // The standard exception, and it is worth real money — the dealer takes
+    // every other push, but blackjack against blackjack pays the player.
+    const s = bjSettleHand(EXPOSURE, hand([ACE(H), KING(D)]), [ACE(C), card(12, S)]);
+    expect(s.outcome).toBe('blackjack');
+    expect(s.payout).toBe(200);
+  });
+});
+
+describe('Pontoon — the dealer really does take everything', () => {
+  it('beats a player Pontoon with a dealer Pontoon', () => {
+    const s = bjSettleHand(PONTOON, hand([ACE(H), KING(D)]), [ACE(C), card(12, S)]);
+    expect(s.outcome).toBe('loss');
+    expect(s.payout).toBe(0);
   });
 });
 

@@ -31,7 +31,20 @@ const RANK_LABEL: Record<number, string> = {
 
 const SUIT_GLYPH = ['♥', '♦', '♣', '♠'];
 
-/** Card index 0..51 → rank 2..14 (14 = Ace, high). */
+/**
+ * The two card encodings in this repo, and why there are two.
+ *
+ * The poker family reads rank = (idx % 13) + 2, so index 0 is a Two and an Ace
+ * is 14 — high, the way poker wants it. The blackjack family reads
+ * rank = (idx % 13) + 1, so index 0 is an ACE. Both are legitimate readings of
+ * the same uniformly shuffled deck and each game family is internally
+ * consistent, but they disagree about what any given index *is* — so anything
+ * that renders a card has to be told which reading applies, or it will happily
+ * label an Ace as a Two.
+ */
+export type CardEncoding = 'poker' | 'blackjack';
+
+/** Card index 0..51 → rank 2..14 (14 = Ace, high). Poker encoding. */
 export function cardRank(cardIdx: number): number {
   return (cardIdx % 13) + 2;
 }
@@ -42,7 +55,13 @@ export function cardSuit(cardIdx: number): number {
 }
 
 /** Card index 0..51 → display rank label (A, K, Q, J, 10, 9..2). */
-export function cardRankLabel(cardIdx: number): string {
+export function cardRankLabel(cardIdx: number, encoding: CardEncoding = 'poker'): string {
+  if (encoding === 'blackjack') {
+    // 1 = Ace … 11/12/13 = J/Q/K, matching provably-fair.service.ts.
+    const r = (cardIdx % 13) + 1;
+    const BJ: Record<number, string> = { 1: 'A', 11: 'J', 12: 'Q', 13: 'K' };
+    return BJ[r] ?? String(r);
+  }
   return RANK_LABEL[cardRank(cardIdx)] ?? '?';
 }
 
