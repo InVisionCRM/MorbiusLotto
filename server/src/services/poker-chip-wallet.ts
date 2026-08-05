@@ -33,6 +33,14 @@ export type PokerChipLedgerReason =
   | 'arcade_craps_bet'
   | 'arcade_craps_payout'
   | 'arcade_craps_refund'
+  // Shared-felt craps. Kept distinct from the solo reasons so the ledger says
+  // which game a chip moved in, but the `_bet` / `_payout` / `_refund` suffixes
+  // are load-bearing: VipService and the Weekly Drop classify wagers by
+  // `reason LIKE '%\_bet'`, so renaming these silently drops multiplayer craps
+  // out of rakeback and raffle accrual.
+  | 'craps_multi_bet'
+  | 'craps_multi_payout'
+  | 'craps_multi_refund'
   | 'arcade_baccarat_bet'
   | 'arcade_baccarat_payout'
   | 'arcade_crash_bet'

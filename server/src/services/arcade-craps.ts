@@ -90,6 +90,47 @@ export function canClearBet(type: CrapsBetType, phase: CrapsPhase): boolean {
   return true;
 }
 
+// ── Phase transition ────────────────────────────────────────────────────────
+
+export interface CrapsPhaseChange {
+  phaseAfter: CrapsPhase;
+  pointAfter: number | null;
+  isPoint: boolean;
+  isSevenOut: boolean;
+}
+
+/**
+ * Where the table stands after a throw, independent of anyone's money.
+ *
+ * The dice decide the come-out / point cycle on their own — what is resting on
+ * the felt never moves it. That is what makes a shared craps table possible: at
+ * a multiplayer table one throw settles every seat separately, but all of them
+ * must agree on the phase that follows, so the table takes it from here once
+ * rather than from whichever seat happened to be evaluated last.
+ */
+export function advanceCrapsPhase(
+  sum: number,
+  phase: CrapsPhase,
+  point: number | null,
+): CrapsPhaseChange {
+  if (phase === 'COME_OUT') {
+    // 7/11 (natural), 2/3/12 (craps) all resolve on the come-out and leave the
+    // table where it was; anything else establishes the point.
+    const isNaturalOrCraps = sum === 7 || sum === 11 || sum === 2 || sum === 3 || sum === 12;
+    return isNaturalOrCraps
+      ? { phaseAfter: 'COME_OUT', pointAfter: null, isPoint: false, isSevenOut: false }
+      : { phaseAfter: 'POINT', pointAfter: sum, isPoint: false, isSevenOut: false };
+  }
+
+  if (sum === point) {
+    return { phaseAfter: 'COME_OUT', pointAfter: null, isPoint: true, isSevenOut: false };
+  }
+  if (sum === 7) {
+    return { phaseAfter: 'COME_OUT', pointAfter: null, isPoint: false, isSevenOut: true };
+  }
+  return { phaseAfter: 'POINT', pointAfter: point, isPoint: false, isSevenOut: false };
+}
+
 // ── Roll evaluator ──────────────────────────────────────────────────────────
 // Direct port of the client useCrapsEngine.evaluate. Pure function: takes the
 // current state plus a (die1, die2) and returns the full outcome. The route
@@ -107,10 +148,9 @@ export function evaluateRoll(
 
   let winAmount = 0;
   let lossAmount = 0;
-  let nextPhase: CrapsPhase = phase;
-  let nextPoint: number | null = point;
-  let isPoint = false;
-  let isSevenOut = false;
+  // The come-out/point cycle comes from one place so a shared table and a solo
+  // session can never disagree about it.
+  const { phaseAfter, pointAfter, isPoint, isSevenOut } = advanceCrapsPhase(sum, phase, point);
 
   const pay = (bet: CrapsBetType, oddsProfit: number, returnOriginal = true) => {
     const wager = next[bet];
@@ -150,17 +190,13 @@ export function evaluateRoll(
         winAmount += next['DONT_PASS'];
         delete next['DONT_PASS'];
       }
-    } else {
-      nextPhase = 'POINT';
-      nextPoint = sum;
     }
+    // Any other come-out total establishes the point; no money moves on the
+    // line for it. advanceCrapsPhase already recorded that.
   } else {
     if (sum === point) {
       pay('PASS', 1);
       collect('DONT_PASS');
-      nextPhase = 'COME_OUT';
-      nextPoint = null;
-      isPoint = true;
     } else if (sum === 7) {
       collect('PASS');
       pay('DONT_PASS', 1);
@@ -170,9 +206,6 @@ export function evaluateRoll(
       collect('PLACE_8');
       collect('PLACE_9');
       collect('PLACE_10');
-      nextPhase = 'COME_OUT';
-      nextPoint = null;
-      isSevenOut = true;
     }
 
     if (sum !== 7) {
@@ -188,8 +221,8 @@ export function evaluateRoll(
 
   return {
     die1, die2, sum,
-    phaseBefore: phase, phaseAfter: nextPhase,
-    pointBefore: point, pointAfter: nextPoint,
+    phaseBefore: phase, phaseAfter,
+    pointBefore: point, pointAfter,
     wins: winAmount, losses: lossAmount,
     isPoint, isSevenOut,
     betsBefore, betsAfter: next,
