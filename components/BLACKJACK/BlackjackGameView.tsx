@@ -18,7 +18,6 @@ import { SpeechIndicator } from '@/components/shared/SpeechIndicator';
 import { SpeechConfirmDialog } from '@/components/shared/SpeechConfirmDialog';
 import { TableTokenProfileCard, type TableTokenProfileCardProps } from '@/components/BLACKJACK/TableTokenProfileCard';
 import { ProvablyFairClientSeedModal } from '@/components/shared/ProvablyFairClientSeedModal';
-import { ProvablyFairStrip } from '@/components/shared/ProvablyFairStrip';
 
 interface BlackjackGameViewProps {
   tournament: any;
@@ -438,11 +437,6 @@ export function BlackjackGameView(props: BlackjackGameViewProps) {
             )}
           </div>
 
-          {/* Always-visible fairness bar, Stake-style — the popup is for editing. */}
-          <ProvablyFairStrip
-            clientSeed={clientSeed}
-            onOpenPanel={() => setProvablyFairOpen(true)}
-          />
             </div>
 
           {!isMdUp && primaryBetPanelCard}

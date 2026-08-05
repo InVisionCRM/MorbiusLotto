@@ -41,8 +41,15 @@ import { usePokerChipBalance } from '@/hooks/use-poker-chip-balance'
 import { formatChips } from '@/lib/format-poker-chips'
 import { GameWalletModal } from '@/components/shared/GameWalletModal'
 import { probeSiweSession } from '@/lib/api-auth'
+import { AutoBetPanel } from '@/components/shared/AutoBetPanel'
+import { useAutoBetStrategy } from '@/hooks/use-auto-bet-strategy'
+import {
+  defaultStrategy,
+  stopReasonLabel,
+  type AutoBetStrategy,
+  type SettledRound,
+} from '@/lib/auto-bet-strategy'
 import { useBigWin } from '@/contexts/big-win-context'
-import { ArcadeFairnessStrip } from '@/components/shared/ArcadeFairnessStrip'
 import { kenoAudio } from './keno-audio'
 import { KenoBoard } from './KenoBoard'
 import { KenoHotNumbers } from './KenoHotNumbers'
@@ -133,6 +140,13 @@ export function StakeKenoGame() {
   // Autoplay: games remaining in the current batch + a cancel flag.
   const [autoLeft, setAutoLeft] = useState(0)
   const autoCancel = useRef(false)
+  // stopAuto is defined before the strategy hook, so it reaches it through a ref.
+  const stratStopRef = useRef<(() => void) | null>(null)
+  const [strategy, setStrategy] = useState<AutoBetStrategy>(() => defaultStrategy(10))
+  const [strategyNote, setStrategyNote] = useState<string | null>(null)
+  // Read inside the stop callback, which outlives the render that armed it.
+  const strategyRef = useRef(strategy)
+  strategyRef.current = strategy
 
   // Global feed: recent wins (tab) + hot numbers (strip under the board).
   const { recent, loading: recentLoading, refetch: refetchRecent } = useKenoRecent()
@@ -205,9 +219,16 @@ export function StakeKenoGame() {
   }, [address])
 
   const picksCount = selected.size
-  const autoRunning = autoLeft > 0
+  // Mirrors strat.running, which is declared further down (the hook needs
+  // runRound). `busy` is read by code above the hook, so it can't reach it.
+  const [autoRunning, setAutoRunning] = useState(false)
   const busy = phase !== 'idle' || autoRunning || replaying
 
+  // Memoized: the strategy hook re-syncs whenever this identity changes.
+  const betLimits = useMemo(
+    () => ({ min: bounds.minBet, max: bounds.maxBet }),
+    [bounds.minBet, bounds.maxBet],
+  )
   const clampBet = useCallback(
     (n: number) => Math.min(bounds.maxBet, Math.max(bounds.minBet, Math.floor(n || 0))),
     [bounds],
@@ -327,18 +348,19 @@ export function StakeKenoGame() {
 
   /**
    * Play a single round. `fast` (used by autoplay) collapses the cinematic ball
-   * drop to an instant reveal + short pause so a batch of 10/25/50 doesn't take
-   * minutes. Resolves true on success, false on error (so autoplay can stop).
+   * drop to an instant reveal + short pause so a batch doesn't take minutes.
+   * Resolves the settled round, or null on error (so autoplay can stop).
+   * `stakeOverride` lets the strategy loop stake what it decided.
    */
   const runRound = useCallback(
-    (fast: boolean): Promise<boolean> =>
+    (fast: boolean, stakeOverride?: number): Promise<SettledRound | null> =>
       new Promise((resolve) => {
         if (picksCount === 0) {
-          resolve(false)
+          resolve(null)
           return
         }
         kenoAudio.init()
-        const stake = clampBet(bet)
+        const stake = clampBet(stakeOverride ?? bet)
         setBet(stake)
         setError(null)
         setNoChips(false)
@@ -363,7 +385,7 @@ export function StakeKenoGame() {
             } else {
               setError(serverDetail(msg) ?? 'Could not place the bet. Try again.')
             }
-            resolve(false)
+            resolve(null)
             return
           }
 
@@ -406,7 +428,7 @@ export function StakeKenoGame() {
             if (res.payout > 0) kenoAudio.playWin()
             else kenoAudio.playLose()
             void refetchRecent() // refresh hot numbers + recent-wins feed
-            resolve(true)
+            resolve({ bet: res.bet, payout: res.payout })
           }
 
           const board = boardWrapRef.current
@@ -446,29 +468,51 @@ export function StakeKenoGame() {
 
   const stopAuto = useCallback(() => {
     autoCancel.current = true
+    stratStopRef.current?.()
   }, [])
 
-  const startAuto = useCallback(
-    async (count: number) => {
-      if (busy || autoLeft > 0 || picksCount === 0) return
-      kenoAudio.init()
-      autoCancel.current = false
-      for (let i = 0; i < count; i++) {
-        if (autoCancel.current) break
-        setAutoLeft(count - i)
-        const ok = await runRound(true)
-        if (!ok || autoCancel.current) break
-        // Brief beat between games (the reveal itself already paces things).
-        await new Promise<void>((r) => {
-          const t = setTimeout(() => r(), 300)
-          revealTimers.current.push(t)
-        })
-      }
-      setAutoLeft(0)
-      autoCancel.current = false
-    },
-    [busy, autoLeft, picksCount, runRound],
-  )
+  // Strategy autoplay. Keno's batch loop was already serialized (each round
+  // awaits its reveal), so the shared hook replaces it outright.
+  const strat = useAutoBetStrategy({
+    strategy,
+    limits: betLimits,
+    intervalMs: 300,
+    placeBet: useCallback(
+      (stake: number) => (picksCount === 0 ? Promise.resolve(null) : runRound(true, stake)),
+      [runRound, picksCount],
+    ),
+    onStop: useCallback((reason, state) => {
+      setStrategyNote(stopReasonLabel(reason, state.profit))
+      // Restore the CONFIGURED base bet. The bet field mirrors the escalating
+      // stake while a run goes; without this the last escalated stake would
+      // become the new base — a martingale that ended at 320 would start the
+      // next run (and the next manual bet) at 320 instead of 10.
+      setBet(strategyRef.current.baseBet)
+    }, []),
+  })
+
+  stratStopRef.current = strat.stop
+
+  useEffect(() => {
+    setAutoRunning(strat.running)
+  }, [strat.running])
+
+  // Show the stake the strategy is about to place, so escalation is visible.
+  useEffect(() => {
+    if (strat.running) setBet(strat.run.nextBet)
+  }, [strat.running, strat.run.nextBet])
+
+  // The bet field is the strategy's base bet while idle — one number to set.
+  useEffect(() => {
+    if (!strat.running) setStrategy((s) => (s.baseBet === bet ? s : { ...s, baseBet: bet }))
+  }, [bet, strat.running])
+
+  const startAuto = useCallback(() => {
+    if (busy || strat.running || picksCount === 0) return
+    kenoAudio.init()
+    setStrategyNote(null)
+    strat.start()
+  }, [busy, picksCount, strat])
 
   const openVerify = useCallback((roundId: string | null) => {
     setVerifyTarget(roundId)
@@ -623,32 +667,36 @@ export function StakeKenoGame() {
             )}
           </div>
 
-          {/* Autoplay: run a fixed batch of rounds back-to-back (fast reveal). */}
+          {/* Autoplay with a betting strategy (see AutoBetPanel). */}
           <div className="space-y-1.5">
             <label className="text-xs uppercase tracking-wide text-slate-500">Autoplay</label>
+            <AutoBetPanel
+              strategy={strategy}
+              onChange={setStrategy}
+              disabled={autoRunning}
+              status={strat.running ? strat.run : null}
+            />
+            {!strat.running && strategyNote && (
+              <p className="text-xs text-slate-400">{strategyNote}</p>
+            )}
             {autoRunning ? (
               <Button
                 type="button"
                 onClick={stopAuto}
                 className="h-10 w-full bg-rose-500/90 text-sm font-bold uppercase tracking-wider text-white hover:bg-rose-500"
               >
-                Stop · {autoLeft} left
+                Stop · bet {strat.run.betsPlaced}
               </Button>
             ) : (
-              <div className="grid grid-cols-3 gap-2">
-                {[10, 25, 50].map((n) => (
-                  <Button
-                    key={n}
-                    type="button"
-                    variant="outline"
-                    disabled={busy || picksCount === 0}
-                    onClick={() => void startAuto(n)}
-                    className="border-cyan-950 bg-transparent font-semibold tabular-nums hover:bg-cyan-500/10"
-                  >
-                    {n}
-                  </Button>
-                ))}
-              </div>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={busy || picksCount === 0}
+                onClick={startAuto}
+                className="h-10 w-full border-cyan-950 bg-transparent font-semibold uppercase tracking-wider hover:bg-cyan-500/10"
+              >
+                Start auto{strategy.bets ? ` (${strategy.bets})` : ''}
+              </Button>
             )}
           </div>
 
@@ -777,9 +825,6 @@ export function StakeKenoGame() {
           />
         </div>
       </div>
-
-      {/* Always-visible fairness bar — active seed pair + commitment. */}
-      <ArcadeFairnessStrip onOpenPanel={() => setFairnessOpen(true)} />
 
       {/* ───────── History ───────── */}
       {address && (

@@ -25,9 +25,16 @@ import { usePokerChipBalance } from '@/hooks/use-poker-chip-balance'
 import { formatChips } from '@/lib/format-poker-chips'
 import { GameWalletModal } from '@/components/shared/GameWalletModal'
 import { probeSiweSession } from '@/lib/api-auth'
-import { ArcadeFairnessStrip } from '@/components/shared/ArcadeFairnessStrip'
 import { useBigWin } from '@/contexts/big-win-context'
 import { SessionChart, type SessionPoint } from '@/components/arcade2/SessionChart'
+import { AutoBetPanel } from '@/components/shared/AutoBetPanel'
+import { useAutoBetStrategy } from '@/hooks/use-auto-bet-strategy'
+import {
+  defaultStrategy,
+  stopReasonLabel,
+  type AutoBetStrategy,
+  type SettledRound,
+} from '@/lib/auto-bet-strategy'
 import { FloatingPanel } from '@/components/arcade2/FloatingPanel'
 import { ReplayConfirmOverlay } from '@/components/share/ReplayConfirmOverlay'
 import { PachinkoInfoTabs } from './PachinkoInfoTabs'
@@ -49,7 +56,6 @@ import {
 
 const HISTORY_LIMIT = 25
 const RECENT_LIMIT = 10
-const AUTO_COUNTS = [10, 25, 50, 100] as const
 /** Pause after the drop animation settles before the next auto round fires. */
 const AUTO_GAP_MS = 650
 
@@ -121,8 +127,12 @@ export function PachinkoGame() {
   )
 
   const [mode, setMode] = useState<'manual' | 'auto'>('manual')
-  const [autoCount, setAutoCount] = useState<number>(25)
   const [autoLeft, setAutoLeft] = useState<number | null>(null)
+  const [strategy, setStrategy] = useState<AutoBetStrategy>(() => defaultStrategy(10))
+  const [strategyNote, setStrategyNote] = useState<string | null>(null)
+  // Read inside the stop callback, which outlives the render that armed it.
+  const strategyRef = useRef(strategy)
+  strategyRef.current = strategy
 
   const [fairnessOpen, setFairnessOpen] = useState(false)
   const [rulesOpen, setRulesOpen] = useState(false)
@@ -148,6 +158,8 @@ export function PachinkoGame() {
   // Auto loop bookkeeping. autoActiveRef gates the run; autoTimer holds the
   // inter-round pause so it can be cleared on Stop / unmount.
   const autoActiveRef = useRef(false)
+  // stopAuto is defined before the strategy hook, so it reaches it through a ref.
+  const stratStopRef = useRef<(() => void) | null>(null)
   const autoTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // Balance: public read keyed by wallet (no sign-in popup), then kept fresh
@@ -224,6 +236,8 @@ export function PachinkoGame() {
     (n: number) => Math.min(maxBet, Math.max(minBet, Math.floor(n || 0))),
     [minBet, maxBet],
   )
+  // Memoized: the strategy hook re-syncs whenever this identity changes.
+  const betLimits = useMemo(() => ({ min: minBet, max: maxBet }), [minBet, maxBet])
 
   // Pocket multipliers for the current risk — server tables when available,
   // local fallbacks (verbatim from the server) keep the board drawable on load.
@@ -369,10 +383,10 @@ export function PachinkoGame() {
   // the serialized auto loop can await a complete round before the next. Resolves
   // 'ok' to continue, 'stop' when the loop should halt (error / no chips / busy).
   const dropOnce = useCallback(
-    (stakeArg?: number, riskArg?: PachinkoRisk): Promise<'ok' | 'stop'> => {
-      return new Promise<'ok' | 'stop'>((resolve) => {
+    (stakeArg?: number, riskArg?: PachinkoRisk): Promise<SettledRound | null> => {
+      return new Promise<SettledRound | null>((resolve) => {
         if (busy || replaying || !info) {
-          resolve('stop')
+          resolve(null)
           return
         }
         const useRisk = riskArg ?? risk
@@ -380,7 +394,7 @@ export function PachinkoGame() {
         if (balance != null && BigInt(stake) > balance) {
           setError('Not enough MORBIUS for that bet.')
           setNoChips(true)
-          resolve('stop')
+          resolve(null)
           return
         }
         // A real drop exits any replay view (staged overlay + settled highlight).
@@ -399,7 +413,7 @@ export function PachinkoGame() {
         })
           .then((res) => {
             if (!mounted.current) {
-              resolve('stop')
+              resolve(null)
               return
             }
             const nextBal = BigInt(res.chipBalance)
@@ -408,7 +422,7 @@ export function PachinkoGame() {
             // Animate into the server's pocket, replaying its cosmetic path.
             animateDrop(res.pocket, res.path, () => {
               if (!mounted.current) {
-                resolve('stop')
+                resolve(null)
                 return
               }
               settledPocketRef.current = res.pocket
@@ -464,12 +478,12 @@ export function PachinkoGame() {
                 ].slice(0, HISTORY_LIMIT),
               )
               // Animation has fully settled — the round is complete.
-              resolve('ok')
+              resolve({ bet: res.bet, payout: res.payout })
             })
           })
           .catch((e) => {
             if (!mounted.current) {
-              resolve('stop')
+              resolve(null)
               return
             }
             setBusy(false)
@@ -485,7 +499,7 @@ export function PachinkoGame() {
             } else {
               setError(serverDetail(msg) ?? 'Could not play the round. Try again.')
             }
-            resolve('stop')
+            resolve(null)
           })
       })
     },
@@ -495,49 +509,50 @@ export function PachinkoGame() {
   const stopAuto = useCallback(() => {
     autoActiveRef.current = false
     setAutoLeft(null)
+    stratStopRef.current?.()
     if (autoTimer.current) {
       clearTimeout(autoTimer.current)
       autoTimer.current = null
     }
   }, [])
 
-  /**
-   * Serialized auto loop: drop one ball, await its full animation, pause briefly,
-   * then fire the next — until the count is exhausted, Stop is pressed, the wallet
-   * can't cover the bet, or an error occurs. Repeats the current risk + bet.
-   */
-  const runAuto = useCallback(async () => {
-    let left = autoCount
-    autoActiveRef.current = true
-    setAutoLeft(left)
-    while (mounted.current && autoActiveRef.current && left > 0) {
-      const r = await dropOnce()
-      if (!mounted.current || !autoActiveRef.current) return
-      if (r === 'stop') {
-        stopAuto()
-        return
-      }
-      left -= 1
-      setAutoLeft(left)
-      if (left <= 0) {
-        stopAuto()
-        return
-      }
-      await new Promise<void>((resolve) => {
-        autoTimer.current = setTimeout(() => {
-          autoTimer.current = null
-          resolve()
-        }, AUTO_GAP_MS)
-      })
-    }
-  }, [autoCount, dropOnce, stopAuto])
+  // Strategy autoplay. This game was already serialized (each drop awaits its
+  // full animation), so the shared hook replaces the bespoke loop outright —
+  // there is no fast pipelined path to preserve here.
+  const strat = useAutoBetStrategy({
+    strategy,
+    limits: betLimits,
+    intervalMs: AUTO_GAP_MS,
+    placeBet: useCallback((stake: number) => dropOnce(stake), [dropOnce]),
+    onStop: useCallback((reason, state) => {
+      setStrategyNote(stopReasonLabel(reason, state.profit))
+      // Restore the CONFIGURED base bet. The bet field mirrors the escalating
+      // stake while a run goes; without this the last escalated stake would
+      // become the new base — a martingale that ended at 320 would start the
+      // next run (and the next manual bet) at 320 instead of 10.
+      setBet(strategyRef.current.baseBet)
+    }, []),
+  })
+
+  stratStopRef.current = strat.stop
+
+  // Show the stake the strategy is about to place, so escalation is visible.
+  useEffect(() => {
+    if (strat.running) setBet(strat.run.nextBet)
+  }, [strat.running, strat.run.nextBet])
+
+  // The bet field is the strategy's base bet while idle — one number to set.
+  useEffect(() => {
+    if (!strat.running) setStrategy((s) => (s.baseBet === bet ? s : { ...s, baseBet: bet }))
+  }, [bet, strat.running])
 
   const startAuto = useCallback(() => {
-    if (autoActiveRef.current || busy) return
-    void runAuto()
-  }, [busy, runAuto])
+    if (strat.running || busy) return
+    setStrategyNote(null)
+    strat.start()
+  }, [strat, busy])
 
-  const autoRunning = autoLeft != null
+  const autoRunning = strat.running
 
   const openVerify = useCallback((id: string | null) => {
     setVerifyTarget(id)
@@ -677,27 +692,17 @@ export function PachinkoGame() {
           </div>
 
           {mode === 'auto' && (
-            <div className="space-y-1.5">
-              <label className="text-xs uppercase tracking-wide text-slate-500">Number of drops</label>
-              <div className="grid grid-cols-4 gap-2">
-                {AUTO_COUNTS.map((n) => (
-                  <button
-                    key={n}
-                    type="button"
-                    disabled={autoRunning}
-                    onClick={() => setAutoCount(n)}
-                    className={[
-                      'arc-mono rounded-md py-1.5 text-xs tabular-nums transition-colors',
-                      autoCount === n
-                        ? 'bg-cyan-500/15 text-cyan-300 ring-1 ring-cyan-500/50'
-                        : 'text-slate-500 ring-1 ring-cyan-950 hover:text-slate-300',
-                    ].join(' ')}
-                  >
-                    {n}
-                  </button>
-                ))}
-              </div>
-            </div>
+            <>
+              <AutoBetPanel
+                strategy={strategy}
+                onChange={setStrategy}
+                disabled={autoRunning}
+                status={strat.running ? strat.run : null}
+              />
+              {!strat.running && strategyNote && (
+                <p className="text-xs text-slate-400">{strategyNote}</p>
+              )}
+            </>
           )}
 
           {/* Risk */}
@@ -804,7 +809,7 @@ export function PachinkoGame() {
               onClick={stopAuto}
               className="arc-display h-12 w-full bg-rose-500 text-base font-bold uppercase tracking-widest text-[#1B0308] hover:bg-rose-400"
             >
-              Stop · {autoLeft} left
+              Stop · bet {strat.run.betsPlaced}
             </Button>
           ) : (
             <Button
@@ -813,7 +818,7 @@ export function PachinkoGame() {
               onClick={startAuto}
               className="arc-display h-12 w-full bg-cyan-500 text-base font-bold uppercase tracking-widest text-[#03121B] shadow-[0_0_24px_-6px_rgba(34,211,238,0.8)] hover:bg-cyan-400 disabled:opacity-50"
             >
-              Start auto ({autoCount})
+              Start auto{strategy.bets ? ` (${strategy.bets})` : ''}
             </Button>
           )}
           </div>
@@ -975,9 +980,6 @@ export function PachinkoGame() {
           </div>
         </div>
       </div>
-
-      {/* Always-visible fairness bar — active seed pair + commitment. */}
-      <ArcadeFairnessStrip onOpenPanel={() => setFairnessOpen(true)} />
 
       {/* ───────── Session chart + info tabs ───────── */}
       <div className="mt-4 space-y-4">

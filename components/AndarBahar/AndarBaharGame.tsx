@@ -24,9 +24,16 @@ import { Input } from '@/components/ui/input'
 import { usePokerChipBalance } from '@/hooks/use-poker-chip-balance'
 import { formatChips } from '@/lib/format-poker-chips'
 import { GameWalletModal } from '@/components/shared/GameWalletModal'
-import { ArcadeFairnessStrip } from '@/components/shared/ArcadeFairnessStrip'
 import { probeSiweSession } from '@/lib/api-auth'
 import { useBigWin } from '@/contexts/big-win-context'
+import { AutoBetPanel } from '@/components/shared/AutoBetPanel'
+import { useAutoBetStrategy } from '@/hooks/use-auto-bet-strategy'
+import {
+  defaultStrategy,
+  stopReasonLabel,
+  type AutoBetStrategy,
+  type SettledRound,
+} from '@/lib/auto-bet-strategy'
 import { AndarBaharInfoTabs } from './AndarBaharInfoTabs'
 import { AndarBaharRulesModal } from './AndarBaharRulesModal'
 import { AndarBaharFairnessModal } from './AndarBaharFairnessModal'
@@ -53,11 +60,10 @@ const JOKER_CUT_MS = 420 // prototype: time before the joker flips
 const DEAL_STEP_MS = 220 // prototype: interval between alternating cards
 const SETTLE_MS = 420 // prototype: pause after the last card before settling
 
-/** "400 Bad Request: Not enough chips." → "Not enough chips." */
-/** Auto play (serialized): repeat the current side + bet N times, one full deal at a time. */
-const AUTO_COUNTS = [10, 25, 50, 100] as const
-const AUTO_GAP_MS = 700 // pause after a round settles before the next deal
+/** Pause after a round settles before the next auto round fires. */
+const AUTO_GAP_MS = 700
 
+/** "400 Bad Request: Not enough chips." → "Not enough chips." */
 function serverDetail(msg: string): string | null {
   const m = msg.match(/^\d{3} [^:]*: (.+)$/)
   return m ? m[1] : null
@@ -112,8 +118,12 @@ export function AndarBaharGame() {
   const [bet, setBet] = useState<number>(500)
 
   const [mode, setMode] = useState<'manual' | 'auto'>('manual')
-  const [autoCount, setAutoCount] = useState<number>(25)
   const [autoLeft, setAutoLeft] = useState<number | null>(null)
+  const [strategy, setStrategy] = useState<AutoBetStrategy>(() => defaultStrategy(10))
+  const [strategyNote, setStrategyNote] = useState<string | null>(null)
+  // Read inside the stop callback, which outlives the render that armed it.
+  const strategyRef = useRef(strategy)
+  strategyRef.current = strategy
 
   // Live deal state (replayed from the server result).
   const [phase, setPhase] = useState<Phase>('idle')
@@ -149,6 +159,8 @@ export function AndarBaharGame() {
   // Auto loop bookkeeping. autoActiveRef gates the run; autoTimer holds the
   // inter-round pause; settleResolve releases the loop once a deal finishes.
   const autoActiveRef = useRef(false)
+  // stopAuto is defined before the strategy hook, so it reaches it through a ref.
+  const stratStopRef = useRef<(() => void) | null>(null)
   const autoTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const settleResolve = useRef<(() => void) | null>(null)
 
@@ -224,6 +236,8 @@ export function AndarBaharGame() {
     (n: number) => Math.min(maxBet, Math.max(minBet, Math.floor(n || 0))),
     [minBet, maxBet],
   )
+  // Memoized: the strategy hook re-syncs whenever this identity changes.
+  const betLimits = useMemo(() => ({ min: minBet, max: maxBet }), [minBet, maxBet])
 
   const payLabel = (s: AndarBaharSide) => (s === 'andar' ? '0.9:1' : '1:1')
 
@@ -320,9 +334,9 @@ export function AndarBaharGame() {
     [reportWin],
   )
 
-  const deal = useCallback(async (): Promise<'ok' | 'stop'> => {
-    if (busy || replaying || !info) return 'stop'
-    const stake = clampBet(bet)
+  const deal = useCallback(async (stakeOverride?: number): Promise<SettledRound | null> => {
+    if (busy || replaying || !info) return null
+    const stake = clampBet(stakeOverride ?? bet)
     setBet(stake)
     setError(null)
     setNoChips(false)
@@ -349,7 +363,7 @@ export function AndarBaharGame() {
         side,
         bet: stake,
       })
-      if (!mounted.current) return 'stop'
+      if (!mounted.current) return null
       setBalance(BigInt(res.chipBalance))
       setLastResult(res)
       setHistory((prev) =>
@@ -376,9 +390,9 @@ export function AndarBaharGame() {
       })
       replayDeal(res)
       await settledPromise
-      return mounted.current ? 'ok' : 'stop'
+      return mounted.current ? { bet: res.bet, payout: res.payout } : null
     } catch (e) {
-      if (!mounted.current) return 'stop'
+      if (!mounted.current) return null
       const msg = (e as Error)?.message ?? ''
       if (/Not enough chips|insufficient|402/i.test(msg)) {
         setError('Not enough MORBIUS for that bet.')
@@ -391,7 +405,7 @@ export function AndarBaharGame() {
       setPhase('idle')
       setBusy(false)
       setFeltMsg('Pick a side and deal')
-      return 'stop'
+      return null
     }
   }, [busy, replaying, info, bet, side, clampBet, replayDeal])
 
@@ -443,50 +457,50 @@ export function AndarBaharGame() {
   const stopAuto = useCallback(() => {
     autoActiveRef.current = false
     setAutoLeft(null)
+    stratStopRef.current?.()
     if (autoTimer.current) {
       clearTimeout(autoTimer.current)
       autoTimer.current = null
     }
   }, [])
 
-  /**
-   * Serialized auto loop: deal one round, await the full alternating reveal,
-   * pause briefly, then fire the next — until the count is exhausted, Stop is
-   * pressed, the wallet can't cover the bet, or an error occurs. Repeats the
-   * current side + bet.
-   */
-  const runAuto = useCallback(async () => {
-    let left = autoCount
-    autoActiveRef.current = true
-    setAutoLeft(left)
-    while (mounted.current && autoActiveRef.current && left > 0) {
-      const r = await deal()
-      if (!mounted.current || !autoActiveRef.current) return
-      if (r === 'stop') {
-        stopAuto()
-        return
-      }
-      left -= 1
-      setAutoLeft(left)
-      if (left <= 0) {
-        stopAuto()
-        return
-      }
-      await new Promise<void>((resolve) => {
-        autoTimer.current = setTimeout(() => {
-          autoTimer.current = null
-          resolve()
-        }, AUTO_GAP_MS)
-      })
-    }
-  }, [autoCount, deal, stopAuto])
+  // Strategy autoplay. This game was already serialized (each deal awaits its
+  // full alternating reveal), so the shared hook replaces the bespoke loop
+  // outright — there is no fast pipelined path to preserve here.
+  const strat = useAutoBetStrategy({
+    strategy,
+    limits: betLimits,
+    intervalMs: AUTO_GAP_MS,
+    placeBet: useCallback((stake: number) => deal(stake), [deal]),
+    onStop: useCallback((reason, state) => {
+      setStrategyNote(stopReasonLabel(reason, state.profit))
+      // Restore the CONFIGURED base bet. The bet field mirrors the escalating
+      // stake while a run goes; without this the last escalated stake would
+      // become the new base — a martingale that ended at 320 would start the
+      // next run (and the next manual bet) at 320 instead of 10.
+      setBet(strategyRef.current.baseBet)
+    }, []),
+  })
+
+  stratStopRef.current = strat.stop
+
+  // Show the stake the strategy is about to place, so escalation is visible.
+  useEffect(() => {
+    if (strat.running) setBet(strat.run.nextBet)
+  }, [strat.running, strat.run.nextBet])
+
+  // The bet field is the strategy's base bet while idle — one number to set.
+  useEffect(() => {
+    if (!strat.running) setStrategy((s) => (s.baseBet === bet ? s : { ...s, baseBet: bet }))
+  }, [bet, strat.running])
 
   const startAuto = useCallback(() => {
-    if (autoActiveRef.current || busy || replaying) return
-    void runAuto()
-  }, [busy, replaying, runAuto])
+    if (strat.running || busy || replaying) return
+    setStrategyNote(null)
+    strat.start()
+  }, [strat, busy, replaying])
 
-  const autoRunning = autoLeft != null
+  const autoRunning = strat.running
 
   const openVerify = useCallback((id: string | null) => {
     setVerifyTarget(id)
@@ -584,23 +598,16 @@ export function AndarBaharGame() {
               ))}
             </div>
             {mode === 'auto' && (
-              <div className="mt-2.5 grid grid-cols-4 gap-1.5">
-                {AUTO_COUNTS.map((n) => (
-                  <button
-                    key={n}
-                    type="button"
-                    disabled={autoRunning}
-                    onClick={() => setAutoCount(n)}
-                    className={[
-                      'arc-mono rounded-lg py-2 text-[12.5px] font-semibold tabular-nums transition-colors',
-                      autoCount === n
-                        ? 'bg-cyan-500/15 text-cyan-300 ring-1 ring-cyan-500/50'
-                        : 'bg-[#06101906] text-slate-400 ring-1 ring-cyan-500/15 hover:text-cyan-300',
-                    ].join(' ')}
-                  >
-                    {n}
-                  </button>
-                ))}
+              <div className="mt-2.5 space-y-2">
+                <AutoBetPanel
+                  strategy={strategy}
+                  onChange={setStrategy}
+                  disabled={autoRunning}
+                  status={strat.running ? strat.run : null}
+                />
+                {!strat.running && strategyNote && (
+                  <p className="text-xs text-slate-400">{strategyNote}</p>
+                )}
               </div>
             )}
           </Card>
@@ -821,7 +828,7 @@ export function AndarBaharGame() {
               onClick={stopAuto}
               className="arc-display h-14 w-full bg-rose-500 text-base font-bold uppercase tracking-widest text-[#1B0308] hover:bg-rose-400"
             >
-              Stop · {autoLeft} left
+              Stop · bet {strat.run.betsPlaced}
             </Button>
           ) : (
             <Button
@@ -830,7 +837,7 @@ export function AndarBaharGame() {
               onClick={startAuto}
               className="arc-display h-14 w-full bg-gradient-to-b from-[#3ee0f5] via-cyan-400 to-[#0fb6d4] text-base font-bold uppercase tracking-widest text-[#04141b] shadow-[0_0_24px_-6px_rgba(34,211,238,0.68)] hover:brightness-105 disabled:opacity-50"
             >
-              Start auto ({autoCount})
+              Start auto{strategy.bets ? ` (${strategy.bets})` : ''}
             </Button>
           )}
           </div>
@@ -860,9 +867,6 @@ export function AndarBaharGame() {
           )}
         </div>
       </div>
-
-      {/* Always-visible fairness bar — active seed pair + commitment. */}
-      <ArcadeFairnessStrip onOpenPanel={() => setFairnessOpen(true)} />
 
       {/* ───────── Info tabs ───────── */}
       <div className="mt-4">
