@@ -17,30 +17,49 @@
 import { apiFetchJson } from '@/lib/api-auth';
 import { getApiUrlOptional } from '@/lib/api-urls';
 
-export type VideoPokerCategory =
-  | 'royal_flush'
-  | 'straight_flush'
-  | 'four_of_a_kind'
-  | 'full_house'
-  | 'flush'
-  | 'straight'
-  | 'three_of_a_kind'
-  | 'two_pair'
+export type VideoPokerVariant =
   | 'jacks_or_better'
-  | 'nothing';
+  | 'bonus_poker'
+  | 'double_bonus'
+  | 'double_double_bonus'
+  | 'deuces_wild'
+  | 'joker_poker';
+
+/**
+ * Category keys are open-ended: the bonus paytables split quads into ranked
+ * tiers and the wild games add five of a kind, so the client renders whatever
+ * `order` + `names` the server sends rather than hardcoding a fixed list.
+ */
+export type VideoPokerCategory = string;
+
+/** One entry in the variant picker. */
+export interface VideoPokerVariantSummary {
+  key: VideoPokerVariant;
+  name: string;
+  blurb: string;
+  wild: 'none' | 'deuces' | 'joker';
+  rtpBp: number;
+}
 
 export interface VideoPokerPaytable {
   minBet: number;
   maxBet: number;
-  paytable: Record<VideoPokerCategory, number>;
-  names: Record<VideoPokerCategory, string>;
+  variant: VideoPokerVariant;
+  paytable: Record<string, number>;
+  names: Record<string, string>;
   order: VideoPokerCategory[];
+  /** 52, or 53 when a Joker is in the deck. */
+  deckSize: number;
+  wild: 'none' | 'deuces' | 'joker';
+  rtpBp: number;
+  variants: VideoPokerVariantSummary[];
 }
 
 export interface VideoPokerDealResult {
   handId: string;
   dealtHand: number[];
   bet: number;
+  variant: VideoPokerVariant;
   serverSeedHash: string;
   chipBalance: string;
 }
@@ -49,10 +68,13 @@ export interface VideoPokerDrawResult {
   handId: string;
   holds: boolean[];
   finalHand: number[];
+  variant: VideoPokerVariant;
   category: VideoPokerCategory;
   categoryName: string;
   multiplier: number;
   payout: number;
+  /** True when a wild card was needed to make the hand. */
+  usedWild: boolean;
   serverSeed: string;
   clientSeed: string;
   chipBalance: string;
@@ -62,6 +84,11 @@ export interface VideoPokerVerifyResult {
   handId: string;
   status: string;
   bet: number;
+  /** Which paytable the hand was dealt and paid on. */
+  variant: VideoPokerVariant;
+  variantName: string;
+  /** 52, or 53 for Joker Poker. */
+  deckSize: number;
   serverSeedHash: string;
   clientSeed: string;
   nonce: number;
@@ -88,7 +115,15 @@ const RANK_LABELS: Record<number, string> = {
 /** Suit order matches the server: 0=♥ 1=♦ 2=♣ 3=♠. */
 const SUIT_GLYPHS = ['♥', '♦', '♣', '♠'];
 
-/** Rank 2..14 (14 = Ace). */
+/** The Joker's index in the 53-card Joker Poker deck. */
+export const VP_JOKER_INDEX = 52;
+
+/** True for the Joker, which has no rank or suit of its own. */
+export function vpIsJoker(idx: number): boolean {
+  return idx === VP_JOKER_INDEX;
+}
+
+/** Rank 2..14 (14 = Ace). Meaningless for the Joker. */
 export function vpCardRank(idx: number): number {
   return (idx % 13) + 2;
 }
@@ -98,17 +133,27 @@ export function vpCardSuit(idx: number): number {
 }
 
 export function vpRankLabel(idx: number): string {
+  if (vpIsJoker(idx)) return 'JKR';
   const rank = vpCardRank(idx);
   return RANK_LABELS[rank] ?? String(rank);
 }
 
 export function vpSuitGlyph(idx: number): string {
+  if (vpIsJoker(idx)) return '★';
   return SUIT_GLYPHS[vpCardSuit(idx)] ?? '?';
 }
 
-/** Hearts and diamonds render red; clubs and spades black. */
+/** Hearts and diamonds render red; clubs and spades black. The Joker is red. */
 export function vpCardIsRed(idx: number): boolean {
+  if (vpIsJoker(idx)) return true;
   return vpCardSuit(idx) <= 1;
+}
+
+/** Is this card wild under the given variant's rule? */
+export function vpIsWild(idx: number, wild: 'none' | 'deuces' | 'joker'): boolean {
+  if (wild === 'deuces') return !vpIsJoker(idx) && vpCardRank(idx) === 2;
+  if (wild === 'joker') return vpIsJoker(idx);
+  return false;
 }
 
 /**
@@ -128,14 +173,18 @@ function apiBase(): string {
   return getApiUrlOptional() ?? '';
 }
 
-export async function fetchVideoPokerPaytable(): Promise<VideoPokerPaytable> {
-  const r = await fetch(`${apiBase()}/api/video-poker/paytable`);
+export async function fetchVideoPokerPaytable(
+  variant?: VideoPokerVariant,
+): Promise<VideoPokerPaytable> {
+  const qs = variant ? `?variant=${encodeURIComponent(variant)}` : '';
+  const r = await fetch(`${apiBase()}/api/video-poker/paytable${qs}`);
   const j = await r.json();
   return j as VideoPokerPaytable;
 }
 
 export async function dealVideoPoker(args: {
   bet: number;
+  variant?: VideoPokerVariant;
   clientSeed?: string;
 }): Promise<VideoPokerDealResult> {
   return apiFetchJson<VideoPokerDealResult>('/api/video-poker/deal', {

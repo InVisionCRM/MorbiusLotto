@@ -22,6 +22,8 @@ interface VideoPokerCardProps {
   flipMode?: 'deal' | 'draw' | null;
   /** Animation-delay in ms — stagger each card in the hand. */
   flipDelay?: number;
+  /** This card is wild under the active variant (a deuce, or the Joker). */
+  wild?: boolean;
   onToggle?: () => void;
   disabled?: boolean;
 }
@@ -32,6 +34,7 @@ export function VideoPokerCard({
   win = false,
   flipMode = null,
   flipDelay = 0,
+  wild = false,
   onToggle,
   disabled = true,
 }: VideoPokerCardProps) {
@@ -64,10 +67,16 @@ export function VideoPokerCard({
                 <div className={`absolute inset-0 flex items-center justify-center text-3xl sm:text-5xl ${isRed ? 'text-red-600' : 'text-slate-900'}`}>
                   {vpSuitGlyph(card)}
                 </div>
-                {held && (
+                {held ? (
                   <span className="absolute inset-x-0 bottom-0 rounded-b-lg bg-cyan-500/90 py-0.5 text-center text-[10px] font-bold uppercase tracking-widest text-[#03121B]">
                     Held
                   </span>
+                ) : (
+                  wild && (
+                    <span className="absolute inset-x-0 bottom-0 rounded-b-lg bg-amber-400/90 py-0.5 text-center text-[10px] font-bold uppercase tracking-widest text-[#2b1a00]">
+                      Wild
+                    </span>
+                  )
                 )}
               </>
             )}
@@ -108,10 +117,16 @@ export function VideoPokerCard({
           <div className={`absolute inset-0 flex items-center justify-center text-3xl sm:text-5xl ${isRed ? 'text-red-600' : 'text-slate-900'}`}>
             {vpSuitGlyph(card)}
           </div>
-          {held && (
+          {held ? (
             <span className="absolute inset-x-0 bottom-0 rounded-b-lg bg-cyan-500/90 py-0.5 text-center text-[10px] font-bold uppercase tracking-widest text-[#03121B]">
               Held
             </span>
+          ) : (
+            wild && (
+              <span className="absolute inset-x-0 bottom-0 rounded-b-lg bg-amber-400/90 py-0.5 text-center text-[10px] font-bold uppercase tracking-widest text-[#2b1a00]">
+                Wild
+              </span>
+            )
           )}
         </>
       )}

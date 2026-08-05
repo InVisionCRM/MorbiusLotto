@@ -38,8 +38,10 @@ import {
   fetchVideoPokerPaytable,
   dealVideoPoker,
   drawVideoPoker,
+  vpIsWild,
   type VideoPokerCategory,
   type VideoPokerPaytable,
+  type VideoPokerVariant,
 } from '@/lib/video-poker-client';
 
 const HISTORY_LIMIT = 25;
@@ -64,6 +66,7 @@ export function StakeVideoPokerGame() {
   const { reportWin } = useBigWin();
 
   const [info, setInfo] = useState<VideoPokerPaytable | null>(null);
+  const [variant, setVariant] = useState<VideoPokerVariant>('jacks_or_better');
   const [bet, setBet] = useState<number>(100);
   const [activeBet, setActiveBet] = useState<number>(0);
   const [phase, setPhase] = useState<Phase>('idle');
@@ -114,13 +117,24 @@ export function StakeVideoPokerGame() {
   const minBet = info?.minBet ?? 10;
   const maxBet = info?.maxBet ?? 2000;
 
+  // The paytable IS the game here, so it is re-fetched whenever the player
+  // switches variant — every number on screen comes from the server, and the
+  // server is what pays.
   useEffect(() => {
-    fetchVideoPokerPaytable()
+    let cancelled = false;
+    fetchVideoPokerPaytable(variant)
       .then((i) => {
+        if (cancelled) return;
         setInfo(i);
         setBet((b) => Math.min(Math.max(b, i.minBet), i.maxBet));
       })
       .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [variant]);
+
+  useEffect(() => {
     // Prime the SIWE session so the first deal authenticates cleanly.
     void probeSiweSession().catch(() => {});
   }, []);
@@ -168,7 +182,11 @@ export function StakeVideoPokerGame() {
     setPhase('dealing');
     videoPokerAudio.init();
     try {
-      const r = await dealVideoPoker({ bet: stake, clientSeed: clientSeed.trim() || undefined });
+      const r = await dealVideoPoker({
+        bet: stake,
+        variant,
+        clientSeed: clientSeed.trim() || undefined,
+      });
       setHandId(r.handId);
       setDealtHand(r.dealtHand);
       setActiveBet(r.bet);
@@ -184,7 +202,7 @@ export function StakeVideoPokerGame() {
       setPhase('idle');
       handleErr(e);
     }
-  }, [phase, info, bet, balance, clientSeed, clampBet, handleErr]);
+  }, [phase, info, bet, variant, balance, clientSeed, clampBet, handleErr]);
 
   const toggleHold = useCallback(
     (i: number) => {
@@ -372,6 +390,55 @@ export function StakeVideoPokerGame() {
             </div>
           </div>
 
+          {/* Which paytable you're playing. Locked mid-hand: the hand is
+              settled on the variant it was dealt on, so switching would only
+              lie about what's about to be paid. */}
+          {info && info.variants?.length > 1 && (
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <span className="text-xs uppercase tracking-wide text-slate-500">Game</span>
+                <span className="arc-mono text-[11px] text-slate-600">
+                  {(info.rtpBp / 100).toFixed(2)}% return
+                </span>
+              </div>
+              <div className="grid grid-cols-1 gap-1.5">
+                {info.variants.map((v) => {
+                  const on = v.key === variant;
+                  return (
+                    <button
+                      key={v.key}
+                      type="button"
+                      disabled={!betting}
+                      onClick={() => setVariant(v.key)}
+                      className={[
+                        'rounded-lg px-2.5 py-1.5 text-left transition-colors disabled:opacity-40',
+                        on
+                          ? 'bg-cyan-500/15 ring-1 ring-cyan-500/50'
+                          : 'ring-1 ring-cyan-950 hover:ring-cyan-500/30',
+                      ].join(' ')}
+                    >
+                      <span className="flex items-center justify-between gap-2">
+                        <span
+                          className={`text-[12.5px] font-semibold ${on ? 'text-cyan-300' : 'text-slate-300'}`}
+                        >
+                          {v.name}
+                        </span>
+                        {v.wild !== 'none' && (
+                          <span className="rounded bg-amber-400/15 px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wider text-amber-300">
+                            Wild
+                          </span>
+                        )}
+                      </span>
+                      <span className="mt-0.5 block text-[11px] leading-snug text-slate-500">
+                        {v.blurb}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
               <span className="text-xs uppercase tracking-wide text-slate-500">Bet</span>
@@ -469,6 +536,11 @@ export function StakeVideoPokerGame() {
                             : null
                       }
                       flipDelay={i * 75}
+                      wild={
+                        !showPlaceholders &&
+                        showHand[i] != null &&
+                        vpIsWild(showHand[i], info?.wild ?? 'none')
+                      }
                       onToggle={() => toggleHold(i)}
                       disabled={phase !== 'held'}
                     />

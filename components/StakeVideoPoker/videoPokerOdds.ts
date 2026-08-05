@@ -9,6 +9,7 @@
  */
 
 import type { GameOdds, OddsRow } from '@/components/arcade2/ArcadeOddsTab'
+import type { VideoPokerPaytable } from '@/lib/video-poker-client'
 
 const HANDS: { name: string; pay: number; freq: number; tone: OddsRow['tone'] }[] = [
   { name: 'Royal flush', pay: 800, freq: 0.0000247, tone: 'amber' },
@@ -44,4 +45,48 @@ export const videoPokerOdds: GameOdds = {
       note: 'Pays are total return per 1 staked, so Jacks-or-Better (1×) is a push. Frequencies assume optimal strategy (~99.54% return) and are standard published figures.',
     },
   ],
+}
+
+/**
+ * Odds for whichever paytable is actually loaded.
+ *
+ * Jacks or Better keeps its published per-hand frequencies. The other five
+ * variants get the live paytable and their return, but NOT invented
+ * frequencies — optimal-strategy hand frequencies differ per paytable and the
+ * repo has no strategy engine to derive them. Showing the Jacks-or-Better
+ * numbers under a Deuces Wild heading would be worse than showing none.
+ */
+export function videoPokerOddsFor(info: VideoPokerPaytable | null): GameOdds {
+  if (!info || info.variant === 'jacks_or_better') return videoPokerOdds
+
+  const summary = info.variants?.find((v) => v.key === info.variant)
+  const label = summary?.name ?? 'Video Poker'
+  const rtpPct = info.rtpBp / 100
+
+  const variantRows: OddsRow[] = info.order.map((cat, i) => ({
+    outcome: info.names[cat] ?? cat,
+    chance: `${info.paytable[cat] ?? 0}×`,
+    tone: i < 3 ? 'amber' : i < info.order.length - 2 ? 'cyan' : 'slate',
+  }))
+
+  return {
+    blurb:
+      info.wild === 'none'
+        ? 'You’re dealt five cards, hold any, and draw once. This paytable splits four of a kind by rank, so the same quads are worth very different money.'
+        : 'You’re dealt five cards, hold any, and draw once. Wild cards stand in for anything, which is why nothing small pays on this paytable.',
+    variants: [
+      {
+        id: info.variant,
+        label,
+        edgePct: Number((100 - rtpPct).toFixed(2)),
+        rtpPct,
+        rows: variantRows,
+        headers: ['Hand', 'Pays'],
+        note:
+          `Pays are total return per 1 staked. This is the live ${label} paytable the server settles on. ` +
+          'Per-hand frequencies aren’t listed here: they depend on optimal strategy for this exact paytable, ' +
+          'and quoting the Jacks or Better numbers would be wrong.',
+      },
+    ],
+  }
 }

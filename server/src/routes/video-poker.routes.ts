@@ -22,14 +22,16 @@ import { verifyTelegramInitData } from '../services/telegram.service';
 import { SESSION_COOKIE_NAME } from '../middleware/require-auth';
 import { getPokerChipBalance, applyPokerChipDelta } from '../services/poker-chip-wallet';
 import { ProvablyFairService } from '../services/provably-fair.service';
+import { applyHolds } from '../services/video-poker';
 import {
-  applyHolds,
-  resolveVideoPokerHand,
-  VIDEO_POKER_PAYTABLE,
-  VIDEO_POKER_CATEGORY_NAME,
-  VIDEO_POKER_PAYING_ORDER,
-  type VideoPokerResult,
-} from '../services/video-poker';
+  resolveVpHand,
+  vpSpec,
+  vpVariantInfo,
+  VP_VARIANT_KEYS,
+  VP_VARIANTS,
+  type VpResult,
+  type VpVariantSpec,
+} from '../services/video-poker-variants';
 import type { DatabaseService } from '../services/database.service';
 import type { AuthService } from '../services/auth.service';
 
@@ -45,7 +47,8 @@ interface DrawOutcome {
   finalHand: number[];
   serverSeed: string;
   clientSeed: string;
-  result: VideoPokerResult;
+  result: VpResult;
+  spec: VpVariantSpec;
   chipBalance: bigint;
 }
 
@@ -90,14 +93,27 @@ export function registerVideoPokerRoutes({
   // GET /api/video-poker/paytable — public. Bet limits + the live paytable so
   // the Mini App always renders the exact numbers the server pays.
   // -------------------------------------------------------------------------
-  app.get('/api/video-poker/paytable', (_req: Request, res: Response) => {
+  app.get('/api/video-poker/paytable', (req: Request, res: Response) => {
+    // `?variant=` selects a paytable; anything unknown falls back to Jacks or
+    // Better, so an old client that doesn't send one keeps its original game.
+    const spec = vpSpec(req.query.variant);
+    const info = vpVariantInfo(spec);
     res.json({
       ok: true,
       minBet: betLimits('video_poker').min,
       maxBet: betLimits('video_poker').max,
-      paytable: VIDEO_POKER_PAYTABLE,
-      names: VIDEO_POKER_CATEGORY_NAME,
-      order: VIDEO_POKER_PAYING_ORDER,
+      variant: spec.key,
+      paytable: info.paytable,
+      names: info.names,
+      order: info.order,
+      deckSize: info.deckSize,
+      wild: info.wild,
+      rtpBp: info.rtpBp,
+      // The whole menu, so the client can render its picker from one call.
+      variants: VP_VARIANT_KEYS.map((k) => {
+        const v = vpVariantInfo(VP_VARIANTS[k]);
+        return { key: v.key, name: v.name, blurb: v.blurb, wild: v.wild, rtpBp: v.rtpBp };
+      }),
     });
   });
 
@@ -127,7 +143,10 @@ export function registerVideoPokerRoutes({
           ? req.body.clientSeed.trim().slice(0, 128)
           : crypto.randomBytes(16).toString('hex');
       const nonce = 0;
-      const deck = pf.fisherYatesShuffle(serverSeed, clientSeed, nonce);
+      // Joker Poker shuffles 53 cards; every other variant shuffles the
+      // standard 52. The deck size is fixed by the variant, not the request.
+      const spec = vpSpec(req.body?.variant);
+      const deck = pf.fisherYatesShuffleSized(serverSeed, clientSeed, nonce, spec.deckSize);
       const dealtHand = deck.slice(0, 5);
       const handId = crypto.randomUUID();
 
@@ -141,8 +160,8 @@ export function registerVideoPokerRoutes({
         await client.query(
           `INSERT INTO video_poker_hands
              (id, wallet_address, bet, status, server_seed, server_seed_hash,
-              client_seed, nonce, deck, dealt_hand)
-           VALUES ($1, $2, $3, 'dealt', $4, $5, $6, $7, $8::jsonb, $9::jsonb)`,
+              client_seed, nonce, deck, dealt_hand, variant)
+           VALUES ($1, $2, $3, 'dealt', $4, $5, $6, $7, $8::jsonb, $9::jsonb, $10)`,
           [
             handId,
             wallet.toLowerCase(),
@@ -153,6 +172,7 @@ export function registerVideoPokerRoutes({
             nonce,
             JSON.stringify(deck),
             JSON.stringify(dealtHand),
+            spec.key,
           ],
         );
       });
@@ -162,6 +182,7 @@ export function registerVideoPokerRoutes({
         handId,
         dealtHand,
         bet,
+        variant: spec.key,
         serverSeedHash,
         chipBalance: chipBalance.toString(),
       });
@@ -195,7 +216,7 @@ export function registerVideoPokerRoutes({
       await dbService.withTransaction(async (client) => {
         // Row lock + status check: a hand can never be drawn (or paid) twice.
         const r = await client.query(
-          `SELECT bet, status, server_seed, client_seed, deck
+          `SELECT bet, status, server_seed, client_seed, deck, variant
              FROM video_poker_hands
             WHERE id = $1 AND wallet_address = $2
             FOR UPDATE`,
@@ -206,9 +227,12 @@ export function registerVideoPokerRoutes({
         if (row.status !== 'dealt') throw new Error('HAND_ALREADY_RESOLVED');
 
         const bet = Number(row.bet);
+        // The paytable comes from the STORED variant, never from the request —
+        // otherwise a player could deal on one game and settle on another.
+        const spec = vpSpec(row.variant);
         const deck: number[] = Array.isArray(row.deck) ? row.deck : JSON.parse(row.deck);
         const finalHand = applyHolds(deck, holds);
-        const result = resolveVideoPokerHand(finalHand, bet);
+        const result = resolveVpHand(finalHand, bet, spec);
 
         let chipBalance = await getPokerChipBalance(client, wallet);
         if (result.payout > 0) {
@@ -232,6 +256,7 @@ export function registerVideoPokerRoutes({
           serverSeed: row.server_seed,
           clientSeed: row.client_seed,
           result,
+          spec,
           chipBalance,
         };
       });
@@ -243,10 +268,12 @@ export function registerVideoPokerRoutes({
         handId,
         holds,
         finalHand: o.finalHand,
+        variant: o.spec.key,
         category: o.result.category,
         categoryName: o.result.categoryName,
         multiplier: o.result.multiplier,
         payout: o.result.payout,
+        usedWild: o.result.usedWild,
         serverSeed: o.serverSeed,
         clientSeed: o.clientSeed,
         chipBalance: o.chipBalance.toString(),
@@ -272,7 +299,8 @@ export function registerVideoPokerRoutes({
     try {
       const r = await pool.query(
         `SELECT id, status, bet, server_seed, server_seed_hash, client_seed, nonce,
-                deck, dealt_hand, holds, final_hand, result_category, payout, resolved_at
+                deck, dealt_hand, holds, final_hand, result_category, payout,
+                resolved_at, variant
            FROM video_poker_hands WHERE id = $1`,
         [req.params.handId],
       );
@@ -281,11 +309,15 @@ export function registerVideoPokerRoutes({
       }
       const h = r.rows[0];
       const resolved = h.status === 'resolved';
+      const spec = vpSpec(h.variant);
       return res.json({
         ok: true,
         handId: h.id,
         status: h.status,
         bet: Number(h.bet),
+        variant: spec.key,
+        variantName: spec.name,
+        deckSize: spec.deckSize,
         serverSeedHash: h.server_seed_hash,
         clientSeed: h.client_seed,
         nonce: Number(h.nonce),
@@ -299,7 +331,10 @@ export function registerVideoPokerRoutes({
         payout: h.payout != null ? Number(h.payout) : null,
         resolvedAt: h.resolved_at ?? null,
         recipe:
-          'fisherYatesShuffle(serverSeed, clientSeed, nonce): deck[0..4] is the deal, deck[5..9] are the draw replacements.',
+          `fisherYatesShuffle(serverSeed, clientSeed, nonce) over ${spec.deckSize} cards: ` +
+          'deck[0..4] is the deal, deck[5..9] are the draw replacements.' +
+          (spec.deckSize === 53 ? ' Card index 52 is the Joker.' : '') +
+          ` Paid on the ${spec.name} paytable.`,
       });
     } catch (err) {
       logger.error('[video-poker] verify failed', { error: (err as Error)?.message });

@@ -212,6 +212,15 @@ export function VideoPokerFairnessModal({
               </div>
 
               <div className="grid grid-cols-1 gap-2">
+                {/* Which paytable paid this hand — the same five cards are worth
+                    different money on each game, so the check is incomplete
+                    without it. */}
+                {result.variantName && (
+                  <Field
+                    label="Paytable"
+                    value={`${result.variantName} · ${result.deckSize}-card deck`}
+                  />
+                )}
                 <Field label="Server seed hash (committed)" value={result.serverSeedHash} />
                 <Field label="Server seed (revealed)" value={result.serverSeed ?? '— hidden until the hand resolves'} />
                 <Field label="Client seed" value={result.clientSeed} />
