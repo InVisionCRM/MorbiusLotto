@@ -805,6 +805,230 @@ export function ChickenScene() {
   );
 }
 
+
+/* ── PR #278 games ──────────────────────────────────────────────────────
+   Each of these draws the ONE thing that makes its game different, rather
+   than a generic hand of cards — a card that could be any blackjack game
+   tells a player nothing about why they'd click it. Double Exposure shows
+   the dealer face up, Pontoon shows it face down, Switch shows the trade. */
+
+/** A face-down card. No shared def for this, so it lives here. */
+function CardBack({ x, y, w = 34, h = 46, rot = 0, cx = 0, cy = 0 }: {
+  x: number; y: number; w?: number; h?: number; rot?: number; cx?: number; cy?: number;
+}) {
+  return (
+    <g transform={rot ? `rotate(${rot} ${cx} ${cy})` : undefined} filter="url(#fS2)">
+      <rect x={x} y={y} width={w} height={h} rx="4" fill="#12314e" stroke="#38bdf8" strokeOpacity=".35" />
+      <rect x={x + 3} y={y + 3} width={w - 6} height={h - 6} rx="3" fill="none" stroke="#38bdf8" strokeOpacity=".28" />
+      <path
+        d={`M${x + 5} ${y + h / 2} L${x + w / 2} ${y + 6} L${x + w - 5} ${y + h / 2} L${x + w / 2} ${y + h - 6} Z`}
+        fill="#38bdf8" fillOpacity=".18"
+      />
+    </g>
+  );
+}
+
+export function UltimateHoldemScene() {
+  return (
+    <svg viewBox="0 0 200 140">
+      <ellipse cx="100" cy="112" rx="94" ry="25" fill="url(#feltP)" />
+      {/* The three circles are the whole game: Ante and Blind go down blind,
+          Play is the one shot you get and it shrinks the longer you wait. */}
+      <g fontSize="4.6" fontWeight="800" textAnchor="middle" fill="#c4b5fd" fillOpacity=".85">
+        <circle cx="62" cy="108" r="11" fill="none" stroke="#a78bfa" strokeOpacity=".45" />
+        <text x="62" y="110">ANTE</text>
+        <circle cx="100" cy="112" r="11" fill="none" stroke="#a78bfa" strokeOpacity=".45" />
+        <text x="100" y="114">BLIND</text>
+        <circle cx="138" cy="108" r="11" fill="none" stroke="#fbbf24" strokeOpacity=".7" />
+        <text x="138" y="110" fill="#fde68a">PLAY</text>
+      </g>
+      <g filter="url(#fS2)">
+        <g><rect x="46" y="30" width="32" height="44" rx="4" fill="url(#gCard)" stroke="#94a3b8" strokeOpacity=".4" /><rect x="46" y="30" width="32" height="44" rx="4" fill="url(#gGloss)" /><text x="50" y="44" fontSize="11" fontWeight="800" fill="#dc2626">A</text><text x="50" y="53" fontSize="8" fill="#dc2626">♦</text></g>
+        <g><rect x="84" y="30" width="32" height="44" rx="4" fill="url(#gCard)" stroke="#94a3b8" strokeOpacity=".4" /><rect x="84" y="30" width="32" height="44" rx="4" fill="url(#gGloss)" /><text x="88" y="44" fontSize="11" fontWeight="800" fill="#dc2626">K</text><text x="88" y="53" fontSize="8" fill="#dc2626">♦</text></g>
+        <g><rect x="122" y="30" width="32" height="44" rx="4" fill="url(#gCard)" stroke="#94a3b8" strokeOpacity=".4" /><rect x="122" y="30" width="32" height="44" rx="4" fill="url(#gGloss)" /><text x="126" y="44" fontSize="11" fontWeight="800" fill="#dc2626">Q</text><text x="126" y="53" fontSize="8" fill="#dc2626">♦</text></g>
+      </g>
+      <g filter="url(#fS2)">
+        <ellipse cx="138" cy="100" rx="12" ry="4.5" fill="#78350f" />
+        <ellipse cx="138" cy="96" rx="12" ry="4.5" fill="url(#gGold)" />
+        <text x="138" y="98.5" fontSize="6" fontWeight="800" fill="#3b2503" textAnchor="middle">4×</text>
+      </g>
+      <text x="100" y="22" fontSize="5.5" fontWeight="800" fill="#c4b5fd" fillOpacity=".65" textAnchor="middle" letterSpacing="2.2">ONE BET, FOUR STREETS</text>
+    </svg>
+  );
+}
+
+export function CaribbeanStudScene() {
+  return (
+    <svg viewBox="0 0 200 140">
+      <ellipse cx="100" cy="114" rx="94" ry="24" fill="url(#feltB)" />
+      {/* The dealer's lone up-card is the tension of the whole game — miss
+          Ace-King and your monster hand gets paid one unit. */}
+      <g filter="url(#fS2)">
+        <g><rect x="20" y="18" width="30" height="42" rx="4" fill="url(#gCard)" stroke="#94a3b8" strokeOpacity=".4" /><rect x="20" y="18" width="30" height="42" rx="4" fill="url(#gGloss)" /><text x="24" y="32" fontSize="11" fontWeight="800" fill="#0f172a">A</text><text x="24" y="41" fontSize="8" fill="#0f172a">♠</text></g>
+      </g>
+      <CardBack x={54} y={18} w={26} h={42} />
+      <CardBack x={84} y={18} w={26} h={42} />
+      <CardBack x={114} y={18} w={26} h={42} />
+      <CardBack x={144} y={18} w={26} h={42} />
+      <text x="100" y="72" fontSize="5" fontWeight="800" fill="#7dd3fc" fillOpacity=".75" textAnchor="middle" letterSpacing="1.6">DEALER NEEDS ACE-KING</text>
+      <g filter="url(#fS2)">
+        <g transform="rotate(-12 42 96)"><rect x="28" y="76" width="28" height="40" rx="4" fill="url(#gCard)" stroke="#94a3b8" strokeOpacity=".4" /><rect x="28" y="76" width="28" height="40" rx="4" fill="url(#gGloss)" /><text x="32" y="89" fontSize="10" fontWeight="800" fill="#dc2626">10</text><text x="32" y="98" fontSize="7" fill="#dc2626">♥</text></g>
+        <g transform="rotate(-6 70 94)"><rect x="56" y="74" width="28" height="40" rx="4" fill="url(#gCard)" stroke="#94a3b8" strokeOpacity=".4" /><rect x="56" y="74" width="28" height="40" rx="4" fill="url(#gGloss)" /><text x="60" y="87" fontSize="10" fontWeight="800" fill="#dc2626">J</text><text x="60" y="96" fontSize="7" fill="#dc2626">♥</text></g>
+        <g><rect x="86" y="72" width="28" height="40" rx="4" fill="url(#gCard)" stroke="#94a3b8" strokeOpacity=".4" /><rect x="86" y="72" width="28" height="40" rx="4" fill="url(#gGloss)" /><text x="90" y="85" fontSize="10" fontWeight="800" fill="#dc2626">Q</text><text x="90" y="94" fontSize="7" fill="#dc2626">♥</text></g>
+        <g transform="rotate(6 130 94)"><rect x="116" y="74" width="28" height="40" rx="4" fill="url(#gCard)" stroke="#94a3b8" strokeOpacity=".4" /><rect x="116" y="74" width="28" height="40" rx="4" fill="url(#gGloss)" /><text x="120" y="87" fontSize="10" fontWeight="800" fill="#dc2626">K</text><text x="120" y="96" fontSize="7" fill="#dc2626">♥</text></g>
+        <g transform="rotate(12 158 96)"><rect x="144" y="76" width="28" height="40" rx="4" fill="url(#gCard)" stroke="#94a3b8" strokeOpacity=".4" /><rect x="144" y="76" width="28" height="40" rx="4" fill="url(#gGloss)" /><text x="148" y="89" fontSize="10" fontWeight="800" fill="#dc2626">A</text><text x="148" y="98" fontSize="7" fill="#dc2626">♥</text></g>
+      </g>
+    </svg>
+  );
+}
+
+export function Spanish21Scene() {
+  return (
+    <svg viewBox="0 0 200 140">
+      <ellipse cx="100" cy="114" rx="92" ry="24" fill="url(#feltR)" />
+      {/* 6-7-8 is Spanish 21's signature bonus, and the missing tens are the
+          price you pay for it — both belong on the card. */}
+      <g filter="url(#fS2)">
+        <g transform="rotate(-11 60 62)"><rect x="42" y="36" width="36" height="50" rx="5" fill="url(#gCard)" stroke="#94a3b8" strokeOpacity=".4" /><rect x="42" y="36" width="36" height="50" rx="5" fill="url(#gGloss)" /><text x="46" y="51" fontSize="12" fontWeight="800" fill="#0f172a">6</text><text x="46" y="61" fontSize="9" fill="#0f172a">♠</text></g>
+        <g><rect x="82" y="32" width="36" height="50" rx="5" fill="url(#gCard)" stroke="#94a3b8" strokeOpacity=".4" /><rect x="82" y="32" width="36" height="50" rx="5" fill="url(#gGloss)" /><text x="86" y="47" fontSize="12" fontWeight="800" fill="#0f172a">7</text><text x="86" y="57" fontSize="9" fill="#0f172a">♠</text></g>
+        <g transform="rotate(11 140 62)"><rect x="122" y="36" width="36" height="50" rx="5" fill="url(#gCard)" stroke="#94a3b8" strokeOpacity=".4" /><rect x="122" y="36" width="36" height="50" rx="5" fill="url(#gGloss)" /><text x="126" y="51" fontSize="12" fontWeight="800" fill="#0f172a">8</text><text x="126" y="61" fontSize="9" fill="#0f172a">♠</text></g>
+      </g>
+      <text x="100" y="103" fontSize="7" fontWeight="800" fill="#fda4af" textAnchor="middle" letterSpacing="2">6·7·8 PAYS</text>
+      <text x="100" y="121" fontSize="5" fontWeight="800" fill="#fecdd3" fillOpacity=".65" textAnchor="middle" letterSpacing="1.8">48 CARDS · NO TENS · YOUR 21 ALWAYS WINS</text>
+      <text x="100" y="22" fontSize="6.5" fontWeight="800" fill="#fda4af" fillOpacity=".7" textAnchor="middle" letterSpacing="3">SPANISH</text>
+    </svg>
+  );
+}
+
+export function DoubleExposureScene() {
+  return (
+    <svg viewBox="0 0 200 140">
+      <ellipse cx="100" cy="116" rx="92" ry="22" fill="url(#feltG)" />
+      {/* Both dealer cards face up — the entire proposition of the game. */}
+      <g filter="url(#fS2)">
+        <g><rect x="56" y="16" width="38" height="52" rx="5" fill="url(#gCard)" stroke="#94a3b8" strokeOpacity=".4" /><rect x="56" y="16" width="38" height="52" rx="5" fill="url(#gGloss)" /><text x="60" y="31" fontSize="12" fontWeight="800" fill="#0f172a">10</text><text x="60" y="41" fontSize="9" fill="#0f172a">♣</text></g>
+        <g><rect x="102" y="16" width="38" height="52" rx="5" fill="url(#gCard)" stroke="#94a3b8" strokeOpacity=".4" /><rect x="102" y="16" width="38" height="52" rx="5" fill="url(#gGloss)" /><text x="106" y="31" fontSize="12" fontWeight="800" fill="#dc2626">7</text><text x="106" y="41" fontSize="9" fill="#dc2626">♦</text></g>
+      </g>
+      {/* An eye, because you are being shown what you are never normally shown. */}
+      <g opacity=".9">
+        <path d="M76 82 Q100 68 124 82 Q100 96 76 82 Z" fill="none" stroke="#fbbf24" strokeWidth="1.6" />
+        <circle cx="100" cy="82" r="5.5" fill="#fbbf24" fillOpacity=".22" stroke="#fbbf24" strokeWidth="1.2" />
+        <circle cx="100" cy="82" r="2" fill="#fde68a" />
+      </g>
+      <text x="100" y="106" fontSize="6" fontWeight="800" fill="#fde68a" fillOpacity=".85" textAnchor="middle" letterSpacing="2.4">BOTH CARDS UP</text>
+      <text x="100" y="122" fontSize="4.8" fontWeight="700" fill="#86efac" fillOpacity=".6" textAnchor="middle" letterSpacing="1.4">DEALER TAKES TIES · NATURALS PAY EVEN</text>
+    </svg>
+  );
+}
+
+export function PontoonScene() {
+  return (
+    <svg viewBox="0 0 200 140">
+      <ellipse cx="100" cy="116" rx="92" ry="22" fill="url(#feltB)" />
+      {/* Pontoon's dealer hides BOTH cards — the mirror image of Double
+          Exposure, and the reason the game has its own vocabulary. */}
+      <CardBack x={56} y={16} w={38} h={52} />
+      <CardBack x={102} y={16} w={38} h={52} />
+      <g fontWeight="800" textAnchor="middle">
+        <rect x="46" y="78" width="44" height="17" rx="8" fill="#0c4a6e" fillOpacity=".7" stroke="#38bdf8" strokeOpacity=".55" />
+        <text x="68" y="90" fontSize="7" fill="#7dd3fc">TWIST</text>
+        <rect x="110" y="78" width="44" height="17" rx="8" fill="#0c4a6e" fillOpacity=".7" stroke="#38bdf8" strokeOpacity=".55" />
+        <text x="132" y="90" fontSize="7" fill="#7dd3fc">STICK</text>
+      </g>
+      <text x="100" y="110" fontSize="5.2" fontWeight="800" fill="#7dd3fc" fillOpacity=".7" textAnchor="middle" letterSpacing="1.5">FIVE-CARD TRICK BEATS 21</text>
+      <text x="100" y="124" fontSize="4.6" fontWeight="700" fill="#7dd3fc" fillOpacity=".45" textAnchor="middle" letterSpacing="1.3">CAN&apos;T STICK BELOW 15</text>
+    </svg>
+  );
+}
+
+export function FreeBetScene() {
+  return (
+    <svg viewBox="0 0 200 140">
+      <ellipse cx="100" cy="114" rx="92" ry="24" fill="url(#feltG)" />
+      {/* The house's chip sitting next to your own is the game in one image. */}
+      <g filter="url(#fS2)">
+        <g transform="rotate(-8 62 54)"><rect x="44" y="28" width="36" height="50" rx="5" fill="url(#gCard)" stroke="#94a3b8" strokeOpacity=".4" /><rect x="44" y="28" width="36" height="50" rx="5" fill="url(#gGloss)" /><text x="48" y="43" fontSize="12" fontWeight="800" fill="#dc2626">5</text><text x="48" y="53" fontSize="9" fill="#dc2626">♥</text></g>
+        <g transform="rotate(6 112 52)"><rect x="94" y="26" width="36" height="50" rx="5" fill="url(#gCard)" stroke="#94a3b8" strokeOpacity=".4" /><rect x="94" y="26" width="36" height="50" rx="5" fill="url(#gGloss)" /><text x="98" y="41" fontSize="12" fontWeight="800" fill="#0f172a">6</text><text x="98" y="51" fontSize="9" fill="#0f172a">♠</text></g>
+      </g>
+      <g filter="url(#fS2)">
+        <ellipse cx="72" cy="102" rx="13" ry="5" fill="#14532d" />
+        <ellipse cx="72" cy="98" rx="13" ry="5" fill="url(#gChipE)" />
+        <text x="72" y="100.5" fontSize="5.4" fontWeight="800" fill="#052e16" textAnchor="middle">YOURS</text>
+      </g>
+      <g filter="url(#fS2)">
+        <ellipse cx="118" cy="102" rx="13" ry="5" fill="#78350f" />
+        <ellipse cx="118" cy="98" rx="13" ry="5" fill="url(#gGold)" />
+        <ellipse cx="118" cy="98" rx="13" ry="5" fill="none" stroke="#fff" strokeWidth="1.2" strokeDasharray="3 4" opacity=".85" />
+        <text x="118" y="100.5" fontSize="5.4" fontWeight="800" fill="#3b2503" textAnchor="middle">FREE</text>
+      </g>
+      <text x="100" y="122" fontSize="5" fontWeight="800" fill="#86efac" fillOpacity=".7" textAnchor="middle" letterSpacing="1.5">HOUSE BUYS YOUR DOUBLE · 22 PUSHES</text>
+    </svg>
+  );
+}
+
+export function BlackjackSwitchScene() {
+  return (
+    <svg viewBox="0 0 200 140">
+      <ellipse cx="100" cy="118" rx="92" ry="20" fill="url(#feltP)" />
+      {/* Two hands and the trade between them. */}
+      <g filter="url(#fS2)">
+        <rect x="16" y="34" width="32" height="44" rx="4" fill="url(#gCard)" stroke="#94a3b8" strokeOpacity=".4" /><rect x="16" y="34" width="32" height="44" rx="4" fill="url(#gGloss)" /><text x="20" y="48" fontSize="11" fontWeight="800" fill="#0f172a">K</text><text x="20" y="57" fontSize="8" fill="#0f172a">♠</text>
+        <rect x="52" y="34" width="32" height="44" rx="4" fill="url(#gCard)" stroke="#94a3b8" strokeOpacity=".4" /><rect x="52" y="34" width="32" height="44" rx="4" fill="url(#gGloss)" /><text x="56" y="48" fontSize="11" fontWeight="800" fill="#dc2626">6</text><text x="56" y="57" fontSize="8" fill="#dc2626">♦</text>
+      </g>
+      <g filter="url(#fS2)">
+        <rect x="116" y="34" width="32" height="44" rx="4" fill="url(#gCard)" stroke="#94a3b8" strokeOpacity=".4" /><rect x="116" y="34" width="32" height="44" rx="4" fill="url(#gGloss)" /><text x="120" y="48" fontSize="11" fontWeight="800" fill="#0f172a">9</text><text x="120" y="57" fontSize="8" fill="#0f172a">♣</text>
+        <rect x="152" y="34" width="32" height="44" rx="4" fill="url(#gCard)" stroke="#94a3b8" strokeOpacity=".4" /><rect x="152" y="34" width="32" height="44" rx="4" fill="url(#gGloss)" /><text x="156" y="48" fontSize="11" fontWeight="800" fill="#dc2626">A</text><text x="156" y="57" fontSize="8" fill="#dc2626">♥</text>
+      </g>
+      {/* The swap: second card of each hand trades with the other. */}
+      <g stroke="#fbbf24" strokeWidth="1.8" fill="none" strokeLinecap="round">
+        <path d="M70 88 Q100 108 166 88" markerEnd="" />
+        <path d="M166 96 Q100 116 70 96" />
+        <path d="M70 88 l5 -4 M70 88 l5 4" />
+        <path d="M166 96 l-5 -4 M166 96 l-5 4" />
+      </g>
+      <text x="100" y="132" fontSize="5.2" fontWeight="800" fill="#c4b5fd" fillOpacity=".8" textAnchor="middle" letterSpacing="1.8">TRADE THE SECOND CARDS</text>
+    </svg>
+  );
+}
+
+export function CrapsMultiScene() {
+  return (
+    <svg viewBox="0 0 200 140">
+      <ellipse cx="100" cy="110" rx="94" ry="26" fill="url(#feltG)" />
+      <path d="M16 116 Q100 86 184 116" stroke="#fbbf24" strokeOpacity=".35" strokeWidth="1.5" fill="none" />
+      {/* One shooter's dice, and the rail's chips all riding on them. */}
+      <g transform="rotate(-12 74 44)" filter="url(#fS)">
+        <path d="M58 30 L66 22 L92 22 L84 30 Z" fill="url(#gRDiceTop)" />
+        <path d="M84 30 L92 22 L92 48 L84 56 Z" fill="url(#gRDiceSide)" />
+        <rect x="58" y="30" width="26" height="26" rx="5" fill="url(#gRDiceFront)" />
+        <g fill="#fff"><circle cx="65" cy="37" r="2.6" /><circle cx="77" cy="49" r="2.6" /><circle cx="71" cy="43" r="2.6" /></g>
+      </g>
+      <g transform="rotate(10 124 40)" filter="url(#fS)">
+        <path d="M110 26 L118 18 L144 18 L136 26 Z" fill="url(#gRDiceTop)" />
+        <path d="M136 26 L144 18 L144 44 L136 52 Z" fill="url(#gRDiceSide)" />
+        <rect x="110" y="26" width="26" height="26" rx="5" fill="url(#gRDiceFront)" />
+        <g fill="#fff"><circle cx="117" cy="33" r="2.6" /><circle cx="129" cy="33" r="2.6" /><circle cx="117" cy="45" r="2.6" /><circle cx="129" cy="45" r="2.6" /></g>
+      </g>
+      {/* Eight seats' worth of chips along the rail — the part solo craps
+          cannot have. The gold one is holding the dice. */}
+      <g filter="url(#fS2)">
+        {[
+          { x: 26, f: 'url(#gChipC)' }, { x: 47, f: 'url(#gChipV)' }, { x: 68, f: 'url(#gChipE)' },
+          { x: 89, f: 'url(#gGold)' }, { x: 110, f: 'url(#gChipR)' }, { x: 131, f: 'url(#gChipC)' },
+          { x: 152, f: 'url(#gChipV)' }, { x: 173, f: 'url(#gChipE)' },
+        ].map((c) => (
+          <g key={c.x}>
+            <ellipse cx={c.x} cy="94" rx="8.5" ry="3.4" fill="#000" opacity=".45" />
+            <ellipse cx={c.x} cy="91" rx="8.5" ry="3.4" fill={c.f} />
+          </g>
+        ))}
+        <path d="M89 82 l0 -6 M86 79 l3 -3 3 3" stroke="#fde68a" strokeWidth="1.4" fill="none" strokeLinecap="round" />
+      </g>
+      <text x="100" y="112" fontSize="6" fontWeight="800" fill="#86efac" fillOpacity=".8" textAnchor="middle" letterSpacing="2.6">ONE SHOOTER · WHOLE RAIL</text>
+    </svg>
+  );
+}
+
 /* ── Floor grid data (same order as the lab's #floorGrid) ───────────── */
 
 export type FloorGame = {
@@ -834,6 +1058,14 @@ export const FLOOR_GAMES: FloorGame[] = [
   { key: "baccarat", name: "BACCARAT", cat: "table", fontClass: "f-bowlby", nameSize: "12px", blurb: "Player · Banker · Tie", Scene: BaccaratScene, glow: "rgba(251,191,36,.16)", href: "/baccarat" },
   { key: "videopoker", name: "VIDEO POKER", cat: "cards", fontClass: "f-bungee", nameSize: "11px", blurb: "Jacks or better", Scene: VideoPokerScene, glow: "rgba(34,211,238,.18)", href: "/video-poker" },
   { key: "craps", name: "CRAPS", cat: "table", fontClass: "f-titan", nameSize: "14px", blurb: "Roll the bones", Scene: CrapsScene, glow: "rgba(251,113,133,.18)", href: "/craps" },
+  { key: "crapsmulti", name: "CRAPS TABLE", cat: "table", fontClass: "f-titan", nameSize: "12px", blurb: "One shooter, whole rail", Scene: CrapsMultiScene, glow: "rgba(134,239,172,.2)", href: "/craps/multi", badge: "MULTIPLAYER", badgeClass: "new" },
+  { key: "ultimateholdem", name: "ULTIMATE", cat: "cards", fontClass: "f-bowlby", nameSize: "12px", blurb: "Hold'em vs the dealer", Scene: UltimateHoldemScene, glow: "rgba(167,139,250,.2)", href: "/ultimate-holdem", badge: "NEW", badgeClass: "new" },
+  { key: "caribbeanstud", name: "CARIB STUD", cat: "cards", fontClass: "f-lilita", nameSize: "12px", blurb: "Five cards, one call", Scene: CaribbeanStudScene, glow: "rgba(56,189,248,.2)", href: "/caribbean-stud", badge: "NEW", badgeClass: "new" },
+  { key: "spanish21", name: "SPANISH 21", cat: "cards", fontClass: "f-titan", nameSize: "12px", blurb: "No tens, your 21 wins", Scene: Spanish21Scene, glow: "rgba(251,113,133,.2)", href: "/spanish-21", badge: "NEW", badgeClass: "new" },
+  { key: "doubleexposure", name: "DBL EXPOSURE", cat: "cards", fontClass: "f-bungee", nameSize: "10px", blurb: "Both dealer cards up", Scene: DoubleExposureScene, glow: "rgba(251,191,36,.2)", href: "/double-exposure", badge: "NEW", badgeClass: "new" },
+  { key: "pontoon", name: "PONTOON", cat: "cards", fontClass: "f-lilita", nameSize: "13px", blurb: "Twist, stick, five-card trick", Scene: PontoonScene, glow: "rgba(56,189,248,.2)", href: "/pontoon", badge: "NEW", badgeClass: "new" },
+  { key: "freebet", name: "FREE BET", cat: "cards", fontClass: "f-titan", nameSize: "13px", blurb: "House buys your double", Scene: FreeBetScene, glow: "rgba(134,239,172,.2)", href: "/free-bet-blackjack", badge: "NEW", badgeClass: "new" },
+  { key: "bjswitch", name: "BJ SWITCH", cat: "cards", fontClass: "f-bowlby", nameSize: "12px", blurb: "Two hands, trade a card", Scene: BlackjackSwitchScene, glow: "rgba(167,139,250,.2)", href: "/blackjack-switch", badge: "NEW", badgeClass: "new" },
   { key: "dragontiger", name: "DRAGON TIGER", cat: "table", fontClass: "f-bowlby", nameSize: "11px", blurb: "One card. One winner.", Scene: DragonTigerScene, glow: "rgba(251,146,60,.2)", href: "/dragon-tiger" },
   { key: "andarbahar", name: "ANDAR BAHAR", cat: "table", fontClass: "f-lilita", nameSize: "13px", blurb: "Pick a side", Scene: AndarBaharScene, glow: "rgba(167,139,250,.18)", href: "/andar-bahar" },
   { key: "pachinko", name: "PACHINKO", cat: "orig", fontClass: "f-bungee", nameSize: "12px", blurb: "Neon pin storm", Scene: PachinkoScene, glow: "rgba(244,114,182,.2)", href: "/pachinko" },
