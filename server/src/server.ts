@@ -28,6 +28,8 @@ import { registerArcadeFirewalkRoutes } from './routes/arcade-firewalk.routes';
 import { registerArcadeHeistRoutes } from './routes/arcade-heist.routes';
 import { registerArcadeThreeCardPokerRoutes } from './routes/arcade-three-card-poker.routes';
 import { registerArcadePaiGowPokerRoutes } from './routes/arcade-pai-gow-poker.routes';
+import { registerArcadeUltimateHoldemRoutes } from './routes/arcade-ultimate-holdem.routes';
+import { registerArcadeCaribbeanStudRoutes } from './routes/arcade-caribbean-stud.routes';
 import { registerArcadeGreedDiceRoutes } from './routes/arcade-greed-dice.routes';
 import { registerArcadeCipherRoutes } from './routes/arcade-cipher.routes';
 import { registerArcadeCrapsRoutes } from './routes/arcade-craps.routes';
@@ -514,6 +516,8 @@ async function initializeServices() {
     registerArcadeHeistRoutes({ app, dbService, authService });
     registerArcadeThreeCardPokerRoutes({ app, dbService, authService });
     registerArcadePaiGowPokerRoutes({ app, dbService, authService });
+    registerArcadeUltimateHoldemRoutes({ app, dbService, authService });
+    registerArcadeCaribbeanStudRoutes({ app, dbService, authService });
     registerArcadeGreedDiceRoutes({ app, dbService, authService });
     registerArcadeCipherRoutes({ app, dbService, authService });
     registerArcadeCrapsRoutes({ app, dbService, authService });

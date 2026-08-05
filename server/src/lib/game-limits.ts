@@ -58,8 +58,14 @@ export const DEFAULT_BET_LIMITS = {
    */
   craps: { min: 5, max: 10_000 },
   video_poker: { min: 10, max: 2000 },
-  ultimate_holdem: { min: 100, max: 10_000 },
-  caribbean_stud: { min: 100, max: 10_000 },
+  /**
+   * These two carry the biggest top-end multipliers on the site (a UTH Blind
+   * pays 500:1 on a royal; a Caribbean Stud Call pays 100:1 on 2× the ante),
+   * so their max sits below the other table games on purpose. Raise it in the
+   * admin panel once the bankroll math has been looked at, not here.
+   */
+  ultimate_holdem: { min: 100, max: 5_000 },
+  caribbean_stud: { min: 100, max: 5_000 },
 } as const satisfies Record<string, BetLimits>;
 
 export type GameLimitKey = keyof typeof DEFAULT_BET_LIMITS;
