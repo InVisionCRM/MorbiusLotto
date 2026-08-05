@@ -19,6 +19,12 @@ export interface CrapsCommitment {
   nonce: number;
 }
 
+export interface CrapsLimits {
+  min: number;
+  /** Applies to the TOTAL resting on any ONE betting zone, not per chip. */
+  max: number;
+}
+
 export interface CrapsEngine {
   /** Off-chain chip balance (string to preserve bigint precision). */
   chipBalance: string;
@@ -51,7 +57,16 @@ export interface CrapsEngine {
   needsWallet: boolean;
   /** True when we have a live session ready to take bets. */
   sessionReady: boolean;
+  /** Table limits the server enforces, so the felt can show the same numbers. */
+  limits: CrapsLimits;
 }
+
+/**
+ * Fallback limits used only until GET /info answers. They match the registry
+ * defaults, so a slow info call never lets a bet through that the server would
+ * then reject — the server is the authority either way.
+ */
+const FALLBACK_LIMITS: CrapsLimits = { min: 5, max: 10_000 };
 
 interface CreateSessionResp {
   ok: boolean;
@@ -129,6 +144,28 @@ export function useCrapsEngine(): CrapsEngine {
   const [rollHistory, setRollHistory] = useState<number[]>([]);
   const [isInitializing, setIsInitializing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [limits, setLimits] = useState<CrapsLimits>(FALLBACK_LIMITS);
+
+  // Table limits are public and admin-configurable, so read them rather than
+  // hardcoding them in the UI. Failing here just leaves the fallback in place.
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch('/api/arcade/craps/info', { credentials: 'include' });
+        const d = (await res.json()) as { ok?: boolean; minBet?: number; maxBet?: number };
+        if (cancelled || !d?.ok) return;
+        if (Number.isFinite(d.minBet) && Number.isFinite(d.maxBet)) {
+          setLimits({ min: Number(d.minBet), max: Number(d.maxBet) });
+        }
+      } catch {
+        // Keep the fallback; the server still enforces the real numbers.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Guards against double-create in StrictMode + duplicate-wallet effect runs.
   const creatingRef = useRef(false);
@@ -240,6 +277,18 @@ export function useCrapsEngine(): CrapsEngine {
       );
       return;
     }
+    // Pre-check the table limits so the felt says no immediately instead of
+    // after a round trip. The server re-checks the same rule — this is only
+    // there to make the refusal instant and legible.
+    if (amount < limits.min) {
+      setError(`Minimum bet is ${limits.min.toLocaleString()} chips.`);
+      return;
+    }
+    const resting = Number(bets[type] || 0);
+    if (resting + amount > limits.max) {
+      setError(`Table max is ${limits.max.toLocaleString()} chips on any one bet.`);
+      return;
+    }
     setError(null);
     void (async () => {
       try {
@@ -250,7 +299,7 @@ export function useCrapsEngine(): CrapsEngine {
         setError((e as Error).message);
       }
     })();
-  }, [sessionId, isRolling, isInitializing]);
+  }, [sessionId, isRolling, isInitializing, bets, limits]);
 
   const clearBets = useCallback(() => {
     if (!sessionId || isRolling) return;
@@ -387,5 +436,6 @@ export function useCrapsEngine(): CrapsEngine {
     clearError: () => setError(null),
     needsWallet: !isConnected || !address,
     sessionReady: Boolean(sessionId),
+    limits,
   };
 }

@@ -2,8 +2,9 @@
 
 /**
  * VideoPokerInfoTabs — info tabs for /video-poker (cyan Deep-Sea Neon skin):
- *   Paytable — the live 9/6 Jacks-or-Better table; the round's winning row
- *              highlights on a result
+ *   Paytable — the live table for whichever variant is loaded (Jacks or
+ *              Better, the Bonus family, Deuces Wild, Joker Poker); the round's
+ *              winning row highlights on a result
  *   My hands — this session's hands (the backend keeps no history), verify links
  *   Rules    — how deal/hold/draw + the paytable work
  */
@@ -21,7 +22,7 @@ import {
 import { ArcadeOddsTab } from '@/components/arcade2/ArcadeOddsTab';
 import { GameHowTo } from '@/components/shared/GameHowTo';
 import { HOWTO } from '@/lib/how-to-content';
-import { videoPokerOdds } from './videoPokerOdds';
+import { videoPokerOddsFor } from './videoPokerOdds';
 
 export interface VideoPokerSessionHand {
   handId: string;
@@ -159,7 +160,7 @@ export function VideoPokerInfoTabs({ info, hands, onVerify, onReplay, currentCat
         </TabsContent>
 
         <TabsContent value="odds" className="mt-3 focus-visible:outline-none">
-          <ArcadeOddsTab odds={videoPokerOdds} />
+          <ArcadeOddsTab odds={videoPokerOddsFor(info)} />
         </TabsContent>
 
         <TabsContent value="rules" className="mt-3 focus-visible:outline-none">

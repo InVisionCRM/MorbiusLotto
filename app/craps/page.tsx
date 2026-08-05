@@ -210,6 +210,17 @@ export default function CrapsPage() {
                     <CrapsChipRail activeChip={activeChip} onSelect={setActiveChip} />
                   </div>
 
+                  {/* Table limits, straight from the server. The max is per
+                      betting zone (the total resting on it), the way a real
+                      craps table posts it. */}
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="uppercase tracking-wide text-slate-500">Table limits</span>
+                    <span className="arc-mono tabular-nums text-slate-400">
+                      {engine.limits.min.toLocaleString()} – {engine.limits.max.toLocaleString()}
+                      <span className="ml-1 normal-case text-slate-600">per bet</span>
+                    </span>
+                  </div>
+
                   <div className="flex items-center justify-between text-xs">
                     <span className="uppercase tracking-wide text-slate-500">Bet total</span>
                     <span className="arc-mono tabular-nums text-cyan-300">

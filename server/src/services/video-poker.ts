@@ -11,7 +11,8 @@
  *   suit = floor(idx / 13)  (0 = hearts, 1 = diamonds, 2 = clubs, 3 = spades)
  */
 
-import { bestHand, HandRank, type RankedHand } from './poker-hand-eval';
+import { HandRank, type RankedHand } from './poker-hand-eval';
+import { resolveVpHand, VP_VARIANTS } from './video-poker-variants';
 
 export type VideoPokerCategory =
   | 'royal_flush'
@@ -110,25 +111,22 @@ export interface VideoPokerResult {
 }
 
 /**
- * Resolve a final 5-card video poker hand to a payout.
+ * Resolve a final 5-card Jacks or Better hand to a payout.
+ *
+ * Now a thin call into the shared variant engine (video-poker-variants.ts),
+ * which scores all six paytables from one evaluator — Jacks or Better is just
+ * the spec with no wild cards. The categories and 9/6 numbers are unchanged.
+ *
  * @param finalHand exactly 5 card indices (0-51)
  * @param bet the chip amount staked on the hand
  */
 export function resolveVideoPokerHand(finalHand: number[], bet: number): VideoPokerResult {
-  if (finalHand.length !== 5) {
-    throw new Error('Video poker hand must be exactly 5 cards');
-  }
-  if (new Set(finalHand).size !== 5) {
-    throw new Error('Video poker hand has duplicate cards');
-  }
-  const ranked = bestHand(finalHand);
-  const category = categorize(ranked);
-  const multiplier = VIDEO_POKER_PAYTABLE[category];
+  const r = resolveVpHand(finalHand, bet, VP_VARIANTS.jacks_or_better);
   return {
-    category,
-    categoryName: VIDEO_POKER_CATEGORY_NAME[category],
-    multiplier,
-    payout: Math.round(bet * multiplier),
+    category: r.category as VideoPokerCategory,
+    categoryName: r.categoryName,
+    multiplier: r.multiplier,
+    payout: r.payout,
   };
 }
 

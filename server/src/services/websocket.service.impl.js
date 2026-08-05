@@ -23,6 +23,7 @@ const blackjack_router_1 = require("./websocket/blackjack-router");
 const tournament_router_1 = require("./websocket/tournament-router");
 const poker_router_1 = require("./websocket/poker-router");
 const bj_multi_router_1 = require("./websocket/bj-multi-router");
+const craps_multi_router_1 = require("./websocket/craps-multi-router");
 const poker_chip_wallet_1 = require("./poker-chip-wallet");
 const stream_voice_service_1 = require("./stream-voice.service");
 const poker_rps_1 = require("./poker-rps");
@@ -121,6 +122,10 @@ class WebSocketService {
     bjMultiTickInFlight = false;
     // Per-action rate limiting for BJ multi: address -> timestamp array (5 actions per 3s window)
     bjMultiActionTimestamps = new Map();
+    crapsMultiService = null;
+    crapsMultiTimerInterval = null;
+    // True while a craps sweep is running, so overlapping ticks are skipped.
+    crapsMultiTickInFlight = false;
     betLimitsCache = null;
     // RPS table mini-game (ephemeral, just-for-fun). See poker-rps.ts + RPS_MINIGAME_PLAN.md.
     rpsRegistry = new poker_rps_1.RpsRegistry();
@@ -221,7 +226,40 @@ class WebSocketService {
                 }
             }, 5000);
         }
+        // Shared craps felt: close expired betting windows, and throw for a
+        // shooter who has walked away from the dice.
+        if (this.crapsMultiService) {
+            this.crapsMultiTimerInterval = setInterval(async () => {
+                try {
+                    await this.tickCrapsMultiTimers();
+                }
+                catch (err) {
+                    logger_1.logger.error('CrapsMulti timer watchdog error', err);
+                }
+            }, 2000);
+        }
         logger_1.logger.info('WebSocket service initialized');
+    }
+    /**
+     * Wire in the shared-craps service after construction.
+     *
+     * A setter rather than a constructor argument so the existing call site
+     * keeps its signature. The watchdog is started here because construction
+     * has already run by the time this lands — without it, betting windows
+     * would never close and an absent shooter would freeze the table.
+     */
+    setCrapsMultiService(service) {
+        this.crapsMultiService = service ?? null;
+        if (this.crapsMultiService && !this.crapsMultiTimerInterval) {
+            this.crapsMultiTimerInterval = setInterval(async () => {
+                try {
+                    await this.tickCrapsMultiTimers();
+                }
+                catch (err) {
+                    logger_1.logger.error('CrapsMulti timer watchdog error', err);
+                }
+            }, 2000);
+        }
     }
     /** Wire in the PokerTournamentService after construction. */
     setPokerTournamentService(service) {
@@ -593,6 +631,9 @@ class WebSocketService {
                 case 'bj_multi':
                     await this.routeBJMultiMessage(ws, message);
                     return;
+                case 'craps_multi':
+                    await this.routeCrapsMultiMessage(ws, message);
+                    return;
                 default:
                     this.sendError(ws, `Unknown message type (routing): ${message.type}`, message.requestId);
                     return;
@@ -629,6 +670,13 @@ class WebSocketService {
         if (!this.requireAuth(ws, message))
             return;
         await this.dispatchDomainMessage(ws, message, bj_multi_router_1.BJ_MULTI_MESSAGE_HANDLER_MAP, 'multiplayer blackjack');
+    }
+    async routeCrapsMultiMessage(ws, message) {
+        // Browsing the lobby needs no wallet; sitting down and betting does.
+        const isLobbyPeek = message.type === 'craps_multi_list_tables';
+        if (!isLobbyPeek && !this.requireAuth(ws, message))
+            return;
+        await this.dispatchDomainMessage(ws, message, craps_multi_router_1.CRAPS_MULTI_MESSAGE_HANDLER_MAP, 'multiplayer craps');
     }
     async dispatchDomainMessage(ws, message, handlerMap, domainName) {
         const handlerName = handlerMap[message.type];
@@ -1055,7 +1103,8 @@ class WebSocketService {
             const normalized = roomId.toLowerCase().trim();
             const isPokerTableRoom = normalized.startsWith('poker:table:');
             const isBJMultiRoom = isBlackjackTableRoom(normalized);
-            if (!ALLOWED_CHAT_ROOMS.has(normalized) && !isTournamentRoom(normalized) && !isPokerTableRoom && !isBJMultiRoom) {
+            const isCrapsRoom = craps_multi_router_1.isCrapsTableRoom(normalized);
+            if (!ALLOWED_CHAT_ROOMS.has(normalized) && !isTournamentRoom(normalized) && !isPokerTableRoom && !isBJMultiRoom && !isCrapsRoom) {
                 return this.sendError(ws, 'Invalid room', message.requestId);
             }
             // Tournament rooms require participant check
@@ -1083,7 +1132,7 @@ class WebSocketService {
                 this.roomToClients.set(normalized, new Set());
             }
             this.roomToClients.get(normalized).add(ws.connectionId);
-            const recent = (isPokerTableRoom || isBJMultiRoom) ? [] : await this.dbService.getRecentChatMessages(normalized, CHAT_RECENT_MESSAGES_LIMIT);
+            const recent = (isPokerTableRoom || isBJMultiRoom || isCrapsRoom) ? [] : await this.dbService.getRecentChatMessages(normalized, CHAT_RECENT_MESSAGES_LIMIT);
             const addresses = [...new Set(recent.map(m => m.sender_address).filter(Boolean))];
             const profiles = await this.dbService.getProfiles(addresses);
             const config = await this.dbService.getAdminGameConfig();
@@ -2070,7 +2119,7 @@ class WebSocketService {
             }
             const normalized = roomId.toLowerCase().trim();
             const isPokerTableRoom = normalized.startsWith('poker:table:');
-            if (!ALLOWED_CHAT_ROOMS.has(normalized) && !isTournamentRoom(normalized) && !isPokerTableRoom && !isBlackjackTableRoom(normalized)) {
+            if (!ALLOWED_CHAT_ROOMS.has(normalized) && !isTournamentRoom(normalized) && !isPokerTableRoom && !isBlackjackTableRoom(normalized) && !craps_multi_router_1.isCrapsTableRoom(normalized)) {
                 return this.sendError(ws, 'Invalid room', message.requestId);
             }
             const limitNum = typeof limit === 'number' && limit > 0 && limit <= CHAT_RECENT_MESSAGES_LIMIT
@@ -2198,7 +2247,7 @@ class WebSocketService {
             }
             const normalizedRoom = roomId.toLowerCase().trim();
             const isPokerTableRoom = normalizedRoom.startsWith('poker:table:');
-            if (!ALLOWED_CHAT_ROOMS.has(normalizedRoom) && !isTournamentRoom(normalizedRoom) && !isPokerTableRoom && !isBlackjackTableRoom(normalizedRoom)) {
+            if (!ALLOWED_CHAT_ROOMS.has(normalizedRoom) && !isTournamentRoom(normalizedRoom) && !isPokerTableRoom && !isBlackjackTableRoom(normalizedRoom) && !craps_multi_router_1.isCrapsTableRoom(normalizedRoom)) {
                 return this.sendError(ws, 'Invalid room', message.requestId);
             }
             // Tournament rooms require participant check on send
@@ -3963,6 +4012,9 @@ class WebSocketService {
         if (this.bjMultiTimerInterval) {
             clearInterval(this.bjMultiTimerInterval);
         }
+        if (this.crapsMultiTimerInterval) {
+            clearInterval(this.crapsMultiTimerInterval);
+        }
         this.wss.clients.forEach((client) => {
             client.close(1000, 'Server shutdown');
         });
@@ -3989,6 +4041,262 @@ class WebSocketService {
         }
         catch (err) {
             logger_1.logger.error('broadcastBJMultiTableState failed', { tableId, error: err });
+        }
+    }
+    // ---------------------------------------------------------------------
+    // Shared craps felt
+    // ---------------------------------------------------------------------
+    /** Push table state to everyone watching a craps felt. */
+    async broadcastCrapsMultiTableState(tableId) {
+        if (!this.crapsMultiService)
+            return;
+        const roomId = craps_multi_router_1.crapsTableRoom(tableId);
+        const roomSize = this.roomToClients.get(roomId)?.size ?? 0;
+        if (roomSize === 0)
+            return;
+        try {
+            const state = await this.crapsMultiService.getTableState(tableId);
+            const seatedCount = state.seats.filter((s) => s.playerAddress).length;
+            state.viewerCount = Math.max(0, roomSize - seatedCount);
+            this.broadcastToRoom(roomId, { type: 'craps_multi_table_state', payload: state });
+        }
+        catch (err) {
+            logger_1.logger.error('broadcastCrapsMultiTableState failed', { tableId, error: err });
+        }
+    }
+    /**
+     * Move this connection into a craps table's room, leaving whatever room it
+     * was in. Same bookkeeping the blackjack join does — kept here so a craps
+     * seat and a blackjack seat can't both think they own ws.currentRoom.
+     */
+    joinCrapsRoom(ws, tableId) {
+        const roomId = craps_multi_router_1.crapsTableRoom(tableId);
+        if (ws.currentRoom && ws.connectionId) {
+            const prev = this.roomToClients.get(ws.currentRoom);
+            if (prev) {
+                prev.delete(ws.connectionId);
+                if (prev.size === 0)
+                    this.roomToClients.delete(ws.currentRoom);
+            }
+        }
+        ws.currentRoom = roomId;
+        if (!this.roomToClients.has(roomId))
+            this.roomToClients.set(roomId, new Set());
+        this.roomToClients.get(roomId).add(ws.connectionId);
+        return roomId;
+    }
+    /**
+     * Craps errors are thrown as short codes by the service so the transport
+     * decides the wording. Anything unrecognised stays generic rather than
+     * leaking an internal message to the felt.
+     */
+    crapsErrorText(err) {
+        const code = err?.message ?? '';
+        switch (code) {
+            case 'NOT_FOUND': return 'That table is gone.';
+            case 'NOT_SEATED': return 'Take a seat first.';
+            case 'ALREADY_SEATED': return "You're already at this table.";
+            case 'SEAT_TAKEN': return 'Someone just took that seat.';
+            case 'BAD_SEAT': return 'That seat does not exist.';
+            case 'NO_SHOOTER': return 'Nobody has the dice yet.';
+            case 'NOT_SHOOTER': return 'Only the shooter can throw.';
+            case 'WINDOW_CLOSED': return 'Betting is closed — the dice are out.';
+            case 'LOCKED': return 'That bet is locked while the point is on.';
+            case 'NOTHING_THERE': return 'Nothing to pick up there.';
+            case 'BAD_BET_TYPE': return 'Unknown bet.';
+            case 'BAD_AMOUNT': return 'Bet must be a positive number of chips.';
+            case 'UNDER_MIN': return 'Below the table minimum.';
+            case 'OVER_MAX': return 'That would put you over the table maximum on this bet.';
+            case 'NO_LIVE_SEED': return 'The table seed was rotated — reload the felt.';
+            case 'PHASE_DESYNC': return 'The table got out of step and the throw was cancelled. Nothing was settled.';
+            default:
+                if (/insufficient/i.test(code))
+                    return 'Not enough chips.';
+                return 'Could not do that at the table.';
+        }
+    }
+    async handleCrapsMultiJoinTable(ws, message) {
+        try {
+            if (!this.crapsMultiService || !ws.playerAddress) {
+                return this.sendError(ws, 'Craps tables unavailable or wallet required', message.requestId);
+            }
+            const { tableId, seatPosition, clientSeed } = (message.payload ?? {});
+            if (!tableId)
+                return this.sendError(ws, 'tableId required', message.requestId);
+            if (seatPosition === undefined || seatPosition === null) {
+                return this.sendError(ws, 'seatPosition required', message.requestId);
+            }
+            const state = await this.crapsMultiService.joinTable(tableId, ws.playerAddress, Number(seatPosition), clientSeed);
+            this.joinCrapsRoom(ws, tableId);
+            this.sendMessage(ws, { type: 'craps_multi_table_state', payload: state, requestId: message.requestId });
+            // The service already broadcast during joinTable, but this connection
+            // was not in the room yet — so everyone's viewer count is one stale.
+            // Re-push now that the seat is actually in the room.
+            await this.broadcastCrapsMultiTableState(tableId);
+        }
+        catch (error) {
+            this.sendError(ws, this.crapsErrorText(error), message.requestId);
+        }
+    }
+    async handleCrapsMultiLeaveTable(ws, message) {
+        try {
+            if (!this.crapsMultiService || !ws.playerAddress) {
+                return this.sendError(ws, 'Craps tables unavailable or wallet required', message.requestId);
+            }
+            const { tableId } = (message.payload ?? {});
+            if (!tableId)
+                return this.sendError(ws, 'tableId required', message.requestId);
+            const state = await this.crapsMultiService.leaveTable(tableId, ws.playerAddress);
+            this.sendMessage(ws, { type: 'craps_multi_table_state', payload: state, requestId: message.requestId });
+        }
+        catch (error) {
+            this.sendError(ws, this.crapsErrorText(error), message.requestId);
+        }
+    }
+    async handleCrapsMultiPlaceBet(ws, message) {
+        try {
+            if (!this.crapsMultiService || !ws.playerAddress) {
+                return this.sendError(ws, 'Craps tables unavailable or wallet required', message.requestId);
+            }
+            const { tableId, betType, amount } = (message.payload ?? {});
+            if (!tableId)
+                return this.sendError(ws, 'tableId required', message.requestId);
+            const result = await this.crapsMultiService.placeBet(tableId, ws.playerAddress, betType, Number(amount));
+            this.sendMessage(ws, { type: 'craps_multi_bet_placed', payload: result, requestId: message.requestId });
+        }
+        catch (error) {
+            this.sendError(ws, this.crapsErrorText(error), message.requestId);
+        }
+    }
+    async handleCrapsMultiClearBet(ws, message) {
+        try {
+            if (!this.crapsMultiService || !ws.playerAddress) {
+                return this.sendError(ws, 'Craps tables unavailable or wallet required', message.requestId);
+            }
+            const { tableId, betType } = (message.payload ?? {});
+            if (!tableId)
+                return this.sendError(ws, 'tableId required', message.requestId);
+            const result = await this.crapsMultiService.clearBet(tableId, ws.playerAddress, betType);
+            this.sendMessage(ws, { type: 'craps_multi_bet_cleared', payload: result, requestId: message.requestId });
+        }
+        catch (error) {
+            this.sendError(ws, this.crapsErrorText(error), message.requestId);
+        }
+    }
+    async handleCrapsMultiRoll(ws, message) {
+        try {
+            if (!this.crapsMultiService || !ws.playerAddress) {
+                return this.sendError(ws, 'Craps tables unavailable or wallet required', message.requestId);
+            }
+            const { tableId } = (message.payload ?? {});
+            if (!tableId)
+                return this.sendError(ws, 'tableId required', message.requestId);
+            // The service enforces that this connection actually holds the dice.
+            const state = await this.crapsMultiService.roll(tableId, ws.playerAddress);
+            this.sendMessage(ws, { type: 'craps_multi_table_state', payload: state, requestId: message.requestId });
+        }
+        catch (error) {
+            this.sendError(ws, this.crapsErrorText(error), message.requestId);
+        }
+    }
+    async handleCrapsMultiGetState(ws, message) {
+        try {
+            if (!this.crapsMultiService)
+                return this.sendError(ws, 'Craps tables unavailable', message.requestId);
+            const { tableId } = (message.payload ?? {});
+            if (!tableId)
+                return this.sendError(ws, 'tableId required', message.requestId);
+            // Watching a felt is allowed without sitting down.
+            this.joinCrapsRoom(ws, tableId);
+            const state = await this.crapsMultiService.getTableState(tableId);
+            this.sendMessage(ws, { type: 'craps_multi_table_state', payload: state, requestId: message.requestId });
+        }
+        catch (error) {
+            this.sendError(ws, this.crapsErrorText(error), message.requestId);
+        }
+    }
+    async handleCrapsMultiListTables(ws, message) {
+        try {
+            if (!this.crapsMultiService)
+                return this.sendError(ws, 'Craps tables unavailable', message.requestId);
+            const tables = await this.crapsMultiService.listTables();
+            this.sendMessage(ws, { type: 'craps_multi_table_list', payload: { tables }, requestId: message.requestId });
+        }
+        catch (error) {
+            this.sendError(ws, this.crapsErrorText(error), message.requestId);
+        }
+    }
+    async handleCrapsMultiCreateTable(ws, message) {
+        try {
+            if (!this.crapsMultiService)
+                return this.sendError(ws, 'Craps tables unavailable', message.requestId);
+            if (!ws.playerAddress || !(0, cosmetics_catalog_1.isAdminWallet)(ws.playerAddress))
+                return this.sendError(ws, 'Only admins can open a craps table', message.requestId);
+            const { minBet, maxBet } = (message.payload ?? {});
+            const created = await this.crapsMultiService.createTable(minBet === undefined ? undefined : Number(minBet), maxBet === undefined ? undefined : Number(maxBet));
+            this.sendMessage(ws, { type: 'craps_multi_table_created', payload: created, requestId: message.requestId });
+        }
+        catch (error) {
+            this.sendError(ws, this.crapsErrorText(error), message.requestId);
+        }
+    }
+    async handleCrapsMultiDeleteTable(ws, message) {
+        try {
+            if (!this.crapsMultiService)
+                return this.sendError(ws, 'Craps tables unavailable', message.requestId);
+            if (!ws.playerAddress || !(0, cosmetics_catalog_1.isAdminWallet)(ws.playerAddress))
+                return this.sendError(ws, 'Only admins can close a craps table', message.requestId);
+            const { tableId } = (message.payload ?? {});
+            if (!tableId)
+                return this.sendError(ws, 'tableId required', message.requestId);
+            const ok = await this.crapsMultiService.deleteTable(tableId);
+            this.sendMessage(ws, { type: 'craps_multi_table_deleted', payload: { tableId, ok }, requestId: message.requestId });
+        }
+        catch (error) {
+            this.sendError(ws, this.crapsErrorText(error), message.requestId);
+        }
+    }
+    async handleCrapsMultiRotateSeed(ws, message) {
+        try {
+            if (!this.crapsMultiService)
+                return this.sendError(ws, 'Craps tables unavailable', message.requestId);
+            const { tableId } = (message.payload ?? {});
+            if (!tableId)
+                return this.sendError(ws, 'tableId required', message.requestId);
+            // Any player at the table may demand a fresh commitment — that is the
+            // point of rotation as a fairness tool, and archiving the old seed
+            // means nobody loses the ability to verify a past throw. Onlookers
+            // can't, so a passer-by can't reset a table they have no stake in.
+            const seated = (await this.crapsMultiService.getTableState(tableId))
+                .seats.some((s) => s.playerAddress === ws.playerAddress);
+            if (!seated)
+                return this.sendError(ws, 'Only players at the table can rotate its seed.', message.requestId);
+            const result = await this.crapsMultiService.rotateSeed(tableId);
+            this.sendMessage(ws, { type: 'craps_multi_seed_rotated', payload: result, requestId: message.requestId });
+        }
+        catch (error) {
+            this.sendError(ws, this.crapsErrorText(error), message.requestId);
+        }
+    }
+    /**
+     * Craps watchdog. Two jobs, in order: close betting windows whose time is
+     * up, then throw for any shooter who has left the dice sitting. Polls
+     * faster than the blackjack sweep because a craps window is short.
+     */
+    async tickCrapsMultiTimers() {
+        if (!this.crapsMultiService)
+            return;
+        // Same overlap guard as the blackjack sweep: the work is stateless, so
+        // skipping a tick just means the next one picks it up.
+        if (this.crapsMultiTickInFlight)
+            return;
+        this.crapsMultiTickInFlight = true;
+        try {
+            await this.crapsMultiService.closeExpiredBettingWindows();
+            await this.crapsMultiService.rollForExpiredShooters();
+        }
+        finally {
+            this.crapsMultiTickInFlight = false;
         }
     }
     /** Timer tick: check for expired turns and betting timeouts across all active BJ multi tables. */

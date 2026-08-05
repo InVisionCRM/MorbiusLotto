@@ -50,6 +50,30 @@ export const DEFAULT_BET_LIMITS = {
   dragon_tiger: { min: 100, max: 50_000 },
   three_card_poker: { min: 100, max: 50_000 },
   pai_gow_poker: { min: 100, max: 10_000 },
+  /**
+   * Craps' max is PER BETTING ZONE and applies to the TOTAL resting on that
+   * zone, not to a single chip — otherwise repeated small bets would walk
+   * straight past the cap. Craps shipped with no limit at all; these are the
+   * first ones it has ever had, sized to the chip ladder (top chip 1,000).
+   */
+  craps: { min: 5, max: 10_000 },
+  video_poker: { min: 10, max: 2000 },
+  /**
+   * These two carry the biggest top-end multipliers on the site (a UTH Blind
+   * pays 500:1 on a royal; a Caribbean Stud Call pays 100:1 on 2× the ante),
+   * so their max sits below the other table games on purpose. Raise it in the
+   * admin panel once the bankroll math has been looked at, not here.
+   */
+  ultimate_holdem: { min: 100, max: 5_000 },
+  caribbean_stud: { min: 100, max: 5_000 },
+  /**
+   * The blackjack variants (Spanish 21, Double Exposure, Pontoon, Free Bet).
+   * Top payout is modest — a Pontoon at 2:1 — so this sits with the other
+   * table games rather than down with the big-multiplier poker ones. The cap
+   * is per HAND: a split or double multiplies what's on the felt, the way it
+   * does at a real table.
+   */
+  blackjack_variants: { min: 100, max: 10_000 },
 } as const satisfies Record<string, BetLimits>;
 
 export type GameLimitKey = keyof typeof DEFAULT_BET_LIMITS;
@@ -80,6 +104,11 @@ export const GAME_LIMIT_LABELS: Record<GameLimitKey, string> = {
   dragon_tiger: 'Dragon Tiger',
   three_card_poker: 'Three Card Poker',
   pai_gow_poker: 'Pai Gow Poker',
+  craps: 'Craps (per zone)',
+  video_poker: 'Video Poker',
+  ultimate_holdem: "Ultimate Texas Hold'em",
+  caribbean_stud: 'Caribbean Stud',
+  blackjack_variants: 'Blackjack variants (per hand)',
 };
 
 /** Absolute sanity bounds an admin-set limit can never escape. */

@@ -105,6 +105,24 @@ export const WS_BJ_MULTI_MESSAGES = [
   'bj_multi_directed_emote',
 ] as const;
 
+/**
+ * Shared-felt craps. Note there is no per-player action message: craps has no
+ * turn order, so the only thing one seat does that the rest must wait for is
+ * the shooter's throw.
+ */
+export const WS_CRAPS_MULTI_MESSAGES = [
+  'craps_multi_join_table',
+  'craps_multi_leave_table',
+  'craps_multi_place_bet',
+  'craps_multi_clear_bet',
+  'craps_multi_roll',
+  'craps_multi_get_state',
+  'craps_multi_list_tables',
+  'craps_multi_create_table',
+  'craps_multi_delete_table',
+  'craps_multi_rotate_seed',
+] as const;
+
 export const ALL_WS_MESSAGE_TYPES = [
   ...WS_AUTH_MESSAGES,
   ...WS_PUBLIC_MESSAGES,
@@ -113,6 +131,7 @@ export const ALL_WS_MESSAGE_TYPES = [
   ...WS_TOURNAMENT_MESSAGES,
   ...WS_POKER_MESSAGES,
   ...WS_BJ_MULTI_MESSAGES,
+  ...WS_CRAPS_MULTI_MESSAGES,
 ] as const;
 
 export const ALL_WS_MESSAGE_TYPE_SET: ReadonlySet<string> = new Set<string>(ALL_WS_MESSAGE_TYPES as readonly string[]);

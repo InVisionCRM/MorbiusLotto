@@ -343,10 +343,27 @@ export class ProvablyFairService {
    * Consumes 51 * 4 = 204 bytes (~7 HMAC rounds).
    */
   fisherYatesShuffle(serverSeed: string, clientSeed: string, nonce: number): number[] {
-    const deck = Array.from({ length: 52 }, (_, i) => i);
+    return this.fisherYatesShuffleSized(serverSeed, clientSeed, nonce, 52);
+  }
+
+  /**
+   * The same shuffle over a deck of `size` cards. Joker Poker deals from 53
+   * (index 52 is the Joker); everything else uses the 52-card form above.
+   *
+   * The byte-stream walk is identical — cursor starts at 0 and advances 4 bytes
+   * per swap from i = size-1 down to 1 — so a 52-card call produces exactly the
+   * order it always has and no existing hand's verification changes.
+   */
+  fisherYatesShuffleSized(
+    serverSeed: string,
+    clientSeed: string,
+    nonce: number,
+    size: number,
+  ): number[] {
+    const deck = Array.from({ length: size }, (_, i) => i);
     let cursor = 0;
 
-    for (let i = 51; i >= 1; i--) {
+    for (let i = size - 1; i >= 1; i--) {
       const bytes = this.hmacByteStream(serverSeed, clientSeed, nonce, cursor);
       cursor += 4;
       const float = this.bytesToFloat(bytes);
