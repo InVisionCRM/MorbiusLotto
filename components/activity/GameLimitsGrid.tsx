@@ -33,13 +33,16 @@ const HREF: Record<string, string> = {
   roulette: '/roulette', pachinko: '/pachinko', cascade: '/cascade', cipher: '/cipher',
   greed_dice: '/greed-dice', andar_bahar: '/andar-bahar', dragon_tiger: '/dragon-tiger',
   three_card_poker: '/three-card-poker', pai_gow_poker: '/pai-gow-poker',
+  craps: '/craps', video_poker: '/video-poker',
+  ultimate_holdem: '/ultimate-holdem', caribbean_stud: '/caribbean-stud',
 }
 const ICON: Record<string, string> = {
   dice: '🎲', dicex2: '🎯', limbo: '🚀', mines: '💣', crash: '📈', towers: '🗼',
   chicken: '🐔', hilo: '↕', firewalk: '🔥', heist: '🏦', baccarat: '🃏', keno: '🔢',
   plinko: '🔻', roulette: '🎡', pachinko: '🏮', cascade: '💧', cipher: '🔐',
   greed_dice: '🤑', andar_bahar: '🪭', dragon_tiger: '🐉', three_card_poker: '🂡',
-  pai_gow_poker: '🀄',
+  pai_gow_poker: '🀄', craps: '🎲', video_poker: '🖥',
+  ultimate_holdem: '♥', caribbean_stud: '♦',
 }
 
 type Draft = Record<string, { min: string; max: string }>

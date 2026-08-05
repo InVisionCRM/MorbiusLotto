@@ -146,6 +146,8 @@ const OTHER_GAMES: readonly OtherGameNavItem[] = [
   { label: 'Heist', href: '/heist', icon: 'mine' },
   { label: 'Three Card Poker', href: '/three-card-poker', icon: 'cards' },
   { label: 'Pai Gow Poker', href: '/pai-gow-poker', icon: 'cards' },
+  { label: "Ultimate Hold'em", href: '/ultimate-holdem', icon: 'cards' },
+  { label: 'Caribbean Stud', href: '/caribbean-stud', icon: 'cards' },
   { label: 'Greed Dice', href: '/greed-dice', icon: 'dice' },
   { label: 'Cipher', href: '/cipher', icon: 'grid' },
   { label: 'Hi-Lo', href: '/hilo', icon: 'hilo' },

@@ -89,6 +89,8 @@ const CARDS_TABLE_LINKS: SbLinkItem[] = [
   { icon: '🐉', label: 'Dragon Tiger', href: '/dragon-tiger' },
   { icon: '🃏', label: 'Three Card', href: '/three-card-poker' },
   { icon: '🀄', label: 'Pai Gow', href: '/pai-gow-poker' },
+  { icon: '♥', label: "Ultimate Hold'em", href: '/ultimate-holdem' },
+  { icon: '♦', label: 'Caribbean Stud', href: '/caribbean-stud' },
   { icon: '🖥', label: 'Video Poker', href: '/video-poker' },
 ];
 
