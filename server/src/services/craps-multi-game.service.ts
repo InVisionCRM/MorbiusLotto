@@ -415,7 +415,16 @@ export class CrapsMultiGameService {
         );
 
         // First player through the door picks up the dice and opens betting.
-        if (t.rows[0].shooter_position === null) {
+        //
+        // "No shooter" has to mean a pointer that names nobody OR one that
+        // names a seat that isn't there: a table whose shooter vanished while
+        // it was mid-throw keeps a stale position, and if arriving players did
+        // not clear it the table would stay shut — status never returns to
+        // 'betting', so the newcomer can neither bet nor throw.
+        const claimed = t.rows[0].shooter_position;
+        const shooterPresent =
+          claimed !== null && taken.rows.some((s: any) => Number(s.position) === Number(claimed));
+        if (!shooterPresent) {
           await client.query(
             `UPDATE craps_multi_tables
                 SET shooter_position = $1, status = 'betting', betting_started_at = NOW()
@@ -608,17 +617,38 @@ export class CrapsMultiGameService {
         if (t.rows.length === 0) throw new Error('NOT_FOUND');
         const table = t.rows[0];
 
-        const shooterPosition: number | null =
-          table.shooter_position === null ? null : Number(table.shooter_position);
-        if (shooterPosition === null) throw new Error('NO_SHOOTER');
-
         const seats = await client.query(
           `SELECT id, position, player_address, bets, client_seed, consecutive_timeouts
              FROM craps_multi_seats WHERE table_id = $1 ORDER BY position ASC FOR UPDATE`,
           [tableId],
         );
-        const shooterSeat = seats.rows.find((s: any) => Number(s.position) === shooterPosition);
+
+        const claimed: number | null =
+          table.shooter_position === null ? null : Number(table.shooter_position);
+        let shooterSeat = claimed === null
+          ? undefined
+          : seats.rows.find((s: any) => Number(s.position) === claimed);
+
+        // Self-heal a dangling shooter. If the pointer names a seat that is no
+        // longer there, the lowest occupied seat picks the dice up rather than
+        // the throw failing. Without this a table whose shooter vanished can
+        // never throw again, and because a failed throw leaves it in 'rolling',
+        // betting never reopens either — the table is bricked with players'
+        // chips still on the felt. Cheap to do, and it recovers any table that
+        // was already stranded before this guard existed.
+        if (!shooterSeat && seats.rows.length > 0) {
+          shooterSeat = seats.rows[0];
+          await client.query(
+            `UPDATE craps_multi_tables SET shooter_position = $1 WHERE id = $2`,
+            [Number(shooterSeat.position), tableId],
+          );
+          logger.warn('CrapsMulti: shooter seat was missing, dice adopted by lowest seat', {
+            tableId, claimed, adoptedBy: Number(shooterSeat.position),
+          });
+        }
         if (!shooterSeat) throw new Error('NO_SHOOTER');
+
+        const shooterPosition = Number(shooterSeat.position);
 
         if (byAddress !== null && shooterSeat.player_address !== byAddress.trim().toLowerCase()) {
           throw new Error('NOT_SHOOTER');
@@ -669,7 +699,16 @@ export class CrapsMultiGameService {
           if (!hadChips) {
             // Nothing on the felt — count it toward the idle-seat limit.
             const next = Number(seat.consecutive_timeouts ?? 0) + 1;
-            if (next >= CRAPS_MULTI_AFK_KICK_AFTER) {
+            // NEVER kick the seat holding the dice. Two reasons, and the second
+            // is the dangerous one: the dice are yours until you seven out, so
+            // taking a shooter's seat mid-hand is simply wrong; and deleting it
+            // here would leave shooter_position pointing at a seat that no
+            // longer exists, which strands the table in 'rolling' forever —
+            // every later throw fails NO_SHOOTER and betting never reopens.
+            // The counter keeps climbing either way, so an idle shooter loses
+            // the seat on the first throw after they seven out and the dice
+            // have moved on.
+            if (next >= CRAPS_MULTI_AFK_KICK_AFTER && Number(seat.position) !== shooterPosition) {
               await client.query(`DELETE FROM craps_multi_seats WHERE id = $1`, [seat.id]);
             } else {
               await client.query(
