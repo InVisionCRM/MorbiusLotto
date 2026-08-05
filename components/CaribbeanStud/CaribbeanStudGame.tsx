@@ -35,6 +35,10 @@ import { FloatingPanel } from '@/components/arcade2/FloatingPanel';
 import { TableCard, TableCardStyles } from '@/components/shared/TableCard';
 import { TableFairnessModal, type DeckSlice } from '@/components/shared/TableFairnessModal';
 import { TableHandHistory, type TableHistoryRow } from '@/components/shared/TableHandHistory';
+import { TableFeltControls, useTableFelt } from '@/components/shared/TableFeltControls';
+import { tableAudio } from '@/lib/table-audio';
+import { ArcadeFAQ } from '@/components/arcade2/ArcadeFAQ';
+import { caribbeanStudFaqs } from './caribbeanStudFaqs';
 import { categoryName, oddsLabel } from '@/lib/playing-cards';
 import {
   csResultLabel,
@@ -74,6 +78,7 @@ export function CaribbeanStudGame() {
   const [dealerUpCard, setDealerUpCard] = useState<number | null>(null);
   const [dealerCards, setDealerCards] = useState<number[]>([]);
   const [settlement, setSettlement] = useState<CsDecisionResult | null>(null);
+  const felt = useTableFelt();
 
   const [handAnte, setHandAnte] = useState(0);
   const [handBonus, setHandBonus] = useState(0);
@@ -205,6 +210,9 @@ export function CaribbeanStudGame() {
     setError(null);
     setNoChips(false);
     setSettlement(null);
+    // First real gesture of the hand — safe place to open the audio context.
+    tableAudio.init();
+    tableAudio.playChip();
     setDealerCards([]);
     setDealerUpCard(null);
     setPhase('dealing');
@@ -220,6 +228,8 @@ export function CaribbeanStudGame() {
       setAnte(r.ante);
       setPlayerCards(r.playerCards);
       setDealerUpCard(r.dealerUpCard);
+      // One tick per card, paced like a real deal rather than a single burst.
+      r.playerCards.forEach((_, i) => setTimeout(() => tableAudio.playDeal(), i * 90));
       try {
         setBalance(BigInt(r.chipBalance.split('.')[0] || '0'));
       } catch {
@@ -242,6 +252,9 @@ export function CaribbeanStudGame() {
         const r = await decideCs(roundId, action);
         setDealerCards(r.dealerCards);
         setSettlement(r);
+        // The dealer's four down cards turn together; the flip sound is one
+        // event, not four, because that is what it sounds like at a table.
+        tableAudio.playFlip();
         if (r.chipBalance) {
           try {
             setBalance(BigInt(r.chipBalance.split('.')[0] || '0'));
@@ -254,6 +267,20 @@ export function CaribbeanStudGame() {
         const net = r.totalPayout - r.committed;
         reportWin({ game: 'Caribbean Stud', bet: r.committed, payout: r.totalPayout });
         if (net > 0) winFx();
+
+        // Settlement speaks after the reveal has had a beat to land.
+        setTimeout(() => {
+          if (net > 0) {
+            // A hand paying five times the stake or better earns the big cue.
+            if (r.committed > 0 && r.totalPayout >= r.committed * 5) tableAudio.playBigWin();
+            else tableAudio.playWin();
+            if (r.bonusPayout && r.bonusPayout > 0) setTimeout(() => tableAudio.playBonus(), 260);
+          } else if (net === 0) {
+            tableAudio.playPush();
+          } else {
+            tableAudio.playLose();
+          }
+        }, 340);
 
         setHistory((prev) =>
           [
@@ -358,6 +385,10 @@ export function CaribbeanStudGame() {
         {/* ───────── Control rail ───────── */}
         <div className="order-2 space-y-3.5 lg:order-1 lg:sticky lg:top-20 lg:h-fit">
           <Card className="space-y-3.5 border-0 bg-[#07131F] p-4 ring-1 ring-inset ring-cyan-950/70">
+            <div className="flex items-center justify-between gap-2">
+              <TableFeltControls felt={felt} />
+            </div>
+
             <div className="flex items-center justify-between gap-2">
               <span className="text-xs uppercase tracking-wide text-slate-500">Balance</span>
               <div className="flex items-center gap-2">
@@ -576,6 +607,7 @@ export function CaribbeanStudGame() {
                           // Before the showdown only deck[5] — the up card — is known.
                           cardIdx={revealed ? dealerCards[i] : i === 0 ? (dealerUpCard ?? undefined) : undefined}
                           faceDown={!revealed && i !== 0}
+                          back={felt.back}
                           win={revealed && settlement?.winSide === 'dealer'}
                         />
                       ))
@@ -601,6 +633,7 @@ export function CaribbeanStudGame() {
                           key={i}
                           cardIdx={c}
                           width={CARD_W}
+                          back={felt.back}
                           win={settlement?.winSide === 'player'}
                         />
                       ))
@@ -784,6 +817,11 @@ export function CaribbeanStudGame() {
           await refetchBalance();
         }}
       />
+
+      {/* Everything a player would otherwise only learn by losing. */}
+      <section className="mt-6">
+        <ArcadeFAQ items={caribbeanStudFaqs} accent="#38BDF8" />
+      </section>
 
       <TableCardStyles />
     </div>

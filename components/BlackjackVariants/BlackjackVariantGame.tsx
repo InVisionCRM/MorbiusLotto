@@ -30,6 +30,10 @@ import { formatChips } from '@/lib/format-poker-chips';
 import { GameWalletModal } from '@/components/shared/GameWalletModal';
 import { probeSiweSession } from '@/lib/api-auth';
 import { useBigWin } from '@/contexts/big-win-context';
+import { TableFeltControls, useTableFelt } from '@/components/shared/TableFeltControls';
+import { tableAudio } from '@/lib/table-audio';
+import { ArcadeFAQ } from '@/components/arcade2/ArcadeFAQ';
+import { blackjackVariantFaqs } from './blackjackVariantFaqs';
 import { SessionChart, type SessionPoint } from '@/components/arcade2/SessionChart';
 import { FloatingPanel } from '@/components/arcade2/FloatingPanel';
 import { TableCard, TableCardStyles } from '@/components/shared/TableCard';
@@ -71,6 +75,7 @@ function serverDetail(msg: string): string | null {
 export function BlackjackVariantGame({ variant }: { variant: BjVariant }) {
   const { address } = useAccount();
   const { reportWin } = useBigWin();
+  const felt = useTableFelt();
 
   const [info, setInfo] = useState<BjInfo | null>(null);
   const rules: BjVariantRules | null = info?.rules ?? null;
@@ -253,6 +258,23 @@ export function BlackjackVariantGame({ variant }: { variant: BjVariant }) {
         payout: r.totalPayout,
       });
       if (net > 0) winFx();
+
+      // The dealer's down card turns over at settlement in every variant that
+      // has one; Double Exposure has already shown it, so the flip is harmless
+      // there rather than wrong.
+      tableAudio.playFlip();
+      setTimeout(() => {
+        if (net > 0) {
+          if (r.committed > 0 && r.totalPayout >= r.committed * 3) tableAudio.playBigWin();
+          else tableAudio.playWin();
+          if (r.sidePayout && r.sidePayout > 0) setTimeout(() => tableAudio.playBonus(), 260);
+        } else if (net === 0) {
+          tableAudio.playPush();
+        } else {
+          tableAudio.playLose();
+        }
+      }, 340);
+
       setSession((prev) => [...prev, { drop: prev.length + 1, bet: r.committed, profit: net }]);
       loadMyHistory();
     },
@@ -270,6 +292,9 @@ export function BlackjackVariantGame({ variant }: { variant: BjVariant }) {
     }
     setError(null);
     setNoChips(false);
+    // First real gesture of the hand — safe place to open the audio context.
+    tableAudio.init();
+    tableAudio.playChip();
     setResults(null);
     setDealerTotal(null);
     setDealerCards([]);
@@ -325,6 +350,10 @@ export function BlackjackVariantGame({ variant }: { variant: BjVariant }) {
           bankSettled(r);
           return;
         }
+        // Doubling and splitting put more money up; hitting and switching just
+        // move cards. Standing does neither, so it stays silent.
+        if (action === 'double' || action === 'split') tableAudio.playCommit();
+        else if (action !== 'stand') tableAudio.playDeal();
         setHands(r.hands);
         setActiveHand(r.activeHand);
         setLegalActions(r.legalActions);
@@ -429,6 +458,10 @@ export function BlackjackVariantGame({ variant }: { variant: BjVariant }) {
         {/* ───────── Control rail ───────── */}
         <div className="order-2 space-y-3.5 lg:order-1 lg:sticky lg:top-20 lg:h-fit">
           <Card className="space-y-3.5 border-0 bg-[#07131F] p-4 ring-1 ring-inset ring-cyan-950/70">
+            <div className="flex items-center justify-between gap-2">
+              <TableFeltControls felt={felt} />
+            </div>
+
             <div className="flex items-center justify-between gap-2">
               <span className="text-xs uppercase tracking-wide text-slate-500">Balance</span>
               <div className="flex items-center gap-2">
@@ -685,19 +718,16 @@ export function BlackjackVariantGame({ variant }: { variant: BjVariant }) {
                   )}
                 </div>
                 <div className="flex flex-wrap justify-center gap-1.5 sm:gap-2.5">
-                  {dealerSeats.map((s, i) =>
-                    s.card == null ? (
-                      <TableCard key={i} faceDown width={CARD_W} />
-                    ) : (
-                      <TableCard
-                        key={i}
-                        cardIdx={s.card}
-                        width={CARD_W}
-                        encoding="blackjack"
-                        deal
-                      />
-                    ),
-                  )}
+                  {dealerSeats.map((s, i) => (
+                    <TableCard
+                      key={i}
+                      cardIdx={s.card ?? undefined}
+                      faceDown={s.card == null}
+                      width={CARD_W}
+                      encoding="blackjack"
+                      back={felt.back}
+                    />
+                  ))}
                 </div>
               </div>
 
@@ -742,6 +772,7 @@ export function BlackjackVariantGame({ variant }: { variant: BjVariant }) {
                               cardIdx={c}
                               width={CARD_W}
                               encoding="blackjack"
+                              back={felt.back}
                               deal
                               win={
                                 !!res &&
@@ -950,6 +981,11 @@ export function BlackjackVariantGame({ variant }: { variant: BjVariant }) {
           await refetchBalance();
         }}
       />
+
+      {/* Everything a player would otherwise only learn by losing. */}
+      <section className="mt-6">
+        <ArcadeFAQ items={blackjackVariantFaqs(variant)} accent="#22D3EE" />
+      </section>
 
       <TableCardStyles />
     </div>
