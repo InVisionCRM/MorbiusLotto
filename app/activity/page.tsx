@@ -18,6 +18,7 @@ import {
   ArrowUpFromLine,
   Crown,
   Gift,
+  LayoutGrid,
   Loader2,
   RefreshCw,
   ShieldAlert,
@@ -26,6 +27,7 @@ import {
 } from 'lucide-react'
 import GlobalMainNav from '@/components/shared/GlobalMainNav'
 import AdminCreditPanel from '@/components/activity/AdminCreditPanel'
+import LiveTablesModal from '@/components/activity/LiveTablesModal'
 import ReferralAbuseControls from '@/components/activity/ReferralAbuseControls'
 import LiveBadge from '@/components/activity/LiveBadge'
 import TiersPanel from '@/components/activity/TiersPanel'
@@ -91,6 +93,7 @@ export default function AdminDashboardPage() {
   // Drives both the hits filter and the frequency roll-ups. 0 = no multiplier filter.
   const [minMultiplier, setMinMultiplier] = useState('10')
   const [bigWinView, setBigWinView] = useState<BigWinView>('hits')
+  const [tablesOpen, setTablesOpen] = useState(false)
 
   const multNum = Number(minMultiplier) || 0
   const { data, isLoading, isFetching, refetch } = useAdminDashboard(
@@ -139,6 +142,16 @@ export default function AdminDashboardPage() {
             </div>
             <div className="flex items-center gap-2">
               <LiveBadge enabled={isAdmin} minutes={5} />
+              {/* Craps and Hold'em need a table to exist before anyone can
+                  play them, and only an admin can open one. */}
+              <button
+                type="button"
+                onClick={() => setTablesOpen(true)}
+                className="inline-flex items-center gap-1.5 rounded-xl border border-cyan-400/35 bg-cyan-400/12 px-3 py-2 text-xs font-bold text-cyan-200 transition hover:bg-cyan-400/20"
+              >
+                <LayoutGrid className="h-3.5 w-3.5" />
+                Live tables
+              </button>
               <button
                 type="button"
                 onClick={() => refetch()}
@@ -368,6 +381,8 @@ export default function AdminDashboardPage() {
             </>
           )}
         </div>
+
+        <LiveTablesModal open={tablesOpen} onClose={() => setTablesOpen(false)} />
       </div>
     </GlobalMainNav>
   )
