@@ -24,6 +24,7 @@ const tournament_router_1 = require("./websocket/tournament-router");
 const poker_router_1 = require("./websocket/poker-router");
 const bj_multi_router_1 = require("./websocket/bj-multi-router");
 const craps_multi_router_1 = require("./websocket/craps-multi-router");
+const uth_multi_router_1 = require("./websocket/uth-multi-router");
 const poker_chip_wallet_1 = require("./poker-chip-wallet");
 const stream_voice_service_1 = require("./stream-voice.service");
 const poker_rps_1 = require("./poker-rps");
@@ -124,6 +125,9 @@ class WebSocketService {
     bjMultiActionTimestamps = new Map();
     crapsMultiService = null;
     crapsMultiTimerInterval = null;
+    uthMultiService = null;
+    uthMultiTimerInterval = null;
+    uthMultiTickInFlight = false;
     // True while a craps sweep is running, so overlapping ticks are skipped.
     crapsMultiTickInFlight = false;
     betLimitsCache = null;
@@ -634,6 +638,9 @@ class WebSocketService {
                 case 'craps_multi':
                     await this.routeCrapsMultiMessage(ws, message);
                     return;
+                case 'uth_multi':
+                    await this.routeUthMultiMessage(ws, message);
+                    return;
                 default:
                     this.sendError(ws, `Unknown message type (routing): ${message.type}`, message.requestId);
                     return;
@@ -670,6 +677,14 @@ class WebSocketService {
         if (!this.requireAuth(ws, message))
             return;
         await this.dispatchDomainMessage(ws, message, bj_multi_router_1.BJ_MULTI_MESSAGE_HANDLER_MAP, 'multiplayer blackjack');
+    }
+    async routeUthMultiMessage(ws, message) {
+        // Browsing the lobby and watching a felt need no wallet; sitting down,
+        // posting and acting all do.
+        const isPublic = message.type === 'uth_multi_list_tables' || message.type === 'uth_multi_get_state';
+        if (!isPublic && !this.requireAuth(ws, message))
+            return;
+        await this.dispatchDomainMessage(ws, message, uth_multi_router_1.UTH_MULTI_MESSAGE_HANDLER_MAP, 'multiplayer Ultimate Hold\'em');
     }
     async routeCrapsMultiMessage(ws, message) {
         // Browsing the lobby needs no wallet; sitting down and betting does.
@@ -4016,6 +4031,9 @@ class WebSocketService {
         if (this.crapsMultiTimerInterval) {
             clearInterval(this.crapsMultiTimerInterval);
         }
+        if (this.uthMultiTimerInterval) {
+            clearInterval(this.uthMultiTimerInterval);
+        }
         this.wss.clients.forEach((client) => {
             client.close(1000, 'Server shutdown');
         });
@@ -4315,6 +4333,240 @@ class WebSocketService {
         }
         finally {
             this.crapsMultiTickInFlight = false;
+        }
+    }
+    // ---------------------------------------------------------------------
+    // Shared Ultimate Hold'em felt
+    // ---------------------------------------------------------------------
+    setUthMultiService(service) {
+        this.uthMultiService = service ?? null;
+        if (this.uthMultiService && !this.uthMultiTimerInterval) {
+            this.uthMultiTimerInterval = setInterval(async () => {
+                try {
+                    await this.tickUthMultiTimers();
+                }
+                catch (err) {
+                    logger_1.logger.error('UthMulti timer watchdog error', err);
+                }
+            }, 2000);
+        }
+    }
+    /**
+     * Push table state to everyone watching.
+     *
+     * Unlike craps, this is per-connection rather than one payload to the room:
+     * a Hold'em felt contains private hole cards, so each viewer gets the state
+     * built for THEM. Broadcasting one shared payload here would leak hands.
+     */
+    async broadcastUthMultiTableState(tableId) {
+        if (!this.uthMultiService)
+            return;
+        const roomId = uth_multi_router_1.uthTableRoom(tableId);
+        const ids = this.roomToClients.get(roomId);
+        if (!ids || ids.size === 0)
+            return;
+        for (const connectionId of ids) {
+            // `this.clients` is the registry broadcastToRoom uses — same source,
+            // so a socket that has gone away is skipped the same way.
+            const ws = this.clients.get(connectionId);
+            if (!ws || ws.readyState !== ws_1.WebSocket.OPEN)
+                continue;
+            try {
+                const state = await this.uthMultiService.getTableState(tableId, ws.playerAddress ?? null);
+                this.sendMessage(ws, { type: 'uth_multi_table_state', payload: state });
+            }
+            catch (err) {
+                logger_1.logger.error('broadcastUthMultiTableState failed', { tableId, error: err });
+            }
+        }
+    }
+    joinUthRoom(ws, tableId) {
+        const roomId = uth_multi_router_1.uthTableRoom(tableId);
+        if (ws.currentRoom && ws.connectionId) {
+            const prev = this.roomToClients.get(ws.currentRoom);
+            if (prev) {
+                prev.delete(ws.connectionId);
+                if (prev.size === 0)
+                    this.roomToClients.delete(ws.currentRoom);
+            }
+        }
+        ws.currentRoom = roomId;
+        if (!this.roomToClients.has(roomId))
+            this.roomToClients.set(roomId, new Set());
+        this.roomToClients.get(roomId).add(ws.connectionId);
+        return roomId;
+    }
+    uthErrorText(err) {
+        const code = err?.message ?? '';
+        switch (code) {
+            case 'NOT_FOUND': return 'That table is gone.';
+            case 'NOT_SEATED': return 'Take a seat first.';
+            case 'ALREADY_SEATED': return "You're already at this table.";
+            case 'SEAT_TAKEN': return 'Someone just took that seat.';
+            case 'BAD_SEAT': return 'That seat does not exist.';
+            case 'ROUND_LIVE': return 'A hand is already in play — you are in from the next one.';
+            case 'NO_ROUND': return 'No hand is in play.';
+            case 'NOT_IN_ROUND': return 'You are not in this hand.';
+            case 'ILLEGAL_ACTION': return 'That is not a legal action on this street.';
+            case 'ALREADY_ACTED': return 'You have already acted on this street.';
+            case 'ALREADY_COMMITTED': return 'Your Play bet is already down.';
+            case 'ALREADY_FOLDED': return 'You have folded this hand.';
+            case 'UNDER_MIN': return 'Below the table minimum.';
+            case 'OVER_MAX': return 'Above the table maximum.';
+            case 'NO_LIVE_SEED': return 'The table seed was rotated — reload the felt.';
+            default:
+                if (/insufficient/i.test(code))
+                    return 'Not enough chips.';
+                return 'Could not do that at the table.';
+        }
+    }
+    async handleUthMultiJoinTable(ws, message) {
+        try {
+            if (!this.uthMultiService || !ws.playerAddress)
+                return this.sendError(ws, 'Hold\'em tables unavailable or wallet required', message.requestId);
+            const { tableId, seatPosition, clientSeed } = (message.payload ?? {});
+            if (!tableId)
+                return this.sendError(ws, 'tableId required', message.requestId);
+            if (seatPosition === undefined || seatPosition === null)
+                return this.sendError(ws, 'seatPosition required', message.requestId);
+            const state = await this.uthMultiService.joinTable(tableId, ws.playerAddress, Number(seatPosition), clientSeed);
+            this.joinUthRoom(ws, tableId);
+            this.sendMessage(ws, { type: 'uth_multi_table_state', payload: state, requestId: message.requestId });
+            await this.broadcastUthMultiTableState(tableId);
+        }
+        catch (error) {
+            this.sendError(ws, this.uthErrorText(error), message.requestId);
+        }
+    }
+    async handleUthMultiLeaveTable(ws, message) {
+        try {
+            if (!this.uthMultiService || !ws.playerAddress)
+                return this.sendError(ws, 'Hold\'em tables unavailable or wallet required', message.requestId);
+            const { tableId } = (message.payload ?? {});
+            if (!tableId)
+                return this.sendError(ws, 'tableId required', message.requestId);
+            const state = await this.uthMultiService.leaveTable(tableId, ws.playerAddress);
+            this.sendMessage(ws, { type: 'uth_multi_table_state', payload: state, requestId: message.requestId });
+        }
+        catch (error) {
+            this.sendError(ws, this.uthErrorText(error), message.requestId);
+        }
+    }
+    async handleUthMultiPostAnte(ws, message) {
+        try {
+            if (!this.uthMultiService || !ws.playerAddress)
+                return this.sendError(ws, 'Hold\'em tables unavailable or wallet required', message.requestId);
+            const { tableId, ante, trips } = (message.payload ?? {});
+            if (!tableId)
+                return this.sendError(ws, 'tableId required', message.requestId);
+            const state = await this.uthMultiService.postAnte(tableId, ws.playerAddress, Number(ante), Number(trips) || 0);
+            this.sendMessage(ws, { type: 'uth_multi_table_state', payload: state, requestId: message.requestId });
+        }
+        catch (error) {
+            this.sendError(ws, this.uthErrorText(error), message.requestId);
+        }
+    }
+    async handleUthMultiAct(ws, message) {
+        try {
+            if (!this.uthMultiService || !ws.playerAddress)
+                return this.sendError(ws, 'Hold\'em tables unavailable or wallet required', message.requestId);
+            const { tableId, action } = (message.payload ?? {});
+            if (!tableId || !action)
+                return this.sendError(ws, 'tableId and action required', message.requestId);
+            const state = await this.uthMultiService.act(tableId, ws.playerAddress, action);
+            this.sendMessage(ws, { type: 'uth_multi_table_state', payload: state, requestId: message.requestId });
+        }
+        catch (error) {
+            this.sendError(ws, this.uthErrorText(error), message.requestId);
+        }
+    }
+    async handleUthMultiGetState(ws, message) {
+        try {
+            if (!this.uthMultiService)
+                return this.sendError(ws, 'Hold\'em tables unavailable', message.requestId);
+            const { tableId } = (message.payload ?? {});
+            if (!tableId)
+                return this.sendError(ws, 'tableId required', message.requestId);
+            this.joinUthRoom(ws, tableId);
+            const state = await this.uthMultiService.getTableState(tableId, ws.playerAddress ?? null);
+            this.sendMessage(ws, { type: 'uth_multi_table_state', payload: state, requestId: message.requestId });
+        }
+        catch (error) {
+            this.sendError(ws, this.uthErrorText(error), message.requestId);
+        }
+    }
+    async handleUthMultiListTables(ws, message) {
+        try {
+            if (!this.uthMultiService)
+                return this.sendError(ws, 'Hold\'em tables unavailable', message.requestId);
+            const tables = await this.uthMultiService.listTables();
+            this.sendMessage(ws, { type: 'uth_multi_table_list', payload: { tables }, requestId: message.requestId });
+        }
+        catch (error) {
+            this.sendError(ws, this.uthErrorText(error), message.requestId);
+        }
+    }
+    async handleUthMultiCreateTable(ws, message) {
+        try {
+            if (!this.uthMultiService)
+                return this.sendError(ws, 'Hold\'em tables unavailable', message.requestId);
+            if (!ws.playerAddress || !(0, cosmetics_catalog_1.isAdminWallet)(ws.playerAddress))
+                return this.sendError(ws, 'Only admins can open a table', message.requestId);
+            const { minBet, maxBet } = (message.payload ?? {});
+            const created = await this.uthMultiService.createTable(minBet === undefined ? undefined : Number(minBet), maxBet === undefined ? undefined : Number(maxBet));
+            this.sendMessage(ws, { type: 'uth_multi_table_created', payload: created, requestId: message.requestId });
+        }
+        catch (error) {
+            this.sendError(ws, this.uthErrorText(error), message.requestId);
+        }
+    }
+    async handleUthMultiDeleteTable(ws, message) {
+        try {
+            if (!this.uthMultiService)
+                return this.sendError(ws, 'Hold\'em tables unavailable', message.requestId);
+            if (!ws.playerAddress || !(0, cosmetics_catalog_1.isAdminWallet)(ws.playerAddress))
+                return this.sendError(ws, 'Only admins can close a table', message.requestId);
+            const { tableId } = (message.payload ?? {});
+            if (!tableId)
+                return this.sendError(ws, 'tableId required', message.requestId);
+            const ok = await this.uthMultiService.deleteTable(tableId);
+            this.sendMessage(ws, { type: 'uth_multi_table_deleted', payload: { tableId, ok }, requestId: message.requestId });
+        }
+        catch (error) {
+            this.sendError(ws, this.uthErrorText(error), message.requestId);
+        }
+    }
+    async handleUthMultiRotateSeed(ws, message) {
+        try {
+            if (!this.uthMultiService || !ws.playerAddress)
+                return this.sendError(ws, 'Hold\'em tables unavailable or wallet required', message.requestId);
+            const { tableId } = (message.payload ?? {});
+            if (!tableId)
+                return this.sendError(ws, 'tableId required', message.requestId);
+            const seated = (await this.uthMultiService.getTableState(tableId, ws.playerAddress))
+                .seats.some((s) => s.playerAddress === ws.playerAddress);
+            if (!seated)
+                return this.sendError(ws, 'Only players at the table can rotate its seed.', message.requestId);
+            const result = await this.uthMultiService.rotateSeed(tableId);
+            this.sendMessage(ws, { type: 'uth_multi_seed_rotated', payload: result, requestId: message.requestId });
+        }
+        catch (error) {
+            this.sendError(ws, this.uthErrorText(error), message.requestId);
+        }
+    }
+    /** Deal expired betting windows, then resolve expired streets. */
+    async tickUthMultiTimers() {
+        if (!this.uthMultiService)
+            return;
+        if (this.uthMultiTickInFlight)
+            return;
+        this.uthMultiTickInFlight = true;
+        try {
+            await this.uthMultiService.dealExpiredBettingWindows();
+            await this.uthMultiService.resolveExpiredStreets();
+        }
+        finally {
+            this.uthMultiTickInFlight = false;
         }
     }
     /** Timer tick: check for expired turns and betting timeouts across all active BJ multi tables. */

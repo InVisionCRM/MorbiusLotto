@@ -7,6 +7,7 @@ import {
   WS_POKER_MESSAGES,
   WS_PUBLIC_MESSAGES,
   WS_TOURNAMENT_MESSAGES,
+  WS_UTH_MULTI_MESSAGES,
 } from './message-types';
 
 export type WebSocketMessageDomain =
@@ -18,6 +19,7 @@ export type WebSocketMessageDomain =
   | 'poker'
   | 'bj_multi'
   | 'craps_multi'
+  | 'uth_multi'
   | 'unknown';
 
 const POKER_PUBLIC_TYPES = new Set<string>([
@@ -35,5 +37,6 @@ export function classifyWebSocketMessageType(type: string): WebSocketMessageDoma
   if ((WS_POKER_MESSAGES as readonly string[]).includes(type) || POKER_PUBLIC_TYPES.has(type)) return 'poker';
   if ((WS_BJ_MULTI_MESSAGES as readonly string[]).includes(type)) return 'bj_multi';
   if ((WS_CRAPS_MULTI_MESSAGES as readonly string[]).includes(type)) return 'craps_multi';
+  if ((WS_UTH_MULTI_MESSAGES as readonly string[]).includes(type)) return 'uth_multi';
   return 'unknown';
 }

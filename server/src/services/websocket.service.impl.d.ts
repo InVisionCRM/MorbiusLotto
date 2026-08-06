@@ -161,6 +161,13 @@ export declare class WebSocketService {
     setCrapsMultiService(service: unknown): void;
     /** Broadcast current shared-craps table state to everyone watching the felt. */
     broadcastCrapsMultiTableState(tableId: string): Promise<void>;
+    /** Wire in the shared Hold'em service; also starts its betting/street watchdog. */
+    setUthMultiService(service: unknown): void;
+    /**
+     * Push shared Hold'em state to each watcher individually — the felt carries
+     * private hole cards, so one shared payload would leak hands.
+     */
+    broadcastUthMultiTableState(tableId: string): Promise<void>;
     /** Timer tick: check for expired turns and betting timeouts across all active BJ multi tables. */
     private tickBJMultiTimers;
     private handleBJMultiListTables;
