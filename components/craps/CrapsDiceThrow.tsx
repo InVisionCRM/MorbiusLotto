@@ -236,21 +236,23 @@ export function CrapsDiceThrow({
     };
     Events.on(engine, 'collisionStart', onCollide);
 
-    // Free tumble while moving; on settle these tween to the server's faces.
+    /**
+     * Per-die tumble, plus how far it has been drawn toward the face it has to
+     * show. `blend` runs 0 → 1 and never goes back: see the convergence note in
+     * the loop for why it is tied to the die losing speed rather than to a
+     * timer, and why it must not unwind.
+     */
     const spin = dice.map(() => ({
       x: Math.random() * 360,
       y: Math.random() * 360,
       vx: (Math.random() - 0.5) * 26,
       vy: (Math.random() - 0.5) * 26,
+      blend: 0,
+      target: null as null | { x: number; y: number },
     }));
 
     const startedAt = performance.now();
     let calmFrames = 0;
-    let settling: null | {
-      at: number;
-      from: Array<{ x: number; y: number; z: number }>;
-      to: Array<{ x: number; y: number; z: number }>;
-    } = null;
     let done = false;
 
     const paint = (
@@ -274,46 +276,61 @@ export function CrapsDiceThrow({
         `rotateZ(${rz}deg) rotateX(${rx}deg) rotateY(${ry}deg)`;
     };
 
-    const SETTLE_MS = 380;
+    /**
+     * Speed at which a die starts being drawn toward the face it must show.
+     * Roughly a third of launch speed: by then the hard bounces are done and
+     * it is into its last hops, which is the moment a real die stops tumbling
+     * wildly and starts committing to a side.
+     */
+    const CONVERGE_SPEED = 6;
 
     const step = () => {
       const now = performance.now();
       Engine.update(engine, 1000 / 60);
 
-      if (settling) {
-        // Ease the cubes round to the faces the server rolled.
-        const t = Math.min(1, (now - settling.at) / SETTLE_MS);
-        const e = 1 - Math.pow(1 - t, 3);
-        dice.forEach((body, i) => {
-          const f = settling!.from[i];
-          const to = settling!.to[i];
-          paint(
-            i,
-            body,
-            f.x + (to.x - f.x) * e,
-            f.y + (to.y - f.y) * e,
-            f.z + (to.z - f.z) * e,
-          );
-        });
-        if (t >= 1) {
-          if (!done) {
-            done = true;
-            tableAudio.playDiceSettle();
-            settleCbRef.current?.();
-          }
-          return; // Frozen on the result; stop burning frames.
-        }
-        frameRef.current = requestAnimationFrame(step);
-        return;
-      }
-
-      // Still in flight: tumble freely.
       dice.forEach((body, i) => {
         const s = spin[i];
+
+        // Convergence, rather than a correction at the end.
+        //
+        // Steering the die onto its face only once it had stopped meant the
+        // last thing you saw was a resting cube pirouetting — the physics
+        // looked real right up until the moment it obviously wasn't. So the
+        // blend is driven by the die's own deceleration instead: it starts
+        // easing toward the target as it slows, and reaches it exactly as the
+        // momentum runs out. The rotation is still being imposed, but it is
+        // imposed while the die is moving and bouncing, which is when the eye
+        // reads rotation as tumbling rather than as a snap.
+        //
+        // It never unwinds. A bounce can send speed back up, and letting the
+        // blend fall with it would visibly rewind the die away from its face.
+        if (body.speed < CONVERGE_SPEED) {
+          if (!s.target) {
+            const r = faceRotation(valsRef.current[i]);
+            s.target = {
+              x: nearestEquivalent(s.x, r.x),
+              y: nearestEquivalent(s.y, r.y),
+            };
+          }
+          const want = 1 - body.speed / CONVERGE_SPEED;
+          if (want > s.blend) s.blend = want;
+        }
+
         const energy = Math.min(1, body.speed / 10);
-        s.x += s.vx * energy;
-        s.y += s.vy * energy;
-        paint(i, body, s.x, s.y, (body.angle * 180) / Math.PI);
+        // Free tumbling decays as the blend takes over, so the two are never
+        // fighting each other for the same degrees.
+        const free = 1 - s.blend;
+        s.x += s.vx * energy * free;
+        s.y += s.vy * energy * free;
+
+        let rx = s.x;
+        let ry = s.y;
+        if (s.target && s.blend > 0) {
+          const e = s.blend * s.blend * (3 - 2 * s.blend); // smoothstep
+          rx = s.x + (s.target.x - s.x) * e;
+          ry = s.y + (s.target.y - s.y) * e;
+        }
+        paint(i, body, rx, ry, (body.angle * 180) / Math.PI);
       });
 
       const calm = dice.every(
@@ -321,23 +338,28 @@ export function CrapsDiceThrow({
       );
       calmFrames = calm ? calmFrames + 1 : 0;
 
-      if (calmFrames > 10 || now - startedAt > MAX_THROW_MS) {
-        settling = {
-          at: now,
-          from: dice.map((body, i) => ({
-            x: spin[i].x,
-            y: spin[i].y,
-            z: (body.angle * 180) / Math.PI,
-          })),
-          to: dice.map((body, i) => {
-            const r = faceRotation(valsRef.current[i]);
-            return {
-              x: nearestEquivalent(spin[i].x, r.x),
-              y: nearestEquivalent(spin[i].y, r.y),
-              z: (body.angle * 180) / Math.PI,
-            };
-          }),
-        };
+      const timedOut = now - startedAt > MAX_THROW_MS;
+      if (calmFrames > 10 || timedOut) {
+        // Land exactly on the face. By here the blend has almost always done
+        // the work already, so this is a sub-degree tidy-up rather than the
+        // visible spin it used to be — but it has to be exact, because the
+        // number on the felt is the number the player is paid on.
+        dice.forEach((body, i) => {
+          const r = faceRotation(valsRef.current[i]);
+          paint(
+            i,
+            body,
+            nearestEquivalent(spin[i].x, r.x),
+            nearestEquivalent(spin[i].y, r.y),
+            (body.angle * 180) / Math.PI,
+          );
+        });
+        if (!done) {
+          done = true;
+          tableAudio.playDiceSettle();
+          settleCbRef.current?.();
+        }
+        return; // Frozen on the result; stop burning frames.
       }
 
       frameRef.current = requestAnimationFrame(step);

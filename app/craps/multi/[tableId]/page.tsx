@@ -79,6 +79,46 @@ export default function CrapsMultiTablePage() {
   // the outcome held back until they land.
   const [throwKey, setThrowKey] = useState<string | null>(null);
   const pendingOutcomeRef = useRef<CrapsMultiTableState['lastRoll']>(null);
+  // The dice the throw is heading for. Held apart from `state` because the
+  // felt is deliberately frozen on the pre-roll picture while they are in the
+  // air, and that picture still carries the PREVIOUS roll.
+  const [diceVals, setDiceVals] = useState<[number, number]>([1, 1]);
+  // Newest state from the server, whether or not the felt is showing it yet.
+  const liveRef = useRef<CrapsMultiTableState | null>(null);
+  const throwInFlight = useRef(false);
+
+  /**
+   * The felt must not know the number before the dice do.
+   *
+   * A throw's state update carries everything it decided — the sum, the new
+   * point, the phase, every seat's win — and painting that the moment it
+   * arrives spoils the throw completely: the point lights up, the history strip
+   * grows, and the dice are still in the air being watched by nobody. So a new
+   * roll starts the dice and otherwise holds the whole board where it was;
+   * the settle applies the update as one piece.
+   */
+  const applyState = useCallback((s: CrapsMultiTableState) => {
+    liveRef.current = s;
+
+    const roll = s.lastRoll;
+    if (roll && soundedRollRef.current !== roll.rollId) {
+      const first = soundedRollRef.current === null;
+      soundedRollRef.current = roll.rollId;
+      // A throw we arrived after is already over — animating it would be a lie
+      // about when it happened, so the first state we ever see just paints.
+      if (!first) {
+        tableAudio.init();
+        pendingOutcomeRef.current = roll;
+        throwInFlight.current = true;
+        setDiceVals([roll.die1, roll.die2]);
+        setThrowKey(roll.rollId);
+        return;
+      }
+    }
+
+    if (throwInFlight.current) return;
+    setState(s);
+  }, []);
   const [rolls, setRolls] = useState<CrapsMultiRollHistoryRow[]>([]);
   const [rollsLoading, setRollsLoading] = useState(true);
 
@@ -100,10 +140,10 @@ export default function CrapsMultiTablePage() {
       setError(null);
       // The room membership died with the socket; re-ask for state, which
       // re-joins the room server-side.
-      try { setState(await getCrapsTableState(client, tableId)); } catch { /* broadcast will catch us up */ }
+      try { applyState(await getCrapsTableState(client, tableId)); } catch { /* broadcast will catch us up */ }
     });
     client.on(CRAPS_MULTI_EVENTS.tableState, (payload: CrapsMultiTableState) => {
-      setState(payload);
+      applyState(payload);
     });
     client.on('error', (err: any) => setError(err?.message ?? 'Connection error'));
 
@@ -114,7 +154,7 @@ export default function CrapsMultiTablePage() {
         setConnected(true);
         setWs(client);
         try {
-          setState(await getCrapsTableState(client, tableId));
+          applyState(await getCrapsTableState(client, tableId));
         } catch (err) {
           setError((err as Error)?.message ?? 'Could not load the table.');
         }
@@ -133,28 +173,21 @@ export default function CrapsMultiTablePage() {
     return () => clearInterval(id);
   }, []);
 
-  // Sound the throw the TABLE last made, not the one this client asked for:
-  // every seat should hear the dice, including the seven that just emptied the
-  // felt, and only the shooter sends a roll request.
-  useEffect(() => {
-    const roll = state?.lastRoll;
-    if (!roll || soundedRollRef.current === roll.rollId) return;
-    const first = soundedRollRef.current === null;
-    soundedRollRef.current = roll.rollId;
-    // Don't replay the table's history on arrival — only throws made while
-    // we're watching. A throw we joined after is already over; showing the
-    // dice mid-flight for it would be a lie about when it happened.
-    if (first) return;
-
-    tableAudio.init();
-    // The knocks now come from the dice hitting things, so there is nothing to
-    // play here. What the throw *meant* waits for the dice to stop, below.
-    pendingOutcomeRef.current = roll;
-    setThrowKey(roll.rollId);
-  }, [state?.lastRoll]);
-
-  // The rail reacts when the dice do, not on a timer that guesses at it.
+  /**
+   * The dice have landed: the felt may now catch up.
+   *
+   * Everything the throw decided lands in one go, at the moment the number
+   * becomes readable on the dice — the board, the rail's winnings, the point,
+   * the history. The sounds follow the same rule; the knocks came from the
+   * dice hitting things, and this is what the throw *meant*.
+   *
+   * Every seat hears it, including the ones the seven just emptied — only the
+   * shooter sends a roll request, but the whole rail lives on the result.
+   */
   const handleDiceSettled = useCallback(() => {
+    throwInFlight.current = false;
+    if (liveRef.current) setState(liveRef.current);
+
     const roll = pendingOutcomeRef.current;
     if (!roll) return;
     pendingOutcomeRef.current = null;
@@ -243,7 +276,14 @@ export default function CrapsMultiTablePage() {
   }, [guard, ws, tableId]);
 
   const lastRoll = state?.lastRoll ?? null;
-  const dice: [number, number] = lastRoll ? [lastRoll.die1, lastRoll.die2] : [1, 1];
+  // The dice show the throw in the air; everything else on this page shows the
+  // last throw that has already landed. They are the same roll only once the
+  // dice have settled and `state` has caught up.
+  const dice: [number, number] = throwKey
+    ? diceVals
+    : lastRoll
+      ? [lastRoll.die1, lastRoll.die2]
+      : [1, 1];
 
   return (
     <GlobalMainNav>
