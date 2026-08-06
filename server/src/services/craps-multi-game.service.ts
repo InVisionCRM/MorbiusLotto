@@ -165,6 +165,31 @@ export interface CrapsMultiTableState {
   stateVersion: number;
 }
 
+/**
+ * One past throw. The dice half is table-wide; the `viewer*` half is whatever
+ * that throw did to the player asking, and is null when they had nothing down.
+ */
+export interface CrapsMultiRollHistoryRow {
+  rollId: string;
+  seedEpoch: number;
+  nonce: number;
+  die1: number;
+  die2: number;
+  sum: number;
+  phaseBefore: CrapsPhase;
+  phaseAfter: CrapsPhase;
+  pointBefore: number | null;
+  pointAfter: number | null;
+  isPoint: boolean;
+  isSevenOut: boolean;
+  dicePassed: boolean;
+  shooterPosition: number | null;
+  shooterAddress: string | null;
+  viewerWins: number | null;
+  viewerLosses: number | null;
+  createdAt: string;
+}
+
 export interface CrapsMultiTableSummary {
   id: string;
   status: string;
@@ -969,6 +994,65 @@ export class CrapsMultiGameService {
       themeConfig: table.theme_config ?? null,
       stateVersion: this.stateVersions.get(tableId) ?? 0,
     };
+  }
+
+  /**
+   * The table's recent throws, newest first.
+   *
+   * Two halves, as the schema splits them: what the dice did (table-wide, the
+   * same for everyone) and what it cost or paid THIS viewer. A player watching
+   * a rail wants both — "the shooter made their point" and "that was 240 to me"
+   * are different facts, and only the second is private.
+   *
+   * `viewerAddress` is optional: an onlooker gets the dice and the shooter, and
+   * simply has no money column.
+   */
+  async getRollHistory(
+    tableId: string,
+    limit = 25,
+    viewerAddress?: string | null,
+  ): Promise<CrapsMultiRollHistoryRow[]> {
+    const capped = Math.max(1, Math.min(100, Math.floor(limit) || 25));
+    const viewer = viewerAddress ? viewerAddress.trim().toLowerCase() : null;
+
+    const r = await this.pool.query(
+      `SELECT rr.id, rr.seed_epoch, rr.nonce, rr.die1, rr.die2, rr.sum,
+              rr.phase_before, rr.phase_after, rr.point_before, rr.point_after,
+              rr.is_point, rr.is_seven_out, rr.dice_passed,
+              rr.shooter_position, rr.shooter_address, rr.created_at,
+              rs.wins  AS viewer_wins,
+              rs.losses AS viewer_losses
+         FROM craps_multi_rolls rr
+         LEFT JOIN craps_multi_roll_seats rs
+                ON rs.roll_id = rr.id AND rs.player_address = $2
+        WHERE rr.table_id = $1
+        ORDER BY rr.created_at DESC, rr.nonce DESC
+        LIMIT $3`,
+      [tableId, viewer, capped],
+    );
+
+    return r.rows.map((row: any) => ({
+      rollId: row.id,
+      seedEpoch: Number(row.seed_epoch),
+      nonce: Number(row.nonce),
+      die1: Number(row.die1),
+      die2: Number(row.die2),
+      sum: Number(row.sum),
+      phaseBefore: row.phase_before,
+      phaseAfter: row.phase_after,
+      pointBefore: row.point_before === null ? null : Number(row.point_before),
+      pointAfter: row.point_after === null ? null : Number(row.point_after),
+      isPoint: Boolean(row.is_point),
+      isSevenOut: Boolean(row.is_seven_out),
+      dicePassed: Boolean(row.dice_passed),
+      shooterPosition: row.shooter_position === null ? null : Number(row.shooter_position),
+      shooterAddress: row.shooter_address ?? null,
+      // Null rather than zero when this viewer had nothing on that throw —
+      // "no bet" and "bet and won nothing" are different things to show.
+      viewerWins: row.viewer_wins === null || row.viewer_wins === undefined ? null : Number(row.viewer_wins),
+      viewerLosses: row.viewer_losses === null || row.viewer_losses === undefined ? null : Number(row.viewer_losses),
+      createdAt: new Date(row.created_at).toISOString(),
+    }));
   }
 
   /** Chip balance helper for the felt's own header. */

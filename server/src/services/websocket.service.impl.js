@@ -673,7 +673,8 @@ class WebSocketService {
     }
     async routeCrapsMultiMessage(ws, message) {
         // Browsing the lobby needs no wallet; sitting down and betting does.
-        const isLobbyPeek = message.type === 'craps_multi_list_tables';
+        const isLobbyPeek = message.type === 'craps_multi_list_tables'
+      || message.type === 'craps_multi_roll_history';
         if (!isLobbyPeek && !this.requireAuth(ws, message))
             return;
         await this.dispatchDomainMessage(ws, message, craps_multi_router_1.CRAPS_MULTI_MESSAGE_HANDLER_MAP, 'multiplayer craps');
@@ -4251,6 +4252,23 @@ class WebSocketService {
                 return this.sendError(ws, 'tableId required', message.requestId);
             const ok = await this.crapsMultiService.deleteTable(tableId);
             this.sendMessage(ws, { type: 'craps_multi_table_deleted', payload: { tableId, ok }, requestId: message.requestId });
+        }
+        catch (error) {
+            this.sendError(ws, this.crapsErrorText(error), message.requestId);
+        }
+    }
+    async handleCrapsMultiRollHistory(ws, message) {
+        try {
+            if (!this.crapsMultiService)
+                return this.sendError(ws, 'Craps tables unavailable', message.requestId);
+            const { tableId, limit } = (message.payload ?? {});
+            if (!tableId)
+                return this.sendError(ws, 'tableId required', message.requestId);
+            // ws.playerAddress may be absent — an onlooker gets the dice and the
+            // shooter, and no money column. That is deliberate: the throws are
+            // table-wide facts, the payouts are not.
+            const rolls = await this.crapsMultiService.getRollHistory(tableId, Number(limit) || 25, ws.playerAddress ?? null);
+            this.sendMessage(ws, { type: 'craps_multi_roll_history_result', payload: { tableId, rolls }, requestId: message.requestId });
         }
         catch (error) {
             this.sendError(ws, this.crapsErrorText(error), message.requestId);

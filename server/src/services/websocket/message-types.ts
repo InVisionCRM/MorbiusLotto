@@ -121,6 +121,7 @@ export const WS_CRAPS_MULTI_MESSAGES = [
   'craps_multi_create_table',
   'craps_multi_delete_table',
   'craps_multi_rotate_seed',
+  'craps_multi_roll_history',
 ] as const;
 
 export const ALL_WS_MESSAGE_TYPES = [
