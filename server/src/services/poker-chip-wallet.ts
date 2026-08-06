@@ -41,6 +41,11 @@ export type PokerChipLedgerReason =
   | 'craps_multi_bet'
   | 'craps_multi_payout'
   | 'craps_multi_refund'
+  // Multiplayer Ultimate Hold'em. Same suffix rule as above — VipService and
+  // the Weekly Drop find wagers with `reason LIKE '%\_bet'`.
+  | 'uth_multi_bet'
+  | 'uth_multi_payout'
+  | 'uth_multi_refund'
   | 'arcade_baccarat_bet'
   | 'arcade_baccarat_payout'
   | 'arcade_crash_bet'
