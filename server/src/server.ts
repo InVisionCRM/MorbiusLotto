@@ -306,6 +306,48 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
+/**
+ * Boot preflight for the game schemas added alongside their services.
+ *
+ * One representative table per migration is enough — the migrations are
+ * transactional, so a table's presence implies the rest of its file landed.
+ * This only warns: a missing arcade table should not stop the whole casino
+ * from serving the games that _are_ installed, and hard-failing boot over it
+ * would turn a partial deploy into a total outage.
+ */
+async function warnOnMissingGameTables(dbService: DatabaseService): Promise<void> {
+  const REQUIRED: Array<{ table: string; migration: string; game: string }> = [
+    { table: 'arcade_ultimate_holdem_rounds', migration: '180_arcade_ultimate_holdem.sql', game: "Ultimate Hold'em" },
+    { table: 'arcade_caribbean_stud_rounds', migration: '181_arcade_caribbean_stud.sql', game: 'Caribbean Stud' },
+    { table: 'arcade_blackjack_variant_rounds', migration: '183_arcade_blackjack_variants.sql', game: 'Blackjack variants' },
+    { table: 'craps_multi_tables', migration: '185_craps_multi_tables.sql', game: 'Multiplayer craps' },
+    { table: 'craps_multi_seats', migration: '186_craps_multi_seats.sql', game: 'Multiplayer craps seats' },
+    { table: 'craps_multi_rolls', migration: '187_craps_multi_rolls.sql', game: 'Multiplayer craps rolls' },
+    { table: 'uth_multi_tables', migration: "188_uth_multi_tables.sql", game: "Multiplayer Ultimate Hold'em" },
+  ];
+
+  try {
+    const { rows } = await dbService.getPool().query<{ tablename: string }>(
+      `SELECT tablename FROM pg_tables WHERE schemaname = 'public' AND tablename = ANY($1)`,
+      [REQUIRED.map((r) => r.table)],
+    );
+    const present = new Set(rows.map((r) => r.tablename));
+    const missing = REQUIRED.filter((r) => !present.has(r.table));
+
+    if (missing.length === 0) return;
+
+    logger.warn(
+      `[SCHEMA] ${missing.length} game table(s) missing — those games will reject every request until their migrations run.`,
+    );
+    for (const m of missing) {
+      logger.warn(`[SCHEMA]   ${m.game}: run  node server/run-migration.js migrations/${m.migration}`);
+    }
+  } catch (err) {
+    // Never let the preflight itself take down boot.
+    logger.warn('[SCHEMA] Could not verify game tables', err);
+  }
+}
+
 // Initialize services
 async function initializeServices() {
   try {
@@ -389,6 +431,13 @@ async function initializeServices() {
 
     // Shared Ultimate Hold'em felt — one board, every seat against the dealer.
     const uthMultiService = new UthMultiGameService(dbService, pfService);
+
+    // Deploying the server ahead of its migrations is the single most likely
+    // way these tables break, and it fails silently: the WS handlers all exist,
+    // so the felt connects, subscribes, and only falls over on the first query
+    // a player triggers. Check at boot instead and name the exact command, so
+    // the gap shows up in the deploy log rather than in someone's console.
+    await warnOnMissingGameTables(dbService);
 
     // Initialize WebSocket service. authService is passed last so WS upgrades
     // can read the SIWE session cookie and skip the EIP-712 challenge for

@@ -70,115 +70,111 @@ export default function UthMultiLobbyPage() {
   }, [address, signTypedDataAsync, refresh]);
 
   return (
-    <div className="min-h-screen bg-[#04121b] text-slate-200">
-      <GlobalMainNav />
-
-      <main className="mx-auto max-w-4xl px-3 py-6 sm:px-4">
-        <div className="mb-5 flex items-end justify-between gap-3">
-          <div>
-            <h1 className="arc-display flex items-center gap-2 text-2xl font-bold text-slate-100">
-              <Spade className="h-6 w-6 text-violet-300" />
-              Hold'em tables
+    <GlobalMainNav>
+      {/* Centred in the viewport rather than stacked at the top: the house runs
+          one table, so the page has exactly one thing to say and it should be
+          the thing you land on. */}
+      <main className="flex min-h-full flex-col items-center justify-center px-4 py-10">
+        <div className="w-full max-w-2xl">
+          <div className="mb-8 text-center">
+            <h1 className="arc-display flex items-center justify-center gap-3 text-4xl font-bold text-slate-100 sm:text-5xl">
+              <Spade className="h-9 w-9 text-violet-300 sm:h-11 sm:w-11" />
+              Hold&apos;em tables
             </h1>
-            <p className="mt-1 text-sm text-slate-500">
+            <p className="mx-auto mt-3 max-w-md text-base text-slate-400">
               One board, one dealer, every seat playing its own hand. Nobody waits for a turn.
             </p>
           </div>
-          <div className="flex items-center gap-2">
+
+          {error && (
+            <div className="mb-4 rounded-lg border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-center text-sm text-rose-200">
+              {error}
+            </div>
+          )}
+
+          {loading ? (
+            <div className="h-48 animate-pulse rounded-2xl bg-cyan-500/5" />
+          ) : tables.length === 0 ? (
+            <Card className="arc-panel border-0 p-10 text-center">
+              <Spade className="mx-auto mb-4 h-12 w-12 text-slate-600" />
+              <p className="arc-display text-lg text-slate-300">No Hold&apos;em table is open yet.</p>
+              <p className="mx-auto mt-2 max-w-sm text-sm text-slate-500">
+                Tables are opened by the house. The solo game is always running in the meantime.
+              </p>
+              <Button
+                onClick={() => router.push('/ultimate-holdem')}
+                className="mt-6 bg-cyan-500 px-6 py-5 text-base font-semibold text-[#04121b] hover:bg-cyan-400"
+              >
+                Play solo Hold&apos;em
+              </Button>
+            </Card>
+          ) : (
+            <div className="space-y-4">
+              {tables.map((t) => {
+                const full = t.emptySeats === 0;
+                const seats = t.seatedCount + t.emptySeats;
+                return (
+                  <Card
+                    key={t.id}
+                    className={cn(
+                      'arc-panel border-0 p-8 text-center transition-colors',
+                      full ? 'opacity-70' : 'cursor-pointer hover:bg-cyan-500/5',
+                    )}
+                    onClick={() => { if (!full) router.push(`/ultimate-holdem/multi/${t.id}`); }}
+                  >
+                    <div className="flex items-center justify-center gap-3">
+                      <span className="arc-display text-2xl font-semibold text-slate-100">
+                        {t.stage ? 'Hand in play' : 'Between hands'}
+                      </span>
+                      {t.stage && (
+                        <span className="arc-mono rounded bg-violet-500 px-2 py-1 text-xs font-bold text-[#04121b]">
+                          {t.stage}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="arc-mono mt-4 flex items-center justify-center gap-6 text-base text-slate-400">
+                      <span className="flex items-center gap-2">
+                        <Users className="h-5 w-5" />
+                        {t.seatedCount}/{seats} seated
+                      </span>
+                      <span className="text-slate-600">|</span>
+                      <span>{t.minBet.toLocaleString()} – {t.maxBet.toLocaleString()} ante</span>
+                    </div>
+
+                    <Button
+                      disabled={full}
+                      onClick={(e) => { e.stopPropagation(); router.push(`/ultimate-holdem/multi/${t.id}`); }}
+                      className="mt-7 w-full max-w-xs bg-cyan-500 py-6 text-lg font-bold text-[#04121b] hover:bg-cyan-400"
+                    >
+                      {full ? 'Table full' : 'Take a seat'}
+                    </Button>
+                  </Card>
+                );
+              })}
+            </div>
+          )}
+
+          <div className="mt-8 flex items-center justify-center gap-3">
             <button
               type="button"
               onClick={() => ws && refresh(ws)}
               disabled={!ws}
-              className="rounded border border-cyan-500/25 bg-cyan-500/5 p-2 text-cyan-300 transition-colors hover:bg-cyan-500/15 disabled:opacity-40"
-              aria-label="Refresh tables"
+              className="flex items-center gap-2 rounded border border-cyan-500/25 bg-cyan-500/5 px-3 py-2 text-sm text-cyan-300 transition-colors hover:bg-cyan-500/15 disabled:opacity-40"
             >
               <RefreshCw className="h-4 w-4" />
+              Refresh
             </button>
             <Button
               variant="outline"
               onClick={() => router.push('/ultimate-holdem')}
-              className="border-cyan-500/25 text-xs text-slate-300"
+              className="border-cyan-500/25 text-sm text-slate-300"
             >
               Play solo
             </Button>
           </div>
         </div>
-
-        {error && (
-          <div className="mb-3 rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-200">
-            {error}
-          </div>
-        )}
-
-        {loading ? (
-          <div className="space-y-2">
-            {[0, 1, 2].map((i) => (
-              <div key={i} className="h-[76px] animate-pulse rounded-xl bg-cyan-500/5" />
-            ))}
-          </div>
-        ) : tables.length === 0 ? (
-          <Card className="arc-panel border-0 p-8 text-center">
-            <Spade className="mx-auto mb-3 h-8 w-8 text-slate-600" />
-            <p className="arc-display text-sm text-slate-400">No Hold'em tables are open yet.</p>
-            <p className="mt-1 text-xs text-slate-600">
-              Tables are opened by the house. The solo game is always running in the meantime.
-            </p>
-            <Button
-              onClick={() => router.push('/ultimate-holdem')}
-              className="mt-4 bg-cyan-500 font-semibold text-[#04121b] hover:bg-cyan-400"
-            >
-              Play solo Hold'em
-            </Button>
-          </Card>
-        ) : (
-          <div className="space-y-2">
-            {tables.map((t) => {
-              const full = t.emptySeats === 0;
-              return (
-                <Card
-                  key={t.id}
-                  className={cn(
-                    'arc-panel flex items-center justify-between gap-3 border-0 p-3 transition-colors sm:p-4',
-                    full ? 'opacity-70' : 'cursor-pointer hover:bg-cyan-500/5',
-                  )}
-                  onClick={() => { if (!full) router.push(`/ultimate-holdem/multi/${t.id}`); }}
-                >
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="arc-display text-sm font-semibold text-slate-200">
-                        {t.stage ? 'Hand in play' : 'Between hands'}
-                      </span>
-                      {t.stage && (
-                        <span className="arc-mono rounded bg-violet-500 px-1.5 py-0.5 text-[11px] font-bold text-[#04121b]">
-                          {t.stage}
-                        </span>
-                      )}
-                    </div>
-                    <div className="mt-0.5 text-[11px] text-slate-500">
-                      {t.minBet.toLocaleString()} – {t.maxBet.toLocaleString()} ante
-                    </div>
-                  </div>
-
-                  <div className="flex shrink-0 items-center gap-3">
-                    <span className="arc-mono flex items-center gap-1 text-xs text-slate-400">
-                      <Users className="h-3.5 w-3.5" />
-                      {t.seatedCount}/{t.seatedCount + t.emptySeats}
-                    </span>
-                    <Button
-                      size="sm"
-                      disabled={full}
-                      onClick={(e) => { e.stopPropagation(); router.push(`/ultimate-holdem/multi/${t.id}`); }}
-                      className="bg-cyan-500 text-xs font-semibold text-[#04121b] hover:bg-cyan-400"
-                    >
-                      {full ? 'Full' : 'Join'}
-                    </Button>
-                  </div>
-                </Card>
-              );
-            })}
-          </div>
-        )}
       </main>
-    </div>
+    </GlobalMainNav>
   );
 }

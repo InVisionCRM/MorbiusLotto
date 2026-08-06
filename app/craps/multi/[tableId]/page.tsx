@@ -233,10 +233,8 @@ export default function CrapsMultiTablePage() {
   const dice: [number, number] = lastRoll ? [lastRoll.die1, lastRoll.die2] : [1, 1];
 
   return (
-    <div className="min-h-screen bg-[#04121b] text-slate-200">
-      <GlobalMainNav />
-
-      <main className="mx-auto max-w-6xl px-3 py-4 sm:px-4 sm:py-6">
+    <GlobalMainNav>
+      <main className="mx-auto w-full max-w-6xl px-3 py-4 sm:px-4 sm:py-6">
         <div className="mb-4 flex items-center justify-between gap-2">
           <button
             type="button"
@@ -520,6 +518,6 @@ export default function CrapsMultiTablePage() {
           <ArcadeFAQ items={crapsMultiFaqs} accent="#86EFAC" />
         </section>
       </main>
-    </div>
+    </GlobalMainNav>
   );
 }
