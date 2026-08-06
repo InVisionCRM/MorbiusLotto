@@ -40,7 +40,7 @@ function SeatCard({
         disabled={!onTakeSeat || busy}
         onClick={() => onTakeSeat?.(seat.position)}
         className={cn(
-          'h-[86px] rounded-xl border border-dashed border-cyan-500/20 bg-[#081420]/40',
+          'h-[68px] sm:h-[86px] rounded-xl border border-dashed border-cyan-500/20 bg-[#081420]/40',
           'flex flex-col items-center justify-center gap-1 transition-colors',
           onTakeSeat && !busy
             ? 'cursor-pointer hover:border-cyan-400/50 hover:bg-cyan-500/10'
@@ -60,7 +60,7 @@ function SeatCard({
   return (
     <div
       className={cn(
-        'h-[86px] rounded-xl border px-2 py-1.5 flex flex-col justify-between transition-colors relative',
+        'h-[68px] sm:h-[86px] rounded-xl border px-2 py-1 sm:py-1.5 flex flex-col justify-between transition-colors relative',
         seat.isShooter
           ? 'border-amber-400/60 bg-amber-500/10 shadow-[0_0_22px_-8px_rgba(245,158,11,0.7)]'
           : isMe
@@ -120,7 +120,7 @@ export function CrapsMultiRail({ seats, myAddress, onTakeSeat, busy }: Props) {
   const alreadySeated = seats.some((s) => s.playerAddress && s.playerAddress === mine);
 
   return (
-    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+    <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4 sm:gap-2">
       {seats.map((seat) => (
         <SeatCard
           key={seat.position}

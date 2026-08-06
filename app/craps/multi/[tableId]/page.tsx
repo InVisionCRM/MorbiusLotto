@@ -287,8 +287,8 @@ export default function CrapsMultiTablePage() {
 
   return (
     <GlobalMainNav>
-      <main className="mx-auto w-full max-w-6xl px-3 py-4 sm:px-4 sm:py-6">
-        <div className="mb-4 flex items-center justify-between gap-2">
+      <main className="mx-auto w-full max-w-6xl px-2 py-3 sm:px-4 sm:py-6">
+        <div className="mb-3 sm:mb-4 flex items-center justify-between gap-2">
           <button
             type="button"
             onClick={() => router.push('/craps/multi')}
@@ -323,7 +323,7 @@ export default function CrapsMultiTablePage() {
         )}
 
         {/* ───────── The rail ───────── */}
-        <Card className="arc-panel mb-4 border-0 p-3 sm:p-4">
+        <Card className="arc-panel mb-3 border-0 p-2 sm:mb-4 sm:p-4">
           <div className="mb-2 flex items-center justify-between">
             <span className="arc-display text-[10px] uppercase tracking-[0.25em] text-slate-500">
               The rail
@@ -355,7 +355,7 @@ export default function CrapsMultiTablePage() {
           {/* ───────── Game area ───────── */}
           <div className="space-y-4">
             {/* Shooter — dice, the clock, and the throw */}
-            <Card className="arc-panel border-0 p-3 sm:p-4">
+            <Card className="arc-panel border-0 p-2 sm:p-4">
               <div className="mb-1 flex items-center justify-between">
                 <span className="arc-display flex items-center gap-1.5 text-[10px] uppercase tracking-[0.25em] text-slate-500">
                   <Dices className="h-3.5 w-3.5" />
@@ -381,7 +381,7 @@ export default function CrapsMultiTablePage() {
                 </div>
               </div>
 
-              <div className="relative flex min-h-[120px] items-center justify-center">
+              <div className="relative flex min-h-[92px] items-center justify-center sm:min-h-[120px]">
                 <div className="w-full">
                   <CrapsDiceThrow
                     val1={dice[0]}
@@ -439,7 +439,7 @@ export default function CrapsMultiTablePage() {
             </Card>
 
             {/* Felt — your own chips on the shared layout. */}
-            <Card className="arc-panel relative border-0 p-3 sm:p-4">
+            <Card className="arc-panel relative border-0 p-2 sm:p-4">
               <CrapsTable
                 bets={mySeat?.bets ?? {}}
                 point={state?.point ?? null}
@@ -454,7 +454,7 @@ export default function CrapsMultiTablePage() {
 
           {/* ───────── Side panel ───────── */}
           <div className="space-y-4">
-            <Card className="arc-panel space-y-3 border-0 p-3 sm:p-4">
+            <Card className="arc-panel space-y-2.5 border-0 p-2 sm:space-y-3 sm:p-4">
               <div className="flex items-center justify-between gap-2">
                 <span className="text-xs uppercase tracking-wide text-slate-500">Phase</span>
                 <span className="arc-display flex items-center gap-2 text-sm font-semibold tracking-[0.15em] text-slate-200">
@@ -526,7 +526,7 @@ export default function CrapsMultiTablePage() {
             </Card>
 
             {/* What the dice have been doing, and what it cost you. */}
-            <Card className="arc-panel space-y-2 border-0 p-3 sm:p-4">
+            <Card className="arc-panel space-y-2 border-0 p-2 sm:p-4">
               <span className="arc-display flex items-center gap-1.5 text-[10px] uppercase tracking-[0.25em] text-slate-500">
                 <Dices className="h-3.5 w-3.5" />
                 Recent throws
@@ -541,7 +541,7 @@ export default function CrapsMultiTablePage() {
             </Card>
 
             {/* Fairness. The shooter's seed is genuinely in every throw they make. */}
-            <Card className="arc-panel space-y-2 border-0 p-3 sm:p-4">
+            <Card className="arc-panel space-y-2 border-0 p-2 sm:p-4">
               <span className="arc-display flex items-center gap-1.5 text-[10px] uppercase tracking-[0.25em] text-slate-500">
                 <ShieldCheck className="h-3.5 w-3.5" />
                 Provably fair
@@ -571,9 +571,23 @@ export default function CrapsMultiTablePage() {
             </Card>
           </div>
         </div>
-        {/* The questions a shared felt raises that a solo game never does. */}
+        {/* The questions a shared felt raises that a solo game never does.
+            Fourteen of them, which on a phone is most of the page below the
+            felt — so there it collapses to a single row you open if you want
+            it, and stays laid out on anything wider. */}
         <section className="mt-6">
-          <ArcadeFAQ items={crapsMultiFaqs} accent="#86EFAC" />
+          <details className="group rounded-xl border border-white/10 bg-[#050E16]/60 sm:hidden">
+            <summary className="arc-display flex cursor-pointer list-none items-center justify-between px-3 py-3 text-[11px] uppercase tracking-[0.2em] text-slate-400">
+              Rules &amp; FAQ
+              <span className="text-slate-600 transition-transform group-open:rotate-180">▾</span>
+            </summary>
+            <div className="px-1 pb-2">
+              <ArcadeFAQ items={crapsMultiFaqs} accent="#86EFAC" />
+            </div>
+          </details>
+          <div className="hidden sm:block">
+            <ArcadeFAQ items={crapsMultiFaqs} accent="#86EFAC" />
+          </div>
         </section>
       </main>
     </GlobalMainNav>
