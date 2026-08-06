@@ -21,7 +21,6 @@ import {
   Loader2,
   Plus,
   RefreshCw,
-  Shuffle,
   Spade,
   Trash2,
   X,
@@ -33,14 +32,12 @@ import {
   createCrapsTable,
   deleteCrapsTable,
   listCrapsTables,
-  rotateCrapsMultiSeed,
   type CrapsMultiTableSummary,
 } from '@/lib/craps-multi-client'
 import {
   createUthTable,
   deleteUthTable,
   listUthTables,
-  rotateUthSeed,
   type UthMultiTableSummary,
 } from '@/lib/uth-multi-client'
 
@@ -277,15 +274,6 @@ export default function LiveTablesModal({ open, onClose }: { open: boolean; onCl
                 onMin={setCrapsMin}
                 onMax={setCrapsMax}
                 onOpen={openCraps}
-                onRotate={(id) =>
-                  run(`rot:${id}`, async (c) => {
-                    const r = await rotateCrapsMultiSeed(c, id)
-                    // Craps refuses mid-point on purpose — a live point was bet
-                    // against the seed that established it.
-                    if (!r.ok) throw new Error(r.error ?? 'Could not rotate the seed.')
-                    return 'New seed committed.'
-                  })
-                }
                 onDelete={(id) =>
                   run(`del:${id}`, async (c) => {
                     await deleteCrapsTable(c, id)
@@ -312,13 +300,6 @@ export default function LiveTablesModal({ open, onClose }: { open: boolean; onCl
                 onMin={setUthMin}
                 onMax={setUthMax}
                 onOpen={openUth}
-                onRotate={(id) =>
-                  run(`rot:${id}`, async (c) => {
-                    const r = await rotateUthSeed(c, id)
-                    if (!r.ok) throw new Error(r.error ?? 'Could not rotate the seed.')
-                    return 'New seed committed.'
-                  })
-                }
                 onDelete={(id) =>
                   run(`del:${id}`, async (c) => {
                     await deleteUthTable(c, id)
@@ -335,9 +316,10 @@ export default function LiveTablesModal({ open, onClose }: { open: boolean; onCl
 
           <p className="mt-5 border-t border-white/10 pt-3 text-[11px] leading-relaxed text-white/30">
             Closing a table refunds every live bet rather than settling it, so nobody loses a stake
-            to a table disappearing. Rotating a seed retires the current one — past rounds stay
-            verifiable — and craps refuses while a point is on, because that point was bet against
-            the seed that established it.
+            to a table disappearing. There is no seed control here on purpose: rotating a seed is a
+            fairness tool for players with money at risk, and the server accepts it only from a
+            seated player. Opening a table always mints a fresh seed, so closing and reopening is
+            the operator&apos;s equivalent.
           </p>
         </div>
       </div>
@@ -363,7 +345,6 @@ function GameSection({
   onMin,
   onMax,
   onOpen,
-  onRotate,
   onDelete,
   busy,
   disabled,
@@ -377,7 +358,6 @@ function GameSection({
   onMin: (v: string) => void
   onMax: (v: string) => void
   onOpen: () => void
-  onRotate: (id: string) => void
   onDelete: (id: string) => void
   busy: string | null
   disabled: boolean
@@ -439,19 +419,6 @@ function GameSection({
                 >
                   <ExternalLink className="h-3.5 w-3.5" />
                 </a>
-                <button
-                  type="button"
-                  onClick={() => onRotate(r.id)}
-                  disabled={disabled || busy !== null}
-                  className="rounded-lg border border-white/10 p-1.5 text-white/40 transition hover:bg-white/5 hover:text-white disabled:opacity-40"
-                  title="Rotate the server seed"
-                >
-                  {busy === `rot:${r.id}` ? (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  ) : (
-                    <Shuffle className="h-3.5 w-3.5" />
-                  )}
-                </button>
                 {confirmClose === r.id ? (
                   <>
                     <button
