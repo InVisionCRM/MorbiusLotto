@@ -10,7 +10,11 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAccount } from 'wagmi';
 import { BetType, Phase, RollResult } from '@/lib/craps-types';
 
-const ROLL_ANIM_MS = 1200;
+/**
+ * Backstop only. The dice normally clear `isRolling` by settling; this is how
+ * long the game will wait for that before unsticking itself.
+ */
+const ROLL_SAFETY_MS = 6000;
 
 export interface CrapsCommitment {
   sessionId: string;
@@ -140,6 +144,9 @@ export function useCrapsEngine(): CrapsEngine {
   const [point, setPoint] = useState<number | null>(null);
   const [dice, setDice] = useState<[number, number]>([3, 4]);
   const [isRolling, setIsRolling] = useState(false);
+  /** Bumped per throw so the felt animates even when the dice repeat. */
+  const [rollNonce, setRollNonce] = useState(0);
+  const settleGuard = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [lastResult, setLastResult] = useState<RollResult | null>(null);
   const [rollHistory, setRollHistory] = useState<number[]>([]);
   const [isInitializing, setIsInitializing] = useState(false);
@@ -328,27 +335,42 @@ export function useCrapsEngine(): CrapsEngine {
         setIsRolling(false);
         return;
       }
-      const elapsed = Date.now() - spinStart;
-      const wait = Math.max(0, ROLL_ANIM_MS - elapsed);
-      setTimeout(() => {
-        setDice([r.die1, r.die2]);
-        setChipBalance(r.chipBalance);
-        setBets(r.bets);
-        setPhase(r.phase);
-        setPoint(r.point);
-        setRollHistory(r.rollHistory);
-        setLastResult({
-          wins: r.wins,
-          lost: r.losses,
-          sum: r.sum,
-          isPoint: r.isPoint,
-          isSevenOut: r.isSevenOut,
-        });
-        setCommitment((prev) => (prev ? { ...prev, nonce: r.nonce + 1 } : prev));
-        setIsRolling(false);
-      }, wait);
+      // The dice go out the moment the result is known: the physics throw is
+      // the wait now, so padding it to a fixed animation length would only sit
+      // the player in front of a still felt before anything moved.
+      setDice([r.die1, r.die2]);
+      setChipBalance(r.chipBalance);
+      setBets(r.bets);
+      setPhase(r.phase);
+      setPoint(r.point);
+      setRollHistory(r.rollHistory);
+      setLastResult({
+        wins: r.wins,
+        lost: r.losses,
+        sum: r.sum,
+        isPoint: r.isPoint,
+        isSevenOut: r.isSevenOut,
+      });
+      setCommitment((prev) => (prev ? { ...prev, nonce: r.nonce + 1 } : prev));
+      setRollNonce((n) => n + 1);
+
+      // isRolling stays true until the dice actually stop, so a second throw
+      // cannot be started mid-flight. The felt calls diceSettled() for that;
+      // this timer only covers the case where it never does — an unmount, a
+      // hidden tab throttling rAF — so the game can never wedge on a throw.
+      if (settleGuard.current) clearTimeout(settleGuard.current);
+      settleGuard.current = setTimeout(() => setIsRolling(false), ROLL_SAFETY_MS);
     })();
   }, [sessionId, isRolling]);
+
+  /** Called by the felt once the dice have come to rest. */
+  const diceSettled = useCallback(() => {
+    if (settleGuard.current) {
+      clearTimeout(settleGuard.current);
+      settleGuard.current = null;
+    }
+    setIsRolling(false);
+  }, []);
 
   const rotateSeed = useCallback(async (): Promise<string | null> => {
     if (!sessionId || isRolling) return null;
@@ -430,6 +452,7 @@ export function useCrapsEngine(): CrapsEngine {
   return {
     chipBalance,
     bets, phase, point, dice, isRolling, lastResult, rollHistory,
+    rollNonce, diceSettled,
     placeBet, clearBets, rollDice, resetGame, rotateSeed,
     setClientSeedAndRestart,
     commitment, isInitializing, error,

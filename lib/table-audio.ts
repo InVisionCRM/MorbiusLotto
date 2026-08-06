@@ -197,13 +197,60 @@ class TableAudio {
 
   // ── Dice ─────────────────────────────────────────────────────────────────
 
-  /** Dice tumbling down the felt — a scatter of knocks, then the settle. */
+  /**
+   * Dice tumbling down the felt — a scatter of knocks, then the settle.
+   *
+   * Kept for callers with no physics to drive them. When a real simulation is
+   * running, use playDiceImpact per collision instead: a fixed scatter on a
+   * timer will drift out of step with what the eye is seeing, and dice sound
+   * wrong the moment the knock does not land with the bounce.
+   */
   playDiceRoll(): void {
     const knocks = 5;
     for (let i = 0; i < knocks; i++) {
       this.noise(0.04, 0.2 - i * 0.02, 900 + Math.random() * 900, 3, i * 55);
     }
     this.noise(0.09, 0.2, 620, 1.5, knocks * 55);
+  }
+
+  /**
+   * One collision, sounded at the energy it actually carried.
+   *
+   * `strength` is 0..1 — the physics layer derives it from impact speed, so a
+   * die skimming the wall ticks and a hard first bounce cracks. Without that
+   * scaling every knock lands at the same volume and the throw sounds like a
+   * loop rather than a fall.
+   *
+   * The three surfaces are genuinely different objects: acrylic on wood is
+   * lower and duller than acrylic on acrylic, and the felt swallows most of
+   * the ring. Same reason a real table sounds different at the wall than in
+   * the middle.
+   */
+  playDiceImpact(kind: 'wall' | 'die' | 'felt', strength = 1): void {
+    const s = Math.max(0, Math.min(1, strength));
+    // Below this the collision is visually imperceptible and only adds mud.
+    if (s < 0.06) return;
+
+    switch (kind) {
+      case 'die':
+        // Acrylic on acrylic: bright, short, a real click.
+        this.noise(0.03, 0.05 + s * 0.22, 1500 + s * 1400 + Math.random() * 300, 4);
+        break;
+      case 'wall':
+        // Against the rail: lower, with a bit of body behind it.
+        this.noise(0.05, 0.05 + s * 0.24, 700 + s * 500 + Math.random() * 200, 2.2);
+        this.tone(90 + s * 50, 'sine', 0.05, 0.03 + s * 0.06);
+        break;
+      case 'felt':
+        // Landing on cloth: mostly absorbed, no ring at all.
+        this.noise(0.07, 0.03 + s * 0.13, 380 + s * 220, 1.2);
+        break;
+    }
+  }
+
+  /** Both dice have come to rest — the last soft knock as they settle. */
+  playDiceSettle(): void {
+    this.noise(0.09, 0.14, 560, 1.5);
   }
 
   /** The point is made — the rail's good news. */

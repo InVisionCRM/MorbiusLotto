@@ -27,7 +27,7 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import type { BetType } from '@/lib/craps-types';
 import { CrapsTable } from '@/components/craps/CrapsTable';
-import { CrapsDice } from '@/components/craps/CrapsDice';
+import { CrapsDiceThrow } from '@/components/craps/CrapsDiceThrow';
 import { CrapsChipRail } from '@/components/craps/CrapsChipRail';
 import { CrapsMultiRail } from '@/components/craps/multi/CrapsMultiRail';
 import { crapsMultiFaqs } from '@/components/craps/multi/crapsMultiFaqs';
@@ -75,6 +75,10 @@ export default function CrapsMultiTablePage() {
   // the roll-sound effect can read it without taking the seat as a dependency
   // (which would re-fire the sound whenever anything else about the seat moved).
   const mySeatWinRef = useRef<number>(0);
+  // The throw currently in the air. Which roll id the dice are animating, and
+  // the outcome held back until they land.
+  const [throwKey, setThrowKey] = useState<string | null>(null);
+  const pendingOutcomeRef = useRef<CrapsMultiTableState['lastRoll']>(null);
   const [rolls, setRolls] = useState<CrapsMultiRollHistoryRow[]>([]);
   const [rollsLoading, setRollsLoading] = useState(true);
 
@@ -138,18 +142,27 @@ export default function CrapsMultiTablePage() {
     const first = soundedRollRef.current === null;
     soundedRollRef.current = roll.rollId;
     // Don't replay the table's history on arrival — only throws made while
-    // we're watching.
+    // we're watching. A throw we joined after is already over; showing the
+    // dice mid-flight for it would be a lie about when it happened.
     if (first) return;
 
     tableAudio.init();
-    tableAudio.playDiceRoll();
-    setTimeout(() => {
-      if (roll.isSevenOut) tableAudio.playSevenOut();
-      else if (roll.isPoint) tableAudio.playPointMade();
-      else if ((mySeatWinRef.current ?? 0) > 0) tableAudio.playWin();
-      if (roll.dicePassed) setTimeout(() => tableAudio.playDicePass(), 420);
-    }, 340);
+    // The knocks now come from the dice hitting things, so there is nothing to
+    // play here. What the throw *meant* waits for the dice to stop, below.
+    pendingOutcomeRef.current = roll;
+    setThrowKey(roll.rollId);
   }, [state?.lastRoll]);
+
+  // The rail reacts when the dice do, not on a timer that guesses at it.
+  const handleDiceSettled = useCallback(() => {
+    const roll = pendingOutcomeRef.current;
+    if (!roll) return;
+    pendingOutcomeRef.current = null;
+    if (roll.isSevenOut) tableAudio.playSevenOut();
+    else if (roll.isPoint) tableAudio.playPointMade();
+    else if ((mySeatWinRef.current ?? 0) > 0) tableAudio.playWin();
+    if (roll.dicePassed) setTimeout(() => tableAudio.playDicePass(), 420);
+  }, []);
 
   const lastRollId = state?.lastRoll?.rollId ?? null;
   useEffect(() => {
@@ -329,8 +342,13 @@ export default function CrapsMultiTablePage() {
               </div>
 
               <div className="relative flex min-h-[120px] items-center justify-center">
-                <div className="scale-[0.8] sm:scale-90">
-                  <CrapsDice val1={dice[0]} val2={dice[1]} isRolling={false} />
+                <div className="w-full">
+                  <CrapsDiceThrow
+                    val1={dice[0]}
+                    val2={dice[1]}
+                    rollKey={throwKey}
+                    onSettle={handleDiceSettled}
+                  />
                 </div>
                 {lastRoll && (
                   <div className="absolute right-2 top-1/2 -translate-y-1/2 text-right">
