@@ -172,6 +172,27 @@ export async function rotateCrapsMultiSeed(
   return ws.sendRequest('craps_multi_rotate_seed', { tableId });
 }
 
+// ── Admin ───────────────────────────────────────────────────────────────────
+// Both of these are refused server-side for anyone outside ADMIN_WALLETS. The
+// check that matters lives there; the UI simply doesn't offer the buttons.
+
+/** Open a table. Omitting a limit takes the game's registered default. */
+export async function createCrapsTable(
+  ws: WsLike,
+  minBet?: number,
+  maxBet?: number,
+): Promise<{ id: string }> {
+  return ws.sendRequest('craps_multi_create_table', { minBet, maxBet });
+}
+
+/** Close a table. The server refunds every live bet before dropping it. */
+export async function deleteCrapsTable(
+  ws: WsLike,
+  tableId: string,
+): Promise<{ tableId: string; ok: boolean }> {
+  return ws.sendRequest('craps_multi_delete_table', { tableId });
+}
+
 /** The table's recent throws, newest first. Readable without a wallet. */
 export async function fetchCrapsRollHistory(
   ws: WsLike,

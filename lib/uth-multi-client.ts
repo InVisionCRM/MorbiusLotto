@@ -117,6 +117,24 @@ export async function rotateUthSeed(
   return ws.sendRequest('uth_multi_rotate_seed', { tableId });
 }
 
+// ── Admin ───────────────────────────────────────────────────────────────────
+// Both of these are refused server-side for anyone outside ADMIN_WALLETS. The
+// check that matters lives there; the UI simply doesn't offer the buttons.
+
+/** Open a table. Omitting a limit takes the game's registered default. */
+export async function createUthTable(
+  ws: WsLike, minBet?: number, maxBet?: number,
+): Promise<{ id: string }> {
+  return ws.sendRequest('uth_multi_create_table', { minBet, maxBet });
+}
+
+/** Close a table. A live round is refunded in full rather than settled. */
+export async function deleteUthTable(
+  ws: WsLike, tableId: string,
+): Promise<{ tableId: string; ok: boolean }> {
+  return ws.sendRequest('uth_multi_delete_table', { tableId });
+}
+
 // ── Helpers the felt uses ───────────────────────────────────────────────────
 
 /** Seconds left on whichever clock is running, or null when none is. */
