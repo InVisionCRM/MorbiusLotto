@@ -275,6 +275,50 @@ export default function CrapsMultiTablePage() {
     });
   }, [guard, ws, tableId]);
 
+  /**
+   * Everyone else's chips, summed per zone.
+   *
+   * Craps chips sit face up on a shared felt — at a real table the whole rail
+   * can see what everyone is behind, and that is most of why the game is worth
+   * playing together. Nothing here is private, so nothing is hidden; the only
+   * seat left out is your own, which is already drawn as your chip.
+   *
+   * It follows the felt's freeze during a throw for free: it reads `state`,
+   * which does not move until the dice have landed.
+   */
+  const railBets = useMemo(() => {
+    const out: Partial<Record<BetType, { count: number; total: number }>> = {};
+    if (!state) return out;
+    for (const seat of state.seats) {
+      if (!seat.playerAddress) continue;
+      if (mySeat && seat.position === mySeat.position) continue;
+      for (const [zone, amount] of Object.entries(seat.bets ?? {})) {
+        const chips = Number(amount) || 0;
+        if (chips <= 0) continue;
+        const key = zone as BetType;
+        const cur = out[key] ?? { count: 0, total: 0 };
+        out[key] = { count: cur.count + 1, total: cur.total + chips };
+      }
+    }
+    return out;
+  }, [state, mySeat]);
+
+  /** Which zone's per-seat breakdown is open, if any. */
+  const [inspectZone, setInspectZone] = useState<BetType | null>(null);
+
+  const inspectRows = useMemo(() => {
+    if (!inspectZone || !state) return [];
+    return state.seats
+      .filter((s) => s.playerAddress && Number(s.bets?.[inspectZone] ?? 0) > 0)
+      .map((s) => ({
+        position: s.position,
+        label: crapsSeatLabel(s),
+        amount: Number(s.bets?.[inspectZone] ?? 0),
+        isMe: Boolean(mySeat && s.position === mySeat.position),
+      }))
+      .sort((a, b) => b.amount - a.amount);
+  }, [inspectZone, state, mySeat]);
+
   const lastRoll = state?.lastRoll ?? null;
   // The dice show the throw in the air; everything else on this page shows the
   // last throw that has already landed. They are the same roll only once the
@@ -442,6 +486,8 @@ export default function CrapsMultiTablePage() {
             <Card className="arc-panel relative border-0 p-2 sm:p-4">
               <CrapsTable
                 bets={mySeat?.bets ?? {}}
+                railBets={railBets}
+                onInspectZone={setInspectZone}
                 point={state?.point ?? null}
                 phase={state?.phase ?? 'COME_OUT'}
                 activeChip={activeChip}
@@ -571,6 +617,57 @@ export default function CrapsMultiTablePage() {
             </Card>
           </div>
         </div>
+        {/* Who is actually behind a zone. Opened from a zone's rail badge —
+            the felt itself takes chips, so this can only be reached from the
+            badge, which stops the click. */}
+        {inspectZone && (
+          <div
+            className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-3 sm:items-center"
+            onClick={() => setInspectZone(null)}
+          >
+            <div
+              className="w-full max-w-sm rounded-2xl border border-cyan-500/25 bg-[#050E16] p-4"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="mb-3 flex items-center justify-between">
+                <span className="arc-display text-[11px] uppercase tracking-[0.25em] text-cyan-300">
+                  {inspectZone.replace(/_/g, ' ')}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setInspectZone(null)}
+                  className="text-xs text-slate-500 hover:text-white"
+                >
+                  Close
+                </button>
+              </div>
+              {inspectRows.length === 0 ? (
+                <p className="text-sm text-slate-500">Nothing on this one right now.</p>
+              ) : (
+                <ul className="space-y-1.5">
+                  {inspectRows.map((r) => (
+                    <li
+                      key={r.position}
+                      className={cn(
+                        'flex items-center justify-between rounded-lg px-2 py-1.5 text-sm',
+                        r.isMe ? 'bg-cyan-500/10 text-cyan-200' : 'text-slate-300',
+                      )}
+                    >
+                      <span className="truncate">
+                        {r.label}
+                        {r.isMe && <span className="ml-1.5 text-[10px] text-cyan-400">you</span>}
+                      </span>
+                      <span className="arc-mono shrink-0 font-semibold">
+                        {r.amount.toLocaleString()}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* The questions a shared felt raises that a solo game never does.
             Fourteen of them, which on a phone is most of the page below the
             felt — so there it collapses to a single row you open if you want
