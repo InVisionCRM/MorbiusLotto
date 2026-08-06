@@ -32,6 +32,16 @@ import { ultimateHoldemFaqs } from '@/components/UltimateHoldem/ultimateHoldemFa
 import { UthMultiRail } from '@/components/UltimateHoldem/multi/UthMultiRail';
 import { uthActionLabel } from '@/lib/ultimate-holdem-client';
 import type { UthAction } from '@/lib/ultimate-holdem-client';
+
+/**
+ * Reveal pacing. The board arrives from the server a whole street at a time;
+ * these are what turn that into a dealer laying cards down rather than three
+ * appearing at once.
+ */
+const DEAL_GAP = 280;
+/** The dealer's hand decides the round, so it gets a beat before it turns. */
+const SHOWDOWN_PAUSE = 420;
+const FLIP_GAP = 340;
 import {
   UTH_MULTI_EVENTS,
   actUthMulti,
@@ -57,6 +67,10 @@ export default function UthMultiTablePage() {
   const [ws, setWs] = useState<BlackjackWebSocketClient | null>(null);
   const [connected, setConnected] = useState(false);
   const [state, setState] = useState<UthMultiTableState | null>(null);
+  // Read by the reveal scheduler, which runs off stage changes and must not
+  // re-run every time anything else about the table moves.
+  const stateRef = useRef<UthMultiTableState | null>(null);
+  stateRef.current = state;
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [ante, setAnte] = useState(500);
@@ -109,6 +123,31 @@ export default function UthMultiTablePage() {
   const mySeat = useMemo(() => uthSeatOf(state, address), [state, address]);
   const settled = state?.stage === 'settled';
 
+  // How much of the board and the dealer's hand has actually been turned over
+  // for this viewer. The server says which cards exist; this says which ones
+  // the dealer has got to yet.
+  const [shownBoard, setShownBoard] = useState(0);
+  const [shownDealer, setShownDealer] = useState(0);
+  // Mirrored so the scheduler can read the count without doing it inside a
+  // state updater — React may run an updater twice, which would schedule the
+  // whole street's reveals twice over.
+  const shownBoardRef = useRef(0);
+  shownBoardRef.current = shownBoard;
+  const revealTimers = useRef<Array<ReturnType<typeof setTimeout>>>([]);
+
+  const clearReveals = useCallback(() => {
+    revealTimers.current.forEach(clearTimeout);
+    revealTimers.current = [];
+  }, []);
+
+  const scheduleReveal = useCallback((delay: number, fn: () => void) => {
+    revealTimers.current.push(setTimeout(fn, delay));
+  }, []);
+
+  // A reveal in flight when the page goes away would otherwise fire into a
+  // dead component.
+  useEffect(() => clearReveals, [clearReveals]);
+
   // A new round deals; each street turns more board cards over; showdown pays.
   const roundId = state?.roundId ?? null;
   const stage = state?.stage ?? null;
@@ -127,25 +166,61 @@ export default function UthMultiTablePage() {
     if (!isNewStage) return;
 
     tableAudio.init();
-    if (isNewRound && stage === 'preflop') {
-      tableAudio.playChip();
-      for (let i = 0; i < 2; i++) setTimeout(() => tableAudio.playDeal(), i * 110);
+
+    const boardLen = stateRef.current?.board?.length ?? 0;
+    const dealerLen = stateRef.current?.dealerCards?.length ?? 0;
+
+    // Walking in on a hand already in progress: those cards were turned before
+    // we got here, so dealing them out now would be theatre about a moment
+    // that has passed. Show them as found.
+    if (isNewRound && stage !== 'preflop') {
+      clearReveals();
+      setShownBoard(boardLen);
+      setShownDealer(dealerLen);
       return;
     }
-    if (stage === 'flop') {
-      for (let i = 0; i < 3; i++) setTimeout(() => tableAudio.playDeal(), i * 110);
-    } else if (stage === 'river') {
-      for (let i = 0; i < 2; i++) setTimeout(() => tableAudio.playDeal(), i * 110);
-    } else if (stage === 'settled') {
-      tableAudio.playFlip();
-      setTimeout(() => {
+
+    if (isNewRound && stage === 'preflop') {
+      clearReveals();
+      setShownBoard(0);
+      setShownDealer(0);
+      tableAudio.playChip();
+      for (let i = 0; i < 2; i++) scheduleReveal(i * DEAL_GAP, () => tableAudio.playDeal());
+      return;
+    }
+
+    if (stage === 'flop' || stage === 'river') {
+      // One card at a time, each with its own sound as it lands — the deal
+      // was already staggered in audio while every card appeared at once,
+      // which is why the street felt like a jump cut with a rattle over it.
+      const already = shownBoardRef.current;
+      for (let n = already; n < boardLen; n++) {
+        scheduleReveal((n - already) * DEAL_GAP, () => {
+          setShownBoard(n + 1);
+          tableAudio.playDeal();
+        });
+      }
+      return;
+    }
+
+    if (stage === 'settled') {
+      // The dealer's hand is the answer to the whole round, so it gets a beat
+      // to itself before turning, and the two cards turn separately.
+      setShownBoard(boardLen);
+      for (let i = 0; i < dealerLen; i++) {
+        scheduleReveal(SHOWDOWN_PAUSE + i * FLIP_GAP, () => {
+          setShownDealer(i + 1);
+          tableAudio.playFlip();
+        });
+      }
+      scheduleReveal(SHOWDOWN_PAUSE + dealerLen * FLIP_GAP + 260, () => {
         const net = myNetRef.current;
         if (net > 0) tableAudio.playWin();
         else if (net < 0) tableAudio.playLose();
         else tableAudio.playPush();
-      }, 340);
+      });
     }
-  }, [roundId, stage]);
+  }, [roundId, stage, clearReveals, scheduleReveal]);
 
   const secondsLeft = uthClockRemaining(state, nowMs);
 
@@ -236,7 +311,9 @@ export default function UthMultiTablePage() {
 
           <div className="flex items-center justify-center gap-1.5 py-2 sm:gap-2.5">
             {[0, 1, 2, 3, 4].map((i) =>
-              board[i] != null ? (
+              // A card the server has sent but the dealer has not reached yet
+              // stays an empty space, so the street lands one card at a time.
+              board[i] != null && i < shownBoard ? (
                 <TableCard key={i} cardIdx={board[i]} back={felt.back} deal />
               ) : (
                 <TableCard key={i} placeholder />
@@ -253,7 +330,10 @@ export default function UthMultiTablePage() {
                   key={i}
                   width="clamp(32px, 8vw, 44px)"
                   cardIdx={state?.dealerCards?.[i]}
-                  faceDown={!state?.dealerCards?.length}
+                  // Face down until this particular card has been turned, so
+                  // the dealer's hand arrives one card at a time rather than
+                  // both flipping the instant the round settles.
+                  faceDown={i >= shownDealer}
                   back={felt.back}
                 />
               ))}
