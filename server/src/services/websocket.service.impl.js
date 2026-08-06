@@ -4109,6 +4109,34 @@ class WebSocketService {
      * decides the wording. Anything unrecognised stays generic rather than
      * leaking an internal message to the felt.
      */
+    /**
+     * Last resort for the per-game error mappers below.
+     *
+     * Every mapper matches a closed set of sentinel codes the game services
+     * throw on purpose. Anything else arriving here is unplanned — a driver
+     * fault, a schema gap, a genuine crash — and flattening those into the same
+     * polite sentence the sentinels get makes production undiagnosable: the
+     * player sees "could not do that" and the server says nothing at all. So
+     * log the real error with its game, and hand back text that at least tells
+     * the player which kind of wrong this is.
+     *
+     * The undefined_table case is called out by name because it has exactly one
+     * cause — code deployed ahead of its migrations — and naming it turns a
+     * mystery into an instruction.
+     */
+    unexpectedTableError(err, game) {
+        const pgCode = err?.code ?? err?.cause?.code ?? '';
+        if (pgCode === '42P01') {
+            logger_1.logger.error(`${game}: table schema missing — migrations have not been run against this database`, { pgCode, message: err?.message });
+            return 'This game is not finished installing on the server yet. Nothing was charged.';
+        }
+        logger_1.logger.error(`${game}: unexpected table error`, {
+            message: err?.message,
+            pgCode: pgCode || undefined,
+            stack: err?.stack,
+        });
+        return 'Something went wrong at the table. Nothing was charged — the server logged it.';
+    }
     crapsErrorText(err) {
         const code = err?.message ?? '';
         switch (code) {
@@ -4131,7 +4159,7 @@ class WebSocketService {
             default:
                 if (/insufficient/i.test(code))
                     return 'Not enough chips.';
-                return 'Could not do that at the table.';
+                return this.unexpectedTableError(err, 'craps_multi');
         }
     }
     async handleCrapsMultiJoinTable(ws, message) {
@@ -4417,7 +4445,7 @@ class WebSocketService {
             default:
                 if (/insufficient/i.test(code))
                     return 'Not enough chips.';
-                return 'Could not do that at the table.';
+                return this.unexpectedTableError(err, 'uth_multi');
         }
     }
     async handleUthMultiJoinTable(ws, message) {
