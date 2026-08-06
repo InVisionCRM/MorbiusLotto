@@ -44,6 +44,15 @@ import { DatabaseService } from './database.service';
 import { ProvablyFairService } from './provably-fair.service';
 import { applyPokerChipDelta, getPokerChipBalance } from './poker-chip-wallet';
 import { betLimits } from '../lib/game-limits';
+import {
+  KeyedMutex,
+  loadPendingSeed as loadEpochSeed,
+  newServerSeed,
+  nextOccupiedSeat,
+  rotateSeedEpoch,
+  storePendingSeed,
+  type SeedEpochTables,
+} from '../lib/multiplayer-table';
 import { logger } from '../utils/logger';
 import {
   CrapsBets,
@@ -79,25 +88,6 @@ export const CRAPS_MULTI_ROLL_SECONDS = 20;
  * table without ever betting is not.
  */
 export const CRAPS_MULTI_AFK_KICK_AFTER = 6;
-
-// ---------------------------------------------------------------------------
-// Shared per-table mutex (same shape as the blackjack multi table lock)
-// ---------------------------------------------------------------------------
-
-class KeyedMutex {
-  private locks = new Map<string, Promise<void>>();
-
-  async acquire(key: string): Promise<() => void> {
-    const prevLock = this.locks.get(key) ?? Promise.resolve();
-    let releaseFn!: () => void;
-    const gate = new Promise<void>((resolve) => { releaseFn = resolve; });
-    this.locks.set(key, prevLock.then(() => gate));
-    await prevLock;
-    return releaseFn;
-  }
-
-  delete(key: string): void { this.locks.delete(key); }
-}
 
 // ---------------------------------------------------------------------------
 // Types
@@ -207,6 +197,13 @@ export interface CrapsMultiTableSummary {
 // Service
 // ---------------------------------------------------------------------------
 
+/** Where this game keeps its commitment, live seed and retired epochs. */
+const CRAPS_SEED_TABLES: SeedEpochTables = {
+  tables: 'craps_multi_tables',
+  pending: 'craps_multi_table_pending_seeds',
+  revealed: 'craps_multi_revealed_seeds',
+};
+
 export class CrapsMultiGameService {
   private readonly tableLocks = new KeyedMutex();
   private readonly stateVersions = new Map<string, number>();
@@ -242,20 +239,6 @@ export class CrapsMultiGameService {
   // Seeds
   // -------------------------------------------------------------------------
 
-  private newServerSeed(): { seed: string; hash: string } {
-    const seed = crypto.randomBytes(32).toString('hex');
-    const hash = '0x' + crypto.createHash('sha256').update(seed).digest('hex');
-    return { seed, hash };
-  }
-
-  private async loadPendingSeed(client: PoolClient, tableId: string): Promise<string> {
-    const r = await client.query<{ server_seed: string }>(
-      'SELECT server_seed FROM craps_multi_table_pending_seeds WHERE table_id = $1',
-      [tableId],
-    );
-    if (r.rows.length === 0) throw new Error('NO_LIVE_SEED');
-    return r.rows[0].server_seed;
-  }
 
   /**
    * Retire the live seed and issue a fresh one.
@@ -273,30 +256,11 @@ export class CrapsMultiGameService {
           [tableId],
         );
         if (t.rows.length === 0) throw new Error('NOT_FOUND');
+        // The one rule that is craps-specific and stays here: rotating with a
+        // point on would swap the dice underneath a live bet.
         if (t.rows[0].phase === 'POINT') throw new Error('POINT_LIVE');
 
-        const epoch = Number(t.rows[0].seed_epoch);
-        const plaintext = await this.loadPendingSeed(client, tableId);
-
-        await client.query(
-          `INSERT INTO craps_multi_revealed_seeds (table_id, seed_epoch, server_seed, server_seed_hash)
-           VALUES ($1, $2, $3, $4)
-           ON CONFLICT (table_id, seed_epoch) DO NOTHING`,
-          [tableId, epoch, plaintext, t.rows[0].server_seed_hash],
-        );
-
-        const next = this.newServerSeed();
-        await client.query(
-          `UPDATE craps_multi_tables
-              SET server_seed_hash = $1, seed_epoch = $2, nonce_counter = 0
-            WHERE id = $3`,
-          [next.hash, epoch + 1, tableId],
-        );
-        await client.query(
-          `INSERT INTO craps_multi_table_pending_seeds (table_id, server_seed) VALUES ($1, $2)
-           ON CONFLICT (table_id) DO UPDATE SET server_seed = EXCLUDED.server_seed`,
-          [tableId, next.seed],
-        );
+        await rotateSeedEpoch(client, CRAPS_SEED_TABLES, tableId);
         return { ok: true as const };
       });
       await this.broadcast(tableId, 'seed_rotated');
@@ -348,7 +312,7 @@ export class CrapsMultiGameService {
     const reg = betLimits('craps');
     const min = Math.max(1, Math.floor(minBet ?? reg.min));
     const max = Math.max(min, Math.floor(maxBet ?? reg.max));
-    const seed = this.newServerSeed();
+    const seed = newServerSeed();
 
     const id = await this.dbService.withTransaction(async (client) => {
       const r = await client.query(
@@ -357,10 +321,7 @@ export class CrapsMultiGameService {
         [min, max, seed.hash],
       );
       const newId: string = r.rows[0].id;
-      await client.query(
-        `INSERT INTO craps_multi_table_pending_seeds (table_id, server_seed) VALUES ($1, $2)`,
-        [newId, seed.seed],
-      );
+      await storePendingSeed(client, CRAPS_SEED_TABLES, newId, seed.seed);
       return newId;
     });
     return { id };
@@ -679,7 +640,7 @@ export class CrapsMultiGameService {
           throw new Error('NOT_SHOOTER');
         }
 
-        const serverSeed = await this.loadPendingSeed(client, tableId);
+        const serverSeed = await loadEpochSeed(client, CRAPS_SEED_TABLES, tableId);
         const nonce = Number(table.nonce_counter);
         const [die1, die2] = rollDiceFromSeeds(
           this.pfService, serverSeed, String(shooterSeat.client_seed), nonce,
@@ -809,14 +770,14 @@ export class CrapsMultiGameService {
       [tableId],
     );
     const positions = seats.rows.map((r) => Number(r.position));
-    if (positions.length === 0) {
+    const next = nextOccupiedSeat(positions, fromPosition);
+    if (next === null) {
       await client.query(
         `UPDATE craps_multi_tables SET shooter_position = NULL, status = 'waiting' WHERE id = $1`,
         [tableId],
       );
       return;
     }
-    const next = positions.find((p) => p > fromPosition) ?? positions[0];
     await client.query(
       `UPDATE craps_multi_tables SET shooter_position = $1 WHERE id = $2`,
       [next, tableId],

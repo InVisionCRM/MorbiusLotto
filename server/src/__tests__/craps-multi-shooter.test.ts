@@ -37,11 +37,14 @@ function resolveShooter(claimed: number | null, present: number[]): number | nul
   return present[0];
 }
 
-/** Next seat clockwise, wrapping. Mirrors passDiceTo. */
-function passDice(from: number, present: number[]): number | null {
-  if (present.length === 0) return null;
-  return present.find((p) => p > from) ?? present[0];
-}
+/**
+ * Next seat clockwise, wrapping. This is now the REAL shared helper rather than
+ * a copy of it — craps passes the dice with it and Hold'em moves the button
+ * with it, so a test against a mirror would prove nothing about either.
+ */
+import { nextOccupiedSeat } from '../lib/multiplayer-table';
+
+const passDice = (from: number, present: number[]) => nextOccupiedSeat(present, from);
 
 describe('the seat holding the dice is never kicked', () => {
   it('keeps the shooter even after the idle limit is reached', () => {
