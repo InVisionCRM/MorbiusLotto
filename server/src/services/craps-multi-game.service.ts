@@ -44,6 +44,15 @@ import { DatabaseService } from './database.service';
 import { ProvablyFairService } from './provably-fair.service';
 import { applyPokerChipDelta, getPokerChipBalance } from './poker-chip-wallet';
 import { betLimits } from '../lib/game-limits';
+import {
+  KeyedMutex,
+  loadPendingSeed as loadEpochSeed,
+  newServerSeed,
+  nextOccupiedSeat,
+  rotateSeedEpoch,
+  storePendingSeed,
+  type SeedEpochTables,
+} from '../lib/multiplayer-table';
 import { logger } from '../utils/logger';
 import {
   CrapsBets,
@@ -79,25 +88,6 @@ export const CRAPS_MULTI_ROLL_SECONDS = 20;
  * table without ever betting is not.
  */
 export const CRAPS_MULTI_AFK_KICK_AFTER = 6;
-
-// ---------------------------------------------------------------------------
-// Shared per-table mutex (same shape as the blackjack multi table lock)
-// ---------------------------------------------------------------------------
-
-class KeyedMutex {
-  private locks = new Map<string, Promise<void>>();
-
-  async acquire(key: string): Promise<() => void> {
-    const prevLock = this.locks.get(key) ?? Promise.resolve();
-    let releaseFn!: () => void;
-    const gate = new Promise<void>((resolve) => { releaseFn = resolve; });
-    this.locks.set(key, prevLock.then(() => gate));
-    await prevLock;
-    return releaseFn;
-  }
-
-  delete(key: string): void { this.locks.delete(key); }
-}
 
 // ---------------------------------------------------------------------------
 // Types
@@ -165,6 +155,31 @@ export interface CrapsMultiTableState {
   stateVersion: number;
 }
 
+/**
+ * One past throw. The dice half is table-wide; the `viewer*` half is whatever
+ * that throw did to the player asking, and is null when they had nothing down.
+ */
+export interface CrapsMultiRollHistoryRow {
+  rollId: string;
+  seedEpoch: number;
+  nonce: number;
+  die1: number;
+  die2: number;
+  sum: number;
+  phaseBefore: CrapsPhase;
+  phaseAfter: CrapsPhase;
+  pointBefore: number | null;
+  pointAfter: number | null;
+  isPoint: boolean;
+  isSevenOut: boolean;
+  dicePassed: boolean;
+  shooterPosition: number | null;
+  shooterAddress: string | null;
+  viewerWins: number | null;
+  viewerLosses: number | null;
+  createdAt: string;
+}
+
 export interface CrapsMultiTableSummary {
   id: string;
   status: string;
@@ -181,6 +196,13 @@ export interface CrapsMultiTableSummary {
 // ---------------------------------------------------------------------------
 // Service
 // ---------------------------------------------------------------------------
+
+/** Where this game keeps its commitment, live seed and retired epochs. */
+const CRAPS_SEED_TABLES: SeedEpochTables = {
+  tables: 'craps_multi_tables',
+  pending: 'craps_multi_table_pending_seeds',
+  revealed: 'craps_multi_revealed_seeds',
+};
 
 export class CrapsMultiGameService {
   private readonly tableLocks = new KeyedMutex();
@@ -217,20 +239,6 @@ export class CrapsMultiGameService {
   // Seeds
   // -------------------------------------------------------------------------
 
-  private newServerSeed(): { seed: string; hash: string } {
-    const seed = crypto.randomBytes(32).toString('hex');
-    const hash = '0x' + crypto.createHash('sha256').update(seed).digest('hex');
-    return { seed, hash };
-  }
-
-  private async loadPendingSeed(client: PoolClient, tableId: string): Promise<string> {
-    const r = await client.query<{ server_seed: string }>(
-      'SELECT server_seed FROM craps_multi_table_pending_seeds WHERE table_id = $1',
-      [tableId],
-    );
-    if (r.rows.length === 0) throw new Error('NO_LIVE_SEED');
-    return r.rows[0].server_seed;
-  }
 
   /**
    * Retire the live seed and issue a fresh one.
@@ -248,30 +256,11 @@ export class CrapsMultiGameService {
           [tableId],
         );
         if (t.rows.length === 0) throw new Error('NOT_FOUND');
+        // The one rule that is craps-specific and stays here: rotating with a
+        // point on would swap the dice underneath a live bet.
         if (t.rows[0].phase === 'POINT') throw new Error('POINT_LIVE');
 
-        const epoch = Number(t.rows[0].seed_epoch);
-        const plaintext = await this.loadPendingSeed(client, tableId);
-
-        await client.query(
-          `INSERT INTO craps_multi_revealed_seeds (table_id, seed_epoch, server_seed, server_seed_hash)
-           VALUES ($1, $2, $3, $4)
-           ON CONFLICT (table_id, seed_epoch) DO NOTHING`,
-          [tableId, epoch, plaintext, t.rows[0].server_seed_hash],
-        );
-
-        const next = this.newServerSeed();
-        await client.query(
-          `UPDATE craps_multi_tables
-              SET server_seed_hash = $1, seed_epoch = $2, nonce_counter = 0
-            WHERE id = $3`,
-          [next.hash, epoch + 1, tableId],
-        );
-        await client.query(
-          `INSERT INTO craps_multi_table_pending_seeds (table_id, server_seed) VALUES ($1, $2)
-           ON CONFLICT (table_id) DO UPDATE SET server_seed = EXCLUDED.server_seed`,
-          [tableId, next.seed],
-        );
+        await rotateSeedEpoch(client, CRAPS_SEED_TABLES, tableId);
         return { ok: true as const };
       });
       await this.broadcast(tableId, 'seed_rotated');
@@ -323,7 +312,7 @@ export class CrapsMultiGameService {
     const reg = betLimits('craps');
     const min = Math.max(1, Math.floor(minBet ?? reg.min));
     const max = Math.max(min, Math.floor(maxBet ?? reg.max));
-    const seed = this.newServerSeed();
+    const seed = newServerSeed();
 
     const id = await this.dbService.withTransaction(async (client) => {
       const r = await client.query(
@@ -332,10 +321,7 @@ export class CrapsMultiGameService {
         [min, max, seed.hash],
       );
       const newId: string = r.rows[0].id;
-      await client.query(
-        `INSERT INTO craps_multi_table_pending_seeds (table_id, server_seed) VALUES ($1, $2)`,
-        [newId, seed.seed],
-      );
+      await storePendingSeed(client, CRAPS_SEED_TABLES, newId, seed.seed);
       return newId;
     });
     return { id };
@@ -654,7 +640,7 @@ export class CrapsMultiGameService {
           throw new Error('NOT_SHOOTER');
         }
 
-        const serverSeed = await this.loadPendingSeed(client, tableId);
+        const serverSeed = await loadEpochSeed(client, CRAPS_SEED_TABLES, tableId);
         const nonce = Number(table.nonce_counter);
         const [die1, die2] = rollDiceFromSeeds(
           this.pfService, serverSeed, String(shooterSeat.client_seed), nonce,
@@ -784,14 +770,14 @@ export class CrapsMultiGameService {
       [tableId],
     );
     const positions = seats.rows.map((r) => Number(r.position));
-    if (positions.length === 0) {
+    const next = nextOccupiedSeat(positions, fromPosition);
+    if (next === null) {
       await client.query(
         `UPDATE craps_multi_tables SET shooter_position = NULL, status = 'waiting' WHERE id = $1`,
         [tableId],
       );
       return;
     }
-    const next = positions.find((p) => p > fromPosition) ?? positions[0];
     await client.query(
       `UPDATE craps_multi_tables SET shooter_position = $1 WHERE id = $2`,
       [next, tableId],
@@ -969,6 +955,65 @@ export class CrapsMultiGameService {
       themeConfig: table.theme_config ?? null,
       stateVersion: this.stateVersions.get(tableId) ?? 0,
     };
+  }
+
+  /**
+   * The table's recent throws, newest first.
+   *
+   * Two halves, as the schema splits them: what the dice did (table-wide, the
+   * same for everyone) and what it cost or paid THIS viewer. A player watching
+   * a rail wants both — "the shooter made their point" and "that was 240 to me"
+   * are different facts, and only the second is private.
+   *
+   * `viewerAddress` is optional: an onlooker gets the dice and the shooter, and
+   * simply has no money column.
+   */
+  async getRollHistory(
+    tableId: string,
+    limit = 25,
+    viewerAddress?: string | null,
+  ): Promise<CrapsMultiRollHistoryRow[]> {
+    const capped = Math.max(1, Math.min(100, Math.floor(limit) || 25));
+    const viewer = viewerAddress ? viewerAddress.trim().toLowerCase() : null;
+
+    const r = await this.pool.query(
+      `SELECT rr.id, rr.seed_epoch, rr.nonce, rr.die1, rr.die2, rr.sum,
+              rr.phase_before, rr.phase_after, rr.point_before, rr.point_after,
+              rr.is_point, rr.is_seven_out, rr.dice_passed,
+              rr.shooter_position, rr.shooter_address, rr.created_at,
+              rs.wins  AS viewer_wins,
+              rs.losses AS viewer_losses
+         FROM craps_multi_rolls rr
+         LEFT JOIN craps_multi_roll_seats rs
+                ON rs.roll_id = rr.id AND rs.player_address = $2
+        WHERE rr.table_id = $1
+        ORDER BY rr.created_at DESC, rr.nonce DESC
+        LIMIT $3`,
+      [tableId, viewer, capped],
+    );
+
+    return r.rows.map((row: any) => ({
+      rollId: row.id,
+      seedEpoch: Number(row.seed_epoch),
+      nonce: Number(row.nonce),
+      die1: Number(row.die1),
+      die2: Number(row.die2),
+      sum: Number(row.sum),
+      phaseBefore: row.phase_before,
+      phaseAfter: row.phase_after,
+      pointBefore: row.point_before === null ? null : Number(row.point_before),
+      pointAfter: row.point_after === null ? null : Number(row.point_after),
+      isPoint: Boolean(row.is_point),
+      isSevenOut: Boolean(row.is_seven_out),
+      dicePassed: Boolean(row.dice_passed),
+      shooterPosition: row.shooter_position === null ? null : Number(row.shooter_position),
+      shooterAddress: row.shooter_address ?? null,
+      // Null rather than zero when this viewer had nothing on that throw —
+      // "no bet" and "bet and won nothing" are different things to show.
+      viewerWins: row.viewer_wins === null || row.viewer_wins === undefined ? null : Number(row.viewer_wins),
+      viewerLosses: row.viewer_losses === null || row.viewer_losses === undefined ? null : Number(row.viewer_losses),
+      createdAt: new Date(row.created_at).toISOString(),
+    }));
   }
 
   /** Chip balance helper for the felt's own header. */

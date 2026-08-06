@@ -17,6 +17,7 @@ export const CRAPS_MULTI_MESSAGE_HANDLER_MAP: Record<string, string> = {
   craps_multi_create_table: 'handleCrapsMultiCreateTable',
   craps_multi_delete_table: 'handleCrapsMultiDeleteTable',
   craps_multi_rotate_seed: 'handleCrapsMultiRotateSeed',
+  craps_multi_roll_history: 'handleCrapsMultiRollHistory',
 };
 
 /** Room name a seated player subscribes to for table broadcasts. */

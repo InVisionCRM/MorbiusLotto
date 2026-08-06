@@ -121,6 +121,20 @@ export const WS_CRAPS_MULTI_MESSAGES = [
   'craps_multi_create_table',
   'craps_multi_delete_table',
   'craps_multi_rotate_seed',
+  'craps_multi_roll_history',
+] as const;
+
+/** Shared-felt Ultimate Texas Hold'em. */
+export const WS_UTH_MULTI_MESSAGES = [
+  'uth_multi_join_table',
+  'uth_multi_leave_table',
+  'uth_multi_post_ante',
+  'uth_multi_act',
+  'uth_multi_get_state',
+  'uth_multi_list_tables',
+  'uth_multi_create_table',
+  'uth_multi_delete_table',
+  'uth_multi_rotate_seed',
 ] as const;
 
 export const ALL_WS_MESSAGE_TYPES = [
@@ -132,6 +146,7 @@ export const ALL_WS_MESSAGE_TYPES = [
   ...WS_POKER_MESSAGES,
   ...WS_BJ_MULTI_MESSAGES,
   ...WS_CRAPS_MULTI_MESSAGES,
+  ...WS_UTH_MULTI_MESSAGES,
 ] as const;
 
 export const ALL_WS_MESSAGE_TYPE_SET: ReadonlySet<string> = new Set<string>(ALL_WS_MESSAGE_TYPES as readonly string[]);

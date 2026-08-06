@@ -67,6 +67,32 @@ export interface CrapsMultiTableState {
   viewerCount?: number;
 }
 
+/**
+ * One past throw. The dice half is the same for everyone at the table; the
+ * `viewer*` half is what it did to you, and is null when you had nothing down —
+ * "no bet" and "bet and won nothing" are different things to show.
+ */
+export interface CrapsMultiRollHistoryRow {
+  rollId: string;
+  seedEpoch: number;
+  nonce: number;
+  die1: number;
+  die2: number;
+  sum: number;
+  phaseBefore: Phase;
+  phaseAfter: Phase;
+  pointBefore: number | null;
+  pointAfter: number | null;
+  isPoint: boolean;
+  isSevenOut: boolean;
+  dicePassed: boolean;
+  shooterPosition: number | null;
+  shooterAddress: string | null;
+  viewerWins: number | null;
+  viewerLosses: number | null;
+  createdAt: string;
+}
+
 export interface CrapsMultiTableSummary {
   id: string;
   status: string;
@@ -92,6 +118,7 @@ export const CRAPS_MULTI_EVENTS = {
   betPlaced: 'craps_multi_bet_placed',
   betCleared: 'craps_multi_bet_cleared',
   seedRotated: 'craps_multi_seed_rotated',
+  rollHistory: 'craps_multi_roll_history_result',
 } as const;
 
 export async function listCrapsTables(ws: WsLike): Promise<CrapsMultiTableSummary[]> {
@@ -143,6 +170,16 @@ export async function rotateCrapsMultiSeed(
   tableId: string,
 ): Promise<{ ok: boolean; error?: string }> {
   return ws.sendRequest('craps_multi_rotate_seed', { tableId });
+}
+
+/** The table's recent throws, newest first. Readable without a wallet. */
+export async function fetchCrapsRollHistory(
+  ws: WsLike,
+  tableId: string,
+  limit = 25,
+): Promise<CrapsMultiRollHistoryRow[]> {
+  const res = await ws.sendRequest('craps_multi_roll_history', { tableId, limit });
+  return res?.rolls ?? [];
 }
 
 // ── Helpers the felt uses ───────────────────────────────────────────────────

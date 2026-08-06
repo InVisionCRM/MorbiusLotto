@@ -31,6 +31,7 @@ import { CrapsDice } from '@/components/craps/CrapsDice';
 import { CrapsChipRail } from '@/components/craps/CrapsChipRail';
 import { CrapsMultiRail } from '@/components/craps/multi/CrapsMultiRail';
 import { crapsMultiFaqs } from '@/components/craps/multi/crapsMultiFaqs';
+import { CrapsMultiRollHistory } from '@/components/craps/multi/CrapsMultiRollHistory';
 import { ArcadeFAQ } from '@/components/arcade2/ArcadeFAQ';
 import { TableFeltControls, useTableFelt } from '@/components/shared/TableFeltControls';
 import { tableAudio } from '@/lib/table-audio';
@@ -46,6 +47,8 @@ import {
   placeCrapsMultiBet,
   rollCrapsMulti,
   rotateCrapsMultiSeed,
+  fetchCrapsRollHistory,
+  type CrapsMultiRollHistoryRow,
   type CrapsMultiTableState,
 } from '@/lib/craps-multi-client';
 
@@ -72,6 +75,8 @@ export default function CrapsMultiTablePage() {
   // the roll-sound effect can read it without taking the seat as a dependency
   // (which would re-fire the sound whenever anything else about the seat moved).
   const mySeatWinRef = useRef<number>(0);
+  const [rolls, setRolls] = useState<CrapsMultiRollHistoryRow[]>([]);
+  const [rollsLoading, setRollsLoading] = useState(true);
 
   const stateRef = useRef<CrapsMultiTableState | null>(null);
   stateRef.current = state;
@@ -145,6 +150,25 @@ export default function CrapsMultiTablePage() {
       if (roll.dicePassed) setTimeout(() => tableAudio.playDicePass(), 420);
     }, 340);
   }, [state?.lastRoll]);
+
+  const lastRollId = state?.lastRoll?.rollId ?? null;
+  useEffect(() => {
+    if (!tableId) return;
+    // No socket means there is nothing to fetch from — stop claiming to load,
+    // or the skeleton spins forever whenever the backend is unreachable. The
+    // connection dot and error banner already say what actually went wrong.
+    if (!ws) {
+      setRollsLoading(false);
+      return;
+    }
+    let cancelled = false;
+    fetchCrapsRollHistory(ws, tableId, 25)
+      .then((rows) => { if (!cancelled) setRolls(rows); })
+      .catch(() => { /* the felt still works without the list */ })
+      .finally(() => { if (!cancelled) setRollsLoading(false); });
+    return () => { cancelled = true; };
+    // Re-fetch on each new throw, and once the socket is up.
+  }, [ws, tableId, lastRollId]);
 
   const mySeat = useMemo(() => crapsSeatOf(state, address), [state, address]);
   useEffect(() => {
@@ -442,6 +466,21 @@ export default function CrapsMultiTablePage() {
                     {(state?.maxBet ?? 0).toLocaleString()}
                   </span>
                 </div>
+              </div>
+            </Card>
+
+            {/* What the dice have been doing, and what it cost you. */}
+            <Card className="arc-panel space-y-2 border-0 p-3 sm:p-4">
+              <span className="arc-display flex items-center gap-1.5 text-[10px] uppercase tracking-[0.25em] text-slate-500">
+                <Dices className="h-3.5 w-3.5" />
+                Recent throws
+              </span>
+              <div className="max-h-[320px] overflow-y-auto pr-0.5">
+                <CrapsMultiRollHistory
+                  rolls={rolls}
+                  loading={rollsLoading}
+                  myAddress={address ?? null}
+                />
               </div>
             </Card>
 
