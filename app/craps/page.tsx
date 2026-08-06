@@ -24,7 +24,7 @@ import { useCrapsTutorial } from '@/hooks/use-craps-tutorial';
 import { usePokerChipBalance } from '@/hooks/use-poker-chip-balance';
 import { GameWalletModal } from '@/components/shared/GameWalletModal';
 import { CrapsTable } from '@/components/craps/CrapsTable';
-import { CrapsDice } from '@/components/craps/CrapsDice';
+import { CrapsDiceThrow } from '@/components/craps/CrapsDiceThrow';
 import { CrapsChipRail } from '@/components/craps/CrapsChipRail';
 import { CrapsTutorialOverlay } from '@/components/craps/CrapsTutorialOverlay';
 import { CrapsHistoryModal } from '@/components/craps/CrapsHistoryModal';
@@ -324,8 +324,13 @@ export default function CrapsPage() {
                       </div>
                     </div>
                     <div className="flex items-center justify-center min-h-[120px] relative">
-                      <div className="scale-[0.8] sm:scale-90">
-                        <CrapsDice val1={engine.dice[0]} val2={engine.dice[1]} isRolling={engine.isRolling} />
+                      <div className="w-full">
+                        <CrapsDiceThrow
+                          val1={engine.dice[0]}
+                          val2={engine.dice[1]}
+                          rollKey={engine.rollNonce || null}
+                          onSettle={engine.diceSettled}
+                        />
                       </div>
                       {engine.lastResult && !engine.isRolling && (
                         <div className="absolute right-2 top-1/2 -translate-y-1/2 text-right">
