@@ -4126,8 +4126,14 @@ class WebSocketService {
      */
     unexpectedTableError(err, game) {
         const pgCode = err?.code ?? err?.cause?.code ?? '';
-        if (pgCode === '42P01') {
-            logger_1.logger.error(`${game}: table schema missing — migrations have not been run against this database`, { pgCode, message: err?.message });
+        // 42P01 undefined_table / 42703 undefined_column. Both mean the query
+        // and the database disagree about the schema — either migrations have
+        // not run, or the query names something that was never there. The
+        // second is what shipped here: a join against a real table for columns
+        // that live on a different one, which read as an ordinary failure for
+        // hours because only 42P01 was called out by name.
+        if (pgCode === '42P01' || pgCode === '42703') {
+            logger_1.logger.error(`${game}: schema mismatch — query does not match this database (${pgCode === '42P01' ? 'missing table' : 'missing column'})`, { pgCode, message: err?.message });
             return 'This game is not finished installing on the server yet. Nothing was charged.';
         }
         logger_1.logger.error(`${game}: unexpected table error`, {

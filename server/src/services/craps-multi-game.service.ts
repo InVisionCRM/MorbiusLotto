@@ -853,7 +853,7 @@ export class CrapsMultiGameService {
       SELECT s.position, s.player_address, s.status, s.bets, s.consecutive_timeouts,
              p.display_name, p.profile_image_url, p.avatar_config, p.profile_display_mode
         FROM craps_multi_seats s
-        LEFT JOIN players p ON LOWER(p.wallet_address) = s.player_address
+        LEFT JOIN chat_display_names p ON LOWER(p.wallet_address) = s.player_address
        WHERE s.table_id = $1
        ORDER BY s.position ASC
     `, [tableId]);
