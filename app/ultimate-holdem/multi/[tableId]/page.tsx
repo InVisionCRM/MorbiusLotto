@@ -193,10 +193,8 @@ export default function UthMultiTablePage() {
   const canPost = !!mySeat && state?.status !== 'dealing';
 
   return (
-    <div className="min-h-screen bg-[#04121b] text-slate-200">
-      <GlobalMainNav />
-
-      <main className="mx-auto max-w-6xl px-3 py-4 sm:px-4 sm:py-6">
+    <GlobalMainNav>
+      <main className="mx-auto w-full max-w-6xl px-3 py-4 sm:px-4 sm:py-6">
         <div className="mb-4 flex items-center justify-between gap-2">
           <button
             type="button"
@@ -402,6 +400,6 @@ export default function UthMultiTablePage() {
       </main>
 
       <TableCardStyles />
-    </div>
+    </GlobalMainNav>
   );
 }
