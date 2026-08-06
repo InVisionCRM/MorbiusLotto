@@ -9,6 +9,8 @@
  */
 
 import {
+  uthSeatCanAfford,
+  uthSeatCost,
   uthSeatOwesDecision,
   uthStreetComplete,
 } from '../services/uth-multi-game.service';
@@ -141,5 +143,48 @@ describe('every seat is settled against the same board, independently', () => {
     // Trips pays iff the final hand reaches a paying category.
     const paying = UTH_TRIPS_PAY[r.playerCategory] > 0;
     expect(r.tripsPayout > 0).toBe(paying);
+  });
+});
+
+describe('a seat that cannot back its ante is skipped, not fatal', () => {
+  // Regression. A seat that could not cover its stake used to throw out of the
+  // chip debit, roll the whole deal back, and leave the expired betting window
+  // in place — so the watchdog retried the same doomed deal every couple of
+  // seconds and no hand ever played at that table again.
+  it('charges the ante, an equal blind, and any Trips', () => {
+    expect(uthSeatCost(500, 0)).toBe(1000);
+    expect(uthSeatCost(500, 500)).toBe(1500);
+    expect(uthSeatCost(100, 25)).toBe(225);
+  });
+
+  it('lets a seat in when it can cover exactly', () => {
+    expect(uthSeatCanAfford(500, 0, 1000n)).toBe(true);
+  });
+
+  it('keeps a seat out when it is one chip short', () => {
+    expect(uthSeatCanAfford(500, 0, 999n)).toBe(false);
+  });
+
+  it('counts Trips against the balance too', () => {
+    // The trap: an ante the player CAN cover, plus a Trips bet that tips them
+    // over. Checking the ante alone would let this seat through and bring the
+    // whole table down at the debit.
+    expect(uthSeatCanAfford(500, 500, 1200n)).toBe(false);
+    expect(uthSeatCanAfford(500, 0, 1200n)).toBe(true);
+  });
+
+  it('keeps a broke seat out without excluding the others', () => {
+    // One player running out of chips must not take the table down with them:
+    // the rest of the rail still gets dealt in.
+    const rail = [
+      { name: 'flush', ante: 500, trips: 0, balance: 5000n },
+      { name: 'broke', ante: 500, trips: 0, balance: 10n },
+      { name: 'thin', ante: 100, trips: 100, balance: 300n },
+    ];
+    const dealtIn = rail
+      .filter((s) => uthSeatCanAfford(s.ante, s.trips, s.balance))
+      .map((s) => s.name);
+    expect(dealtIn.length).toBe(2);
+    expect(dealtIn.join(',')).toBe('flush,thin');
   });
 });

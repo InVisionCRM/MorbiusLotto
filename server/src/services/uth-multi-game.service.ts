@@ -43,7 +43,7 @@ import { Pool, PoolClient } from 'pg';
 import crypto from 'crypto';
 import { DatabaseService } from './database.service';
 import { ProvablyFairService } from './provably-fair.service';
-import { applyPokerChipDelta } from './poker-chip-wallet';
+import { applyPokerChipDelta, getPokerChipBalance } from './poker-chip-wallet';
 import { betLimits } from '../lib/game-limits';
 import {
   KeyedMutex,
@@ -190,6 +190,27 @@ export function uthStreetComplete(
   stage: UthStage,
 ): boolean {
   return seats.every((s) => !uthSeatOwesDecision(s, stage));
+}
+
+/**
+ * What a posted seat must cover before the round deals: the ante, an equal
+ * blind alongside it, and any Trips.
+ *
+ * Exported so the rule is testable. It exists because a seat that could not pay
+ * used to abort the entire deal and leave an expired betting window behind,
+ * turning the watchdog into an infinite retry that bricked the table.
+ */
+export function uthSeatCost(pendingAnte: number, pendingTrips: number): number {
+  return pendingAnte * 2 + pendingTrips;
+}
+
+/** Can this seat back what it posted? */
+export function uthSeatCanAfford(
+  pendingAnte: number,
+  pendingTrips: number,
+  balance: bigint,
+): boolean {
+  return balance >= BigInt(uthSeatCost(pendingAnte, pendingTrips));
 }
 
 /** How many board cards a street has turned over. */
@@ -551,6 +572,41 @@ export class UthMultiGameService {
           return false;
         }
 
+        // Who can actually cover what they posted?
+        //
+        // This has to happen BEFORE any cards are assigned. A seat that cannot
+        // pay used to throw out of applyPokerChipDelta, roll the whole deal
+        // back, and leave betting_started_at untouched — so the watchdog picked
+        // the same table again every tick and no hand ever played again. One
+        // player running out of chips must not take the table down with them.
+        //
+        // Filtering first (rather than skipping mid-loop) also keeps the deal
+        // recipe honest: the cards are handed out to exactly the seats recorded
+        // on the round, in position order, with nothing burned in between.
+        const affordable: any[] = [];
+        for (const s of posting) {
+          const balance = await getPokerChipBalance(client, s.player_address);
+          if (uthSeatCanAfford(Number(s.pending_ante), Number(s.pending_trips), balance)) {
+            affordable.push(s);
+          } else {
+            // Clear the stake they can't back and sit them out; they can post
+            // again once they top up.
+            await client.query(
+              `UPDATE uth_multi_seats SET pending_ante = 0, pending_trips = 0, status = 'sitting_out'
+                WHERE id = $1`,
+              [s.id],
+            );
+          }
+        }
+        if (affordable.length === 0) {
+          // Nobody could pay. Reopen the window rather than leaving an expired
+          // one for the watchdog to trip over again immediately.
+          await client.query(
+            `UPDATE uth_multi_tables SET betting_started_at = NOW() WHERE id = $1`, [tableId],
+          );
+          return false;
+        }
+
         const serverSeed = await loadPendingSeed(client, UTH_SEED_TABLES, tableId);
         const nonce = Number(t.rows[0].nonce_counter);
         // Every seated player contributes, in seat order, so no single party
@@ -561,7 +617,7 @@ export class UthMultiGameService {
         // Fixed deal order — this IS the verification recipe.
         let cursor = 0;
         const hole: Record<number, number[]> = {};
-        for (const s of posting) {
+        for (const s of affordable) {
           hole[Number(s.position)] = [deck[cursor++], deck[cursor++]];
         }
         const board = [deck[cursor++], deck[cursor++], deck[cursor++], deck[cursor++], deck[cursor++]];
@@ -579,12 +635,12 @@ export class UthMultiGameService {
           [roundId, tableId, Number(nextNumber.rows[0].n), Number(t.rows[0].seed_epoch), nonce, board, dealerCards],
         );
 
-        for (const s of posting) {
+        for (const s of affordable) {
           const ante = Number(s.pending_ante);
           const trips = Number(s.pending_trips);
           // Ante + an equal Blind, plus Trips. Debited here, where the wager
           // actually becomes real.
-          const cost = ante * 2 + trips;
+          const cost = uthSeatCost(ante, trips);
           await applyPokerChipDelta(client, s.player_address, BigInt(-cost), 'uth_multi_bet', {
             type: 'uth_multi', id: roundId,
           });
@@ -617,6 +673,12 @@ export class UthMultiGameService {
       return dealt;
     } catch (err) {
       logger.error('UthMulti: deal failed', { tableId, error: (err as Error)?.message });
+      // The transaction rolled back, so the expired window is still sitting
+      // there. Reopen it — otherwise ANY unexpected failure here becomes a
+      // watchdog that retries the same doomed deal every couple of seconds.
+      await this.pool
+        .query(`UPDATE uth_multi_tables SET betting_started_at = NOW() WHERE id = $1`, [tableId])
+        .catch(() => { /* nothing more we can do from here */ });
       return false;
     } finally {
       release();
