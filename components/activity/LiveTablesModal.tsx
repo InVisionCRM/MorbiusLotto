@@ -3,10 +3,10 @@
 /**
  * Open and close the shared multiplayer tables, without leaving the dashboard.
  *
- * Craps and Ultimate Hold'em are the two games that need a table to exist
- * before anyone can play them — a player can't create one, so until an admin
- * opens one the lobby is simply empty. That made opening a table a database
- * job, which is the wrong shape for something done this often.
+ * Craps, Ultimate Hold'em and roulette all need a table to exist before anyone
+ * can play them — a player can't create one, so until an admin opens one the
+ * lobby is simply empty. That made opening a table a database job, which is the
+ * wrong shape for something done this often.
  *
  * Everything here is refused server-side for anyone outside ADMIN_WALLETS. The
  * wallet gate on the page is a courtesy so the buttons don't appear; it is not
@@ -16,6 +16,7 @@
 import { useCallback, useEffect, useId, useRef, useState } from 'react'
 import { useAccount, useSignTypedData } from 'wagmi'
 import {
+  CircleDot,
   Dices,
   ExternalLink,
   Loader2,
@@ -45,8 +46,9 @@ import {
 // only prefill the form — the server still decides what an empty field means.
 const CRAPS_DEFAULTS = { min: '5', max: '10000' }
 const UTH_DEFAULTS = { min: '100', max: '5000' }
+const ROULETTE_DEFAULTS = { min: '5', max: '10000' }
 
-type GameKey = 'craps' | 'uth'
+type GameKey = 'craps' | 'uth' | 'roulette'
 
 const GAMES: Record<GameKey, { label: string; felt: string; icon: React.ReactNode; blurb: string }> = {
   craps: {
@@ -60,6 +62,12 @@ const GAMES: Record<GameKey, { label: string; felt: string; icon: React.ReactNod
     felt: '/ultimate-holdem/multi',
     icon: <Spade className="h-4 w-4" />,
     blurb: 'Six seats. Limits are the ante; Blind matches it and Play is a multiple of it.',
+  },
+  roulette: {
+    label: 'Roulette',
+    felt: '/roulette/multi',
+    icon: <CircleDot className="h-4 w-4" />,
+    blurb: 'Eight seats. Limits are per zone; the felt also carries its own total cap.',
   },
 }
 
@@ -80,6 +88,7 @@ export default function LiveTablesModal({ open, onClose }: { open: boolean; onCl
   const [connecting, setConnecting] = useState(false)
   const [craps, setCraps] = useState<CrapsMultiTableSummary[]>([])
   const [uth, setUth] = useState<UthMultiTableSummary[]>([])
+  const [roulette, setRoulette] = useState<RouletteMultiTableSummary[]>([])
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   // Keyed by table id (or the game key while opening) so one row's spinner
@@ -91,15 +100,22 @@ export default function LiveTablesModal({ open, onClose }: { open: boolean; onCl
   const [crapsMax, setCrapsMax] = useState(CRAPS_DEFAULTS.max)
   const [uthMin, setUthMin] = useState(UTH_DEFAULTS.min)
   const [uthMax, setUthMax] = useState(UTH_DEFAULTS.max)
+  const [rouletteMin, setRouletteMin] = useState(ROULETTE_DEFAULTS.min)
+  const [rouletteMax, setRouletteMax] = useState(ROULETTE_DEFAULTS.max)
 
   const wsRef = useRef<BlackjackWebSocketClient | null>(null)
 
   const refresh = useCallback(async (client: BlackjackWebSocketClient) => {
     // Listing is unauthenticated on both games, so this half still works even
     // if the admin handshake failed — which makes the failure legible.
-    const [c, u] = await Promise.all([listCrapsTables(client), listUthTables(client)])
+    const [c, u, r] = await Promise.all([
+      listCrapsTables(client),
+      listUthTables(client),
+      listRouletteTables(client),
+    ])
     setCraps(c)
     setUth(u)
+    setRoulette(r)
   }, [])
 
   // Connect only while the modal is open. A dashboard left open all day should
@@ -196,7 +212,13 @@ export default function LiveTablesModal({ open, onClose }: { open: boolean; onCl
       return "Hold'em table open."
     })
 
-  const total = craps.length + uth.length
+  const openRoulette = () =>
+    run('new:roulette', async (c) => {
+      await createRouletteTable(c, parseLimit(rouletteMin), parseLimit(rouletteMax))
+      return 'Roulette table open.'
+    })
+
+  const total = craps.length + uth.length + roulette.length
 
   if (!open) return null
 
@@ -304,6 +326,34 @@ export default function LiveTablesModal({ open, onClose }: { open: boolean; onCl
                   run(`del:${id}`, async (c) => {
                     await deleteUthTable(c, id)
                     return "Hold'em table closed and antes refunded."
+                  })
+                }
+                busy={busy}
+                disabled={!ws}
+                confirmClose={confirmClose}
+                onConfirmClose={setConfirmClose}
+              />
+
+              <GameSection
+                game="roulette"
+                rows={roulette.map((t) => ({
+                  id: t.id,
+                  status: t.status,
+                  limits: `${t.minBet.toLocaleString()} – ${t.maxBet.toLocaleString()}`,
+                  seats: `${t.seatedCount}/${t.seatedCount + t.emptySeats}`,
+                  // The last pocket is the most useful thing about a live wheel
+                  // at a glance — it says the table is actually turning.
+                  detail: t.recent.length > 0 ? `last ${t.recent[0]}` : 'no spins yet',
+                }))}
+                min={rouletteMin}
+                max={rouletteMax}
+                onMin={setRouletteMin}
+                onMax={setRouletteMax}
+                onOpen={openRoulette}
+                onDelete={(id) =>
+                  run(`del:${id}`, async (c) => {
+                    await deleteRouletteTable(c, id)
+                    return 'Roulette table closed and bets refunded.'
                   })
                 }
                 busy={busy}

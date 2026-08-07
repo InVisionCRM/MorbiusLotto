@@ -41,6 +41,15 @@ interface RouletteBoard2Props {
   winningNumber: number | null;
   onPlace: (bet: Roulette2Bet) => void;
   onRemove: (key: string) => void;
+  /**
+   * What the REST of the table has on each zone, on a shared felt. Omitted by
+   * the solo game, which has no rail — the board renders identically without it.
+   *
+   * Not drawn as more chips: this grid is dense enough that a second chip per
+   * zone would bury the number underneath, and tinting per player would fight
+   * the chip tiers, which already use colour to mean amount.
+   */
+  railAmounts?: Record<string, { count: number; total: number }>;
 }
 
 function chipTier(amount: number): string {
@@ -67,12 +76,30 @@ function Chip({ amount }: { amount: number }) {
   );
 }
 
+/** A zone's own chip, plus the rail's action on it when there is a rail. */
+function ZoneMarks({ amount, rail }: { amount: number; rail?: { count: number; total: number } }) {
+  return (
+    <>
+      {amount > 0 && <Chip amount={amount} />}
+      {rail && rail.total > 0 && (
+        <span
+          className="arc-mono pointer-events-none absolute bottom-0 right-0 z-30 rounded-tl bg-amber-500/85 px-[3px] text-[7px] font-bold leading-[10px] text-[#1a1000]"
+          title={`${rail.count} other player${rail.count === 1 ? '' : 's'} — ${rail.total.toLocaleString()} chips`}
+        >
+          {compact(rail.total)}
+        </span>
+      )}
+    </>
+  );
+}
+
 export default function RouletteBoard2({
   amounts,
   disabled,
   winningNumber,
   onPlace,
   onRemove,
+  railAmounts,
 }: RouletteBoard2Props) {
   const [hoverBet, setHoverBet] = useState<Roulette2Bet | null>(null);
 
@@ -94,6 +121,7 @@ export default function RouletteBoard2({
       onMouseEnter: () => setHoverBet({ type, amount: 0, numbers }),
       onMouseLeave: () => setHoverBet(null),
       amount: amounts[key] ?? 0,
+      rail: railAmounts?.[key],
     };
   };
 
@@ -121,7 +149,7 @@ export default function RouletteBoard2({
         onMouseLeave={z.onMouseLeave}
         className={`absolute z-20 rounded-sm transition-colors hover:bg-cyan-400/30 ${className}`}
       >
-        {z.amount > 0 && <Chip amount={z.amount} />}
+        <ZoneMarks amount={z.amount} rail={z.rail} />
       </button>
     );
   }
@@ -170,7 +198,7 @@ export default function RouletteBoard2({
           style={{ gridRow: '1 / span 3', gridColumn: 1 }}
         >
           0
-          {zeroZone.amount > 0 && <Chip amount={zeroZone.amount} />}
+          <ZoneMarks amount={zeroZone.amount} rail={zeroZone.rail} />
         </button>
 
         {/* Number cells + inner hit zones */}
@@ -195,7 +223,7 @@ export default function RouletteBoard2({
                   className={`relative flex h-10 w-full items-center justify-center rounded-md font-mono text-[12px] sm:text-[13px] font-semibold transition-transform hover:scale-[1.04] sm:h-11 ${numberCellClasses(n)}`}
                 >
                   {n}
-                  {z.amount > 0 && <Chip amount={z.amount} />}
+                  <ZoneMarks amount={z.amount} rail={z.rail} />
                 </button>
 
                 {/* split with the number above (n, n+1) */}
@@ -264,7 +292,7 @@ export default function RouletteBoard2({
               style={{ gridRow: rIdx + 1, gridColumn: 14 }}
             >
               2:1
-              {z.amount > 0 && <Chip amount={z.amount} />}
+              <ZoneMarks amount={z.amount} rail={z.rail} />
             </button>
           );
         })}
@@ -285,7 +313,7 @@ export default function RouletteBoard2({
               style={{ gridRow: 4, gridColumn: `${2 + i * 4} / span 4` }}
             >
               {i === 0 ? '1st 12' : i === 1 ? '2nd 12' : '3rd 12'}
-              {z.amount > 0 && <Chip amount={z.amount} />}
+              <ZoneMarks amount={z.amount} rail={z.rail} />
             </button>
           );
         })}
@@ -321,7 +349,7 @@ export default function RouletteBoard2({
               style={{ gridRow: 5, gridColumn: `${2 + i * 2} / span 2` }}
             >
               {o.label}
-              {z.amount > 0 && <Chip amount={z.amount} />}
+              <ZoneMarks amount={z.amount} rail={z.rail} />
             </button>
           );
         })}

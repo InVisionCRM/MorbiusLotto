@@ -58,6 +58,7 @@ import { WeeklyDropService } from './services/weekly-drop.service';
 import { registerDropRoutes } from './routes/drop.routes';
 import { BlackjackMultiGameService } from './services/blackjack-multi-game.service';
 import { CrapsMultiGameService } from './services/craps-multi-game.service';
+import { RouletteMultiGameService } from './services/roulette-multi-game.service';
 import { UthMultiGameService } from './services/uth-multi-game.service';
 import { ChainAnalyticsService } from './services/chain-analytics.service';
 import { InstantLotteryService } from './services/instant-lottery.service';
@@ -324,6 +325,7 @@ async function warnOnMissingGameTables(dbService: DatabaseService): Promise<void
     { table: 'craps_multi_seats', migration: '186_craps_multi_seats.sql', game: 'Multiplayer craps seats' },
     { table: 'craps_multi_rolls', migration: '187_craps_multi_rolls.sql', game: 'Multiplayer craps rolls' },
     { table: 'uth_multi_tables', migration: "188_uth_multi_tables.sql", game: "Multiplayer Ultimate Hold'em" },
+    { table: 'roulette_multi_tables', migration: '189_roulette_multi.sql', game: 'Multiplayer roulette' },
   ];
 
   try {
@@ -429,6 +431,9 @@ async function initializeServices() {
     // Shared craps felt — one throw settles the whole rail.
     const crapsMultiService = new CrapsMultiGameService(dbService, pfService);
 
+    // Shared roulette wheel — one pocket settles every seat.
+    const rouletteMultiService = new RouletteMultiGameService(dbService, pfService);
+
     // Shared Ultimate Hold'em felt — one board, every seat against the dealer.
     const uthMultiService = new UthMultiGameService(dbService, pfService);
 
@@ -477,6 +482,9 @@ async function initializeServices() {
     // betting-window / shooter watchdog) and wire state pushes back the other way.
     wsService.setCrapsMultiService(crapsMultiService);
     crapsMultiService.setBroadcastCallback((tableId) => wsService.broadcastCrapsMultiTableState(tableId));
+
+    wsService.setRouletteMultiService(rouletteMultiService);
+    rouletteMultiService.setBroadcastCallback((tableId) => wsService.broadcastRouletteMultiTableState(tableId));
 
     // Same handshake for the Hold'em tables.
     wsService.setUthMultiService(uthMultiService);

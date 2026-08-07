@@ -24,6 +24,7 @@ const tournament_router_1 = require("./websocket/tournament-router");
 const poker_router_1 = require("./websocket/poker-router");
 const bj_multi_router_1 = require("./websocket/bj-multi-router");
 const craps_multi_router_1 = require("./websocket/craps-multi-router");
+const roulette_multi_router_1 = require("./websocket/roulette-multi-router");
 const uth_multi_router_1 = require("./websocket/uth-multi-router");
 const poker_chip_wallet_1 = require("./poker-chip-wallet");
 const stream_voice_service_1 = require("./stream-voice.service");
@@ -124,6 +125,9 @@ class WebSocketService {
     // Per-action rate limiting for BJ multi: address -> timestamp array (5 actions per 3s window)
     bjMultiActionTimestamps = new Map();
     crapsMultiService = null;
+    rouletteMultiService = null;
+    rouletteMultiTimerInterval = null;
+    rouletteMultiTickInFlight = false;
     crapsMultiTimerInterval = null;
     uthMultiService = null;
     uthMultiTimerInterval = null;
@@ -252,6 +256,53 @@ class WebSocketService {
      * has already run by the time this lands — without it, betting windows
      * would never close and an absent shooter would freeze the table.
      */
+    setRouletteMultiService(service) {
+        this.rouletteMultiService = service ?? null;
+        if (this.rouletteMultiService && !this.rouletteMultiTimerInterval) {
+            this.rouletteMultiTimerInterval = setInterval(async () => {
+                try {
+                    await this.tickRouletteMultiTimers();
+                }
+                catch (err) {
+                    logger_1.logger.error('RouletteMulti timer watchdog error', err);
+                }
+            }, 2000);
+        }
+    }
+    /**
+     * Roulette watchdog. A wheel must never wait on someone pressing a button:
+     * the window closes on its own and spins, then the wheel reopens once it has
+     * had its moment. Both halves are what make the table feel dealt rather than
+     * driven.
+     */
+    async tickRouletteMultiTimers() {
+        if (!this.rouletteMultiService)
+            return;
+        // Same overlap guard as the other sweeps — the work is stateless, so a
+        // skipped tick is simply picked up by the next one.
+        if (this.rouletteMultiTickInFlight)
+            return;
+        this.rouletteMultiTickInFlight = true;
+        try {
+            const due = await this.rouletteMultiService.closeExpiredBettingWindows();
+            for (const tableId of due) {
+                try {
+                    await this.rouletteMultiService.spin(tableId, null);
+                }
+                catch (err) {
+                    // One stuck table must not stop the rest of them turning.
+                    logger_1.logger.error('RouletteMulti auto-spin failed', { tableId, error: err?.message });
+                }
+            }
+            const reopened = await this.rouletteMultiService.reopenFinishedSpins();
+            for (const tableId of reopened) {
+                await this.broadcastRouletteMultiTableState(tableId);
+            }
+        }
+        finally {
+            this.rouletteMultiTickInFlight = false;
+        }
+    }
     setCrapsMultiService(service) {
         this.crapsMultiService = service ?? null;
         if (this.crapsMultiService && !this.crapsMultiTimerInterval) {
@@ -641,6 +692,9 @@ class WebSocketService {
                 case 'uth_multi':
                     await this.routeUthMultiMessage(ws, message);
                     return;
+                case 'roulette_multi':
+                    await this.routeRouletteMultiMessage(ws, message);
+                    return;
                 default:
                     this.sendError(ws, `Unknown message type (routing): ${message.type}`, message.requestId);
                     return;
@@ -693,6 +747,16 @@ class WebSocketService {
         if (!isLobbyPeek && !this.requireAuth(ws, message))
             return;
         await this.dispatchDomainMessage(ws, message, craps_multi_router_1.CRAPS_MULTI_MESSAGE_HANDLER_MAP, 'multiplayer craps');
+    }
+    async routeRouletteMultiMessage(ws, message) {
+        // Browsing the lobby and watching a wheel need no wallet; sitting down,
+        // betting and spinning all do.
+        const isPublic = message.type === 'roulette_multi_list_tables'
+            || message.type === 'roulette_multi_get_state'
+            || message.type === 'roulette_multi_spin_history';
+        if (!isPublic && !this.requireAuth(ws, message))
+            return;
+        await this.dispatchDomainMessage(ws, message, roulette_multi_router_1.ROULETTE_MULTI_MESSAGE_HANDLER_MAP, 'multiplayer roulette');
     }
     async dispatchDomainMessage(ws, message, handlerMap, domainName) {
         const handlerName = handlerMap[message.type];
@@ -4142,6 +4206,244 @@ class WebSocketService {
             stack: err?.stack,
         });
         return 'Something went wrong at the table. Nothing was charged — the server logged it.';
+    }
+    rouletteErrorText(err) {
+        const code = err?.message ?? '';
+        if (code.startsWith('INVALID:')) return code.slice('INVALID:'.length);
+        switch (code) {
+            case 'NOT_FOUND': return 'That table is gone.';
+            case 'NOT_SEATED': return 'Take a seat first.';
+            case 'ALREADY_SEATED': return "You're already at this table.";
+            case 'SEAT_TAKEN': return 'Someone just took that seat.';
+            case 'BAD_SEAT': return 'That seat does not exist.';
+            case 'WINDOW_CLOSED': return 'Betting is closed — the wheel is turning.';
+            case 'NOTHING_THERE': return 'Nothing to pick up there.';
+            case 'BAD_AMOUNT': return 'Bet must be a positive number of chips.';
+            case 'UNDER_MIN': return 'Below the table minimum.';
+            case 'OVER_MAX': return 'That would put you over the table maximum on this zone.';
+            case 'OVER_TABLE_MAX': return 'That would put you over the maximum for the whole felt.';
+            case 'NO_PLAYERS': return 'Nobody is seated.';
+            case 'ALREADY_SPINNING': return 'The wheel is already turning.';
+            case 'NO_LIVE_SEED': return 'The table seed was rotated — reload the felt.';
+            default:
+                if (/insufficient/i.test(code))
+                    return 'Not enough chips.';
+                return this.unexpectedTableError(err, 'roulette_multi');
+        }
+    }
+    async broadcastRouletteMultiTableState(tableId) {
+        if (!this.rouletteMultiService)
+            return;
+        const roomId = roulette_multi_router_1.rouletteTableRoom(tableId);
+        const roomSize = this.roomToClients.get(roomId)?.size ?? 0;
+        if (roomSize === 0)
+            return;
+        try {
+            const state = await this.rouletteMultiService.getTableState(tableId);
+            const seatedCount = state.seats.filter((s) => s.playerAddress).length;
+            state.viewerCount = Math.max(0, roomSize - seatedCount);
+            this.broadcastToRoom(roomId, { type: 'roulette_multi_table_state', payload: state });
+        }
+        catch (err) {
+            logger_1.logger.error('broadcastRouletteMultiTableState failed', { tableId, error: err });
+        }
+    }
+    /** Move this connection into a roulette table's room, leaving whatever it was in. */
+    joinRouletteRoom(ws, tableId) {
+        const roomId = roulette_multi_router_1.rouletteTableRoom(tableId);
+        if (ws.currentRoom && ws.connectionId) {
+            const prev = this.roomToClients.get(ws.currentRoom);
+            if (prev) {
+                prev.delete(ws.connectionId);
+                if (prev.size === 0)
+                    this.roomToClients.delete(ws.currentRoom);
+            }
+        }
+        ws.currentRoom = roomId;
+        if (!this.roomToClients.has(roomId))
+            this.roomToClients.set(roomId, new Set());
+        this.roomToClients.get(roomId).add(ws.connectionId);
+        return roomId;
+    }
+    async handleRouletteMultiJoinTable(ws, message) {
+        try {
+            if (!this.rouletteMultiService || !ws.playerAddress)
+                return this.sendError(ws, 'Roulette tables unavailable or wallet required', message.requestId);
+            const { tableId, seatPosition, clientSeed } = (message.payload ?? {});
+            if (!tableId)
+                return this.sendError(ws, 'tableId required', message.requestId);
+            if (seatPosition === undefined || seatPosition === null)
+                return this.sendError(ws, 'seatPosition required', message.requestId);
+            const state = await this.rouletteMultiService.joinTable(tableId, ws.playerAddress, Number(seatPosition), clientSeed);
+            this.joinRouletteRoom(ws, tableId);
+            this.sendMessage(ws, { type: 'roulette_multi_table_state', payload: state, requestId: message.requestId });
+            // This connection was not in the room when the service broadcast, so
+            // everyone else's viewer count is one stale until we re-push.
+            await this.broadcastRouletteMultiTableState(tableId);
+        }
+        catch (error) {
+            this.sendError(ws, this.rouletteErrorText(error), message.requestId);
+        }
+    }
+    async handleRouletteMultiLeaveTable(ws, message) {
+        try {
+            if (!this.rouletteMultiService || !ws.playerAddress)
+                return this.sendError(ws, 'Roulette tables unavailable or wallet required', message.requestId);
+            const { tableId } = (message.payload ?? {});
+            if (!tableId)
+                return this.sendError(ws, 'tableId required', message.requestId);
+            const state = await this.rouletteMultiService.leaveTable(tableId, ws.playerAddress);
+            this.sendMessage(ws, { type: 'roulette_multi_table_state', payload: state, requestId: message.requestId });
+            await this.broadcastRouletteMultiTableState(tableId);
+        }
+        catch (error) {
+            this.sendError(ws, this.rouletteErrorText(error), message.requestId);
+        }
+    }
+    async handleRouletteMultiPlaceBet(ws, message) {
+        try {
+            if (!this.rouletteMultiService || !ws.playerAddress)
+                return this.sendError(ws, 'Roulette tables unavailable or wallet required', message.requestId);
+            const { tableId, bet } = (message.payload ?? {});
+            if (!tableId)
+                return this.sendError(ws, 'tableId required', message.requestId);
+            if (!bet || typeof bet !== 'object')
+                return this.sendError(ws, 'bet required', message.requestId);
+            const out = await this.rouletteMultiService.placeBet(tableId, ws.playerAddress, bet);
+            this.sendMessage(ws, { type: 'roulette_multi_bet_placed', payload: out, requestId: message.requestId });
+        }
+        catch (error) {
+            this.sendError(ws, this.rouletteErrorText(error), message.requestId);
+        }
+    }
+    async handleRouletteMultiClearBet(ws, message) {
+        try {
+            if (!this.rouletteMultiService || !ws.playerAddress)
+                return this.sendError(ws, 'Roulette tables unavailable or wallet required', message.requestId);
+            const { tableId, bet } = (message.payload ?? {});
+            if (!tableId)
+                return this.sendError(ws, 'tableId required', message.requestId);
+            if (!bet || typeof bet !== 'object')
+                return this.sendError(ws, 'bet required', message.requestId);
+            const out = await this.rouletteMultiService.clearBet(tableId, ws.playerAddress, bet);
+            this.sendMessage(ws, { type: 'roulette_multi_bet_cleared', payload: out, requestId: message.requestId });
+        }
+        catch (error) {
+            this.sendError(ws, this.rouletteErrorText(error), message.requestId);
+        }
+    }
+    async handleRouletteMultiClearAll(ws, message) {
+        try {
+            if (!this.rouletteMultiService || !ws.playerAddress)
+                return this.sendError(ws, 'Roulette tables unavailable or wallet required', message.requestId);
+            const { tableId } = (message.payload ?? {});
+            if (!tableId)
+                return this.sendError(ws, 'tableId required', message.requestId);
+            const out = await this.rouletteMultiService.clearAllBets(tableId, ws.playerAddress);
+            this.sendMessage(ws, { type: 'roulette_multi_bet_cleared', payload: out, requestId: message.requestId });
+        }
+        catch (error) {
+            this.sendError(ws, this.rouletteErrorText(error), message.requestId);
+        }
+    }
+    async handleRouletteMultiSpin(ws, message) {
+        try {
+            if (!this.rouletteMultiService || !ws.playerAddress)
+                return this.sendError(ws, 'Roulette tables unavailable or wallet required', message.requestId);
+            const { tableId } = (message.payload ?? {});
+            if (!tableId)
+                return this.sendError(ws, 'tableId required', message.requestId);
+            const state = await this.rouletteMultiService.spin(tableId, ws.playerAddress);
+            this.sendMessage(ws, { type: 'roulette_multi_table_state', payload: state, requestId: message.requestId });
+            await this.broadcastRouletteMultiTableState(tableId);
+        }
+        catch (error) {
+            this.sendError(ws, this.rouletteErrorText(error), message.requestId);
+        }
+    }
+    async handleRouletteMultiGetState(ws, message) {
+        try {
+            if (!this.rouletteMultiService)
+                return this.sendError(ws, 'Roulette tables unavailable', message.requestId);
+            const { tableId } = (message.payload ?? {});
+            if (!tableId)
+                return this.sendError(ws, 'tableId required', message.requestId);
+            this.joinRouletteRoom(ws, tableId);
+            const state = await this.rouletteMultiService.getTableState(tableId, ws.playerAddress ?? null);
+            this.sendMessage(ws, { type: 'roulette_multi_table_state', payload: state, requestId: message.requestId });
+        }
+        catch (error) {
+            this.sendError(ws, this.rouletteErrorText(error), message.requestId);
+        }
+    }
+    async handleRouletteMultiSpinHistory(ws, message) {
+        try {
+            if (!this.rouletteMultiService)
+                return this.sendError(ws, 'Roulette tables unavailable', message.requestId);
+            const { tableId, limit } = (message.payload ?? {});
+            if (!tableId)
+                return this.sendError(ws, 'tableId required', message.requestId);
+            const rows = await this.rouletteMultiService.getSpinHistory(tableId, Number(limit) || 25, ws.playerAddress ?? null);
+            this.sendMessage(ws, { type: 'roulette_multi_spin_history', payload: { spins: rows }, requestId: message.requestId });
+        }
+        catch (error) {
+            this.sendError(ws, this.rouletteErrorText(error), message.requestId);
+        }
+    }
+    async handleRouletteMultiListTables(ws, message) {
+        try {
+            if (!this.rouletteMultiService)
+                return this.sendError(ws, 'Roulette tables unavailable', message.requestId);
+            const tables = await this.rouletteMultiService.listTables();
+            this.sendMessage(ws, { type: 'roulette_multi_table_list', payload: { tables }, requestId: message.requestId });
+        }
+        catch (error) {
+            this.sendError(ws, this.rouletteErrorText(error), message.requestId);
+        }
+    }
+    async handleRouletteMultiCreateTable(ws, message) {
+        try {
+            if (!this.rouletteMultiService)
+                return this.sendError(ws, 'Roulette tables unavailable', message.requestId);
+            if (!ws.playerAddress || !(0, cosmetics_catalog_1.isAdminWallet)(ws.playerAddress))
+                return this.sendError(ws, 'Only admins can open a roulette table', message.requestId);
+            const { minBet, maxBet } = (message.payload ?? {});
+            const out = await this.rouletteMultiService.createTable(minBet, maxBet);
+            this.sendMessage(ws, { type: 'roulette_multi_table_created', payload: out, requestId: message.requestId });
+        }
+        catch (error) {
+            this.sendError(ws, this.rouletteErrorText(error), message.requestId);
+        }
+    }
+    async handleRouletteMultiDeleteTable(ws, message) {
+        try {
+            if (!this.rouletteMultiService)
+                return this.sendError(ws, 'Roulette tables unavailable', message.requestId);
+            if (!ws.playerAddress || !(0, cosmetics_catalog_1.isAdminWallet)(ws.playerAddress))
+                return this.sendError(ws, 'Only admins can open a roulette table', message.requestId);
+            const { tableId } = (message.payload ?? {});
+            if (!tableId)
+                return this.sendError(ws, 'tableId required', message.requestId);
+            const ok = await this.rouletteMultiService.deleteTable(tableId);
+            this.sendMessage(ws, { type: 'roulette_multi_table_deleted', payload: { ok }, requestId: message.requestId });
+        }
+        catch (error) {
+            this.sendError(ws, this.rouletteErrorText(error), message.requestId);
+        }
+    }
+    async handleRouletteMultiRotateSeed(ws, message) {
+        try {
+            if (!this.rouletteMultiService || !ws.playerAddress)
+                return this.sendError(ws, 'Roulette tables unavailable or wallet required', message.requestId);
+            const { tableId } = (message.payload ?? {});
+            if (!tableId)
+                return this.sendError(ws, 'tableId required', message.requestId);
+            const out = await this.rouletteMultiService.rotateSeed(tableId);
+            this.sendMessage(ws, { type: 'roulette_multi_seed_rotated', payload: out, requestId: message.requestId });
+        }
+        catch (error) {
+            this.sendError(ws, this.rouletteErrorText(error), message.requestId);
+        }
     }
     crapsErrorText(err) {
         const code = err?.message ?? '';
