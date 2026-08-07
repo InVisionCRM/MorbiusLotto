@@ -147,6 +147,8 @@ export function useCrapsEngine(): CrapsEngine {
   /** Bumped per throw so the felt animates even when the dice repeat. */
   const [rollNonce, setRollNonce] = useState(0);
   const settleGuard = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** The throw's outcome, held until the dice have shown it. */
+  const pendingRoll = useRef<RollResp | null>(null);
   const [lastResult, setLastResult] = useState<RollResult | null>(null);
   const [rollHistory, setRollHistory] = useState<number[]>([]);
   const [isInitializing, setIsInitializing] = useState(false);
@@ -322,23 +324,19 @@ export function useCrapsEngine(): CrapsEngine {
     })();
   }, [sessionId, isRolling, bets]);
 
-  const rollDice = useCallback(() => {
-    if (!sessionId || isRolling) return;
-    setIsRolling(true);
-    const spinStart = Date.now();
-    void (async () => {
-      let r: RollResp;
-      try {
-        r = await postJSON<RollResp>(`/api/arcade/craps/session/${sessionId}/roll`);
-      } catch (e) {
-        setError((e as Error).message);
-        setIsRolling(false);
-        return;
-      }
-      // The dice go out the moment the result is known: the physics throw is
-      // the wait now, so padding it to a fixed animation length would only sit
-      // the player in front of a still felt before anything moved.
-      setDice([r.die1, r.die2]);
+  /**
+   * Apply everything the throw decided. Called when the dice come to rest, or
+   * by the safety timer if that news never arrives — either way exactly once,
+   * so a late settle callback cannot double-apply a roll.
+   */
+  const revealRoll = useCallback(() => {
+    if (settleGuard.current) {
+      clearTimeout(settleGuard.current);
+      settleGuard.current = null;
+    }
+    const r = pendingRoll.current;
+    pendingRoll.current = null;
+    if (r) {
       setChipBalance(r.chipBalance);
       setBets(r.bets);
       setPhase(r.phase);
@@ -352,6 +350,39 @@ export function useCrapsEngine(): CrapsEngine {
         isSevenOut: r.isSevenOut,
       });
       setCommitment((prev) => (prev ? { ...prev, nonce: r.nonce + 1 } : prev));
+    }
+    setIsRolling(false);
+  }, []);
+
+  /** Called by the felt once the dice have come to rest. */
+  const diceSettled = useCallback(() => {
+    revealRoll();
+  }, [revealRoll]);
+
+  const rollDice = useCallback(() => {
+    if (!sessionId || isRolling) return;
+    setIsRolling(true);
+    void (async () => {
+      let r: RollResp;
+      try {
+        r = await postJSON<RollResp>(`/api/arcade/craps/session/${sessionId}/roll`);
+      } catch (e) {
+        setError((e as Error).message);
+        setIsRolling(false);
+        return;
+      }
+      // The dice go out the moment the result is known: the physics throw is
+      // the wait now, so padding it to a fixed animation length would only sit
+      // the player in front of a still felt before anything moved.
+      //
+      // ONLY the dice. Everything else the roll decided — the point, the phase,
+      // the history strip, the balance, which bets survived — is held back
+      // until the dice have actually shown it. Applying any of it here would
+      // put the answer on screen while the cubes were still in the air, and a
+      // player who has spotted "POINT 6" light up mid-throw has no reason to
+      // watch the throw again.
+      pendingRoll.current = r;
+      setDice([r.die1, r.die2]);
       setRollNonce((n) => n + 1);
 
       // isRolling stays true until the dice actually stop, so a second throw
@@ -359,18 +390,9 @@ export function useCrapsEngine(): CrapsEngine {
       // this timer only covers the case where it never does — an unmount, a
       // hidden tab throttling rAF — so the game can never wedge on a throw.
       if (settleGuard.current) clearTimeout(settleGuard.current);
-      settleGuard.current = setTimeout(() => setIsRolling(false), ROLL_SAFETY_MS);
+      settleGuard.current = setTimeout(() => revealRoll(), ROLL_SAFETY_MS);
     })();
-  }, [sessionId, isRolling]);
-
-  /** Called by the felt once the dice have come to rest. */
-  const diceSettled = useCallback(() => {
-    if (settleGuard.current) {
-      clearTimeout(settleGuard.current);
-      settleGuard.current = null;
-    }
-    setIsRolling(false);
-  }, []);
+  }, [sessionId, isRolling, revealRoll]);
 
   const rotateSeed = useCallback(async (): Promise<string | null> => {
     if (!sessionId || isRolling) return null;

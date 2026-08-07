@@ -79,6 +79,46 @@ export default function CrapsMultiTablePage() {
   // the outcome held back until they land.
   const [throwKey, setThrowKey] = useState<string | null>(null);
   const pendingOutcomeRef = useRef<CrapsMultiTableState['lastRoll']>(null);
+  // The dice the throw is heading for. Held apart from `state` because the
+  // felt is deliberately frozen on the pre-roll picture while they are in the
+  // air, and that picture still carries the PREVIOUS roll.
+  const [diceVals, setDiceVals] = useState<[number, number]>([1, 1]);
+  // Newest state from the server, whether or not the felt is showing it yet.
+  const liveRef = useRef<CrapsMultiTableState | null>(null);
+  const throwInFlight = useRef(false);
+
+  /**
+   * The felt must not know the number before the dice do.
+   *
+   * A throw's state update carries everything it decided — the sum, the new
+   * point, the phase, every seat's win — and painting that the moment it
+   * arrives spoils the throw completely: the point lights up, the history strip
+   * grows, and the dice are still in the air being watched by nobody. So a new
+   * roll starts the dice and otherwise holds the whole board where it was;
+   * the settle applies the update as one piece.
+   */
+  const applyState = useCallback((s: CrapsMultiTableState) => {
+    liveRef.current = s;
+
+    const roll = s.lastRoll;
+    if (roll && soundedRollRef.current !== roll.rollId) {
+      const first = soundedRollRef.current === null;
+      soundedRollRef.current = roll.rollId;
+      // A throw we arrived after is already over — animating it would be a lie
+      // about when it happened, so the first state we ever see just paints.
+      if (!first) {
+        tableAudio.init();
+        pendingOutcomeRef.current = roll;
+        throwInFlight.current = true;
+        setDiceVals([roll.die1, roll.die2]);
+        setThrowKey(roll.rollId);
+        return;
+      }
+    }
+
+    if (throwInFlight.current) return;
+    setState(s);
+  }, []);
   const [rolls, setRolls] = useState<CrapsMultiRollHistoryRow[]>([]);
   const [rollsLoading, setRollsLoading] = useState(true);
 
@@ -100,10 +140,10 @@ export default function CrapsMultiTablePage() {
       setError(null);
       // The room membership died with the socket; re-ask for state, which
       // re-joins the room server-side.
-      try { setState(await getCrapsTableState(client, tableId)); } catch { /* broadcast will catch us up */ }
+      try { applyState(await getCrapsTableState(client, tableId)); } catch { /* broadcast will catch us up */ }
     });
     client.on(CRAPS_MULTI_EVENTS.tableState, (payload: CrapsMultiTableState) => {
-      setState(payload);
+      applyState(payload);
     });
     client.on('error', (err: any) => setError(err?.message ?? 'Connection error'));
 
@@ -114,7 +154,7 @@ export default function CrapsMultiTablePage() {
         setConnected(true);
         setWs(client);
         try {
-          setState(await getCrapsTableState(client, tableId));
+          applyState(await getCrapsTableState(client, tableId));
         } catch (err) {
           setError((err as Error)?.message ?? 'Could not load the table.');
         }
@@ -133,28 +173,21 @@ export default function CrapsMultiTablePage() {
     return () => clearInterval(id);
   }, []);
 
-  // Sound the throw the TABLE last made, not the one this client asked for:
-  // every seat should hear the dice, including the seven that just emptied the
-  // felt, and only the shooter sends a roll request.
-  useEffect(() => {
-    const roll = state?.lastRoll;
-    if (!roll || soundedRollRef.current === roll.rollId) return;
-    const first = soundedRollRef.current === null;
-    soundedRollRef.current = roll.rollId;
-    // Don't replay the table's history on arrival — only throws made while
-    // we're watching. A throw we joined after is already over; showing the
-    // dice mid-flight for it would be a lie about when it happened.
-    if (first) return;
-
-    tableAudio.init();
-    // The knocks now come from the dice hitting things, so there is nothing to
-    // play here. What the throw *meant* waits for the dice to stop, below.
-    pendingOutcomeRef.current = roll;
-    setThrowKey(roll.rollId);
-  }, [state?.lastRoll]);
-
-  // The rail reacts when the dice do, not on a timer that guesses at it.
+  /**
+   * The dice have landed: the felt may now catch up.
+   *
+   * Everything the throw decided lands in one go, at the moment the number
+   * becomes readable on the dice — the board, the rail's winnings, the point,
+   * the history. The sounds follow the same rule; the knocks came from the
+   * dice hitting things, and this is what the throw *meant*.
+   *
+   * Every seat hears it, including the ones the seven just emptied — only the
+   * shooter sends a roll request, but the whole rail lives on the result.
+   */
   const handleDiceSettled = useCallback(() => {
+    throwInFlight.current = false;
+    if (liveRef.current) setState(liveRef.current);
+
     const roll = pendingOutcomeRef.current;
     if (!roll) return;
     pendingOutcomeRef.current = null;
@@ -242,13 +275,64 @@ export default function CrapsMultiTablePage() {
     });
   }, [guard, ws, tableId]);
 
+  /**
+   * Everyone else's chips, summed per zone.
+   *
+   * Craps chips sit face up on a shared felt — at a real table the whole rail
+   * can see what everyone is behind, and that is most of why the game is worth
+   * playing together. Nothing here is private, so nothing is hidden; the only
+   * seat left out is your own, which is already drawn as your chip.
+   *
+   * It follows the felt's freeze during a throw for free: it reads `state`,
+   * which does not move until the dice have landed.
+   */
+  const railBets = useMemo(() => {
+    const out: Partial<Record<BetType, { count: number; total: number }>> = {};
+    if (!state) return out;
+    for (const seat of state.seats) {
+      if (!seat.playerAddress) continue;
+      if (mySeat && seat.position === mySeat.position) continue;
+      for (const [zone, amount] of Object.entries(seat.bets ?? {})) {
+        const chips = Number(amount) || 0;
+        if (chips <= 0) continue;
+        const key = zone as BetType;
+        const cur = out[key] ?? { count: 0, total: 0 };
+        out[key] = { count: cur.count + 1, total: cur.total + chips };
+      }
+    }
+    return out;
+  }, [state, mySeat]);
+
+  /** Which zone's per-seat breakdown is open, if any. */
+  const [inspectZone, setInspectZone] = useState<BetType | null>(null);
+
+  const inspectRows = useMemo(() => {
+    if (!inspectZone || !state) return [];
+    return state.seats
+      .filter((s) => s.playerAddress && Number(s.bets?.[inspectZone] ?? 0) > 0)
+      .map((s) => ({
+        position: s.position,
+        label: crapsSeatLabel(s),
+        amount: Number(s.bets?.[inspectZone] ?? 0),
+        isMe: Boolean(mySeat && s.position === mySeat.position),
+      }))
+      .sort((a, b) => b.amount - a.amount);
+  }, [inspectZone, state, mySeat]);
+
   const lastRoll = state?.lastRoll ?? null;
-  const dice: [number, number] = lastRoll ? [lastRoll.die1, lastRoll.die2] : [1, 1];
+  // The dice show the throw in the air; everything else on this page shows the
+  // last throw that has already landed. They are the same roll only once the
+  // dice have settled and `state` has caught up.
+  const dice: [number, number] = throwKey
+    ? diceVals
+    : lastRoll
+      ? [lastRoll.die1, lastRoll.die2]
+      : [1, 1];
 
   return (
     <GlobalMainNav>
-      <main className="mx-auto w-full max-w-6xl px-3 py-4 sm:px-4 sm:py-6">
-        <div className="mb-4 flex items-center justify-between gap-2">
+      <main className="mx-auto w-full max-w-6xl px-2 py-3 sm:px-4 sm:py-6">
+        <div className="mb-3 sm:mb-4 flex items-center justify-between gap-2">
           <button
             type="button"
             onClick={() => router.push('/craps/multi')}
@@ -283,7 +367,7 @@ export default function CrapsMultiTablePage() {
         )}
 
         {/* ───────── The rail ───────── */}
-        <Card className="arc-panel mb-4 border-0 p-3 sm:p-4">
+        <Card className="arc-panel mb-3 border-0 p-2 sm:mb-4 sm:p-4">
           <div className="mb-2 flex items-center justify-between">
             <span className="arc-display text-[10px] uppercase tracking-[0.25em] text-slate-500">
               The rail
@@ -315,7 +399,7 @@ export default function CrapsMultiTablePage() {
           {/* ───────── Game area ───────── */}
           <div className="space-y-4">
             {/* Shooter — dice, the clock, and the throw */}
-            <Card className="arc-panel border-0 p-3 sm:p-4">
+            <Card className="arc-panel border-0 p-2 sm:p-4">
               <div className="mb-1 flex items-center justify-between">
                 <span className="arc-display flex items-center gap-1.5 text-[10px] uppercase tracking-[0.25em] text-slate-500">
                   <Dices className="h-3.5 w-3.5" />
@@ -341,7 +425,7 @@ export default function CrapsMultiTablePage() {
                 </div>
               </div>
 
-              <div className="relative flex min-h-[120px] items-center justify-center">
+              <div className="relative flex min-h-[92px] items-center justify-center sm:min-h-[120px]">
                 <div className="w-full">
                   <CrapsDiceThrow
                     val1={dice[0]}
@@ -399,9 +483,11 @@ export default function CrapsMultiTablePage() {
             </Card>
 
             {/* Felt — your own chips on the shared layout. */}
-            <Card className="arc-panel relative border-0 p-3 sm:p-4">
+            <Card className="arc-panel relative border-0 p-2 sm:p-4">
               <CrapsTable
                 bets={mySeat?.bets ?? {}}
+                railBets={railBets}
+                onInspectZone={setInspectZone}
                 point={state?.point ?? null}
                 phase={state?.phase ?? 'COME_OUT'}
                 activeChip={activeChip}
@@ -414,7 +500,7 @@ export default function CrapsMultiTablePage() {
 
           {/* ───────── Side panel ───────── */}
           <div className="space-y-4">
-            <Card className="arc-panel space-y-3 border-0 p-3 sm:p-4">
+            <Card className="arc-panel space-y-2.5 border-0 p-2 sm:space-y-3 sm:p-4">
               <div className="flex items-center justify-between gap-2">
                 <span className="text-xs uppercase tracking-wide text-slate-500">Phase</span>
                 <span className="arc-display flex items-center gap-2 text-sm font-semibold tracking-[0.15em] text-slate-200">
@@ -486,7 +572,7 @@ export default function CrapsMultiTablePage() {
             </Card>
 
             {/* What the dice have been doing, and what it cost you. */}
-            <Card className="arc-panel space-y-2 border-0 p-3 sm:p-4">
+            <Card className="arc-panel space-y-2 border-0 p-2 sm:p-4">
               <span className="arc-display flex items-center gap-1.5 text-[10px] uppercase tracking-[0.25em] text-slate-500">
                 <Dices className="h-3.5 w-3.5" />
                 Recent throws
@@ -501,7 +587,7 @@ export default function CrapsMultiTablePage() {
             </Card>
 
             {/* Fairness. The shooter's seed is genuinely in every throw they make. */}
-            <Card className="arc-panel space-y-2 border-0 p-3 sm:p-4">
+            <Card className="arc-panel space-y-2 border-0 p-2 sm:p-4">
               <span className="arc-display flex items-center gap-1.5 text-[10px] uppercase tracking-[0.25em] text-slate-500">
                 <ShieldCheck className="h-3.5 w-3.5" />
                 Provably fair
@@ -531,9 +617,74 @@ export default function CrapsMultiTablePage() {
             </Card>
           </div>
         </div>
-        {/* The questions a shared felt raises that a solo game never does. */}
+        {/* Who is actually behind a zone. Opened from a zone's rail badge —
+            the felt itself takes chips, so this can only be reached from the
+            badge, which stops the click. */}
+        {inspectZone && (
+          <div
+            className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-3 sm:items-center"
+            onClick={() => setInspectZone(null)}
+          >
+            <div
+              className="w-full max-w-sm rounded-2xl border border-cyan-500/25 bg-[#050E16] p-4"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="mb-3 flex items-center justify-between">
+                <span className="arc-display text-[11px] uppercase tracking-[0.25em] text-cyan-300">
+                  {inspectZone.replace(/_/g, ' ')}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setInspectZone(null)}
+                  className="text-xs text-slate-500 hover:text-white"
+                >
+                  Close
+                </button>
+              </div>
+              {inspectRows.length === 0 ? (
+                <p className="text-sm text-slate-500">Nothing on this one right now.</p>
+              ) : (
+                <ul className="space-y-1.5">
+                  {inspectRows.map((r) => (
+                    <li
+                      key={r.position}
+                      className={cn(
+                        'flex items-center justify-between rounded-lg px-2 py-1.5 text-sm',
+                        r.isMe ? 'bg-cyan-500/10 text-cyan-200' : 'text-slate-300',
+                      )}
+                    >
+                      <span className="truncate">
+                        {r.label}
+                        {r.isMe && <span className="ml-1.5 text-[10px] text-cyan-400">you</span>}
+                      </span>
+                      <span className="arc-mono shrink-0 font-semibold">
+                        {r.amount.toLocaleString()}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* The questions a shared felt raises that a solo game never does.
+            Fourteen of them, which on a phone is most of the page below the
+            felt — so there it collapses to a single row you open if you want
+            it, and stays laid out on anything wider. */}
         <section className="mt-6">
-          <ArcadeFAQ items={crapsMultiFaqs} accent="#86EFAC" />
+          <details className="group rounded-xl border border-white/10 bg-[#050E16]/60 sm:hidden">
+            <summary className="arc-display flex cursor-pointer list-none items-center justify-between px-3 py-3 text-[11px] uppercase tracking-[0.2em] text-slate-400">
+              Rules &amp; FAQ
+              <span className="text-slate-600 transition-transform group-open:rotate-180">▾</span>
+            </summary>
+            <div className="px-1 pb-2">
+              <ArcadeFAQ items={crapsMultiFaqs} accent="#86EFAC" />
+            </div>
+          </details>
+          <div className="hidden sm:block">
+            <ArcadeFAQ items={crapsMultiFaqs} accent="#86EFAC" />
+          </div>
         </section>
       </main>
     </GlobalMainNav>
