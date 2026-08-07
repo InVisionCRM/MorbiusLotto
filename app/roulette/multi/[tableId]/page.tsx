@@ -80,6 +80,14 @@ export default function RouletteMultiTablePage() {
   const liveRef = useRef<RouletteMultiTableState | null>(null);
   const spinInFlight = useRef(false);
 
+  // While a spin is in the air the wheel takes the room: it grows out of its
+  // resting size, the felt behind it dims, and it holds big for a beat after
+  // the ball drops so the number is readable before everything snaps back.
+  const [wheelFocused, setWheelFocused] = useState(false);
+  const wheelHostRef = useRef<HTMLDivElement>(null);
+  const unfocusTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => { if (unfocusTimer.current) clearTimeout(unfocusTimer.current); }, []);
+
   /**
    * The board must not know the number before the wheel does.
    *
@@ -100,6 +108,15 @@ export default function RouletteMultiTablePage() {
         spinInFlight.current = true;
         setSpinResult(spin.result);
         setSpinSeq((n) => n + 1);
+        if (unfocusTimer.current) clearTimeout(unfocusTimer.current);
+        setWheelFocused(true);
+        // On a phone the wheel would otherwise grow off the top of the screen.
+        // Desktop has the room, so leave the reader's scroll alone there.
+        if (typeof window !== 'undefined' && window.innerWidth < 1024) {
+          requestAnimationFrame(() =>
+            wheelHostRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }),
+          );
+        }
         return;
       }
     }
@@ -118,6 +135,9 @@ export default function RouletteMultiTablePage() {
     const seat = rouletteSeatOf(live, address);
     if (seat && seat.lastWin > 0) tableAudio.playWin();
     else if (seat && seat.lastLoss > 0) tableAudio.playLose();
+    // Hold the big wheel long enough to read the pocket, then give the felt back.
+    if (unfocusTimer.current) clearTimeout(unfocusTimer.current);
+    unfocusTimer.current = setTimeout(() => setWheelFocused(false), 1600);
   }, [address]);
 
   // ── Socket ────────────────────────────────────────────────────────────────
@@ -313,13 +333,36 @@ export default function RouletteMultiTablePage() {
                 </div>
               </div>
 
-              <div className="flex justify-center py-2">
-                <RouletteWheel2
-                  result={spinResult}
-                  spinSeq={spinSeq}
-                  lastResult={state?.lastSpin?.result ?? null}
-                  onLanded={handleWheelLanded}
-                />
+              {/* The wheel rests small — the board is what you're working with
+                  between spins — and takes the room once the ball is in the air.
+                  The canvas re-cuts itself as the box grows (ResizeObserver in
+                  RouletteWheel2), so it stays sharp the whole way out. */}
+              <div ref={wheelHostRef} className="flex justify-center py-2">
+                <div
+                  className={cn(
+                    'relative w-full transition-[max-width] duration-[900ms] ease-[cubic-bezier(0.22,1,0.36,1)]',
+                    wheelFocused
+                      ? 'max-w-[min(100%,34rem)]'
+                      : 'max-w-[13.5rem] sm:max-w-[19rem]',
+                  )}
+                >
+                  <div
+                    aria-hidden
+                    className={cn(
+                      // inset-0, not a negative inset: a blur paints outside its
+                      // box for free, but a negative inset widens the layout box
+                      // and would push the page wide on a phone.
+                      'pointer-events-none absolute inset-0 rounded-full bg-cyan-400/10 blur-2xl transition-opacity duration-700',
+                      wheelFocused ? 'opacity-100' : 'opacity-0',
+                    )}
+                  />
+                  <RouletteWheel2
+                    result={spinResult}
+                    spinSeq={spinSeq}
+                    lastResult={state?.lastSpin?.result ?? null}
+                    onLanded={handleWheelLanded}
+                  />
+                </div>
               </div>
 
               <div className="mt-2 flex min-w-0 items-center justify-between gap-2 sm:gap-3">
@@ -350,7 +393,12 @@ export default function RouletteMultiTablePage() {
               </div>
             </Card>
 
-            <Card className="arc-panel relative border-0 p-2 sm:p-4">
+            <Card
+              className={cn(
+                'arc-panel relative border-0 p-2 transition-opacity duration-500 sm:p-4',
+                wheelFocused && 'opacity-40',
+              )}
+            >
               <RouletteBoard2
                 amounts={myAmounts}
                 railAmounts={railAmounts}

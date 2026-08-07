@@ -106,9 +106,18 @@ export default function RouletteWheel2({
 
     let raf = 0;
 
+    // The canvas is a fixed pixel buffer, so it has to be re-cut whenever the
+    // container changes size — not just when the window does. The multiplayer
+    // felt grows the wheel mid-spin; without this the ring would keep drawing
+    // at its old resting resolution inside a much larger box.
+    let lastSize = -1;
     const resize = () => {
       const dpr = Math.min(2, window.devicePixelRatio || 1);
-      const size = Math.min(container.clientWidth, container.clientHeight || container.clientWidth);
+      const size = Math.round(
+        Math.min(container.clientWidth, container.clientHeight || container.clientWidth),
+      );
+      if (size === lastSize || size <= 0) return;
+      lastSize = size;
       canvas.width = size * dpr;
       canvas.height = size * dpr;
       canvas.style.width = `${size}px`;
@@ -116,6 +125,8 @@ export default function RouletteWheel2({
     };
     resize();
     window.addEventListener('resize', resize);
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(resize) : null;
+    ro?.observe(container);
 
     const render = () => {
       const ctx = canvas.getContext('2d');
@@ -298,6 +309,7 @@ export default function RouletteWheel2({
     raf = requestAnimationFrame(render);
     return () => {
       window.removeEventListener('resize', resize);
+      ro?.disconnect();
       cancelAnimationFrame(raf);
     };
   }, []);
