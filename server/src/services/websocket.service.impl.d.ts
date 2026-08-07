@@ -161,6 +161,14 @@ export declare class WebSocketService {
     setCrapsMultiService(service: unknown): void;
     /** Broadcast current shared-craps table state to everyone watching the felt. */
     broadcastCrapsMultiTableState(tableId: string): Promise<void>;
+    /**
+     * Wire in the shared-roulette service after construction; also starts its
+     * window/wheel watchdog, which both spins expired windows and reopens
+     * finished ones.
+     */
+    setRouletteMultiService(service: unknown): void;
+    /** Broadcast current shared-roulette table state to everyone watching the felt. */
+    broadcastRouletteMultiTableState(tableId: string): Promise<void>;
     /** Wire in the shared Hold'em service; also starts its betting/street watchdog. */
     setUthMultiService(service: unknown): void;
     /**

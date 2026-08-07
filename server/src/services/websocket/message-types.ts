@@ -137,6 +137,22 @@ export const WS_UTH_MULTI_MESSAGES = [
   'uth_multi_rotate_seed',
 ] as const;
 
+/** Shared-felt roulette. */
+export const WS_ROULETTE_MULTI_MESSAGES = [
+  'roulette_multi_join_table',
+  'roulette_multi_leave_table',
+  'roulette_multi_place_bet',
+  'roulette_multi_clear_bet',
+  'roulette_multi_clear_all',
+  'roulette_multi_spin',
+  'roulette_multi_get_state',
+  'roulette_multi_spin_history',
+  'roulette_multi_list_tables',
+  'roulette_multi_create_table',
+  'roulette_multi_delete_table',
+  'roulette_multi_rotate_seed',
+] as const;
+
 export const ALL_WS_MESSAGE_TYPES = [
   ...WS_AUTH_MESSAGES,
   ...WS_PUBLIC_MESSAGES,
@@ -147,6 +163,7 @@ export const ALL_WS_MESSAGE_TYPES = [
   ...WS_BJ_MULTI_MESSAGES,
   ...WS_CRAPS_MULTI_MESSAGES,
   ...WS_UTH_MULTI_MESSAGES,
+  ...WS_ROULETTE_MULTI_MESSAGES,
 ] as const;
 
 export const ALL_WS_MESSAGE_TYPE_SET: ReadonlySet<string> = new Set<string>(ALL_WS_MESSAGE_TYPES as readonly string[]);
