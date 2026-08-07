@@ -395,9 +395,14 @@ export default function CrapsMultiTablePage() {
           )}
         </Card>
 
-        <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
+        {/* min-w-0 on both columns is load-bearing, not tidiness. A grid item
+            defaults to min-width:auto, so the track sizes to its CONTENT and
+            never to the container — which meant the felt was laid out at ~493px
+            inside a 428px phone and simply clipped. Everything inside was
+            already shrinkable; nothing was ever asking it to shrink. */}
+        <div className="grid min-w-0 gap-4 lg:grid-cols-[1fr_320px]">
           {/* ───────── Game area ───────── */}
-          <div className="space-y-4">
+          <div className="min-w-0 space-y-4">
             {/* Shooter — dice, the clock, and the throw */}
             <Card className="arc-panel border-0 p-2 sm:p-4">
               {/* Twelve 24px pills is 336px of history — on its own wider than
@@ -510,7 +515,7 @@ export default function CrapsMultiTablePage() {
           </div>
 
           {/* ───────── Side panel ───────── */}
-          <div className="space-y-4">
+          <div className="min-w-0 space-y-4">
             <Card className="arc-panel space-y-2.5 border-0 p-2 sm:space-y-3 sm:p-4">
               <div className="flex items-center justify-between gap-2">
                 <span className="text-xs uppercase tracking-wide text-slate-500">Phase</span>
