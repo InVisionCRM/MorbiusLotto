@@ -1029,6 +1029,57 @@ export function CrapsMultiScene() {
   );
 }
 
+export function RouletteMultiScene() {
+  return (
+    <svg viewBox="0 0 200 140">
+      <ellipse cx="100" cy="110" rx="94" ry="26" fill="url(#feltG)" />
+      <path d="M16 116 Q100 86 184 116" stroke="#fbbf24" strokeOpacity=".35" strokeWidth="1.5" fill="none" />
+      {/* The solo card shows a wheel. This one shows a wheel with a rail behind
+          it — the whole difference between the two games in one picture. */}
+      <g transform="translate(100,44) scale(0.6)">
+        <circle r="60" fill="#0b0e16" filter="url(#fS)" />
+        <circle r="58" fill="none" stroke="url(#gGoldEdge)" strokeWidth="5" />
+        <circle r="53" fill="#1c2333" />
+        <g>
+          <path d="M0 0 L0 -50 A50 50 0 0 1 25 -43.3 Z" fill="#b91c1c" /><path d="M0 0 L25 -43.3 A50 50 0 0 1 43.3 -25 Z" fill="#111827" />
+          <path d="M0 0 L43.3 -25 A50 50 0 0 1 50 0 Z" fill="#b91c1c" /><path d="M0 0 L50 0 A50 50 0 0 1 43.3 25 Z" fill="#111827" />
+          <path d="M0 0 L43.3 25 A50 50 0 0 1 25 43.3 Z" fill="#b91c1c" /><path d="M0 0 L25 43.3 A50 50 0 0 1 0 50 Z" fill="#111827" />
+          <path d="M0 0 L0 50 A50 50 0 0 1 -25 43.3 Z" fill="#b91c1c" /><path d="M0 0 L-25 43.3 A50 50 0 0 1 -43.3 25 Z" fill="#111827" />
+          <path d="M0 0 L-43.3 25 A50 50 0 0 1 -50 0 Z" fill="#b91c1c" /><path d="M0 0 L-50 0 A50 50 0 0 1 -43.3 -25 Z" fill="#111827" />
+          <path d="M0 0 L-43.3 -25 A50 50 0 0 1 -25 -43.3 Z" fill="#b91c1c" /><path d="M0 0 L-25 -43.3 A50 50 0 0 1 0 -50 Z" fill="#15803d" />
+          <circle r="50" fill="none" stroke="#fbbf24" strokeOpacity=".35" strokeWidth="1" />
+        </g>
+        <circle r="30" fill="#141a2b" stroke="#39465f" strokeWidth="1.5" />
+        <circle r="19" fill="url(#gSteelR)" />
+        <circle r="7" fill="url(#gGold)" />
+        <g stroke="url(#gGoldEdge)" strokeWidth="3.5" strokeLinecap="round"><path d="M0 -16 V-7 M0 7 V16 M-16 0 H-7 M7 0 H16" /></g>
+        <g>
+          <circle cx="0" cy="-41" r="4.5" fill="url(#gDiceTop)" filter="url(#fS2)" />
+          <ellipse cx="-1.5" cy="-42.5" rx="1.6" ry="1.1" fill="#fff" />
+        </g>
+        <path d="M-60 -18 A60 60 0 0 1 -18 -60" fill="none" stroke="#fff" strokeOpacity=".12" strokeWidth="8" />
+      </g>
+      {/* Eight seats, one pocket settling all of them. The gold chip is the
+          seat feeding the next spin's seed — roulette's rotating answer to a
+          shooter — marked the same way the craps card marks its shooter. */}
+      <g filter="url(#fS2)">
+        {[
+          { x: 26, f: 'url(#gChipC)' }, { x: 47, f: 'url(#gChipV)' }, { x: 68, f: 'url(#gChipE)' },
+          { x: 89, f: 'url(#gGold)' }, { x: 110, f: 'url(#gChipR)' }, { x: 131, f: 'url(#gChipC)' },
+          { x: 152, f: 'url(#gChipV)' }, { x: 173, f: 'url(#gChipE)' },
+        ].map((c) => (
+          <g key={c.x}>
+            <ellipse cx={c.x} cy="102" rx="8.5" ry="3.4" fill="#000" opacity=".45" />
+            <ellipse cx={c.x} cy="99" rx="8.5" ry="3.4" fill={c.f} />
+          </g>
+        ))}
+        <path d="M89 90 l0 -6 M86 87 l3 -3 3 3" stroke="#fde68a" strokeWidth="1.4" fill="none" strokeLinecap="round" />
+      </g>
+      <text x="100" y="120" fontSize="6" fontWeight="800" fill="#86efac" fillOpacity=".8" textAnchor="middle" letterSpacing="2.6">ONE WHEEL · EVERY SEAT</text>
+    </svg>
+  );
+}
+
 /* ── Floor grid data (same order as the lab's #floorGrid) ───────────── */
 
 export type FloorGame = {
@@ -1061,6 +1112,7 @@ export const FLOOR_GAMES: FloorGame[] = [
   { key: "crapsmulti", name: "CRAPS TABLE", cat: "table", fontClass: "f-titan", nameSize: "12px", blurb: "One shooter, whole rail", Scene: CrapsMultiScene, glow: "rgba(134,239,172,.2)", href: "/craps/multi", badge: "MULTIPLAYER", badgeClass: "new" },
   { key: "ultimateholdem", name: "ULTIMATE", cat: "cards", fontClass: "f-bowlby", nameSize: "12px", blurb: "Hold'em vs the dealer", Scene: UltimateHoldemScene, glow: "rgba(167,139,250,.2)", href: "/ultimate-holdem", badge: "NEW", badgeClass: "new" },
   { key: "uthmulti", name: "HOLD'EM TABLE", cat: "cards", fontClass: "f-bowlby", nameSize: "10px", blurb: "One board, every seat", Scene: UltimateHoldemScene, glow: "rgba(167,139,250,.22)", href: "/ultimate-holdem/multi", badge: "MULTIPLAYER", badgeClass: "new" },
+  { key: "roulettemulti", name: "ROULETTE TABLE", cat: "table", fontClass: "f-bowlby", nameSize: "10px", blurb: "One wheel, every seat", Scene: RouletteMultiScene, glow: "rgba(34,211,238,.22)", href: "/roulette/multi", badge: "MULTIPLAYER", badgeClass: "new" },
   { key: "caribbeanstud", name: "CARIB STUD", cat: "cards", fontClass: "f-lilita", nameSize: "12px", blurb: "Five cards, one call", Scene: CaribbeanStudScene, glow: "rgba(56,189,248,.2)", href: "/caribbean-stud", badge: "NEW", badgeClass: "new" },
   { key: "spanish21", name: "SPANISH 21", cat: "cards", fontClass: "f-titan", nameSize: "12px", blurb: "No tens, your 21 wins", Scene: Spanish21Scene, glow: "rgba(251,113,133,.2)", href: "/spanish-21", badge: "NEW", badgeClass: "new" },
   { key: "doubleexposure", name: "DBL EXPOSURE", cat: "cards", fontClass: "f-bungee", nameSize: "10px", blurb: "Both dealer cards up", Scene: DoubleExposureScene, glow: "rgba(251,191,36,.2)", href: "/double-exposure", badge: "NEW", badgeClass: "new" },
