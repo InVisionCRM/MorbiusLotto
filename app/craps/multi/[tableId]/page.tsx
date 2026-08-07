@@ -400,17 +400,27 @@ export default function CrapsMultiTablePage() {
           <div className="space-y-4">
             {/* Shooter — dice, the clock, and the throw */}
             <Card className="arc-panel border-0 p-2 sm:p-4">
-              <div className="mb-1 flex items-center justify-between">
-                <span className="arc-display flex items-center gap-1.5 text-[10px] uppercase tracking-[0.25em] text-slate-500">
-                  <Dices className="h-3.5 w-3.5" />
-                  {shooterSeat ? `${crapsSeatLabel(shooterSeat)} shooting` : 'Nobody has the dice'}
+              {/* Twelve 24px pills is 336px of history — on its own wider than
+                  a phone, and with nothing here able to shrink it dragged the
+                  whole page out with it. The label truncates, the strip
+                  scrolls, and both are allowed to give. */}
+              <div className="mb-1 flex min-w-0 items-center justify-between gap-2">
+                <span className="arc-display flex min-w-0 shrink items-center gap-1.5 text-[10px] uppercase tracking-[0.25em] text-slate-500">
+                  <Dices className="h-3.5 w-3.5 shrink-0" />
+                  <span className="truncate">
+                    {shooterSeat ? `${crapsSeatLabel(shooterSeat)} shooting` : 'Nobody has the dice'}
+                  </span>
                 </span>
-                <div className="flex gap-1">
+                {/* Newest roll is index 0, so the strip runs left to right and
+                    lets the OLDEST scroll away. Right-aligning it would push
+                    the newest throw — the one wearing the highlight ring — off
+                    the visible end, which is the one thing that must not go. */}
+                <div className="flex min-w-0 flex-1 gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                   {(state?.rollHistory ?? []).map((r, i) => (
                     <span
                       key={i}
                       className={cn(
-                        'arc-mono flex h-6 w-6 items-center justify-center rounded text-xs font-bold',
+                        'arc-mono flex h-5 w-5 shrink-0 items-center justify-center rounded text-[10px] font-bold sm:h-6 sm:w-6 sm:text-xs',
                         r === 7
                           ? 'bg-rose-600/80 text-white'
                           : [4, 5, 6, 8, 9, 10].includes(r)
@@ -454,8 +464,8 @@ export default function CrapsMultiTablePage() {
                 )}
               </div>
 
-              <div className="mt-2 flex items-center justify-between gap-3">
-                <span className="arc-display text-xs uppercase tracking-[0.15em] text-slate-500">
+              <div className="mt-2 flex min-w-0 items-center justify-between gap-2 sm:gap-3">
+                <span className="arc-display min-w-0 shrink truncate text-[11px] uppercase tracking-[0.15em] text-slate-500 sm:text-xs">
                   {state?.status === 'rolling'
                     ? 'Dice are out'
                     : state?.status === 'betting'
@@ -470,12 +480,13 @@ export default function CrapsMultiTablePage() {
                   <Button
                     onClick={throwDice}
                     disabled={busy || !connected}
-                    className="bg-amber-500 font-semibold text-[#04121b] hover:bg-amber-400"
+                    className="shrink-0 whitespace-nowrap bg-amber-500 px-3 text-sm font-semibold text-[#04121b] hover:bg-amber-400 sm:px-4 sm:text-base"
                   >
-                    Throw the dice
+                    Throw
+                    <span className="hidden sm:inline">&nbsp;the dice</span>
                   </Button>
                 ) : (
-                  <span className="arc-display text-[11px] text-slate-500">
+                  <span className="arc-display min-w-0 shrink truncate text-[11px] text-slate-500">
                     {shooterSeat ? `Waiting on ${crapsSeatLabel(shooterSeat)}` : 'Sit down to shoot'}
                   </span>
                 )}
