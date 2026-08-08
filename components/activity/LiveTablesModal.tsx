@@ -41,6 +41,12 @@ import {
   listUthTables,
   type UthMultiTableSummary,
 } from '@/lib/uth-multi-client'
+import {
+  createRouletteTable,
+  deleteRouletteTable,
+  listRouletteTables,
+  type RouletteMultiTableSummary,
+} from '@/lib/roulette-multi-client'
 
 // Defaults mirror the server's registry (server/src/lib/game-limits.ts). They
 // only prefill the form — the server still decides what an empty field means.
