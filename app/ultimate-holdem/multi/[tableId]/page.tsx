@@ -25,6 +25,13 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import { TableCard, TableCardStyles } from '@/components/shared/TableCard';
+import {
+  TableWinFxStyles,
+  TableWinGlow,
+  celebrateWin,
+  winTierFor,
+} from '@/components/shared/TableWinFx';
+import { useStagedReveal } from '@/hooks/use-staged-reveal';
 import { TableFeltControls, useTableFelt } from '@/components/shared/TableFeltControls';
 import { tableAudio } from '@/lib/table-audio';
 import { ArcadeFAQ } from '@/components/arcade2/ArcadeFAQ';
@@ -124,38 +131,38 @@ export default function UthMultiTablePage() {
   const settled = state?.stage === 'settled';
 
   // How much of the board and the dealer's hand has actually been turned over
-  // for this viewer. The server says which cards exist; this says which ones
-  // the dealer has got to yet.
-  const [shownBoard, setShownBoard] = useState(0);
-  const [shownDealer, setShownDealer] = useState(0);
-  // Mirrored so the scheduler can read the count without doing it inside a
-  // state updater — React may run an updater twice, which would schedule the
-  // whole street's reveals twice over.
-  const shownBoardRef = useRef(0);
-  shownBoardRef.current = shownBoard;
-  const revealTimers = useRef<Array<ReturnType<typeof setTimeout>>>([]);
-
-  const clearReveals = useCallback(() => {
-    revealTimers.current.forEach(clearTimeout);
-    revealTimers.current = [];
-  }, []);
-
-  const scheduleReveal = useCallback((delay: number, fn: () => void) => {
-    revealTimers.current.push(setTimeout(fn, delay));
-  }, []);
-
-  // A reveal in flight when the page goes away would otherwise fire into a
-  // dead component.
-  useEffect(() => clearReveals, [clearReveals]);
+  // for this viewer. The server says which cards exist; these say which ones
+  // the dealer has got to yet. Two tracks because the board and the dealer turn
+  // on their own schedules.
+  // Destructured rather than held as objects: the individual callbacks are
+  // stable, the returned object is not, and anything depending on the object
+  // would re-run — cancelling the reveal — every time a card turns.
+  const {
+    shown: shownBoard,
+    revealTo: revealBoard,
+    snapTo: snapBoard,
+    schedule: scheduleBoard,
+  } = useStagedReveal();
+  const {
+    shown: shownDealer,
+    revealTo: revealDealer,
+    snapTo: snapDealer,
+  } = useStagedReveal();
 
   // A new round deals; each street turns more board cards over; showdown pays.
   const roundId = state?.roundId ?? null;
   const stage = state?.stage ?? null;
-  const myNet = mySeat && settled
-    ? mySeat.totalPayout - (mySeat.ante + mySeat.blind + mySeat.trips + mySeat.play)
-    : 0;
-  const myNetRef = useRef(0);
-  useEffect(() => { myNetRef.current = myNet; }, [myNet]);
+  const myCommitted = mySeat ? mySeat.ante + mySeat.blind + mySeat.trips + mySeat.play : 0;
+  const myPayout = mySeat && settled ? mySeat.totalPayout : 0;
+  const myNet = settled ? myPayout - myCommitted : 0;
+  // How the round ended, read by the reveal scheduler when the dealer's last
+  // card lands — by which time the render that produced it is long past.
+  const mySettleRef = useRef({ committed: 0, payout: 0 });
+  useEffect(() => {
+    mySettleRef.current = { committed: myCommitted, payout: myPayout };
+  }, [myCommitted, myPayout]);
+  /** The tier drives both the sound and how loud the felt reacts. */
+  const winTier = settled && mySeat ? winTierFor(myCommitted, myPayout) : null;
 
   useEffect(() => {
     if (!roundId || !stage) return;
@@ -174,18 +181,19 @@ export default function UthMultiTablePage() {
     // we got here, so dealing them out now would be theatre about a moment
     // that has passed. Show them as found.
     if (isNewRound && stage !== 'preflop') {
-      clearReveals();
-      setShownBoard(boardLen);
-      setShownDealer(dealerLen);
+      snapBoard(boardLen);
+      snapDealer(dealerLen);
       return;
     }
 
     if (isNewRound && stage === 'preflop') {
-      clearReveals();
-      setShownBoard(0);
-      setShownDealer(0);
+      snapBoard(0);
+      snapDealer(0);
       tableAudio.playChip();
-      for (let i = 0; i < 2; i++) scheduleReveal(i * DEAL_GAP, () => tableAudio.playDeal());
+      // The hole cards arrive together, so this beat is the pair being pitched
+      // — sound with no face to turn. On the reveal's clock so leaving the
+      // table mid-deal doesn't leave it rattling.
+      for (let i = 0; i < 2; i++) scheduleBoard(i * DEAL_GAP, () => tableAudio.playDeal());
       return;
     }
 
@@ -193,34 +201,28 @@ export default function UthMultiTablePage() {
       // One card at a time, each with its own sound as it lands — the deal
       // was already staggered in audio while every card appeared at once,
       // which is why the street felt like a jump cut with a rattle over it.
-      const already = shownBoardRef.current;
-      for (let n = already; n < boardLen; n++) {
-        scheduleReveal((n - already) * DEAL_GAP, () => {
-          setShownBoard(n + 1);
-          tableAudio.playDeal();
-        });
-      }
+      revealBoard(boardLen, { gap: DEAL_GAP, onCard: () => tableAudio.playDeal() });
       return;
     }
 
     if (stage === 'settled') {
       // The dealer's hand is the answer to the whole round, so it gets a beat
       // to itself before turning, and the two cards turn separately.
-      setShownBoard(boardLen);
-      for (let i = 0; i < dealerLen; i++) {
-        scheduleReveal(SHOWDOWN_PAUSE + i * FLIP_GAP, () => {
-          setShownDealer(i + 1);
-          tableAudio.playFlip();
-        });
-      }
-      scheduleReveal(SHOWDOWN_PAUSE + dealerLen * FLIP_GAP + 260, () => {
-        const net = myNetRef.current;
-        if (net > 0) tableAudio.playWin();
-        else if (net < 0) tableAudio.playLose();
-        else tableAudio.playPush();
+      snapBoard(boardLen);
+      revealDealer(dealerLen, {
+        gap: FLIP_GAP,
+        startDelay: SHOWDOWN_PAUSE,
+        onCard: () => tableAudio.playFlip(),
+        onSettled: () => {
+          // The seat carries one `totalPayout` with no per-bet breakdown, so
+          // there is no way to tell a trips hit from the main hand here — no
+          // bonus cue on this felt.
+          const { committed, payout } = mySettleRef.current;
+          celebrateWin(winTierFor(committed, payout));
+        },
       });
     }
-  }, [roundId, stage, clearReveals, scheduleReveal]);
+  }, [roundId, stage, snapBoard, snapDealer, revealBoard, revealDealer]);
 
   const secondsLeft = uthClockRemaining(state, nowMs);
 
@@ -295,7 +297,9 @@ export default function UthMultiTablePage() {
         )}
 
         {/* ───────── The board ───────── */}
-        <Card className="arc-panel mb-4 border-0 p-3 sm:p-4">
+        <Card className="arc-panel relative mb-4 overflow-hidden border-0 p-3 sm:p-4">
+          {/* The felt's own reaction to the result, behind the cards. */}
+          <TableWinGlow tier={winTier} round={state?.roundId ?? undefined} />
           <div className="mb-2 flex items-center justify-between">
             <span className="arc-display text-[10px] uppercase tracking-[0.25em] text-slate-500">
               {state ? uthStageLabel(state.stage) : 'Table'}
@@ -480,6 +484,7 @@ export default function UthMultiTablePage() {
       </main>
 
       <TableCardStyles />
+      <TableWinFxStyles />
     </GlobalMainNav>
   );
 }

@@ -520,6 +520,13 @@
 .home2 .launcher .gl-grid{
   flex:1; min-height:0; overflow-y:auto; -webkit-overflow-scrolling:touch;
   display:grid; grid-template-columns:repeat(3,1fr); gap:10px; align-content:start;
+  /* max-content (not the default `auto`) is load-bearing: the grid sits in a
+     height-capped flex column (`.sheet.launcher{max-height:76vh}`), and `auto`
+     rows let the track sizer squeeze every row down to share out the available
+     height — the cards collapsed to just their name strip and the art was
+     clipped away to a 1px sliver. max-content rows keep their natural height
+     and let the grid scroll instead. */
+  grid-auto-rows:max-content;
   padding-bottom:calc(6px + env(safe-area-inset-bottom,0));
 }
 .home2 .launcher .gl-card{
@@ -529,7 +536,10 @@
 }
 .home2 .launcher .gl-card:active{transform:scale(.92); border-color:rgba(34,211,238,.45)}
 .home2 .launcher .gl-stage{
-  height:72px; display:grid; place-items:center; overflow:hidden;
+  /* flex:none — the card is a flex column, so without it the art strip is the
+     first thing a squeezed card shrinks away (min-height:auto is 0 here
+     because of the overflow:hidden below). */
+  height:72px; flex:none; display:grid; place-items:center; overflow:hidden;
   background:radial-gradient(120% 110% at 50% 0%, #131a2c, #070a12 78%);
   border-bottom:1px solid var(--line);
 }

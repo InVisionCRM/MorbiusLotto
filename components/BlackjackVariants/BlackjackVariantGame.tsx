@@ -21,7 +21,6 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAccount } from 'wagmi';
-import confetti from 'canvas-confetti';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -37,6 +36,19 @@ import { blackjackVariantFaqs } from './blackjackVariantFaqs';
 import { SessionChart, type SessionPoint } from '@/components/arcade2/SessionChart';
 import { FloatingPanel } from '@/components/arcade2/FloatingPanel';
 import { TableCard, TableCardStyles } from '@/components/shared/TableCard';
+import { TableResultBanner } from '@/components/shared/TableResultBanner';
+import { TableWinTextStyles } from '@/components/shared/TableWinText';
+import {
+  TableWinFxStyles,
+  TableWinGlow,
+  celebrateWin,
+  winTierFor,
+} from '@/components/shared/TableWinFx';
+import {
+  REVEAL_FLIP_GAP,
+  REVEAL_SHOWDOWN_PAUSE,
+  useStagedReveal,
+} from '@/hooks/use-staged-reveal';
 import { TableHandHistory, type TableHistoryRow } from '@/components/shared/TableHandHistory';
 import { BlackjackVariantFairnessModal } from './BlackjackVariantFairnessModal';
 import {
@@ -90,6 +102,14 @@ export function BlackjackVariantGame({ variant }: { variant: BjVariant }) {
   const [freeSplit, setFreeSplit] = useState(false);
   const [dealerCards, setDealerCards] = useState<number[]>([]);
   const [dealerTotal, setDealerTotal] = useState<number | null>(null);
+  // How many of the dealer's cards this viewer has actually seen turned. While
+  // the hand is live that is simply however many the variant exposes; at the
+  // showdown it walks up to the full hand one card at a time.
+  const {
+    shown: shownDealer,
+    revealTo: revealDealer,
+    snapTo: snapDealer,
+  } = useStagedReveal(0);
   const [stage, setStage] = useState<BjStage>('play');
   // Blackjack Switch's Super Match side bet.
   const [superMatch, setSuperMatch] = useState(false);
@@ -176,6 +196,9 @@ export function BlackjackVariantGame({ variant }: { variant: BjVariant }) {
         setFreeDouble(active.freeDouble);
         setFreeSplit(active.freeSplit);
         setDealerCards(active.dealerCards);
+        // Walking back into a live hand: these were turned before we got
+        // here, so they are already up rather than dealt again.
+        snapDealer(active.dealerCards.length);
         setDealerTotal(null);
         setResults(null);
         setStage(active.stage ?? 'play');
@@ -210,15 +233,6 @@ export function BlackjackVariantGame({ variant }: { variant: BjVariant }) {
     }
   }, []);
 
-  const winFx = useCallback(() => {
-    confetti({
-      particleCount: 110,
-      spread: 75,
-      origin: { y: 0.5 },
-      colors: ['#22D3EE', '#FCD34D', '#ffffff'],
-    });
-  }, []);
-
   /** Fold a settled response into state and bank the round. */
   const bankSettled = useCallback(
     (r: {
@@ -243,7 +257,6 @@ export function BlackjackVariantGame({ variant }: { variant: BjVariant }) {
       setStage('play');
       setSideResult(r.sideResult ?? null);
       setSidePayout(r.sidePayout ?? 0);
-      setPhase('settled');
       if (r.chipBalance) {
         try {
           setBalance(BigInt(r.chipBalance.split('.')[0] || '0'));
@@ -257,28 +270,28 @@ export function BlackjackVariantGame({ variant }: { variant: BjVariant }) {
         bet: r.committed,
         payout: r.totalPayout,
       });
-      if (net > 0) winFx();
-
       // The dealer's down card turns over at settlement in every variant that
-      // has one; Double Exposure has already shown it, so the flip is harmless
-      // there rather than wrong.
-      tableAudio.playFlip();
-      setTimeout(() => {
-        if (net > 0) {
-          if (r.committed > 0 && r.totalPayout >= r.committed * 3) tableAudio.playBigWin();
-          else tableAudio.playWin();
-          if (r.sidePayout && r.sidePayout > 0) setTimeout(() => tableAudio.playBonus(), 260);
-        } else if (net === 0) {
-          tableAudio.playPush();
-        } else {
-          tableAudio.playLose();
-        }
-      }, 340);
+      // has one, and then he draws to his standing total. Both happen one card
+      // at a time — before this they arrived in a single frame, so a dealer who
+      // drew out to 21 looked identical to one who was always going to.
+      // Double Exposure has already shown both cards, so it simply has fewer
+      // left to turn rather than a wrong first beat.
+      revealDealer(r.dealerCards.length, {
+        gap: REVEAL_FLIP_GAP,
+        startDelay: REVEAL_SHOWDOWN_PAUSE,
+        onCard: (i) => (i < 2 ? tableAudio.playFlip() : tableAudio.playDeal()),
+        onSettled: () => {
+          setPhase('settled');
+          celebrateWin(winTierFor(r.committed, r.totalPayout), {
+            bonus: (r.sidePayout ?? 0) > 0,
+          });
+        },
+      });
 
       setSession((prev) => [...prev, { drop: prev.length + 1, bet: r.committed, profit: net }]);
       loadMyHistory();
     },
-    [reportWin, rules, winFx, loadMyHistory],
+    [reportWin, rules, loadMyHistory, revealDealer],
   );
 
   // ---------------------------------------------------------------- deal
@@ -298,6 +311,7 @@ export function BlackjackVariantGame({ variant }: { variant: BjVariant }) {
     setResults(null);
     setDealerTotal(null);
     setDealerCards([]);
+    snapDealer(0);
     setHands([]);
     setSideResult(null);
     setSidePayout(0);
@@ -322,6 +336,7 @@ export function BlackjackVariantGame({ variant }: { variant: BjVariant }) {
       setFreeDouble(!!r.freeDouble);
       setFreeSplit(!!r.freeSplit);
       setDealerCards(r.dealerCards);
+      snapDealer(r.dealerCards.length);
       setCommitted(r.committed);
       setStage(r.stage ?? 'play');
       if (r.chipBalance) {
@@ -360,6 +375,7 @@ export function BlackjackVariantGame({ variant }: { variant: BjVariant }) {
         setFreeDouble(!!r.freeDouble);
         setFreeSplit(!!r.freeSplit);
         setDealerCards(r.dealerCards);
+        snapDealer(r.dealerCards.length);
         setCommitted(r.committed);
         setStage(r.stage ?? 'play');
         if (r.chipBalance) {
@@ -386,15 +402,25 @@ export function BlackjackVariantGame({ variant }: { variant: BjVariant }) {
   // -------------------------------------------------------------- derived
   const settled = phase === 'settled';
   const net = settled ? totalPayout - committed : 0;
+  // Only once the dealer has finished turning — the glow is part of the
+  // result, not a preview of it.
+  const winTier = settled ? winTierFor(committed, totalPayout) : null;
 
   const dealerSeats = useMemo(() => {
     // Before the showdown the server sends only what this variant lets you
     // see, so anything missing is genuinely absent rather than merely hidden.
-    if (settled) return dealerCards.map((c) => ({ card: c as number | null }));
-    const shown = dealerCards.map((c) => ({ card: c as number | null }));
-    while (shown.length < 2) shown.push({ card: null });
-    return shown;
-  }, [dealerCards, settled]);
+    //
+    // Two kinds of card, because a dealer does two different things: the two
+    // he started with are on the table the whole time and the hole card TURNS,
+    // while anything he drew afterwards LANDS. Reusing one animation for both
+    // made the draws look like they had been sitting there face down all along.
+    const out: Array<{ card: number | null; mode: 'flip' | 'draw' }> = [];
+    for (let i = 0; i < 2; i++) out.push({ card: dealerCards[i] ?? null, mode: 'flip' });
+    for (let i = 2; i < dealerCards.length; i++) {
+      out.push({ card: dealerCards[i], mode: 'draw' });
+    }
+    return out;
+  }, [dealerCards]);
 
   let bannerKind: 'win' | 'loss' | 'push' | null = null;
   let bannerTitle = '';
@@ -700,12 +726,15 @@ export function BlackjackVariantGame({ variant }: { variant: BjVariant }) {
             </div>
 
             <div
-              className="relative flex min-h-[clamp(320px,60vw,420px)] flex-col items-center justify-between gap-2.5 px-4 py-5"
+              className="relative flex min-h-[clamp(320px,60vw,420px)] flex-col items-center justify-between gap-2.5 overflow-hidden px-4 py-5"
               style={{
                 background:
                   'radial-gradient(ellipse 75% 60% at 50% 42%,rgba(34,211,238,.06),transparent 70%)',
               }}
             >
+              {/* The felt's reaction to the result, behind everything on it. */}
+              <TableWinGlow tier={winTier} round={roundId ?? undefined} />
+
               {/* Dealer */}
               <div className="w-full text-center">
                 <div className="mb-1.5 text-[10.5px] uppercase tracking-[0.16em] text-slate-500">
@@ -718,16 +747,22 @@ export function BlackjackVariantGame({ variant }: { variant: BjVariant }) {
                   )}
                 </div>
                 <div className="flex flex-wrap justify-center gap-1.5 sm:gap-2.5">
-                  {dealerSeats.map((s, i) => (
-                    <TableCard
-                      key={i}
-                      cardIdx={s.card ?? undefined}
-                      faceDown={s.card == null}
-                      width={CARD_W}
-                      encoding="blackjack"
-                      back={felt.back}
-                    />
-                  ))}
+                  {dealerSeats.map((s, i) =>
+                    // A card he hasn't drawn yet isn't on the table at all —
+                    // rendering it face down would promise a card that, as far
+                    // as the player can know, does not exist.
+                    s.mode === 'draw' && i >= shownDealer ? null : (
+                      <TableCard
+                        key={i}
+                        cardIdx={s.card ?? undefined}
+                        faceDown={i >= shownDealer}
+                        deal={s.mode === 'draw'}
+                        width={CARD_W}
+                        encoding="blackjack"
+                        back={felt.back}
+                      />
+                    ),
+                  )}
                 </div>
               </div>
 
@@ -814,45 +849,13 @@ export function BlackjackVariantGame({ variant }: { variant: BjVariant }) {
                 )}
               </div>
 
-              {bannerKind && (
-                <div className="pointer-events-none absolute inset-0 grid place-items-center">
-                  <div
-                    className={`tbl-banner-in rounded-2xl px-7 py-4 text-center ${
-                      bannerKind === 'win'
-                        ? 'border border-amber-500/50 shadow-[0_0_50px_-8px_rgba(245,158,11,0.55)]'
-                        : bannerKind === 'loss'
-                          ? 'border border-rose-400/40'
-                          : 'border border-slate-400/35'
-                    }`}
-                    style={{
-                      background:
-                        bannerKind === 'win'
-                          ? 'radial-gradient(ellipse at center,rgba(245,158,11,.22),rgba(4,12,19,.6))'
-                          : bannerKind === 'loss'
-                            ? 'radial-gradient(ellipse at center,rgba(251,113,133,.16),rgba(4,12,19,.65))'
-                            : 'radial-gradient(ellipse at center,rgba(148,163,184,.16),rgba(4,12,19,.6))',
-                    }}
-                  >
-                    <div
-                      className={`text-[12px] uppercase tracking-[0.22em] ${
-                        bannerKind === 'win'
-                          ? 'text-amber-300'
-                          : bannerKind === 'loss'
-                            ? 'text-rose-400'
-                            : 'text-slate-400'
-                      }`}
-                    >
-                      {bannerTitle}
-                    </div>
-                    <div
-                      className="arc-mono mt-1 font-bold text-white"
-                      style={{ fontSize: 'clamp(24px,7vw,38px)' }}
-                    >
-                      {bannerValue}
-                    </div>
-                  </div>
-                </div>
-              )}
+              <TableResultBanner
+  kind={bannerKind}
+  title={bannerTitle}
+  value={bannerValue}
+  tier={winTier}
+  round={roundId ?? undefined}
+/>
             </div>
           </Card>
 
@@ -988,6 +991,8 @@ export function BlackjackVariantGame({ variant }: { variant: BjVariant }) {
       </section>
 
       <TableCardStyles />
+      <TableWinFxStyles />
+      <TableWinTextStyles />
     </div>
   );
 }
