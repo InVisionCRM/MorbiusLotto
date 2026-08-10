@@ -22,7 +22,6 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useAccount } from 'wagmi';
-import confetti from 'canvas-confetti';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -34,6 +33,18 @@ import { useBigWin } from '@/contexts/big-win-context';
 import { SessionChart, type SessionPoint } from '@/components/arcade2/SessionChart';
 import { FloatingPanel } from '@/components/arcade2/FloatingPanel';
 import { TableCard, TableCardStyles } from '@/components/shared/TableCard';
+import {
+  TableWinFxStyles,
+  TableWinGlow,
+  celebrateWin,
+  winTierFor,
+} from '@/components/shared/TableWinFx';
+import {
+  REVEAL_DEAL_GAP,
+  REVEAL_FLIP_GAP,
+  REVEAL_SHOWDOWN_PAUSE,
+  useStagedReveal,
+} from '@/hooks/use-staged-reveal';
 import { TableFairnessModal, type DeckSlice } from '@/components/shared/TableFairnessModal';
 import { TableHandHistory, type TableHistoryRow } from '@/components/shared/TableHandHistory';
 import { TableFeltControls, useTableFelt } from '@/components/shared/TableFeltControls';
@@ -93,6 +104,21 @@ export function UltimateHoldemGame() {
   const [holeCards, setHoleCards] = useState<number[]>([]);
   const [board, setBoard] = useState<number[]>([]);
   const [dealerCards, setDealerCards] = useState<number[]>([]);
+  // Two reveal tracks, same as the multiplayer felt: the board fills a card
+  // at a time as each street comes out, and the dealer's two turn at the
+  // showdown after a beat. Before this the cards all appeared in one frame
+  // with the deal sounds staggered over the top, which is what made a street
+  // land as a jump cut with a rattle behind it.
+  const {
+    shown: shownBoard,
+    revealTo: revealBoard,
+    snapTo: snapBoard,
+  } = useStagedReveal(0);
+  const {
+    shown: shownDealer,
+    revealTo: revealDealer,
+    snapTo: snapDealer,
+  } = useStagedReveal(0);
   const [settlement, setSettlement] = useState<UthSettleResult | null>(null);
 
   // The committed stakes of the hand in play (locked at deal time).
@@ -173,7 +199,11 @@ export function UltimateHoldemGame() {
         setTrips(active.trips > 0);
         setHoleCards(active.holeCards);
         setBoard(active.board);
+        // Walking back into a live hand: this board was dealt before we got
+        // here, so it is simply on the table rather than dealt again.
+        snapBoard(active.board.length);
         setDealerCards([]);
+        snapDealer(0);
         setSettlement(null);
         setStage(active.stage);
         setLegalActions(active.legalActions);
@@ -183,7 +213,7 @@ export function UltimateHoldemGame() {
     return () => {
       cancelled = true;
     };
-  }, [address]);
+  }, [address, snapBoard, snapDealer]);
 
   const betting = phase === 'idle' || phase === 'settled';
 
@@ -211,15 +241,6 @@ export function UltimateHoldemGame() {
     }
   }, []);
 
-  const winFx = useCallback(() => {
-    confetti({
-      particleCount: 110,
-      spread: 75,
-      origin: { y: 0.5 },
-      colors: ['#22D3EE', '#FCD34D', '#ffffff'],
-    });
-  }, []);
-
   // ---------------------------------------------------------------- deal
   const deal = useCallback(async () => {
     if (!betting || !info) return;
@@ -237,7 +258,9 @@ export function UltimateHoldemGame() {
     tableAudio.init();
     tableAudio.playChip();
     setDealerCards([]);
+    snapDealer(0);
     setBoard([]);
+    snapBoard(0);
     setHandPlay(0);
     setPhase('dealing');
     try {
@@ -253,6 +276,7 @@ export function UltimateHoldemGame() {
       setAnte(r.ante);
       setHoleCards(r.holeCards);
       setBoard(r.board);
+      snapBoard(r.board.length);
       setStage(r.stage);
       setLegalActions(r.legalActions);
       try {
@@ -265,7 +289,7 @@ export function UltimateHoldemGame() {
       setPhase('idle');
       handleErr(e);
     }
-  }, [betting, info, ante, trips, balance, clientSeed, clampBet, handleErr]);
+  }, [betting, info, ante, trips, balance, clientSeed, clampBet, handleErr, snapBoard, snapDealer]);
 
   // -------------------------------------------------------------- actions
   const act = useCallback(
@@ -279,17 +303,18 @@ export function UltimateHoldemGame() {
         // A check: the street advances and the server hands over the newly
         // earned board cards. Nothing has been staked.
         if (!isUthSettled(r)) {
-          const revealed = r.board.length - board.length;
           setStage(r.stage);
           setBoard(r.board);
           setLegalActions(r.legalActions);
           setPhase('acting');
           // Betting Play commits chips; checking doesn't. Either way the new
-          // board cards land one after another.
+          // board cards land one after another — really one at a time now, not
+          // all at once with the sounds spread out behind them.
           if (action !== 'check') tableAudio.playCommit();
-          for (let i = 0; i < Math.max(0, revealed); i++) {
-            setTimeout(() => tableAudio.playDeal(), i * 100);
-          }
+          revealBoard(r.board.length, {
+            gap: REVEAL_DEAL_GAP,
+            onCard: () => tableAudio.playDeal(),
+          });
           return;
         }
 
@@ -306,26 +331,31 @@ export function UltimateHoldemGame() {
             /* keep last known */
           }
         }
-        setPhase('settled');
-
         const net = r.totalPayout - r.committed;
         reportWin({ game: "Ultimate Texas Hold'em", bet: r.committed, payout: r.totalPayout });
-        if (net > 0) winFx();
 
-        tableAudio.playFlip();
-        setTimeout(() => {
-          if (net > 0) {
-            // The Blind pays up to 500:1 here, so a genuinely big hand gets
-            // more than the ordinary win cue.
-            if (r.committed > 0 && r.totalPayout >= r.committed * 5) tableAudio.playBigWin();
-            else tableAudio.playWin();
-            if (r.tripsPayout && r.tripsPayout > 0) setTimeout(() => tableAudio.playBonus(), 260);
-          } else if (net === 0) {
-            tableAudio.playPush();
-          } else {
-            tableAudio.playLose();
-          }
-        }, 340);
+        // Any board still owed comes out first, then the dealer's two turn
+        // after a beat — his hand is the answer to the round, so it gets to be
+        // its own moment rather than arriving with everything else. The banner
+        // and the celebration wait for the last card.
+        revealBoard(r.board.length, {
+          gap: REVEAL_DEAL_GAP,
+          onCard: () => tableAudio.playDeal(),
+        });
+        // How much board this response is adding — the dealer waits for it to
+        // finish landing before he turns, so the two never overlap.
+        const boardOwed = Math.max(0, r.board.length - board.length);
+        revealDealer(r.dealerCards.length, {
+          gap: REVEAL_FLIP_GAP,
+          startDelay: boardOwed * REVEAL_DEAL_GAP + REVEAL_SHOWDOWN_PAUSE,
+          onCard: () => tableAudio.playFlip(),
+          onSettled: () => {
+            setPhase('settled');
+            celebrateWin(winTierFor(r.committed, r.totalPayout), {
+              bonus: (r.tripsPayout ?? 0) > 0,
+            });
+          },
+        });
 
         setHistory((prev) =>
           [
@@ -368,7 +398,7 @@ export function UltimateHoldemGame() {
     // `board` is read to work out how many cards this street newly turned over,
     // so it has to be a dependency — without it the count would be measured
     // against a stale board and the deal ticks would drift.
-    [roundId, phase, board, winFx, handleErr, reportWin],
+    [roundId, phase, board, revealBoard, revealDealer, handleErr, reportWin],
   );
 
   const openVerify = useCallback((id: string | null) => {
@@ -381,6 +411,10 @@ export function UltimateHoldemGame() {
     phase === 'idle' ? 0 : handAnte + handBlind + handTrips + handPlay;
   const net = settlement ? settlement.totalPayout - settlement.committed : 0;
   const revealed = phase === 'settled';
+  // Only once the dealer has finished turning — the glow is part of the
+  // result, not a preview of it.
+  const winTier =
+    revealed && settlement ? winTierFor(settlement.committed, settlement.totalPayout) : null;
 
   let bannerKind: 'win' | 'loss' | 'push' | null = null;
   let bannerTitle = '';
@@ -649,12 +683,15 @@ export function UltimateHoldemGame() {
             </div>
 
             <div
-              className="relative flex min-h-[clamp(320px,62vw,420px)] flex-col items-center justify-between gap-2.5 px-4 py-5"
+              className="relative flex min-h-[clamp(320px,62vw,420px)] flex-col items-center justify-between gap-2.5 overflow-hidden px-4 py-5"
               style={{
                 background:
                   'radial-gradient(ellipse 75% 60% at 50% 42%,rgba(34,211,238,.06),transparent 70%)',
               }}
             >
+              {/* The felt's reaction to the result, behind everything on it. */}
+              <TableWinGlow tier={winTier} round={roundId ?? undefined} />
+
               {/* Dealer seat */}
               <div className="w-full text-center">
                 <div className="mb-1.5 text-[10.5px] uppercase tracking-[0.16em] text-slate-500">
@@ -671,8 +708,11 @@ export function UltimateHoldemGame() {
                     [0, 1].map((i) => (
                       <TableCard
                         key={i}
-                        cardIdx={revealed ? dealerCards[i] : undefined}
-                        faceDown={!revealed}
+                        // The face is handed over as soon as the server sends
+                        // it and only `faceDown` is staged, so the card has
+                        // something to turn to when its moment comes.
+                        cardIdx={dealerCards[i]}
+                        faceDown={i >= shownDealer}
                         back={felt.back}
                         win={revealed && settlement?.winSide === 'dealer'}
                       />
@@ -688,7 +728,9 @@ export function UltimateHoldemGame() {
                 </div>
                 <div className="flex justify-center gap-1.5 sm:gap-2.5">
                   {[0, 1, 2, 3, 4].map((i) =>
-                    board[i] != null ? (
+                    // Sent by the server but not yet reached by the dealer is
+                    // still an empty seat, so a street lands a card at a time.
+                    board[i] != null && i < shownBoard ? (
                       <TableCard
                         key={i}
                         cardIdx={board[i]}
@@ -911,6 +953,7 @@ export function UltimateHoldemGame() {
       </section>
 
       <TableCardStyles />
+      <TableWinFxStyles />
     </div>
   );
 }

@@ -21,7 +21,6 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useAccount } from 'wagmi';
-import confetti from 'canvas-confetti';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -33,6 +32,17 @@ import { useBigWin } from '@/contexts/big-win-context';
 import { SessionChart, type SessionPoint } from '@/components/arcade2/SessionChart';
 import { FloatingPanel } from '@/components/arcade2/FloatingPanel';
 import { TableCard, TableCardStyles } from '@/components/shared/TableCard';
+import {
+  TableWinFxStyles,
+  TableWinGlow,
+  celebrateWin,
+  winTierFor,
+} from '@/components/shared/TableWinFx';
+import {
+  REVEAL_FLIP_GAP,
+  REVEAL_SHOWDOWN_PAUSE,
+  useStagedReveal,
+} from '@/hooks/use-staged-reveal';
 import { TableFairnessModal, type DeckSlice } from '@/components/shared/TableFairnessModal';
 import { TableHandHistory, type TableHistoryRow } from '@/components/shared/TableHandHistory';
 import { TableFeltControls, useTableFelt } from '@/components/shared/TableFeltControls';
@@ -79,6 +89,17 @@ export function CaribbeanStudGame() {
   const [dealerCards, setDealerCards] = useState<number[]>([]);
   const [settlement, setSettlement] = useState<CsDecisionResult | null>(null);
   const felt = useTableFelt();
+
+  // How many of the dealer's five have actually been turned. The up card is
+  // face up from the deal, so this sits at 1 through the decision and walks to
+  // 5 at the showdown — one card at a time, which is the whole point: the
+  // dealer's four down cards used to turn in the same frame with a single flip
+  // sound over them, and the hand was over before it looked like it had begun.
+  const {
+    shown: shownDealer,
+    revealTo: revealDealer,
+    snapTo: snapDealer,
+  } = useStagedReveal(0);
 
   const [handAnte, setHandAnte] = useState(0);
   const [handBonus, setHandBonus] = useState(0);
@@ -154,13 +175,16 @@ export function CaribbeanStudGame() {
         setDealerUpCard(active.dealerUpCard);
         setDealerCards([]);
         setSettlement(null);
+        // Walking back into a hand mid-decision: the up card was turned before
+        // we got here, so it is simply already up.
+        snapDealer(1);
         setPhase('decision');
       })
       .catch(() => {});
     return () => {
       cancelled = true;
     };
-  }, [address]);
+  }, [address, snapDealer]);
 
   const betting = phase === 'idle' || phase === 'settled';
 
@@ -188,15 +212,6 @@ export function CaribbeanStudGame() {
     }
   }, []);
 
-  const winFx = useCallback(() => {
-    confetti({
-      particleCount: 110,
-      spread: 75,
-      origin: { y: 0.5 },
-      colors: ['#22D3EE', '#FCD34D', '#ffffff'],
-    });
-  }, []);
-
   // ---------------------------------------------------------------- deal
   const deal = useCallback(async () => {
     if (!betting || !info) return;
@@ -215,6 +230,7 @@ export function CaribbeanStudGame() {
     tableAudio.playChip();
     setDealerCards([]);
     setDealerUpCard(null);
+    snapDealer(0);
     setPhase('dealing');
     try {
       const r = await dealCs({
@@ -228,6 +244,9 @@ export function CaribbeanStudGame() {
       setAnte(r.ante);
       setPlayerCards(r.playerCards);
       setDealerUpCard(r.dealerUpCard);
+      // The dealer's up card is face up from the moment it lands; the other
+      // four wait for the showdown.
+      snapDealer(1);
       // One tick per card, paced like a real deal rather than a single burst.
       r.playerCards.forEach((_, i) => setTimeout(() => tableAudio.playDeal(), i * 90));
       try {
@@ -240,7 +259,7 @@ export function CaribbeanStudGame() {
       setPhase('idle');
       handleErr(e);
     }
-  }, [betting, info, ante, bonus, balance, clientSeed, clampBet, handleErr]);
+  }, [betting, info, ante, bonus, balance, clientSeed, clampBet, handleErr, snapDealer]);
 
   // ------------------------------------------------------------- decision
   const decide = useCallback(
@@ -252,9 +271,6 @@ export function CaribbeanStudGame() {
         const r = await decideCs(roundId, action);
         setDealerCards(r.dealerCards);
         setSettlement(r);
-        // The dealer's four down cards turn together; the flip sound is one
-        // event, not four, because that is what it sounds like at a table.
-        tableAudio.playFlip();
         if (r.chipBalance) {
           try {
             setBalance(BigInt(r.chipBalance.split('.')[0] || '0'));
@@ -262,25 +278,25 @@ export function CaribbeanStudGame() {
             /* keep last known */
           }
         }
-        setPhase('settled');
 
         const net = r.totalPayout - r.committed;
         reportWin({ game: 'Caribbean Stud', bet: r.committed, payout: r.totalPayout });
-        if (net > 0) winFx();
 
-        // Settlement speaks after the reveal has had a beat to land.
-        setTimeout(() => {
-          if (net > 0) {
-            // A hand paying five times the stake or better earns the big cue.
-            if (r.committed > 0 && r.totalPayout >= r.committed * 5) tableAudio.playBigWin();
-            else tableAudio.playWin();
-            if (r.bonusPayout && r.bonusPayout > 0) setTimeout(() => tableAudio.playBonus(), 260);
-          } else if (net === 0) {
-            tableAudio.playPush();
-          } else {
-            tableAudio.playLose();
-          }
-        }, 340);
+        // The dealer turns his four down cards one at a time, after a beat —
+        // his hand is the answer to the round, so it gets to be an event. The
+        // banner and the celebration wait until the last card is over, which is
+        // what `phase` moving to 'settled' is doing here.
+        revealDealer(r.dealerCards.length, {
+          gap: REVEAL_FLIP_GAP,
+          startDelay: REVEAL_SHOWDOWN_PAUSE,
+          onCard: () => tableAudio.playFlip(),
+          onSettled: () => {
+            setPhase('settled');
+            celebrateWin(winTierFor(r.committed, r.totalPayout), {
+              bonus: (r.bonusPayout ?? 0) > 0,
+            });
+          },
+        });
 
         setHistory((prev) =>
           [
@@ -315,7 +331,7 @@ export function CaribbeanStudGame() {
         handleErr(e);
       }
     },
-    [roundId, phase, winFx, handleErr, reportWin],
+    [roundId, phase, revealDealer, handleErr, reportWin],
   );
 
   const openVerify = useCallback((id: string | null) => {
@@ -326,6 +342,10 @@ export function CaribbeanStudGame() {
   // -------------------------------------------------------------- derived
   const revealed = phase === 'settled';
   const net = settlement ? settlement.totalPayout - settlement.committed : 0;
+  // Only once the dealer has finished turning — the glow is part of the result,
+  // not a preview of it.
+  const winTier =
+    revealed && settlement ? winTierFor(settlement.committed, settlement.totalPayout) : null;
   const committedSoFar =
     phase === 'idle' ? 0 : handAnte + handBonus + (settlement ? settlement.call : 0);
 
@@ -581,12 +601,15 @@ export function CaribbeanStudGame() {
             </div>
 
             <div
-              className="relative flex min-h-[clamp(300px,58vw,390px)] flex-col items-center justify-between gap-2.5 px-4 py-5"
+              className="relative flex min-h-[clamp(300px,58vw,390px)] flex-col items-center justify-between gap-2.5 overflow-hidden px-4 py-5"
               style={{
                 background:
                   'radial-gradient(ellipse 75% 60% at 50% 42%,rgba(34,211,238,.06),transparent 70%)',
               }}
             >
+              {/* The felt's reaction to the result, behind everything on it. */}
+              <TableWinGlow tier={winTier} round={roundId ?? undefined} />
+
               {/* Dealer seat — one card up, four sealed until the showdown. */}
               <div className="w-full text-center">
                 <div className="mb-1.5 text-[10.5px] uppercase tracking-[0.16em] text-slate-500">
@@ -604,9 +627,12 @@ export function CaribbeanStudGame() {
                         <TableCard
                           key={i}
                           width={CARD_W}
-                          // Before the showdown only deck[5] — the up card — is known.
-                          cardIdx={revealed ? dealerCards[i] : i === 0 ? (dealerUpCard ?? undefined) : undefined}
-                          faceDown={!revealed && i !== 0}
+                          // Before the showdown only deck[5] — the up card — is
+                          // known. The face is handed over as soon as the server
+                          // sends it and only `faceDown` is staged, so each card
+                          // has something to turn to when its moment comes.
+                          cardIdx={dealerCards[i] ?? (i === 0 ? (dealerUpCard ?? undefined) : undefined)}
+                          faceDown={i >= shownDealer}
                           back={felt.back}
                           win={revealed && settlement?.winSide === 'dealer'}
                         />
@@ -634,7 +660,10 @@ export function CaribbeanStudGame() {
                           cardIdx={c}
                           width={CARD_W}
                           back={felt.back}
-                          win={settlement?.winSide === 'player'}
+                          // Gated on the showdown being over, like the dealer's
+                          // ring — otherwise the winning side is given away the
+                          // moment the server answers, before a card has turned.
+                          win={revealed && settlement?.winSide === 'player'}
                         />
                       ))
                     : [0, 1, 2, 3, 4].map((i) => (
@@ -824,6 +853,7 @@ export function CaribbeanStudGame() {
       </section>
 
       <TableCardStyles />
+      <TableWinFxStyles />
     </div>
   );
 }
