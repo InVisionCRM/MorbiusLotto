@@ -20,8 +20,12 @@
  *
  * THE IMAGES are screenshots of the live site rather than illustrations, so a
  * card cannot promise something the app does not show. Each was taken at
- * 1440x900 (2x), cropped past the nav rail to 16:10, and downscaled to
- * 1920x1200. Retake one by visiting the page it came from:
+ * 1440x900 (2x), cropped past the nav rail, then composed as promo art: the
+ * capture set in a window frame on a lit backdrop in its own accent colour,
+ * leaning on one axis, with a zoomed detail of the same capture pulled forward
+ * — the detail is a crop of the shot, never a separate render. Output is
+ * 1920x1200, the 16/10 both /devlog and the splash lay out. Retake one by
+ * visiting the page it came from:
  *
  *  01-multiplayer    /craps — the table, mid come-out roll
  *  02-new-games      / — the floor grid, scrolled to the NEW/MULTIPLAYER rows
