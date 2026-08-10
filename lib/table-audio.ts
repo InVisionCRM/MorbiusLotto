@@ -1,12 +1,12 @@
 /**
  * table-audio.ts — procedural sound for the house-banked table games.
  *
- * Web Audio, no asset files, same synth conventions as three-card-audio.ts and
- * dicex2-audio.ts. One engine shared by Ultimate Hold'em, Caribbean Stud, the
- * five blackjack variants and the craps tables, so a felt sounds like the rest
- * of the floor instead of like whoever wrote it.
+ * Web Audio, same synth conventions as three-card-audio.ts and dicex2-audio.ts.
+ * One engine shared by Ultimate Hold'em, Caribbean Stud, the five blackjack
+ * variants and the craps tables, so a felt sounds like the rest of the floor
+ * instead of like whoever wrote it.
  *
- * Two things worth knowing:
+ * Three things worth knowing:
  *
  *   * Mute is remembered across games and reloads. A player who silenced a
  *     blackjack table does not want the next felt to start talking again, so
@@ -14,7 +14,13 @@
  *   * Browsers refuse to start audio before a gesture. init() is safe to call
  *     as often as you like and does nothing until a real click has happened,
  *     so games call it from their first user action rather than on mount.
+ *   * The WIN sounds are no longer synthesised. They come from real recordings
+ *     via win-audio.ts, and the oscillator versions below now exist as the
+ *     fallback for when a sample has not arrived yet. Everything else here is
+ *     still generated — a card slide or a chip has no download to wait on.
  */
+
+import { playWinSting, preloadWinSounds } from '@/lib/win-audio';
 
 const MUTE_KEY = 'morb_table_audio_muted';
 
@@ -56,6 +62,10 @@ class TableAudio {
     } catch {
       /* unsupported — every play() below becomes a no-op */
     }
+    // Fetch the win samples now rather than at the moment of winning. This runs
+    // off the first user gesture, which is the earliest point a context can
+    // exist and still comfortably ahead of any settlement.
+    preloadWinSounds();
   }
 
   setMute(muted: boolean): void {
@@ -157,16 +167,47 @@ class TableAudio {
 
   // ── Settlement ───────────────────────────────────────────────────────────
 
-  /** Ascending major triad. */
+  /**
+   * An ordinary win.
+   *
+   * Reaches for the recorded sting first and only synthesises if it is not
+   * ready — which in practice means the very first win of a session on a cold
+   * cache. See win-audio.ts for why that answer is a boolean.
+   */
   playWin(): void {
+    if (playWinSting('small', { muted: this.mutedValue })) return;
+    this.synthWin();
+  }
+
+  /** A big win. */
+  playBigWin(): void {
+    if (playWinSting('big', { muted: this.mutedValue })) return;
+    this.synthBigWin();
+  }
+
+  /**
+   * The top tier — a hand paying several times the stake.
+   *
+   * Its own sting rather than a louder playBigWin, because the whole point of
+   * grading the response is that the rare result does not sound like the
+   * common one. Falls back to the big-win synth, which is the closest thing
+   * the oscillators can do.
+   */
+  playHugeWin(): void {
+    if (playWinSting('huge', { muted: this.mutedValue })) return;
+    this.synthBigWin();
+  }
+
+  /** Fallback: ascending major triad. */
+  private synthWin(): void {
     this.tone(1046.5, 'sine', 0.12, 0.3);
     this.tone(1318.51, 'sine', 0.12, 0.3, undefined, 110);
     this.tone(1567.98, 'sine', 0.34, 0.34, undefined, 220);
   }
 
-  /** A bigger win — the triad plus an octave above. */
-  playBigWin(): void {
-    this.playWin();
+  /** Fallback: the triad plus an octave above. */
+  private synthBigWin(): void {
+    this.synthWin();
     this.tone(2093, 'sine', 0.45, 0.26, undefined, 330);
     this.tone(1567.98, 'triangle', 0.5, 0.14, undefined, 330);
   }

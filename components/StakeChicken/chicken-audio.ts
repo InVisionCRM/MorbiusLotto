@@ -5,6 +5,8 @@
  * respected, and no-ops on the server.
  */
 
+import { playWinSting, preloadWinSounds } from '@/lib/win-audio';
+
 class ChickenAudio {
   private ctx: AudioContext | null = null;
   private muted = false;
@@ -16,6 +18,7 @@ class ChickenAudio {
       if (Ctor) this.ctx = new Ctor();
     }
     if (this.ctx && this.ctx.state === 'suspended') void this.ctx.resume();
+    preloadWinSounds();
   }
 
   setMute(m: boolean): void {
@@ -58,6 +61,9 @@ class ChickenAudio {
 
   /** A two-note chime on cash-out / full crossing. */
   playWin(): void {
+    // Recorded sting first; the tones below are the fallback for when it
+    // has not loaded yet. See lib/win-audio.ts.
+    if (playWinSting('small', { muted: this.muted })) return;
     this.tone(660, 0.12, 'sine', 0.06);
     window.setTimeout(() => this.tone(880, 0.16, 'sine', 0.06), 90);
   }

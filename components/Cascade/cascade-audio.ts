@@ -6,6 +6,8 @@
  * sDrop / sPop / sWin / sNo tones.
  */
 
+import { playWinSting, preloadWinSounds } from '@/lib/win-audio';
+
 class CascadeAudio {
   ctx: AudioContext | null = null;
   master: GainNode | null = null;
@@ -13,6 +15,7 @@ class CascadeAudio {
 
   init() {
     if (this.ctx || typeof window === 'undefined') return;
+    preloadWinSounds();
     try {
       const Ctx =
         window.AudioContext ||
@@ -61,6 +64,9 @@ class CascadeAudio {
 
   /** Win chime — ascending fifth. */
   playWin() {
+    // Recorded sting first; the tones below are the fallback for when it
+    // has not loaded yet. See lib/win-audio.ts.
+    if (playWinSting('small', { muted: this.muted })) return;
     this.tone(660, 'sine', 0.12, 0.32);
     setTimeout(() => this.tone(990, 'sine', 0.16, 0.34), 100);
   }

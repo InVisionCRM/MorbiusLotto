@@ -7,6 +7,8 @@
  * BGM arpeggio.
  */
 
+import { playWinSting, preloadWinSounds } from '@/lib/win-audio';
+
 class GameAudio {
   ctx: AudioContext | null = null;
   masterGain: GainNode | null = null;
@@ -21,6 +23,7 @@ class GameAudio {
 
   init() {
     if (this.hasInit || typeof window === 'undefined') return;
+    preloadWinSounds();
     try {
       const Ctx =
         window.AudioContext ||
@@ -106,6 +109,9 @@ class GameAudio {
   }
 
   playCashout() {
+    // Recorded sting first; the tones below are the fallback for when it
+    // has not loaded yet. See lib/win-audio.ts.
+    if (playWinSting('small', { muted: this.isMuted })) return;
     this.playTone(1046.5, 'sine', 0.1, 0.4); // C6
     setTimeout(() => this.playTone(1318.51, 'sine', 0.4, 0.5), 100); // E6
   }

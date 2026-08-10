@@ -58,7 +58,13 @@ function prefersReducedMotion(): boolean {
   return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 }
 
-/** The settlement sound for a tier, plus the side-bet cue layered behind it. */
+/**
+ * The settlement sound for a tier, plus the side-bet cue layered behind it.
+ *
+ * All three win tiers now sound different. They used not to: `big` fell through
+ * to the same triad as `small`, so the visuals graded a win three ways while the
+ * audio graded it two, and a big win announced itself as an ordinary one.
+ */
 export function playWinTier(tier: WinTier, opts: { bonus?: boolean } = {}): void {
   switch (tier) {
     case 'loss':
@@ -68,6 +74,9 @@ export function playWinTier(tier: WinTier, opts: { bonus?: boolean } = {}): void
       tableAudio.playPush();
       break;
     case 'huge':
+      tableAudio.playHugeWin();
+      break;
+    case 'big':
       tableAudio.playBigWin();
       break;
     default:

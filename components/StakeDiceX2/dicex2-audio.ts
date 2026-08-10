@@ -4,6 +4,8 @@
  * and a low felt thud on a loss. Same synth conventions as dice-audio.ts.
  */
 
+import { playWinSting, preloadWinSounds } from '@/lib/win-audio';
+
 class DiceX2Audio {
   ctx: AudioContext | null = null;
   master: GainNode | null = null;
@@ -11,6 +13,7 @@ class DiceX2Audio {
 
   init() {
     if (this.ctx || typeof window === 'undefined') return;
+    preloadWinSounds();
     try {
       const Ctx =
         window.AudioContext ||
@@ -55,6 +58,9 @@ class DiceX2Audio {
 
   /** Win chime — ascending major triad. */
   playWin() {
+    // Recorded sting first; the tones below are the fallback for when it
+    // has not loaded yet. See lib/win-audio.ts.
+    if (playWinSting('small', { muted: this.muted })) return;
     this.tone(1046.5, 'sine', 0.12, 0.35);
     setTimeout(() => this.tone(1318.51, 'sine', 0.12, 0.35), 110);
     setTimeout(() => this.tone(1567.98, 'sine', 0.35, 0.4), 220);
