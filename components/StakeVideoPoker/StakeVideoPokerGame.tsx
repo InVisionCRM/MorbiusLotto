@@ -48,6 +48,21 @@ const HISTORY_LIMIT = 25;
 
 type Phase = 'idle' | 'dealing' | 'held' | 'drawing' | 'result';
 
+/*
+ * Draw-flip timing, mirrored from the card so the round can wait for it.
+ * VideoPokerCard staggers each position by CARD_FLIP_STAGGER_MS and the flip
+ * itself runs CARD_FLIP_MS (`.vp-draw-flip-wrap` in globals.css). Keep these in
+ * step with both, or the result will start announcing itself early again.
+ */
+const CARD_FLIP_STAGGER_MS = 75;
+const CARD_FLIP_MS = 540;
+
+/** When the last replaced card has finished turning, given which were held. */
+function drawRevealMs(holds: boolean[]): number {
+  const lastDrawn = holds.reduce((last, held, i) => (held ? last : i), -1);
+  return lastDrawn < 0 ? 0 : lastDrawn * CARD_FLIP_STAGGER_MS + CARD_FLIP_MS;
+}
+
 interface DrawResultState {
   category: VideoPokerCategory;
   categoryName: string;
@@ -239,7 +254,16 @@ export function StakeVideoPokerGame() {
       }
       setDrawKey((k) => k + 1);
       setPhase('result');
-      reportWin({ game: 'Video Poker', bet: activeBet, payout: r.payout });
+      // Held back until the last replaced card has actually turned. reportWin
+      // now drives the app-wide win word, and fired here it announced the hand
+      // up to eight tenths of a second before the player could see it.
+      const t = setTimeout(
+        () => reportWin({ game: 'Video Poker', bet: activeBet, payout: r.payout }),
+        drawRevealMs(holds),
+      );
+      // timersRef is already cleared on deal, on new hand and on unmount, so a
+      // pending announcement can never land on the following hand.
+      timersRef.current.push(t);
       setSession((prev) => [...prev, { drop: prev.length + 1, bet: activeBet, profit: r.payout - activeBet }]);
       setHands((prev) =>
         [

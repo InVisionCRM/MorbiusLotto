@@ -34,6 +34,7 @@ import { useBigWin } from '@/contexts/big-win-context';
 import { SessionChart, type SessionPoint } from '@/components/arcade2/SessionChart';
 import { FloatingPanel } from '@/components/arcade2/FloatingPanel';
 import { PlayingCard } from './PlayingCard';
+import { useStagedReveal } from '@/hooks/use-staged-reveal';
 import { ThreeCardInfoTabs } from './ThreeCardInfoTabs';
 import { ThreeCardFairnessModal } from './ThreeCardFairnessModal';
 import { ReplayConfirmOverlay } from '@/components/share/ReplayConfirmOverlay';
@@ -58,6 +59,13 @@ const HISTORY_LIMIT = 25;
 const CHIP_STEPS = [100, 500, 1000] as const;
 /** Replay reveal pacing — deal player hand, flip the dealer, then the banner. */
 const REPLAY_REVEAL_MS = 520;
+/*
+ * The dealer's three come out one at a time, after a beat. Slower than Pai
+ * Gow's seven-card sweep — three cards is a showdown, not a sweep, and this is
+ * the moment the round turns on: whether the dealer even qualifies.
+ */
+const DEALER_REVEAL_GAP = 300;
+const DEALER_REVEAL_PAUSE = 380;
 const REPLAY_SETTLE_MS = 620;
 
 type Phase = 'idle' | 'dealing' | 'decision' | 'revealing' | 'settled';
@@ -80,6 +88,15 @@ export function ThreeCardPokerGame() {
   const [playerCards, setPlayerCards] = useState<number[]>([]);
   const [dealerCards, setDealerCards] = useState<number[]>([]);
   const [dealerRevealed, setDealerRevealed] = useState(false);
+  // How many of the dealer's three have actually come out. All three used to
+  // land in one frame under a single flip sound, with the banner and the
+  // confetti firing in that same frame — the round was over before the reveal
+  // that decides it had happened.
+  const {
+    shown: shownDealer,
+    revealTo: revealDealer,
+    snapTo: snapDealer,
+  } = useStagedReveal(0);
   const [settlement, setSettlement] = useState<ThreeCardDecisionResult | null>(null);
   // The committed Ante / Pair Plus of the hand in play (locked at deal time).
   const [handAnte, setHandAnte] = useState(0);
@@ -260,7 +277,6 @@ export function ThreeCardPokerGame() {
       setPhase('revealing');
       setError(null);
       threeCardAudio.init();
-      threeCardAudio.playFlip();
       try {
         const r = await decideThreeCard(roundId, action);
         setDealerCards(r.dealerCards);
@@ -273,14 +289,26 @@ export function ThreeCardPokerGame() {
             /* keep last known */
           }
         }
-        setPhase('settled');
 
         const committed = r.ante + r.play + r.pairPlus;
         const net = r.totalPayout - committed;
-        reportWin({ game: 'Three Card Poker', bet: committed, payout: r.totalPayout });
-        if (net > 0) winFx();
-        else if (net === 0) threeCardAudio.playPush();
-        else threeCardAudio.playLose();
+
+        // One card at a time, each with its own sound, after a beat. Everything
+        // that announces the result waits for the last of them — including
+        // reportWin, which now drives the app-wide win word and would otherwise
+        // throw MEGA WIN across the screen while the dealer was still turning.
+        revealDealer(r.dealerCards.length, {
+          gap: DEALER_REVEAL_GAP,
+          startDelay: DEALER_REVEAL_PAUSE,
+          onCard: () => threeCardAudio.playFlip(),
+          onSettled: () => {
+            setPhase('settled');
+            reportWin({ game: 'Three Card Poker', bet: committed, payout: r.totalPayout });
+            if (net > 0) winFx();
+            else if (net === 0) threeCardAudio.playPush();
+            else threeCardAudio.playLose();
+          },
+        });
 
         setHistory((prev) =>
           [
@@ -307,12 +335,13 @@ export function ThreeCardPokerGame() {
         handleErr(e);
       }
     },
-    [roundId, phase, winFx, handleErr, reportWin],
+    [roundId, phase, winFx, handleErr, reportWin, revealDealer],
   );
 
   const playAgain = useCallback(() => {
     timersRef.current.forEach(clearTimeout);
     timersRef.current = [];
+    snapDealer(0);
     setPendingReplay(null);
     setReplaying(false);
     setRoundId(null);
@@ -322,7 +351,7 @@ export function ThreeCardPokerGame() {
     setSettlement(null);
     setError(null);
     setPhase('idle');
-  }, []);
+  }, [snapDealer]);
 
   // Replay finish: drop the rebuilt settlement + banner and release the replay
   // flag. No reportWin / balance / history / session / confetti — pure re-watch.
@@ -344,6 +373,7 @@ export function ThreeCardPokerGame() {
       setSettlement(null);
       setDealerCards([]);
       setDealerRevealed(false);
+      snapDealer(0);
       setHandAnte(res.ante);
       setHandPairPlus(res.pairPlus);
       setPlayerCards(res.playerCards);
@@ -353,13 +383,19 @@ export function ThreeCardPokerGame() {
         setPhase('revealing');
         setDealerCards(res.dealerCards);
         setDealerRevealed(true);
-        threeCardAudio.playFlip();
-        const t2 = setTimeout(() => finishReplay(res), REPLAY_SETTLE_MS);
-        timersRef.current.push(t2);
+        // Staged the same way as a live hand — a replay that skipped straight
+        // to the answer would not be showing you the hand you played.
+        revealDealer(res.dealerCards.length, {
+          gap: DEALER_REVEAL_GAP,
+          startDelay: DEALER_REVEAL_PAUSE,
+          onCard: () => threeCardAudio.playFlip(),
+          settleDelay: REPLAY_SETTLE_MS,
+          onSettled: () => finishReplay(res),
+        });
       }, REPLAY_REVEAL_MS);
       timersRef.current.push(t1);
     },
-    [finishReplay],
+    [finishReplay, revealDealer],
   );
 
   // ── Replay a past round: stage the confirm overlay, then re-run the exact same
@@ -422,6 +458,9 @@ export function ThreeCardPokerGame() {
 
   // -------------------------------------------------------------- derived
   const playerEval = playerCards.length === 3 ? evaluate3(playerCards) : null;
+  // The rings and labels wait for the whole hand to be out; lit mid-reveal
+  // they would announce the winner while cards were still coming.
+  const settled = phase === 'settled';
   const dealerEval = dealerRevealed && dealerCards.length === 3 ? evaluate3(dealerCards) : null;
   const dealerQual = dealerEval ? dealerQualifies(dealerEval) : null;
 
@@ -690,14 +729,21 @@ export function ThreeCardPokerGame() {
                 </div>
                 <div className="flex justify-center gap-2.5">
                   {playerCards.length === 3 &&
-                    [0, 1, 2].map((i) => (
-                      <PlayingCard
-                        key={i}
-                        cardIdx={dealerRevealed ? dealerCards[i] : undefined}
-                        faceDown={!dealerRevealed}
-                        win={dealerRevealed && settlement?.winSide === 'dealer'}
-                      />
-                    ))}
+                    [0, 1, 2].map((i) =>
+                      // A card the dealer has not turned yet stays face down —
+                      // and the ring waits for the whole hand, or it would name
+                      // the winner while cards were still coming out.
+                      dealerRevealed && i < shownDealer ? (
+                        <PlayingCard
+                          key={i}
+                          cardIdx={dealerCards[i]}
+                          deal
+                          win={settled && settlement?.winSide === 'dealer'}
+                        />
+                      ) : (
+                        <PlayingCard key={i} faceDown />
+                      ),
+                    )}
                 </div>
               </div>
 
@@ -711,7 +757,7 @@ export function ThreeCardPokerGame() {
                 </div>
                 <div className="flex justify-center gap-2.5">
                   {playerCards.map((c, i) => (
-                    <PlayingCard key={i} cardIdx={c} win={settlement?.winSide === 'player'} />
+                    <PlayingCard key={i} cardIdx={c} win={settled && settlement?.winSide === 'player'} />
                   ))}
                   {playerCards.length === 0 &&
                     [0, 1, 2].map((i) => (

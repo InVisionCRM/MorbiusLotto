@@ -265,10 +265,14 @@ export function BlackjackVariantGame({ variant }: { variant: BjVariant }) {
         }
       }
       const net = r.totalPayout - r.committed;
+      // This felt lands the word inside the table once the dealer has
+      // finished turning, so the app-wide one would be a second copy at the
+      // wrong moment.
       reportWin({
         game: rules?.name ?? 'Blackjack variant',
         bet: r.committed,
         payout: r.totalPayout,
+        ownsCelebration: true,
       });
       // The dealer's down card turns over at settlement in every variant that
       // has one, and then he draws to his standing total. Both happen one card
