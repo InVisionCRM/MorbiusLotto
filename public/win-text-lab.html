@@ -1,0 +1,570 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Win text lab — MORBlotto</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Titan+One&family=Bangers&family=Lilita+One&family=Bungee&family=Bowlby+One+SC&family=Shrikhand&family=Chakra+Petch:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+/* ── Lab chrome ───────────────────────────────────────────────────────── */
+*{box-sizing:border-box}
+body{margin:0;background:#050E16;color:#cbd5e1;font-family:'Chakra Petch',system-ui,sans-serif;
+     background-image:radial-gradient(ellipse 70% 50% at 50% 0%,rgba(34,211,238,.07),transparent 70%)}
+header{position:sticky;top:0;z-index:20;backdrop-filter:blur(10px);
+        background:rgba(5,14,22,.86);border-bottom:1px solid #0e3040;padding:14px 18px}
+h1{margin:0 0 3px;font-size:15px;letter-spacing:.22em;text-transform:uppercase;color:#22D3EE}
+.sub{font-size:12px;color:#64748b;line-height:1.5;max-width:70ch}
+.controls{display:flex;flex-wrap:wrap;gap:14px;align-items:center;margin-top:12px}
+label{font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:#475569;display:block;margin-bottom:4px}
+select,input[type=text]{background:#07131F;color:#e2e8f0;border:1px solid #164e63;border-radius:8px;
+  padding:7px 10px;font-family:inherit;font-size:13px;min-width:150px}
+button{background:#0e7490;color:#ecfeff;border:0;border-radius:8px;padding:9px 16px;
+  font-family:inherit;font-size:12px;letter-spacing:.14em;text-transform:uppercase;cursor:pointer;font-weight:600}
+button:hover{background:#22D3EE;color:#04202A}
+main{padding:18px;display:grid;gap:14px;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));max-width:1500px;margin:0 auto}
+.cell{position:relative;border:1px solid #0e3040;border-radius:14px;overflow:hidden;
+  background:radial-gradient(ellipse 75% 60% at 50% 45%,rgba(34,211,238,.06),transparent 70%),#07131F;
+  min-height:190px;display:flex;flex-direction:column;cursor:pointer;transition:border-color .15s}
+.cell:hover{border-color:#22D3EE}
+.cell .meta{display:flex;justify-content:space-between;align-items:baseline;padding:9px 12px 0;gap:8px}
+.name{font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:#22D3EE;font-weight:700}
+.tag{font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:#475569}
+.desc{padding:3px 12px 0;font-size:11px;color:#64748b;line-height:1.45;min-height:30px}
+.stage{flex:1;display:grid;place-items:center;padding:6px 12px 20px;overflow:hidden}
+.replay{position:absolute;right:9px;bottom:8px;font-size:9px;letter-spacing:.14em;
+  text-transform:uppercase;color:#334155}
+.note{max-width:1500px;margin:6px auto 30px;padding:0 18px;font-size:12px;color:#475569;line-height:1.6}
+.note code{color:#22D3EE;font-size:11px}
+
+/* ── The component's own CSS, lifted verbatim from
+      components/shared/TableWinText.tsx so the lab cannot drift from it ─── */
+
+      .tw-root {
+        position: relative;
+        display: inline-block;
+        /* Never wider than the felt — the words wrap onto two lines on a
+           narrow phone rather than running off both edges. */
+        max-width: 100%;
+        line-height: 1.02;
+        font-size: var(--tw-size);
+        letter-spacing: 0.012em;
+        /* Depth needs somewhere to go — the 3D arrivals rotate in this space. */
+        perspective: 620px;
+        /* Tight enough to halo the letters rather than fog them. */
+        filter: drop-shadow(0 0 12px var(--tw-glow));
+      }
+
+      .tw-word-wrap {
+        display: inline-block;
+        transform-style: preserve-3d;
+      }
+      /* A word never breaks across lines, however narrow the felt gets. */
+      .tw-word {
+        display: inline-block;
+        white-space: nowrap;
+      }
+      .tw-word + .tw-word {
+        margin-left: 0.26em;
+      }
+
+      /* The slab, drawn as the letter's own text: solid dark fill, a stroke
+         widening the silhouette, and a stack of steps walking down-right to
+         build the extrude.
+         The face goes on ::after rather than the depth on ::before, which
+         looks equivalent and is not: the letters carry transforms, a transform
+         establishes a stacking context, and inside one a z-index:-1 child
+         still paints above the element's own background. Done the other way
+         round the extrude covers the gradient and every win reads as flat
+         brown. ::after paints above its parent's content unconditionally, so
+         the face lands on top with no z-index to be clamped. */
+      .tw-letter {
+        position: relative;
+        display: inline-block;
+        transform-style: preserve-3d;
+        color: var(--tw-depth);
+        -webkit-text-fill-color: var(--tw-depth);
+        -webkit-text-stroke: 0.055em var(--tw-stroke);
+        text-shadow:
+          0.014em 0.014em 0 var(--tw-depth),
+          0.028em 0.028em 0 var(--tw-depth),
+          0.042em 0.042em 0 var(--tw-depth),
+          0.056em 0.056em 0 var(--tw-depth),
+          0.07em 0.07em 0 var(--tw-depth),
+          0.084em 0.084em 0 var(--tw-depth),
+          0.098em 0.098em 0 var(--tw-depth),
+          0.112em 0.112em 0 var(--tw-depth),
+          0.126em 0.126em 0.02em rgba(0, 0, 0, 0.5),
+          0.14em 0.16em 0.08em rgba(0, 0, 0, 0.55);
+      }
+
+      /* The lit face. Sits inside the stroked silhouette, so the dark outline
+         reads as a keyline around the gradient.
+         The gloss travels here rather than in an overlay above the word: an
+         overlay is a rectangle, and a rectangle blended over a dark felt is a
+         visible grey bar sitting next to the letters. Riding it as a second
+         background layer on the same clipped face means the shine can only
+         ever appear on the glyphs. */
+      .tw-letter::after {
+        content: attr(data-ch);
+        position: absolute;
+        left: 0;
+        top: 0;
+        background-image: linear-gradient(
+            104deg,
+            transparent 43%,
+            rgba(255, 255, 255, 0.9) 50%,
+            transparent 57%
+          ),
+          var(--tw-face);
+        background-size:
+          320% 100%,
+          100% 100%;
+        background-position:
+          210% 0,
+          0 0;
+        background-repeat: no-repeat;
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+        -webkit-text-fill-color: transparent;
+        -webkit-text-stroke: 0;
+        text-shadow: none;
+      }
+
+      /* ── Arrivals ───────────────────────────────────────────────────────
+         Every variant is one keyframe set plus the same --i stagger, so a new
+         arrival is a keyframe and nothing else. */
+      .tw-v-slam .tw-letter,
+      .tw-v-drop .tw-letter,
+      .tw-v-spin .tw-letter,
+      .tw-v-slide .tw-letter,
+      .tw-v-pop .tw-letter,
+      .tw-v-flip .tw-letter,
+      .tw-v-zoom .tw-letter,
+      .tw-v-roll .tw-letter,
+      .tw-v-bounce .tw-letter,
+      .tw-v-wave .tw-letter {
+        animation-delay: calc(var(--i) * var(--tw-stagger));
+        animation-fill-mode: both;
+      }
+
+      .tw-v-slam .tw-letter {
+        animation-name: tw-slam;
+        animation-duration: 0.64s;
+        animation-timing-function: cubic-bezier(0.2, 1.5, 0.4, 1);
+      }
+      @keyframes tw-slam {
+        0% {
+          transform: scale(4.2) translateY(-6%);
+          opacity: 0;
+          filter: blur(7px);
+        }
+        52% {
+          transform: scale(0.84);
+          opacity: 1;
+          filter: blur(0);
+        }
+        70% {
+          transform: scale(1.12) scaleY(0.92);
+        }
+        85% {
+          transform: scale(0.96) scaleY(1.04);
+        }
+        100% {
+          transform: scale(1);
+        }
+      }
+
+      .tw-v-drop .tw-letter {
+        animation-name: tw-drop;
+        animation-duration: 0.78s;
+        animation-timing-function: cubic-bezier(0.3, 0.9, 0.3, 1);
+      }
+      @keyframes tw-drop {
+        0% {
+          transform: translateY(-280%) rotate(-14deg);
+          opacity: 0;
+        }
+        48% {
+          transform: translateY(0) rotate(0);
+          opacity: 1;
+        }
+        /* Squash on landing, then a smaller rebound — the cartoon beat. */
+        60% {
+          transform: translateY(0) scaleY(0.76) scaleX(1.16);
+        }
+        74% {
+          transform: translateY(-26%) scaleY(1.08) scaleX(0.95);
+        }
+        88% {
+          transform: translateY(0) scaleY(0.93) scaleX(1.04);
+        }
+        100% {
+          transform: translateY(0) scale(1);
+        }
+      }
+
+      .tw-v-spin .tw-letter {
+        animation-name: tw-spin;
+        animation-duration: 0.92s;
+        animation-timing-function: cubic-bezier(0.22, 0.9, 0.25, 1);
+      }
+      @keyframes tw-spin {
+        0% {
+          transform: rotateY(900deg) scale(0.18);
+          opacity: 0;
+        }
+        58% {
+          transform: rotateY(0deg) scale(1.2);
+          opacity: 1;
+        }
+        78% {
+          transform: rotateY(0deg) scale(0.92);
+        }
+        100% {
+          transform: rotateY(0deg) scale(1);
+        }
+      }
+
+      .tw-v-slide .tw-letter {
+        animation-name: tw-slide;
+        animation-duration: 0.6s;
+        animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+      }
+      @keyframes tw-slide {
+        0% {
+          transform: translateX(calc(var(--dir) * 160%)) skewX(calc(var(--dir) * -14deg));
+          opacity: 0;
+        }
+        72% {
+          transform: translateX(calc(var(--dir) * -9%)) skewX(calc(var(--dir) * 4deg));
+          opacity: 1;
+        }
+        100% {
+          transform: none;
+        }
+      }
+
+      .tw-v-pop .tw-letter {
+        animation-name: tw-pop;
+        animation-duration: 0.56s;
+        animation-timing-function: cubic-bezier(0.2, 1.7, 0.4, 1);
+      }
+      @keyframes tw-pop {
+        0% {
+          transform: scale(0) rotate(-28deg);
+          opacity: 0;
+        }
+        62% {
+          transform: scale(1.26) rotate(7deg);
+          opacity: 1;
+        }
+        80% {
+          transform: scale(0.9) rotate(-4deg);
+        }
+        100% {
+          transform: scale(1) rotate(0);
+        }
+      }
+
+      .tw-v-flip .tw-letter {
+        animation-name: tw-flip;
+        animation-duration: 0.7s;
+        animation-timing-function: cubic-bezier(0.25, 1.1, 0.3, 1);
+      }
+      @keyframes tw-flip {
+        0% {
+          transform: rotateX(-115deg) translateY(-45%);
+          opacity: 0;
+        }
+        58% {
+          transform: rotateX(20deg) translateY(0);
+          opacity: 1;
+        }
+        78% {
+          transform: rotateX(-10deg);
+        }
+        100% {
+          transform: rotateX(0);
+        }
+      }
+
+      .tw-v-zoom .tw-letter {
+        animation-name: tw-zoom;
+        animation-duration: 0.72s;
+        animation-timing-function: cubic-bezier(0.18, 1, 0.28, 1);
+      }
+      @keyframes tw-zoom {
+        0% {
+          transform: translateZ(-820px) rotate(14deg);
+          opacity: 0;
+        }
+        70% {
+          transform: translateZ(70px) rotate(-4deg);
+          opacity: 1;
+        }
+        100% {
+          transform: translateZ(0) rotate(0);
+        }
+      }
+
+      .tw-v-roll .tw-letter {
+        animation-name: tw-roll;
+        animation-duration: 0.78s;
+        animation-timing-function: cubic-bezier(0.2, 1, 0.3, 1);
+      }
+      @keyframes tw-roll {
+        0% {
+          transform: translateX(-240%) rotate(-540deg);
+          opacity: 0;
+        }
+        72% {
+          transform: translateX(8%) rotate(14deg);
+          opacity: 1;
+        }
+        100% {
+          transform: none;
+        }
+      }
+
+      .tw-v-bounce .tw-letter {
+        animation-name: tw-bounce;
+        animation-duration: 1s;
+        animation-timing-function: linear;
+      }
+      @keyframes tw-bounce {
+        0% {
+          transform: translateY(-300%);
+          opacity: 0;
+        }
+        30% {
+          transform: translateY(0);
+          opacity: 1;
+        }
+        42% {
+          transform: translateY(-46%);
+        }
+        54% {
+          transform: translateY(0) scaleY(0.86) scaleX(1.1);
+        }
+        66% {
+          transform: translateY(-20%) scale(1);
+        }
+        78% {
+          transform: translateY(0) scaleY(0.94) scaleX(1.03);
+        }
+        88% {
+          transform: translateY(-7%);
+        }
+        100% {
+          transform: translateY(0) scale(1);
+        }
+      }
+
+      .tw-v-wave .tw-letter {
+        animation-name: tw-wave;
+        animation-duration: 0.86s;
+        animation-timing-function: cubic-bezier(0.25, 1.2, 0.35, 1);
+      }
+      @keyframes tw-wave {
+        0% {
+          transform: translateY(120%) rotate(calc(var(--dir) * 20deg)) scale(0.6);
+          opacity: 0;
+        }
+        55% {
+          transform: translateY(-24%) rotate(calc(var(--dir) * -6deg)) scale(1.12);
+          opacity: 1;
+        }
+        78% {
+          transform: translateY(8%) rotate(0) scale(0.97);
+        }
+        100% {
+          transform: translateY(0) rotate(0) scale(1);
+        }
+      }
+
+      /* ── After it lands ────────────────────────────────────────────────
+         A slow bob so the word breathes rather than freezing, and a gloss
+         travelling across the face. Both start once the letters are home. */
+      .tw-root.tw-idle .tw-word-wrap {
+        animation: tw-bob 2.6s ease-in-out 1.1s infinite;
+      }
+      @keyframes tw-bob {
+        0%,
+        100% {
+          transform: translateY(0) rotate(0);
+        }
+        50% {
+          transform: translateY(-3.5%) rotate(-0.5deg);
+        }
+      }
+
+      .tw-root.tw-idle .tw-letter::after {
+        animation: tw-gloss 3.4s cubic-bezier(0.4, 0, 0.2, 1) 1.1s infinite;
+      }
+      @keyframes tw-gloss {
+        0% {
+          background-position:
+            210% 0,
+            0 0;
+        }
+        /* Long tail so the sweep is an occasional glint, not a strobe. */
+        38%,
+        100% {
+          background-position:
+            -110% 0,
+            0 0;
+        }
+      }
+
+      /* Ring of light thrown off on impact. */
+      .tw-shock {
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        width: 1.4em;
+        height: 1.4em;
+        margin: -0.7em 0 0 -0.7em;
+        border-radius: 999px;
+        border: 0.06em solid var(--tw-glow);
+        pointer-events: none;
+        animation: tw-shock 0.72s cubic-bezier(0.2, 0.7, 0.3, 1) 0.16s both;
+      }
+      @keyframes tw-shock {
+        0% {
+          transform: scale(0.2);
+          opacity: 0;
+        }
+        22% {
+          opacity: 0.95;
+        }
+        100% {
+          transform: scale(4.6);
+          opacity: 0;
+        }
+      }
+
+      /* Someone who asked for less motion still gets the word, at full size
+         and with its depth — it simply arrives instead of performing. */
+      @media (prefers-reduced-motion: reduce) {
+        .tw-root .tw-letter,
+        .tw-root .tw-letter::after,
+        .tw-root .tw-word-wrap,
+        .tw-shock {
+          animation: none !important;
+          transform: none !important;
+          opacity: 1 !important;
+        }
+        .tw-shock {
+          display: none;
+        }
+      }
+    
+</style></head>
+<body>
+<header>
+  <h1>Win text lab</h1>
+  <div class="sub">Every arrival against every loaded display face. Click any tile to replay it, or
+    hit Replay all. Pick a font + animation and I'll lock it in as the tier default.</div>
+  <div class="controls">
+    <div><label for="font">Font</label><select id="font">
+      <option value="titan">Titan One</option><option value="bangers">Bangers</option><option value="lilita">Lilita One</option><option value="bungee">Bungee</option><option value="bowlby">Bowlby One SC</option><option value="shrikhand">Shrikhand</option>
+      <option value="__all">— compare all fonts —</option>
+    </select></div>
+    <div><label for="pal">Palette</label><select id="pal">
+      <option value="gold">Gold (win)</option><option value="cyan">Cyan</option>
+      <option value="violet">Violet</option><option value="rose">Rose</option>
+    </select></div>
+    <div><label for="word">Word</label><input id="word" type="text" value="BIG WIN"></div>
+    <div><label for="size">Size</label><select id="size">
+      <option value="clamp(30px,7vw,52px)">Felt size</option>
+      <option value="clamp(38px,9vw,72px)">Large</option>
+      <option value="clamp(24px,5vw,38px)">Small</option>
+    </select></div>
+    <div><label>&nbsp;</label><button id="replay">Replay all</button></div>
+  </div>
+</header>
+
+<main id="grid"></main>
+<div class="note">
+  Rendered from the exact CSS in <code>components/shared/TableWinText.tsx</code> — this page inlines that
+  stylesheet verbatim, so what you see here is what the felts render. Depth is a two-layer glyph:
+  a gradient face in front, a stepped extrude behind.
+</div>
+
+<script>
+const VARIANTS = ['slam', 'drop', 'spin', 'slide', 'pop', 'flip', 'zoom', 'roll', 'bounce', 'wave'];
+const BLURB = {'slam': 'Crashes in from huge, overshoots, settles. The heaviest arrival.', 'drop': 'Falls from above, squashes on landing, rebounds. Most cartoonish.', 'spin': 'Each letter spins 900° into place — the spin-to-spell.', 'slide': 'Letters alternate in from left and right with a skew.', 'pop': 'Elastic scale from nothing with a twist. Quick and light.', 'flip': 'Tumbles forward on the X axis like a falling card.', 'zoom': 'Rushes at you from far back in 3D space.', 'roll': 'Rolls in from the left, 540° of rotation.', 'bounce': 'Drops and bounces several times before it settles.', 'wave': 'Rises from below with alternating tilt, cresting into place.'};
+const FONT_STACKS = {
+  titan:"'Titan One',system-ui,sans-serif", bangers:"'Bangers',system-ui,sans-serif",
+  lilita:"'Lilita One',system-ui,sans-serif", bungee:"'Bungee',system-ui,sans-serif",
+  bowlby:"'Bowlby One SC',system-ui,sans-serif", shrikhand:"'Shrikhand',system-ui,sans-serif"
+};
+const FONT_NAMES = {titan:'Titan One',bangers:'Bangers',lilita:'Lilita One',
+  bungee:'Bungee',bowlby:'Bowlby One SC',shrikhand:'Shrikhand'};
+const PALETTES = {
+  gold:{face:'linear-gradient(180deg,#FFFBE6 0%,#FFE585 34%,#F7B733 62%,#D2820B 100%)',depth:'#7A3E02',stroke:'#3E1E01',glow:'rgba(251,191,36,.55)'},
+  cyan:{face:'linear-gradient(180deg,#EAFEFF 0%,#9BF1FF 34%,#22D3EE 64%,#0E7490 100%)',depth:'#0A4A5C',stroke:'#04202A',glow:'rgba(34,211,238,.55)'},
+  violet:{face:'linear-gradient(180deg,#F7EEFF 0%,#D9B4FF 34%,#A855F7 64%,#6B21A8 100%)',depth:'#4A1878',stroke:'#240B3C',glow:'rgba(168,85,247,.55)'},
+  rose:{face:'linear-gradient(180deg,#FFF0F2 0%,#FFC0CB 34%,#FB7185 64%,#9F1239 100%)',depth:'#7A1029',stroke:'#3A0713',glow:'rgba(251,113,133,.5)'}
+};
+const grid = document.getElementById('grid');
+
+function buildText(word, variant, font, pal, size, shock) {
+  const p = PALETTES[pal];
+  const root = document.createElement('div');
+  root.className = 'tw-root tw-idle';
+  root.style.cssText =
+    `--tw-face:${p.face};--tw-depth:${p.depth};--tw-stroke:${p.stroke};--tw-glow:${p.glow};` +
+    `--tw-size:${size};--tw-stagger:62ms;font-family:${FONT_STACKS[font]}`;
+  if (shock) { const s=document.createElement('span'); s.className='tw-shock'; root.appendChild(s); }
+  const wrap = document.createElement('span');
+  wrap.className = 'tw-word-wrap tw-v-' + variant;
+  let i = 0;
+  word.split(' ').filter(Boolean).forEach(w => {
+    const ws = document.createElement('span'); ws.className = 'tw-word';
+    Array.from(w).forEach(ch => {
+      const L = document.createElement('span');
+      L.className = 'tw-letter'; L.dataset.ch = ch; L.textContent = ch;
+      L.style.setProperty('--i', i); L.style.setProperty('--dir', i % 2 === 0 ? 1 : -1);
+      ws.appendChild(L); i++;
+    });
+    wrap.appendChild(ws);
+  });
+  root.appendChild(wrap);
+  return root;
+}
+
+function render() {
+  const font = document.getElementById('font').value;
+  const pal  = document.getElementById('pal').value;
+  const word = document.getElementById('word').value || 'WIN';
+  const size = document.getElementById('size').value;
+  grid.innerHTML = '';
+  const combos = font === '__all'
+    ? Object.keys(FONT_STACKS).flatMap(f => VARIANTS.map(v => [f, v]))
+    : VARIANTS.map(v => [font, v]);
+  combos.forEach(([f, v]) => {
+    const cell = document.createElement('div');
+    cell.className = 'cell';
+    cell.innerHTML =
+      `<div class="meta"><span class="name">${v}</span><span class="tag">${FONT_NAMES[f]}</span></div>` +
+      `<div class="desc">${BLURB[v]}</div><div class="stage"></div>` +
+      `<span class="replay">click to replay</span>`;
+    const stage = cell.querySelector('.stage');
+    const shock = (v === 'slam' || v === 'zoom');
+    stage.appendChild(buildText(word, v, f, pal, size, shock));
+    cell.addEventListener('click', () => {
+      stage.innerHTML = '';
+      stage.appendChild(buildText(word, v, f, pal, size, shock));
+    });
+    grid.appendChild(cell);
+  });
+}
+['font','pal','word','size'].forEach(id =>
+  document.getElementById(id).addEventListener('change', render));
+document.getElementById('word').addEventListener('input', render);
+document.getElementById('replay').addEventListener('click', render);
+render();
+</script>
+</body></html>

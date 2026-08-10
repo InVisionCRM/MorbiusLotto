@@ -33,6 +33,8 @@ import { useBigWin } from '@/contexts/big-win-context';
 import { SessionChart, type SessionPoint } from '@/components/arcade2/SessionChart';
 import { FloatingPanel } from '@/components/arcade2/FloatingPanel';
 import { TableCard, TableCardStyles } from '@/components/shared/TableCard';
+import { TableResultBanner } from '@/components/shared/TableResultBanner';
+import { TableWinTextStyles } from '@/components/shared/TableWinText';
 import {
   TableWinFxStyles,
   TableWinGlow,
@@ -765,45 +767,13 @@ export function UltimateHoldemGame() {
                 </div>
               </div>
 
-              {bannerKind && (
-                <div className="pointer-events-none absolute inset-0 grid place-items-center">
-                  <div
-                    className={`tbl-banner-in rounded-2xl px-7 py-4 text-center ${
-                      bannerKind === 'win'
-                        ? 'border border-amber-500/50 shadow-[0_0_50px_-8px_rgba(245,158,11,0.55)]'
-                        : bannerKind === 'loss'
-                          ? 'border border-rose-400/40'
-                          : 'border border-slate-400/35'
-                    }`}
-                    style={{
-                      background:
-                        bannerKind === 'win'
-                          ? 'radial-gradient(ellipse at center,rgba(245,158,11,.22),rgba(4,12,19,.6))'
-                          : bannerKind === 'loss'
-                            ? 'radial-gradient(ellipse at center,rgba(251,113,133,.16),rgba(4,12,19,.65))'
-                            : 'radial-gradient(ellipse at center,rgba(148,163,184,.16),rgba(4,12,19,.6))',
-                    }}
-                  >
-                    <div
-                      className={`text-[12px] uppercase tracking-[0.22em] ${
-                        bannerKind === 'win'
-                          ? 'text-amber-300'
-                          : bannerKind === 'loss'
-                            ? 'text-rose-400'
-                            : 'text-slate-400'
-                      }`}
-                    >
-                      {bannerTitle}
-                    </div>
-                    <div
-                      className="arc-mono mt-1 font-bold text-white"
-                      style={{ fontSize: 'clamp(24px,7vw,38px)' }}
-                    >
-                      {bannerValue}
-                    </div>
-                  </div>
-                </div>
-              )}
+              <TableResultBanner
+  kind={bannerKind}
+  title={bannerTitle}
+  value={bannerValue}
+  tier={winTier}
+  round={roundId ?? undefined}
+/>
             </div>
           </Card>
 
@@ -954,6 +924,7 @@ export function UltimateHoldemGame() {
 
       <TableCardStyles />
       <TableWinFxStyles />
+      <TableWinTextStyles />
     </div>
   );
 }
