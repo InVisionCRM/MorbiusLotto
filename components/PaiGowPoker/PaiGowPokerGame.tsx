@@ -37,6 +37,7 @@ import { useBigWin } from '@/contexts/big-win-context';
 import { SessionChart, type SessionPoint } from '@/components/arcade2/SessionChart';
 import { FloatingPanel } from '@/components/arcade2/FloatingPanel';
 import { PlayingCard } from './PlayingCard';
+import { useStagedReveal } from '@/hooks/use-staged-reveal';
 import { PaiGowInfoTabs } from './PaiGowInfoTabs';
 import { PaiGowFairnessModal } from './PaiGowFairnessModal';
 import { paiGowAudio } from './pai-gow-audio';
@@ -61,6 +62,13 @@ const HISTORY_LIMIT = 25;
 const CHIP_STEPS = [100, 500, 1000] as const;
 /** How long the freshly dealt seven animate in before the arrange step opens. */
 const DEAL_MS = 640;
+/*
+ * The dealer's seven come out one at a time. Faster than a two-card showdown
+ * beat — seven cards at a hold'em pace would take two and a half seconds and
+ * stop being a deal — but slow enough that you watch a hand being set rather
+ * than a row appearing.
+ */
+const DEALER_REVEAL_GAP = 165;
 /** Dealer reveal → settlement pacing (mirrors the lab's confirmHands → settle). */
 const SETTLE_MS = 760;
 
@@ -98,6 +106,14 @@ export function PaiGowPokerGame() {
   const [historyLoading, setHistoryLoading] = useState(false);
 
   const timersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+  // How many of the dealer's seven have actually come out. Before this the
+  // whole hand — two low and five high — landed in a single frame under one
+  // flip sound, so the dealer never appeared to set anything.
+  const {
+    shown: shownDealer,
+    revealTo: revealDealer,
+    snapTo: snapDealer,
+  } = useStagedReveal(0);
   useEffect(() => () => timersRef.current.forEach(clearTimeout), []);
 
   const [clientSeed, setClientSeed] = useState('');
@@ -311,7 +327,6 @@ export function PaiGowPokerGame() {
     setPhase('revealing');
     setError(null);
     paiGowAudio.init();
-    paiGowAudio.playFlip();
     try {
       const r = await decidePaiGow(roundId, lowIdx);
       setSettlement(r);
@@ -322,17 +337,26 @@ export function PaiGowPokerGame() {
           /* keep last known */
         }
       }
-      const t = setTimeout(() => finalizeSettle(r), SETTLE_MS);
-      timersRef.current.push(t);
+      // Seven cards, one at a time, each with its own sound — the flip used to
+      // be a single event covering all of them. The result waits for the last
+      // one, so the banner no longer beats the hand it is describing.
+      const dealerCount = r.dealerLow.length + r.dealerHigh.length;
+      revealDealer(dealerCount, {
+        gap: DEALER_REVEAL_GAP,
+        onCard: () => paiGowAudio.playFlip(),
+        settleDelay: SETTLE_MS,
+        onSettled: () => finalizeSettle(r),
+      });
     } catch (e) {
       setPhase('arrange');
       handleErr(e);
     }
-  }, [roundId, phase, lowIdx, playerCards, finalizeSettle, handleErr]);
+  }, [roundId, phase, lowIdx, playerCards, finalizeSettle, handleErr, revealDealer]);
 
   const newHand = useCallback(() => {
     timersRef.current.forEach(clearTimeout);
     timersRef.current = [];
+    snapDealer(0);
     setRoundId(null);
     setPlayerCards([]);
     setLowIdx([]);
@@ -354,6 +378,14 @@ export function PaiGowPokerGame() {
 
   // -------------------------------------------------------------- derived
   const revealed = phase === 'revealing' || phase === 'settled';
+  // The rings wait for the whole hand to be out. Lit during the reveal they
+  // would announce the winner while the dealer was still setting.
+  const settled = phase === 'settled';
+  // `revealed` turns on the moment Confirm is pressed, but the cards only
+  // exist once the server answers. Mapping the empty arrays in between blanked
+  // both dealer rows for the length of the request; the seats hold their
+  // placeholders until there is something to put in them.
+  const dealerOut = revealed && !!settlement;
   const dealerLow = revealed && settlement ? sortDesc(settlement.dealerLow) : [];
   const dealerHigh = revealed && settlement ? sortDesc(settlement.dealerHigh) : [];
   const shownPlayerLow = revealed && settlement ? sortDesc(settlement.playerLow) : sortDesc(lowIdx);
@@ -594,8 +626,17 @@ export function PaiGowPokerGame() {
               <div className="w-full text-center">
                 <div className="mb-1.5 text-[10.5px] uppercase tracking-[0.16em] text-slate-500">Dealer</div>
                 <SeatRow tag="Low" res={dLowRes}>
-                  {revealed ? (
-                    dealerLow.map((c) => <PlayingCard key={c} cardIdx={c} deal={phase === 'revealing'} win={dLowRes === 'w'} />)
+                  {dealerOut ? (
+                    // The low pair comes out first, then the high five — a card
+                    // the dealer has not reached yet stays an empty slot rather
+                    // than appearing early.
+                    dealerLow.map((c, i) =>
+                      i < shownDealer ? (
+                        <PlayingCard key={c} cardIdx={c} deal win={settled && dLowRes === 'w'} />
+                      ) : (
+                        <PlayingCard key={`low-slot-${i}`} slot />
+                      ),
+                    )
                   ) : (
                     <>
                       <PlayingCard slot />
@@ -604,8 +645,14 @@ export function PaiGowPokerGame() {
                   )}
                 </SeatRow>
                 <SeatRow tag="High" res={dHighRes}>
-                  {revealed
-                    ? dealerHigh.map((c) => <PlayingCard key={c} cardIdx={c} deal={phase === 'revealing'} win={dHighRes === 'w'} />)
+                  {dealerOut
+                    ? dealerHigh.map((c, i) =>
+                        dealerLow.length + i < shownDealer ? (
+                          <PlayingCard key={c} cardIdx={c} deal win={settled && dHighRes === 'w'} />
+                        ) : (
+                          <PlayingCard key={`high-down-${i}`} faceDown />
+                        ),
+                      )
                     : Array.from({ length: 7 }, (_, i) => <PlayingCard key={i} faceDown />)}
                 </SeatRow>
               </div>
@@ -626,7 +673,7 @@ export function PaiGowPokerGame() {
                       ))}
                     </>
                   ) : revealed ? (
-                    shownPlayerLow.map((c) => <PlayingCard key={c} cardIdx={c} win={pLowRes === 'w'} />)
+                    shownPlayerLow.map((c) => <PlayingCard key={c} cardIdx={c} win={settled && pLowRes === 'w'} />)
                   ) : (
                     <>
                       <PlayingCard slot />
@@ -644,7 +691,7 @@ export function PaiGowPokerGame() {
                       Array.from({ length: 7 }, (_, i) => <PlayingCard key={i} faceDown />)
                     )
                   ) : revealed ? (
-                    shownPlayerHigh.map((c) => <PlayingCard key={c} cardIdx={c} win={pHighRes === 'w'} />)
+                    shownPlayerHigh.map((c) => <PlayingCard key={c} cardIdx={c} win={settled && pHighRes === 'w'} />)
                   ) : (
                     Array.from({ length: 7 }, (_, i) => <PlayingCard key={i} faceDown />)
                   )}
