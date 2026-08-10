@@ -25,6 +25,12 @@ export interface DevLogEntry {
   src: string;
   title: string;
   category: string;
+  /**
+   * One line, for the first-visit splash. The splash is a dialog someone did
+   * not ask for, so each slide gets a sentence — the full `content` below is
+   * for /devlog, where the reader chose to be.
+   */
+  blurb: string;
   content: ReactNode;
 }
 
@@ -68,6 +74,7 @@ export const DEVLOG_ENTRIES: DevLogEntry[] = [
     src: '/devlog/01-multiplayer.png',
     category: 'Multiplayer',
     title: 'Sit at a table with everyone else',
+    blurb: 'Craps, Ultimate Hold\u2019em and Roulette now seat a whole room on one table \u2014 same dice, same board, same wheel.',
     content: (
       <>
         <Lead>
@@ -98,6 +105,7 @@ export const DEVLOG_ENTRIES: DevLogEntry[] = [
     src: '/devlog/02-new-games.png',
     category: 'New games',
     title: 'Eight new tables',
+    blurb: 'Craps, Ultimate Hold\u2019em, Caribbean Stud and five blackjack variants you have probably never played.',
     content: (
       <>
         <Lead>
@@ -138,6 +146,7 @@ export const DEVLOG_ENTRIES: DevLogEntry[] = [
     src: '/devlog/03-pulsechain.png',
     category: 'PulseChain',
     title: 'More PulseChain support',
+    blurb: 'Scan.Morbius.io keeps shipping free token analysis tools for PulseChain.',
     content: (
       <>
         <Lead>Scan.Morbius.io keeps shipping.</Lead>
@@ -152,6 +161,7 @@ export const DEVLOG_ENTRIES: DevLogEntry[] = [
     src: '/devlog/04-slot-builder.png',
     category: 'Coming soon',
     title: 'Make your own slot machine',
+    blurb: 'Build a slot by clicking the machine \u2014 reels, art, paylines, bonuses and sounds. Coming soon.',
     content: (
       <>
         <Lead>Click the machine to build it.</Lead>
@@ -173,6 +183,7 @@ export const DEVLOG_ENTRIES: DevLogEntry[] = [
     src: '/devlog/05-weekly-drop.png',
     category: 'Rewards',
     title: 'The Weekly Drop',
+    blurb: 'A prize pot that grows while you play, with the guarantee as the floor rather than the ceiling.',
     content: (
       <>
         <Lead>A prize pot that grows while you play.</Lead>
@@ -188,6 +199,7 @@ export const DEVLOG_ENTRIES: DevLogEntry[] = [
     src: '/devlog/06-vip.png',
     category: 'Rewards',
     title: 'VIP tiers',
+    blurb: 'Six tiers, Bronze to Obsidian. Each one raises your rakeback \u2014 paid back on losses.',
     content: (
       <>
         <Lead>Six tiers, Bronze through Obsidian, earned on what you wager.</Lead>
@@ -210,6 +222,7 @@ export const DEVLOG_ENTRIES: DevLogEntry[] = [
     src: '/devlog/07-provably-fair.png',
     category: 'Fairness',
     title: 'Provably fair, in all 28 games',
+    blurb: 'Every game seals its outcome before you act, and publishes the proof afterwards so you can check it.',
     content: (
       <>
         <Lead>
@@ -244,6 +257,7 @@ export const DEVLOG_ENTRIES: DevLogEntry[] = [
     src: '/devlog/08-no-fees.png',
     category: 'The deal',
     title: 'The creators take nothing',
+    blurb: 'No deposit fee, no withdrawal fee, and no cut for the people who built it.',
     content: (
       <>
         <Lead>No deposit fee. No withdrawal fee. The full amount lands in your wallet.</Lead>

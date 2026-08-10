@@ -1,26 +1,23 @@
 'use client';
 
 /**
- * /devlog — what has shipped, as a carousel of cards you can open.
+ * /devlog — the long version of the first-visit splash.
  *
- * The carousel is components/ui/apple-cards-carousel: a horizontal rail where
- * each card expands into a modal. That shape suits this content exactly — the
- * rail stays a headline per card, and the detail (eight games, six tiers, three
- * fairness mechanisms) lives in the expanded view instead of being cut to fit.
+ * The splash gives each update one line; this gives it the whole thing. It
+ * exists so the dialog has somewhere to send anyone who wants the detail, and
+ * so there is a permanent link to point at.
  *
- * Copy lives in components/DevLog/devlog-entries.tsx so it can be edited
- * without touching layout.
+ * Laid out as a stack of wide sections rather than a carousel: the images are
+ * screenshots, which are landscape, and a portrait card rail would centre-crop
+ * them to a narrow strip. Copy lives in components/DevLog/devlog-entries.tsx.
  */
 
-import { Carousel, Card } from '@/components/ui/apple-cards-carousel';
+import Image from 'next/image';
+
 import GlobalMainNav from '@/components/shared/GlobalMainNav';
 import { DEVLOG_ENTRIES } from '@/components/DevLog/devlog-entries';
 
 export default function DevLogPage() {
-  const cards = DEVLOG_ENTRIES.map((entry, i) => (
-    <Card key={entry.src} card={entry} index={i} layout />
-  ));
-
   return (
     <GlobalMainNav>
       <div
@@ -32,26 +29,46 @@ export default function DevLogPage() {
           backgroundColor: '#050E16',
         }}
       >
-        <div className="mx-auto w-full max-w-7xl px-5 pt-10 pb-4 sm:pt-14">
+        <div className="mx-auto w-full max-w-3xl px-5 pt-10 pb-2 sm:pt-16">
           <div className="text-[11px] font-semibold uppercase tracking-[0.3em] text-cyan-400">
             Dev log
           </div>
-          <h1
-            className="mt-3 text-3xl font-bold tracking-tight text-white sm:text-4xl md:text-5xl"
-            style={{ textWrap: 'balance' } as React.CSSProperties}
-          >
+          <h1 className="mt-3 text-3xl font-bold tracking-tight text-white sm:text-4xl md:text-5xl">
             What we&apos;ve been building
           </h1>
-          <p className="mt-4 max-w-2xl text-[15px] leading-relaxed text-slate-400 sm:text-base">
-            New tables, multiplayer rooms, and the plumbing underneath them. Open any card for the
-            detail.
+          <p className="mt-4 text-[15px] leading-relaxed text-slate-400 sm:text-base">
+            New tables, multiplayer rooms, and the plumbing underneath them.
           </p>
         </div>
 
-        <Carousel items={cards} />
+        <div className="mx-auto w-full max-w-3xl px-5 pb-24">
+          {DEVLOG_ENTRIES.map((entry) => (
+            <section
+              key={entry.src}
+              id={entry.src.split('/').pop()?.replace(/\.\w+$/, '')}
+              className="mt-14 scroll-mt-24 border-t border-cyan-500/10 pt-12 first:mt-8 first:border-0 first:pt-0"
+            >
+              <div className="relative mb-7 aspect-[16/10] w-full overflow-hidden rounded-2xl bg-[#07131F] ring-1 ring-cyan-500/15">
+                <Image
+                  src={entry.src}
+                  alt={entry.title}
+                  fill
+                  sizes="(max-width: 768px) 100vw, 768px"
+                  className="object-cover"
+                />
+              </div>
 
-        <div className="mx-auto w-full max-w-7xl px-5 pb-20">
-          <p className="text-[13px] leading-relaxed text-slate-600">
+              <div className="text-[10.5px] font-semibold uppercase tracking-[0.26em] text-cyan-400">
+                {entry.category}
+              </div>
+              <h2 className="mt-2 mb-6 text-2xl font-bold tracking-tight text-white sm:text-3xl">
+                {entry.title}
+              </h2>
+              {entry.content}
+            </section>
+          ))}
+
+          <p className="mt-20 border-t border-cyan-500/10 pt-8 text-[13px] leading-relaxed text-slate-600">
             Every claim here is checked against what actually ships. Game logic runs on our servers,
             not on-chain — so fairness is proven by seed commitment, and each game carries its own
             verifier.

@@ -21,6 +21,7 @@ import {
 import { HeroCarousel } from '@/components/home2/hero-carousel'
 import { HomeSidebar, ChipDock, MobileTopBar } from '@/components/home2/nav'
 import { GameLauncherSheet } from '@/components/home2/game-launcher-sheet'
+import { WhatsNewSplash } from '@/components/DevLog/WhatsNewSplash'
 import { DropSheet } from '@/components/home2/drop-sheet'
 import { WalletSheet } from '@/components/home2/wallet-sheet'
 import { ChartModal } from '@/components/home2/chart-modal'
@@ -243,6 +244,8 @@ export default function Home2Client() {
   return (
     <div className={`home2${navOpen ? ' nav-open' : ''}`} data-mode={mode}>
       <SceneDefs />
+      {/* First visit only — it stores a versioned flag and never returns. */}
+      <WhatsNewSplash />
       <div className="app">
         <HomeSidebar
           mode={mode}
