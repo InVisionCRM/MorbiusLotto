@@ -8,10 +8,15 @@
  * touching any of them; the felts that render it anchored in their own table
  * opt out at the callsite instead.
  *
- * VISUAL ONLY — no sound, no confetti. Most of these games already fire their
- * own on a win, and a second celebration layered on top of a game's existing
- * one reads as a bug rather than a bigger moment. The word is the only thing
- * this adds.
+ * THE WHOLE VISUAL CELEBRATION lives here — word and confetti together, tiered
+ * by fireWinConfetti. It began as word-only because every game still threw its
+ * own confetti, and two of them stacked on one win read as a bug rather than a
+ * bigger moment. Those per-game bursts have since been removed, so this is now
+ * the single place a win is celebrated, and the only place to change how one
+ * looks.
+ *
+ * Sound stays the game's own. Each felt has its own audio character and there
+ * was never a duplication problem there — only the animations doubled up.
  *
  * It sits below the share toast (z-9999): the toast is an action the player
  * can take and has to stay reachable, while this is a two-second flourish that
@@ -21,6 +26,7 @@
 import { useEffect } from 'react';
 
 import { TableWinText, winTextForTier } from '@/components/shared/TableWinText';
+import { fireWinConfetti } from '@/components/shared/TableWinFx';
 
 /** How long the word stays before it clears itself. */
 export const WIN_TEXT_OVERLAY_MS = 2600;
@@ -36,9 +42,12 @@ export interface WinTextOverlayProps {
 
 export function WinTextOverlay({ tier, seed, multiplier, onDone }: WinTextOverlayProps) {
   useEffect(() => {
+    // Keyed on seed as well, so a second win throws its own burst rather than
+    // riding the first one's.
+    fireWinConfetti(tier);
     const id = setTimeout(onDone, WIN_TEXT_OVERLAY_MS);
     return () => clearTimeout(id);
-  }, [onDone, seed]);
+  }, [onDone, seed, tier]);
 
   const { text, variant, shockwave } = winTextForTier(tier, seed);
 

@@ -20,7 +20,6 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAccount } from 'wagmi';
-import confetti from 'canvas-confetti';
 import { Volume2, VolumeX, ArrowUp, ArrowDown } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -332,12 +331,6 @@ export function StakeHiLoGame() {
       setPhase('cashed');
       reportWin({ game: 'Hi-Lo', bet: betAmount, payout: r.payout });
       hiloAudio.playCashout();
-      confetti({
-        particleCount: 110,
-        spread: 75,
-        origin: { y: 0.5 },
-        colors: ['#22D3EE', '#FCD34D', '#ffffff'],
-      });
       settleHistory('cashed_out', roundId, betAmount, r.picks.length, r.multiplierX100, r.payout, r.cards, r.picks);
       setSession((prev) => [...prev, { drop: prev.length + 1, bet: betAmount, profit: r.payout - betAmount }]);
     } catch (e) {
@@ -391,12 +384,6 @@ export function StakeHiLoGame() {
     setResult({ kind: 'cashed', multiplierX100: r.multiplierX100, payout: r.payout, serverSeed: '' });
     setPhase('cashed');
     hiloAudio.playCashout();
-    confetti({
-      particleCount: 110,
-      spread: 75,
-      origin: { y: 0.5 },
-      colors: ['#22D3EE', '#FCD34D', '#ffffff'],
-    });
   }, [pendingReplay, info]);
 
   const openVerify = useCallback((id: string | null) => {

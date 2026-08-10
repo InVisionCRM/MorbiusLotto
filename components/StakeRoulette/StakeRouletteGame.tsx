@@ -16,7 +16,6 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAccount } from 'wagmi';
-import confetti from 'canvas-confetti';
 import { Volume2, VolumeX } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -315,12 +314,6 @@ export function StakeRouletteGame() {
 
     if (net > 0) {
       roulette2Audio.playWin();
-      confetti({
-        particleCount: 110,
-        spread: 75,
-        origin: { y: 0.5 },
-        colors: ['#22D3EE', '#FBBF24', '#ffffff'],
-      });
     }
   }, [bets, reportWin]);
 
