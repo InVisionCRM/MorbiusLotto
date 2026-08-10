@@ -334,7 +334,15 @@ export function UltimateHoldemGame() {
           }
         }
         const net = r.totalPayout - r.committed;
-        reportWin({ game: "Ultimate Texas Hold'em", bet: r.committed, payout: r.totalPayout });
+        // This felt lands the word inside the table once the dealer has
+        // finished turning, so the app-wide one would be a second copy at
+        // the wrong moment.
+        reportWin({
+          game: "Ultimate Texas Hold'em",
+          bet: r.committed,
+          payout: r.totalPayout,
+          ownsCelebration: true,
+        });
 
         // Any board still owed comes out first, then the dealer's two turn
         // after a beat — his hand is the answer to the round, so it gets to be

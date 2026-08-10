@@ -282,7 +282,15 @@ export function CaribbeanStudGame() {
         }
 
         const net = r.totalPayout - r.committed;
-        reportWin({ game: 'Caribbean Stud', bet: r.committed, payout: r.totalPayout });
+        // This felt lands the word inside the table once the dealer has
+        // finished turning, so the app-wide one would be a second copy at
+        // the wrong moment.
+        reportWin({
+          game: 'Caribbean Stud',
+          bet: r.committed,
+          payout: r.totalPayout,
+          ownsCelebration: true,
+        });
 
         // The dealer turns his four down cards one at a time, after a beat —
         // his hand is the answer to the round, so it gets to be an event. The
