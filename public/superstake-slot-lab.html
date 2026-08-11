@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>SUPERSTAKE · Compound — slot cabinet</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="/slots/cabinet.css" />
+<style>
+/* ── SUPERSTAKE · COMPOUND — standalone cabinet ────────────────────────────
+   Brand pulled from superstake.win: the 3D S-mark (their official logo PNG),
+   the HEX hexagon (as served by their site), their eSSH hexagon-field art as
+   the page backdrop, and the HEX gradient (#ff00c7 → #ff7a00 → #ffd200) as
+   the accent ramp. Machine: 6×4 / 4,096 ways, HOLD & WIN — winners lock and
+   the rest respins, which is the staking pitch as a mechanic — sticky wilds,
+   prize wheel, level progression. Maths from /slots/superstake.json. */
+:root{
+  --hexA:#ff00c7; --hexB:#ff7a00; --hexC:#ffd200; --deep:#0b0616;
+}
+*{ box-sizing:border-box; }
+html{ color-scheme:dark; }
+body{ margin:0; min-height:100svh; background:var(--deep); color:#f2e9f6;
+  font-family:'Space Grotesk',system-ui,sans-serif; overflow-x:hidden; }
+.bg-art{ position:fixed; inset:0; z-index:0;
+  background:url('/slots/superstake/ss-backdrop.jpg') center/cover no-repeat;
+  filter:blur(9px) saturate(1.15) brightness(.5); transform:scale(1.08); }
+.bg-tint{ position:fixed; inset:0; z-index:0;
+  background:linear-gradient(180deg,rgba(11,6,22,.72),rgba(6,3,12,.9) 70%); }
+.bg-glow{ position:fixed; inset:0; z-index:0; pointer-events:none;
+  background:radial-gradient(ellipse 60% 40% at 22% 8%,rgba(255,0,199,.16),transparent 65%),
+             radial-gradient(ellipse 55% 45% at 82% 90%,rgba(255,122,0,.14),transparent 65%); }
+/* slow-drifting hex outlines */
+.hexfield{ position:fixed; inset:-10%; z-index:0; pointer-events:none; opacity:.16;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='104' height='120' viewBox='0 0 104 120'%3E%3Cpath d='M52 2 100 30v56L52 114 4 86V30Z' fill='none' stroke='%23ff7a00' stroke-width='1.4'/%3E%3C/svg%3E");
+  background-size:104px 120px; animation:hexDrift 40s linear infinite; }
+@keyframes hexDrift{ from{ transform:translateY(0);} to{ transform:translateY(-120px);} }
+
+.wrap{ position:relative; z-index:2; max-width:920px; margin:0 auto; padding:22px 14px 80px; }
+
+header.hero{ display:flex; align-items:center; gap:20px; margin-bottom:20px; }
+.hero .mark{ width:104px; height:104px; object-fit:contain;
+  filter:drop-shadow(0 0 26px rgba(255,0,199,.55)) drop-shadow(0 8px 14px rgba(0,0,0,.6));
+  animation:markFloat 5.5s ease-in-out infinite alternate; }
+@keyframes markFloat{ from{ transform:translateY(-4px) rotate(-2deg);} to{ transform:translateY(6px) rotate(2deg);} }
+.h-meta{ flex:1; min-width:0; }
+.h-kicker{ font-family:'Space Mono',monospace; font-size:11px; letter-spacing:.3em;
+  background:linear-gradient(90deg,var(--hexA),var(--hexB),var(--hexC));
+  -webkit-background-clip:text; background-clip:text; color:transparent; font-weight:700; }
+.h-name{ font-weight:700; font-size:clamp(26px,6vw,44px); line-height:1.05; color:#fff; }
+.h-name span{ background:linear-gradient(90deg,var(--hexB),var(--hexA));
+  -webkit-background-clip:text; background-clip:text; color:transparent; }
+.h-sub{ margin-top:5px; font-size:13px; color:#cdb8d9; }
+.h-sub b{ color:var(--hexC); }
+.h-links{ margin-top:7px; font-size:11.5px; font-family:'Space Mono',monospace; display:flex; gap:14px; flex-wrap:wrap; }
+.h-links a{ color:#b98fd0; text-decoration:none; border-bottom:1px dotted #6b4a80; }
+.h-links a:hover{ color:var(--hexC); border-color:var(--hexC); }
+.hex-badge{ width:46px; height:46px; object-fit:contain; align-self:flex-start; margin-top:6px;
+  filter:drop-shadow(0 0 12px rgba(255,0,199,.5)); }
+
+/* brand-tint the shared cabinet */
+.cab-scope{ --acc:#ff7a00; --acc2:#ff00c7; --ink:#f6ecfa;
+  --panel:rgba(16,8,28,.85);
+  --cell:linear-gradient(180deg,#1c0f2e,#0d0618);
+  --font-disp:'Space Grotesk',sans-serif; --font-mono:'Space Mono',monospace; }
+.cab-scope .spin-btn{ color:#1a0522;
+  background:linear-gradient(120deg,var(--hexA),var(--hexB) 55%,var(--hexC)); box-shadow:0 0 38px -8px var(--hexA); }
+.cab-scope .meta-fill{ background:linear-gradient(90deg,var(--hexA),var(--hexB),var(--hexC)); }
+.cab-scope .bw-word{ background:linear-gradient(180deg,#fff,var(--hexC) 45%,var(--hexB) 75%,var(--hexA));
+  -webkit-background-clip:text; background-clip:text; }
+
+.rules{ margin-top:22px; border:1px solid rgba(255,122,0,.25); border-radius:16px;
+  background:rgba(14,7,24,.8); padding:14px 18px; font-size:13px; line-height:1.75; color:#d9c6e4; }
+.rules b{ color:var(--hexC); }
+.backlink{ display:inline-block; margin-top:16px; font-size:12px; font-family:'Space Mono',monospace;
+  color:#b98fd0; text-decoration:none; }
+.backlink:hover{ color:var(--hexC); }
+</style>
+</head>
+<body>
+<div class="bg-art"></div><div class="bg-tint"></div><div class="hexfield"></div><div class="bg-glow"></div>
+
+<div class="wrap">
+  <header class="hero">
+    <img class="mark" src="/slots/superstake/ss-logo.png" alt="SuperStake" />
+    <div class="h-meta">
+      <div class="h-kicker">SUPERSTAKE : HEX &middot; pSSH</div>
+      <div class="h-name">SUPERSTAKE <span>&middot; COMPOUND</span></div>
+      <div class="h-sub">6&times;4 &middot; <b>4,096 ways</b> &middot; HOLD &amp; WIN — winners lock, the rest respins &middot; sticky wilds</div>
+      <div class="h-links">
+        <a href="https://superstake.win" target="_blank" rel="noopener">superstake.win</a>
+        <a href="https://x.com/superstakewin" target="_blank" rel="noopener">@superstakewin</a>
+        <span>PulseChain</span>
+      </div>
+    </div>
+    <img class="hex-badge" src="/slots/superstake/hex-logo.png" alt="HEX" />
+  </header>
+
+  <main class="cab-scope"><div id="gameHost"></div></main>
+
+  <section class="rules">
+    <b>HOW IT PAYS.</b> Matching symbols on adjacent reels from the left pay — every extra copy on a
+    reel multiplies the ways, up to <b>4,096</b>. On any win the winning positions <b>LOCK</b> and every
+    other cell respins, again and again while new wins keep landing — a position that keeps paying
+    is the whole SuperStake idea. <b>Sticky wilds</b> hold for three spins. <b>3+ vault scatters</b> spin
+    the <b>RESTAKE WHEEL</b> (2&times; to 25&times; bet). Wins feed your <b>stake level</b> — the ladder above the
+    deck. A random &times;2&ndash;&times;10 slam can hit any win.
+  </section>
+
+  <a class="backlink" href="/labs-hub.html">&larr; labs hub</a>
+</div>
+
+<script src="/slots/cabinet-math.js"></script>
+<script src="/slots/cabinet-engine.js"></script>
+<script>
+CabinetEngine.boot({
+  host:'#gameHost',
+  defUrl:'/slots/superstake.json',
+  key:'superstake',
+  accent:'#ff7a00', accent2:'#ff00c7',
+  bonusTitle:{ wheel:'RESTAKE WHEEL' },
+  mechanics:'4,096 ways-to-win: adjacent reels from the left, every matching copy multiplies the ways. Hold & Win: winning cells lock, all others respin while fresh wins keep appearing. Sticky wilds persist 3 spins. 3+ vault scatters spin the Restake Wheel. Wins grant XP toward your stake level.'
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>MORBIUS · Vault of the Shield — slot cabinet</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="/slots/cabinet.css" />
+<style>
+/* ── MORBIUS · VAULT OF THE SHIELD — the house cabinet ─────────────────────
+   All real MORBIUS art: the official shield (breathing behind the reels), the
+   glass chip, the six VIP badges on the reels. House deep-sea neon — abyss
+   #050E16, cyan #22D3EE, amber wins — with the four-tier jackpot rail on top.
+   Machine: 6×5 scatter-pays (12+ anywhere), cascades with an ENDLESS ladder,
+   expanding shield wilds, pick bonus. Maths from /slots/morbius.json. */
+:root{
+  --abyss:#050E16; --cyan:#22D3EE; --amber:#F59E0B;
+}
+*{ box-sizing:border-box; }
+html{ color-scheme:dark; }
+body{ margin:0; min-height:100svh; background:var(--abyss); color:#E2E8F0;
+  font-family:'Chakra Petch',system-ui,sans-serif; overflow-x:hidden; }
+.bg-grad{ position:fixed; inset:0; z-index:0;
+  background:radial-gradient(ellipse 80% 55% at 50% -8%,rgba(34,211,238,.14),transparent 65%),
+             linear-gradient(180deg,#071722,#02070B 65%); }
+.bg-shield{ position:fixed; inset:0; z-index:0; display:grid; place-items:center; pointer-events:none; }
+.bg-shield img{ width:min(74vmin,660px); opacity:.13; filter:blur(3px) drop-shadow(0 0 60px rgba(34,211,238,.8));
+  animation:shieldBreath 7s ease-in-out infinite alternate; }
+@keyframes shieldBreath{ from{ transform:scale(.97); opacity:.10;} to{ transform:scale(1.04); opacity:.17;} }
+.bg-rays{ position:fixed; inset:-25%; z-index:0; pointer-events:none; opacity:.35;
+  background:conic-gradient(from 0deg at 50% 50%,transparent 0 78deg,rgba(34,211,238,.06) 84deg,transparent 92deg,
+    transparent 168deg,rgba(34,211,238,.05) 176deg,transparent 184deg,transparent 260deg,rgba(245,158,11,.05) 268deg,transparent 276deg);
+  animation:rays 60s linear infinite; }
+@keyframes rays{ to{ transform:rotate(360deg);} }
+.vig{ position:fixed; inset:0; z-index:1; pointer-events:none;
+  background:radial-gradient(ellipse 130% 90% at 50% 20%,transparent 55%,rgba(0,0,0,.7)); }
+
+.wrap{ position:relative; z-index:2; max-width:920px; margin:0 auto; padding:22px 14px 80px; }
+
+header.hero{ display:flex; align-items:center; gap:18px; margin-bottom:18px; }
+.hero .shield{ width:92px; height:92px; object-fit:contain;
+  filter:drop-shadow(0 0 22px rgba(34,211,238,.65)); }
+.h-meta{ flex:1; min-width:0; }
+.h-kicker{ font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:.3em; color:var(--cyan); }
+.h-name{ font-weight:700; font-size:clamp(26px,6vw,44px); line-height:1.05; color:#fff;
+  text-shadow:0 0 26px rgba(34,211,238,.35); }
+.h-name span{ color:var(--amber); text-shadow:0 0 26px rgba(245,158,11,.4); }
+.h-sub{ margin-top:5px; font-size:13px; color:#94A3B8; }
+.h-sub b{ color:var(--cyan); }
+.chip{ width:52px; height:52px; object-fit:contain; align-self:flex-start; margin-top:4px;
+  filter:drop-shadow(0 0 14px rgba(245,158,11,.45)); animation:chipSpin 9s linear infinite; }
+@keyframes chipSpin{ from{ transform:rotate(0);} to{ transform:rotate(360deg);} }
+
+/* brand-tint the shared cabinet (house colors are the cabinet defaults, tuned) */
+.cab-scope{ --acc:#22D3EE; --acc2:#F59E0B; --ink:#E2E8F0;
+  --panel:rgba(8,20,31,.85);
+  --cell:linear-gradient(180deg,#0b1c28,#06121b);
+  --font-disp:'Chakra Petch',sans-serif; --font-mono:'JetBrains Mono',monospace; }
+.cab-scope .spin-btn{ color:#04202A; }
+
+.rules{ margin-top:22px; border:1px solid rgba(34,211,238,.22); border-radius:16px;
+  background:rgba(8,20,31,.78); padding:14px 18px; font-size:13px; line-height:1.75; color:#B6C2D0; }
+.rules b{ color:var(--cyan); }
+.rules .r-amber{ color:var(--amber); }
+.backlink{ display:inline-block; margin-top:16px; font-size:12px; font-family:'JetBrains Mono',monospace;
+  color:#64748B; text-decoration:none; }
+.backlink:hover{ color:var(--cyan); }
+</style>
+</head>
+<body>
+<div class="bg-grad"></div>
+<div class="bg-rays"></div>
+<div class="bg-shield"><img src="/morbius/OfficialMorbiusLogo.png" alt="" /></div>
+<div class="vig"></div>
+
+<div class="wrap">
+  <header class="hero">
+    <img class="shield" src="/morbius/OfficialMorbiusLogo.png" alt="MORBIUS" />
+    <div class="h-meta">
+      <div class="h-kicker">THE HOUSE CABINET &middot; MORBIUS</div>
+      <div class="h-name">VAULT <span>OF THE SHIELD</span></div>
+      <div class="h-sub">6&times;5 &middot; <b>12+ anywhere pays</b> &middot; endless cascade ladder &middot; expanding shields &middot; four jackpots</div>
+    </div>
+    <img class="chip" src="/morbius/MorbiusChip.png" alt="" />
+  </header>
+
+  <main class="cab-scope"><div id="gameHost"></div></main>
+
+  <section class="rules">
+    <b>HOW IT PAYS.</b> Land <b>12 or more</b> of a symbol anywhere on the 30-cell board and it pays —
+    no lines, no adjacency. Winners clear and the board cascades, and the chain multiplier
+    <b>never caps</b>: &times;1 &rarr; &times;2 &rarr; &times;3 &rarr; &times;5 &rarr; &times;8 &rarr; &times;13 and beyond.
+    The <b>shield wild</b> expands to fill its reel. <b>3+ MORB chips</b> open the
+    <span class="r-amber">VAULT PICK</span> — three picks from twelve. The
+    <span class="r-amber">MINI / MINOR / MAJOR / GRAND</span> jackpots above the reels grow with every
+    spin on the floor. A random &times;2&ndash;&times;10 slam can hit any win.
+  </section>
+
+  <a class="backlink" href="/labs-hub.html">&larr; labs hub</a>
+</div>
+
+<script src="/slots/cabinet-math.js"></script>
+<script src="/slots/cabinet-engine.js"></script>
+<script>
+CabinetEngine.boot({
+  host:'#gameHost',
+  defUrl:'/slots/morbius.json',
+  key:'morbius',
+  accent:'#22D3EE', accent2:'#F59E0B',
+  bonusTitle:{ pick:'VAULT PICK' },
+  mechanics:'Scatter-pays: 12+ of a symbol anywhere on the 6×5 board pays. Cascades with an endless multiplier ladder (×1→×2→×3→×5→×8→×13→…). Shield wilds expand to fill their reel. 3+ MORB chip scatters open the Vault Pick. Four tiered jackpots grow with every spin.'
+});
+</script>
+</body>
+</html>
