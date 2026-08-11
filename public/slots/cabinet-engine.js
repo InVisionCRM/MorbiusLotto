@@ -32,7 +32,7 @@ var M = null;                 // CabinetMath, checked at boot
 var S = {                     // engine state
   def:null, strips:null, key:'slot', bet:100, balance:10000,
   spinning:false, featureState:{}, meta:null, muted:false,
-  turbo:false, cfg:null, seedN:0, host:null, cells:[], lastRes:null
+  turbo:false, cfg:null, seedN:0, host:null, reels:[], lastRes:null, lastGrid:null
 };
 
 /* ── tiny DOM helpers ───────────────────────────────────────────────────── */
@@ -113,6 +113,12 @@ function playWinTier(tier){
     src.connect(g); g.connect(master);
     src.start(AC.currentTime+l[2]/1000);
   });
+}
+/* Reels land left to right and the pitch climbs with them — the cue that
+   tells you how far through the spin you are without looking. */
+function sfxReelLand(i){
+  noiseHit(.055,.2,1500+i*260);
+  tone(300+i*58,'triangle',.07,.16);
 }
 function sfx(name){
   switch(name){
@@ -215,6 +221,12 @@ function buildUI(){
   });
   $('#cabPays').addEventListener('click',function(){ audio(); sfx('button'); showPaytable(); });
   if(S.muted) $('#cabMute').innerHTML='&#128263;';
+  // Cells are squared off the measured column width, so a resize has to
+  // re-measure or the reels keep their old height.
+  if(!S._resizeBound){
+    S._resizeBound=true;
+    window.addEventListener('resize',function(){ if(!S.spinning) sizeReels(); });
+  }
   renderMeta();
 }
 function modeReadout(){
@@ -242,24 +254,39 @@ function artOf(id){
   if(a.indexOf('data:')===0||a.indexOf('/')===0||a.indexOf('http')===0) return a;
   return '/'+a;
 }
-function renderGrid(grid, winCells, locked){
-  var reels=$('#cabReels'); reels.innerHTML=''; S.cells=[];
-  for(var r=0;r<S.def.rows;r++){
-    for(var c=0;c<S.def.cols;c++){
-      var id=grid[c][r], s=S.def._byId[id];
-      var cell=el('div','cab-cell'+(s&&s.role==='wild'?' is-wild':'')+(s&&s.role==='scatter'?' is-scatter':''));
-      var key=c+','+r;
-      if(winCells&&winCells[key]) cell.className+=' is-win';
-      if(locked&&locked[key]) cell.className+=' is-locked';
-      var img=el('img'); img.src=artOf(id); img.alt=s?s.name:id;
-      img.style.width=((s&&s.sizePct||88))+'%';
-      cell.appendChild(img);
-      if(locked&&locked[key]) cell.appendChild(el('span','lock-badge','&#128274;'));
-      reels.appendChild(cell); S.cells.push(cell);
-    }
-  }
+/* One symbol cell. Cells live inside a per-reel strip, never in a flat grid —
+   a reel has to be able to scroll, and you cannot scroll a grid cell. */
+function symCell(id, c, r, winCells, locked){
+  var s=S.def._byId[id];
+  var cell=el('div','cab-sym'+(s&&s.role==='wild'?' is-wild':'')+(s&&s.role==='scatter'?' is-scatter':''));
+  var key=c+','+r;
+  if(winCells&&winCells[key]) cell.className+=' is-win';
+  if(locked&&locked[key]) cell.className+=' is-locked';
+  var img=el('img'); img.src=artOf(id); img.alt=s?s.name:id;
+  img.style.width=((s&&s.sizePct||88))+'%';
+  cell.appendChild(img);
+  if(locked&&locked[key]) cell.appendChild(el('span','lock-badge','&#128274;'));
+  return cell;
 }
-function cellAt(c,r){ return S.cells[r*S.def.cols+c]; }
+/* Square the cells off the measured column width. The reel needs a real pixel
+   height before the spin can convert strip travel into a translate distance. */
+function sizeReels(){
+  var reels=$('#cabReels'); if(!reels||!reels.firstChild) return 0;
+  var w=reels.firstChild.clientWidth;
+  if(w>0) reels.style.setProperty('--cellh', w+'px');
+  return w;
+}
+function renderGrid(grid, winCells, locked){
+  var reels=$('#cabReels'); reels.innerHTML=''; S.reels=[];
+  for(var c=0;c<S.def.cols;c++){
+    var reel=el('div','cab-reel'), strip=el('div','cab-strip');
+    for(var r=0;r<S.def.rows;r++) strip.appendChild(symCell(grid[c][r], c, r, winCells, locked));
+    reel.appendChild(strip); reels.appendChild(reel);
+    S.reels.push({ c:c, el:reel, strip:strip });
+  }
+  sizeReels();
+}
+function cellAt(c,r){ var R=S.reels[c]; return R?R.strip.children[r]:null; }
 
 /* ── the spin ───────────────────────────────────────────────────────────── */
 function spin(){
@@ -281,6 +308,9 @@ function spin(){
   $('#cabFoot').innerHTML='seed <span class="mono">'+esc(seed)+'</span> &middot; play-money demo &middot; MORBIUS';
 
   presentSpin(res,payout).then(function(){
+    // Remember what is on screen: the next spin scrolls out of it.
+    var last=res.steps[res.steps.length-1];
+    S.lastGrid=last?last.grid:grid;
     settle(res,payout);
   });
 }
@@ -291,42 +321,129 @@ function presentSpin(res,payout){
   });
 }
 
-/* Reel animation: columns flicker-spin then land left to right. */
+/* ── the reel engine ─────────────────────────────────────────────────────
+   Ported from slot-builder-lab.html, which took it from slots-lab.html,
+   which modelled it on the app's transaction slot machine. Every reel is a
+   long vertical STRIP that scrolls: the current window on top, weighted
+   filler through the middle, and the final window at the bottom — so the
+   result scrolls INTO place and landing needs no symbol swap.
+
+   offset(t) = travel * easeProfile(t/T) * cellHeight, driven by rAF. Each
+   reel has its own T (first stop, then one per gap), so they stop left to
+   right. This is the house reel feel; do not replace it with a timer that
+   shuffles img.src — that reads as flicker, not as a spinning reel. */
+/* The builder uses a FIXED 1000 ms gap between reel stops, which was tuned on
+   a 5-reel board and drags badly as boards get wider — measured, it takes 5.5 s
+   at 5 reels and 7.5 s at 7. These machines are 6 and 7 wide, so the schedule
+   is spread across a fixed WINDOW instead: the first reel stops at `first`, the
+   last at `last`, and the gap falls out of the column count. Same motion
+   profile, same feel, constant length whatever the board. */
+var SPIN_TIMING={
+  normal:{ first:900, last:2600, cruise:17 },
+  turbo: { first:320, last:820,  cruise:26 }
+};
+function stopSchedule(cols, tm){
+  if(cols<=1) return [tm.first];
+  var gap=(tm.last-tm.first)/(cols-1), out=[];
+  for(var c=0;c<cols;c++) out.push(Math.round(tm.first+c*gap));
+  return out;
+}
+/* Quick accel to a, linear cruise to b, smooth decel out — normalised so the
+   area under it is exactly 1 and the reel lands precisely on its stop. */
+function easeProfile(u){
+  var a=0.1, b=0.72, s=1/(a/2+(b-a)+(1-b)/2);
+  if(u<=0) return 0;
+  if(u>=1) return 1;
+  if(u<=a) return s*u*u/(2*a);
+  if(u<=b) return s*a/2+s*(u-a);
+  return 1-s*(1-u)*(1-u)/(2*(1-b));
+}
+function reduced(){
+  return typeof matchMedia==='function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+}
+/* prev window → weighted filler → final window. Filler is drawn from the
+   reel's own weighted strip so the blur shows this machine's symbol mix. */
+function buildSpinStrip(strip, c, travel, grid, prevGrid){
+  var rows=S.def.rows, pool=S.strips[c]||[], syms=S.def.symbols, r;
+  for(r=0;r<rows;r++){
+    var pid=prevGrid&&prevGrid[c]?prevGrid[c][r]:null;
+    strip.appendChild(symCell(pid||syms[Math.floor(Math.random()*syms.length)].id, c, r));
+  }
+  for(var i=0;i<travel-rows;i++){
+    var id=pool.length?pool[Math.floor(Math.random()*pool.length)]
+                      :syms[Math.floor(Math.random()*syms.length)].id;
+    strip.appendChild(symCell(id, c, 0));
+  }
+  for(r=0;r<rows;r++) strip.appendChild(symCell(grid[c][r], c, r));
+}
+function settleReel(R, grid){
+  R.el.classList.remove('spinning');
+  R.strip.style.transform='';
+  R.strip.innerHTML='';
+  var land=(S.def.anim&&S.def.anim.land)||'pop';
+  for(var r=0;r<S.def.rows;r++){
+    var cell=symCell(grid[R.c][r], R.c, r);
+    if(land!=='none'&&!reduced()) cell.classList.add('land-'+land);
+    R.strip.appendChild(cell);
+  }
+  if(!reduced()){
+    R.el.classList.add('landed','rflash');
+    setTimeout(function(){ R.el.classList.remove('landed','rflash'); }, 260);
+  }
+  sfxReelLand(R.c);
+}
 function spinReelAnim(finalGrid){
-  var d=S.def, reels=$('#cabReels');
-  var ids=d.symbols.map(function(s){return s.id;});
-  renderGrid(blankGrid());
-  reels.classList.add('is-spinning');
-  var interval=setInterval(function(){
-    for(var c=0;c<d.cols;c++) for(var r=0;r<d.rows;r++){
-      var img=cellAt(c,r).firstChild;
-      img.src=artOf(ids[Math.floor(Math.random()*ids.length)]);
+  var d=S.def, rows=d.rows, anim=d.anim||{};
+  var tm=SPIN_TIMING[S.turbo?'turbo':'normal'];
+  var rm=reduced();
+  var sched=rm ? stopSchedule(d.cols,{first:180,last:420})
+               : stopSchedule(d.cols,tm);
+  var cruise=tm.cruise*((anim.cruise||10)/10);
+  var prevGrid=S.lastGrid;
+  var reelsEl=$('#cabReels');
+
+  reelsEl.innerHTML=''; S.reels=[];
+  var states=[];
+  for(var c=0;c<d.cols;c++){
+    var T=sched[c];
+    var travel=Math.max(rows+2, Math.round(cruise*T/1000));
+    var reel=el('div','cab-reel'), strip=el('div','cab-strip');
+    if(!rm){
+      reel.classList.add('spinning');
+      reel.style.setProperty('--spin-blur',(anim.spinBlur==null?2:anim.spinBlur)+'px');
     }
-  }, 70);
-  var stopGap=S.turbo?40:130;
-  var base=S.turbo?160:420;
+    buildSpinStrip(strip, c, travel, finalGrid, prevGrid);
+    reel.appendChild(strip); reelsEl.appendChild(reel);
+    S.reels.push({ c:c, el:reel, strip:strip });
+    states.push({ c:c, el:reel, strip:strip, T:T, travel:travel, done:false });
+  }
+  // --cellh must be set before the height is read, or cellH comes out zero and
+  // every reel travels nowhere.
+  sizeReels();
+
   return new Promise(function(resolve){
-    var landed=0;
-    for(var c=0;c<d.cols;c++)(function(col){
-      setTimeout(function(){
-        for(var r=0;r<d.rows;r++){
-          var cell=cellAt(col,r), img=cell.firstChild;
-          img.src=artOf(finalGrid[col][r]);
-          var sm=S.def._byId[finalGrid[col][r]];
-          img.style.width=((sm&&sm.sizePct||88))+'%';
-          cell.classList.remove('is-wild','is-scatter');
-          if(sm&&sm.role==='wild')cell.classList.add('is-wild');
-          if(sm&&sm.role==='scatter')cell.classList.add('is-scatter');
-          cell.classList.add('landed');
+    var cellH=states[0].el.clientHeight/rows;
+    if(!(cellH>0)){                       // never animate against a zero — just show the result
+      states.forEach(function(R){ settleReel(R, finalGrid); });
+      return resolve();
+    }
+    var t0=null;
+    function frame(ts){
+      if(t0===null) t0=ts;
+      var elapsed=ts-t0, allDone=true;
+      for(var i=0;i<states.length;i++){
+        var R=states[i];
+        if(R.done) continue;
+        var u=elapsed/R.T;
+        if(u>=1){ R.done=true; settleReel(R, finalGrid); }
+        else{
+          allDone=false;
+          R.strip.style.transform='translate3d(0,'+(-(R.travel*easeProfile(u))*cellH).toFixed(2)+'px,0)';
         }
-        sfx('land');
-        if(++landed===d.cols){
-          clearInterval(interval);
-          reels.classList.remove('is-spinning');
-          resolve();
-        }
-      }, base+col*stopGap);
-    })(c);
+      }
+      if(allDone) resolve(); else requestAnimationFrame(frame);
+    }
+    requestAnimationFrame(frame);
   });
 }
 

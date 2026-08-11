@@ -3,6 +3,8 @@
      --acc      brand accent (glows, wins, meters)
      --acc2     secondary accent (hot moments, scatters)
      --ink      body text     --panel  panel glass    --cell   cell background
+   (--cellh is the measured square cell HEIGHT, set by the engine — distinct
+    from --cell, which is the cell's background paint.)
      --font-disp / --font-mono
    Layout, motion and the win moment live here so all three cabinets feel like
    one floor; colour and typography stay the page's job. */
@@ -29,27 +31,53 @@
   border:1px solid color-mix(in srgb,var(--acc) 30%,transparent); border-radius:18px;
   padding:12px; box-shadow:0 24px 60px -30px rgba(0,0,0,.9),
     0 0 40px -18px color-mix(in srgb,var(--acc) 55%,transparent); }
-.cab-reels{ display:grid; grid-template-columns:repeat(var(--cols),1fr); gap:6px; }
-.cab-cell{ position:relative; aspect-ratio:1; border-radius:10px; background:var(--cell);
-  display:grid; place-items:center; overflow:hidden;
-  border:1px solid rgba(255,255,255,.06); transition:box-shadow .18s,border-color .18s; }
-.cab-cell img{ display:block; height:auto; filter:drop-shadow(0 3px 6px rgba(0,0,0,.55)); }
-.cab-cell.is-wild{ border-color:color-mix(in srgb,var(--acc) 65%,transparent);
-  box-shadow:inset 0 0 16px -4px color-mix(in srgb,var(--acc) 55%,transparent); }
-.cab-cell.is-scatter{ border-color:color-mix(in srgb,var(--acc2) 65%,transparent);
-  box-shadow:inset 0 0 16px -4px color-mix(in srgb,var(--acc2) 55%,transparent); }
-.cab-cell.is-win{ border-color:var(--acc2);
-  box-shadow:0 0 18px -2px color-mix(in srgb,var(--acc2) 80%,transparent),
-    inset 0 0 14px -6px color-mix(in srgb,var(--acc2) 70%,transparent);
-  animation:cabWinPulse .8s ease-in-out infinite alternate; z-index:2; }
-@keyframes cabWinPulse{ from{ transform:scale(1);} to{ transform:scale(1.045);} }
-.cab-cell.landed img{ animation:cabLand .3s cubic-bezier(.2,1.6,.4,1); }
-@keyframes cabLand{ 0%{ transform:translateY(-26%) scale(.92);} 100%{ transform:translateY(0) scale(1);} }
-.cab-cell.popping{ animation:cabPop .3s ease-in forwards; }
+/* ── reels ──
+   A reel is a clipped column containing a tall STRIP of cells. The engine
+   scrolls the strip with translate3d; CSS only supplies the motion blur while
+   spinning and the bounce/flash on landing. --cell is set in JS from the
+   measured column width so cells stay square at any board size. */
+.cab-reels{ display:grid; grid-template-columns:repeat(var(--cols),1fr); gap:6px; --cellh:64px; }
+.cab-reel{ position:relative; overflow:hidden; height:calc(var(--cellh) * var(--rows,3));
+  border-radius:10px; background:var(--cell);
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.06), 0 6px 14px -8px rgba(0,0,0,.8); }
+.cab-strip{ display:flex; flex-direction:column; will-change:transform; }
+.cab-reel.spinning .cab-strip{ filter:blur(var(--spin-blur,2px)); }
+.cab-reel.landed{ animation:cabReelLand .22s cubic-bezier(.34,1.56,.64,1); }
+@keyframes cabReelLand{ 0%{ transform:translateY(-6px);} 55%{ transform:translateY(3px);} 100%{ transform:translateY(0);} }
+.cab-reel.rflash::before{ content:""; position:absolute; inset:0; z-index:3; pointer-events:none;
+  background:color-mix(in srgb,var(--acc) 22%,transparent); animation:cabReelFlash .18s ease-out both; }
+@keyframes cabReelFlash{ from{ opacity:1;} to{ opacity:0;} }
+
+.cab-sym{ position:relative; height:var(--cellh); flex:none; display:grid; place-items:center;
+  user-select:none; transition:box-shadow .18s; }
+.cab-sym img{ display:block; height:auto; max-height:88%; object-fit:contain;
+  filter:drop-shadow(0 3px 6px rgba(0,0,0,.55)); pointer-events:none; }
+.cab-sym.is-wild{ box-shadow:inset 0 0 0 2px color-mix(in srgb,var(--acc) 65%,transparent),
+  inset 0 0 16px -4px color-mix(in srgb,var(--acc) 55%,transparent); border-radius:8px; }
+.cab-sym.is-scatter{ box-shadow:inset 0 0 0 2px color-mix(in srgb,var(--acc2) 65%,transparent),
+  inset 0 0 16px -4px color-mix(in srgb,var(--acc2) 55%,transparent); border-radius:8px; }
+.cab-sym.is-win{ border-radius:8px; z-index:2;
+  box-shadow:inset 0 0 0 2px var(--acc2), 0 0 18px -2px color-mix(in srgb,var(--acc2) 80%,transparent);
+  animation:cabWinPulse .8s ease-in-out infinite alternate; }
+@keyframes cabWinPulse{ from{ transform:scale(1);} to{ transform:scale(1.05);} }
+.cab-sym.is-locked{ border-radius:8px;
+  box-shadow:inset 0 0 0 2px color-mix(in srgb,var(--acc) 80%,#fff 10%); }
+.cab-sym.popping{ animation:cabPop .3s ease-in forwards; }
 @keyframes cabPop{ 60%{ transform:scale(1.25); opacity:.9; filter:brightness(1.6);} 100%{ transform:scale(.2); opacity:0;} }
-.cab-cell.is-locked{ border-color:color-mix(in srgb,var(--acc) 80%,#fff 10%); }
 .lock-badge{ position:absolute; right:4px; top:3px; font-size:12px; opacity:.85; }
-.cab-reels.is-spinning .cab-cell img{ filter:blur(1.6px) brightness(.9); }
+
+/* land animations, applied to the settled cells */
+.cab-sym.land-bounce{ animation:cabLandBounce .34s cubic-bezier(.34,1.56,.64,1); }
+@keyframes cabLandBounce{ 0%{ transform:translateY(-8px);} 55%{ transform:translateY(3px);} 100%{ transform:translateY(0);} }
+.cab-sym.land-flip{ animation:cabLandFlip .4s ease; }
+@keyframes cabLandFlip{ 0%{ transform:rotateX(90deg); opacity:.2;} 100%{ transform:rotateX(0); opacity:1;} }
+.cab-sym.land-pop{ animation:cabLandPop .32s cubic-bezier(.34,1.56,.64,1); }
+@keyframes cabLandPop{ 0%{ transform:scale(.4); opacity:0;} 60%{ transform:scale(1.12);} 100%{ transform:scale(1);} }
+.cab-sym.land-drop{ animation:cabLandDrop .3s ease-out; }
+@keyframes cabLandDrop{ 0%{ transform:translateY(-26px); opacity:0;} 100%{ transform:translateY(0); opacity:1;} }
+.cab-sym.land-spinin{ animation:cabLandSpin .42s ease; }
+@keyframes cabLandSpin{ 0%{ transform:rotate(-180deg) scale(.4); opacity:0;} 100%{ transform:rotate(0) scale(1); opacity:1;} }
+
 .cab-reels.impact{ animation:cabImpact .26s ease-out; }
 @keyframes cabImpact{ 0%{ transform:translateY(-6px);} 60%{ transform:translateY(2px);} 100%{ transform:translateY(0);} }
 
@@ -163,5 +191,7 @@
   .side-ctl{ justify-content:center; }
 }
 @media (prefers-reduced-motion:reduce){
-  .cab-cell.landed img,.cab-cell.is-win,.cab-reels.impact,.bw-word.huge{ animation:none!important; }
+  .cab-sym[class*="land-"],.cab-sym.is-win,.cab-reels.impact,.bw-word.huge,
+  .cab-reel.landed{ animation:none!important; }
+  .cab-reel.spinning .cab-strip{ filter:none; }
 }
