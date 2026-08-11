@@ -8,6 +8,8 @@
  * and a low bust thud.
  */
 
+import { playWinSting, preloadWinSounds } from '@/lib/win-audio';
+
 class CipherAudio {
   private ctx: AudioContext | null = null;
   private muted = false;
@@ -21,6 +23,7 @@ class CipherAudio {
       if (Ctor) this.ctx = new Ctor();
     }
     if (this.ctx && this.ctx.state === 'suspended') void this.ctx.resume();
+    preloadWinSounds();
   }
 
   setMute(m: boolean): void {
@@ -63,6 +66,9 @@ class CipherAudio {
 
   /** A two-note chime on banking the secured value. */
   playCash(): void {
+    // Recorded sting first; the tones below are the fallback for when it
+    // has not loaded yet. See lib/win-audio.ts.
+    if (playWinSting('small', { muted: this.muted })) return;
     this.tone(660, 0.12, 'sine', 0.06);
     window.setTimeout(() => this.tone(880, 0.16, 'sine', 0.06), 90);
   }

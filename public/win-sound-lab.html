@@ -1,0 +1,456 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>MORBlotto &mdash; Win Sound Lab</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+/* ── MORBlotto Win Sound Lab — Deep-Sea Neon ───────────────────────────────
+   Audition rig for the CC0 win samples in /sounds/wins/.
+
+   A win sting is built from four layers rather than picked as one file: the
+   IMPACT lands under the word, the BODY carries the tune, the TAIL rings out
+   behind it and COINS rattles the payout. Layering is most of what makes a
+   sting sound expensive — a single clip, however good, always sounds like a
+   single clip.
+
+   This page plays exactly what the game plays. It reads the same catalogue
+   (/sounds/wins/catalog.json) and applies the same measured `norm` per file,
+   so a balance dialled in here transfers verbatim to WIN_RECIPES.
+
+   Whoever is reading this can hear the result; the person who assembled it
+   could not. Every default is a guess from duration, attack and tonal balance.
+   Trust your ears over them. */
+:root{
+  --abyss:#050E16; --cyan:#22D3EE; --cyan-soft:rgba(34,211,238,0.12); --cyan-edge:rgba(34,211,238,0.35);
+  --win:#F59E0B; --loss:#FB7185; --good:#34D399;
+  --ink:#E2E8F0; --slate-300:#CBD5E1; --slate-400:#94A3B8; --slate-500:#64748B;
+  --panel:rgba(8,20,31,0.78); --field:#081420;
+  --font-disp:'Chakra Petch','Trebuchet MS',system-ui,sans-serif;
+  --font-mono:'JetBrains Mono',ui-monospace,'SFMono-Regular',Consolas,monospace;
+}
+*{box-sizing:border-box}
+html{color-scheme:dark}
+body{
+  margin:0;min-height:100svh;background-color:var(--abyss);
+  background-image:linear-gradient(to bottom,rgba(5,14,22,0.92),rgba(2,7,11,0.96) 55%,rgba(5,14,22,0.98));
+  color:var(--ink);font-family:var(--font-disp);-webkit-font-smoothing:antialiased;overflow-x:hidden;
+}
+.bg-light{position:fixed;inset:0;pointer-events:none;z-index:0;background:radial-gradient(ellipse 75% 55% at 50% -5%,rgba(34,211,238,0.13),transparent 70%)}
+.wrap{position:relative;z-index:1;max-width:1080px;margin:0 auto;padding:26px 16px 90px}
+@media(min-width:700px){.wrap{padding:40px 24px 110px}}
+.mono{font-family:var(--font-mono);font-variant-numeric:tabular-nums}
+
+header.hero{text-align:center;margin-bottom:22px}
+.hero h1{margin:0;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#fff;font-size:clamp(24px,5.5vw,38px);line-height:1.05}
+.hero h1 .glyph{color:var(--cyan);filter:drop-shadow(0 0 12px rgba(34,211,238,.65))}
+.hero .tagline{margin:.7rem auto 0;max-width:66ch;font-size:clamp(12px,2.6vw,14.5px);color:var(--slate-400);line-height:1.6}
+.hero .tagline b{color:var(--slate-300);font-weight:600}
+
+.note{margin:18px auto 0;max-width:70ch;border:1px solid rgba(245,158,11,.28);background:rgba(245,158,11,.07);
+  border-radius:12px;padding:12px 15px;font-size:13.5px;line-height:1.6;color:#FCD9A0}
+.note b{color:var(--win)}
+
+h2.sec{margin:34px 0 4px;font-size:13px;font-weight:700;letter-spacing:.24em;text-transform:uppercase;color:var(--cyan)}
+p.sub{margin:0 0 16px;font-size:13.5px;color:var(--slate-500);line-height:1.6;max-width:74ch}
+
+.panel{background:linear-gradient(rgba(255,255,255,0.03),rgba(255,255,255,0) 18%),var(--panel);
+  border:1px solid var(--cyan-soft);border-radius:16px;padding:16px;margin-bottom:14px;
+  box-shadow:0 18px 40px -24px rgba(0,0,0,.9)}
+
+.tier-head{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px}
+.tier-name{font-size:17px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#fff}
+.tier-when{font-size:12px;color:var(--slate-500);font-family:var(--font-mono)}
+.tier-head .spacer{flex:1}
+
+.layers{display:grid;gap:10px}
+.layer{display:grid;grid-template-columns:64px 1fr;gap:10px;align-items:center}
+@media(min-width:780px){.layer{grid-template-columns:64px minmax(0,1fr) 152px 152px 42px}}
+.layer-tag{font-family:var(--font-mono);font-size:10.5px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;
+  color:var(--slate-400);text-align:right;cursor:help}
+select{width:100%;min-width:0;background:var(--field);color:var(--ink);border:1px solid var(--cyan-soft);
+  border-radius:9px;padding:8px 10px;font-family:var(--font-mono);font-size:12.5px}
+select:focus{outline:none;border-color:var(--cyan-edge)}
+.knob{display:flex;align-items:center;gap:7px}
+.knob label{font-family:var(--font-mono);font-size:10px;color:var(--slate-500);text-transform:uppercase;letter-spacing:.1em;flex:none}
+.knob input[type=range]{flex:1;min-width:0;accent-color:var(--cyan);height:18px}
+.knob .val{font-family:var(--font-mono);font-size:11px;color:var(--slate-300);width:42px;text-align:right;flex:none}
+.solo{border:1px solid var(--cyan-soft);background:rgba(34,211,238,.06);color:var(--cyan);border-radius:8px;
+  width:38px;height:32px;cursor:pointer;font-size:13px;line-height:1}
+.solo:hover{border-color:var(--cyan-edge)}
+
+button.play{border:1px solid var(--cyan-edge);background:rgba(34,211,238,.12);color:#fff;border-radius:10px;
+  padding:9px 18px;font-family:var(--font-disp);font-weight:700;font-size:13px;letter-spacing:.1em;
+  text-transform:uppercase;cursor:pointer;transition:background .15s,border-color .15s}
+button.play:hover{background:rgba(34,211,238,.22);border-color:var(--cyan)}
+button.play.big{padding:11px 24px;font-size:14px;box-shadow:0 0 22px -10px rgba(34,211,238,.7)}
+button.ghost{border:1px solid var(--cyan-soft);background:transparent;color:var(--slate-400);border-radius:9px;
+  padding:7px 13px;font-family:var(--font-disp);font-size:12px;letter-spacing:.06em;cursor:pointer}
+button.ghost:hover{color:var(--cyan);border-color:var(--cyan-edge)}
+
+.libgroup h3{margin:16px 0 8px;font-size:11.5px;font-weight:700;letter-spacing:.2em;text-transform:uppercase;color:var(--slate-400)}
+.libgroup h3 span{color:var(--slate-500);letter-spacing:0;text-transform:none;font-weight:500}
+.row{display:grid;grid-template-columns:36px 1fr auto;gap:11px;align-items:center;padding:8px 10px;border-radius:10px;
+  border:1px solid transparent}
+.row:hover{background:rgba(34,211,238,.05);border-color:var(--cyan-soft)}
+.row.playing{background:rgba(34,211,238,.10);border-color:var(--cyan-edge)}
+.pbtn{width:34px;height:34px;border-radius:50%;border:1px solid var(--cyan-edge);background:rgba(34,211,238,.10);
+  color:var(--cyan);cursor:pointer;font-size:12px;line-height:1;display:grid;place-items:center}
+.pbtn:hover{background:rgba(34,211,238,.22)}
+.rmeta{min-width:0}
+.rname{font-size:13.5px;color:var(--ink);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rsub{font-family:var(--font-mono);font-size:11px;color:var(--slate-500);margin-top:2px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rsub a{color:var(--slate-400);text-decoration:none;border-bottom:1px dotted var(--slate-500)}
+.rsub a:hover{color:var(--cyan);border-color:var(--cyan)}
+.cc0{display:inline-block;font-family:var(--font-mono);font-size:9.5px;font-weight:700;letter-spacing:.1em;
+  color:var(--good);border:1px solid rgba(52,211,153,.3);background:rgba(52,211,153,.08);border-radius:5px;padding:1px 5px}
+
+textarea{width:100%;min-height:250px;background:var(--field);color:var(--slate-300);border:1px solid var(--cyan-soft);
+  border-radius:12px;padding:13px;font-family:var(--font-mono);font-size:11.5px;line-height:1.55;resize:vertical}
+textarea:focus{outline:none;border-color:var(--cyan-edge)}
+
+/* Full-bleed sideways so the fade reaches the edges, but NOT pulled in
+   vertically: this bar sits in the middle of the document, not at the end of
+   it, and a negative bottom margin drags the library section up underneath. */
+.masterbar{position:sticky;bottom:0;z-index:5;margin:0 -16px 8px;padding:12px 16px 16px;
+  background:linear-gradient(to top,rgba(5,14,22,.97) 68%,rgba(5,14,22,0));
+  display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:center}
+@media(min-width:700px){.masterbar{margin:0 -24px 10px;padding:14px 24px 20px}}
+</style>
+</head>
+<body>
+<div class="bg-light"></div>
+<div class="wrap">
+
+<header class="hero">
+  <h1><span class="glyph">&#9654;</span> Win Sound Lab</h1>
+  <p class="tagline">
+    Thirty <b>CC0</b> samples, licence-checked one page at a time, stacked into a win sting you can
+    tune. Pick a layer, drag its level, hit <b>Play tier</b>, repeat until it sounds like money.
+  </p>
+  <div class="note">
+    <b>Your ears decide this one.</b> These files were chosen from duration, attack and measured
+    tonal balance &mdash; nobody has listened to them yet. The defaults are an educated guess, not a
+    recommendation. If a layer sounds cheap or wrong, swap it; that is what this page is for.
+  </div>
+</header>
+
+<h2 class="sec">The recipe</h2>
+<p class="sub">
+  Each tier stacks up to four layers. <b>Delay</b> is how long after the win a layer starts &mdash;
+  staggering the tail behind the body is most of what makes a sting sound produced rather than piled
+  up. Set a layer to <em>none</em> to drop it; <span class="mono">&#9673;</span> solos one.
+  Levels are already loudness-matched per file, so swapping a sample keeps roughly the balance you
+  dialled in.
+</p>
+<div id="tiers"></div>
+
+<div class="masterbar">
+  <button class="play big" data-tier="small">&#9654; Small</button>
+  <button class="play big" data-tier="big">&#9654; Big</button>
+  <button class="play big" data-tier="huge">&#9654; Huge</button>
+  <button class="ghost" id="stopall">&#9632; Stop</button>
+  <span class="knob" style="min-width:190px">
+    <label>Master</label>
+    <input type="range" id="master" min="0" max="1" step="0.01" value="0.55" />
+    <span class="val mono" id="masterval">0.55</span>
+  </span>
+</div>
+
+<h2 class="sec">The library</h2>
+<p class="sub">
+  Every file is Creative Commons Zero &mdash; confirmed on its own Freesound page, not merely
+  filtered for in search. Author links go to the original so the licence stays checkable.
+  Auditioning a sample here plays it at its matched level, the same as it would sit in a sting.
+</p>
+<div class="panel" id="library">Loading catalogue&hellip;</div>
+
+<h2 class="sec">Hand this back</h2>
+<p class="sub">
+  When it sounds right, copy this and paste it into the conversation. It drops straight onto
+  <span class="mono">WIN_RECIPES</span> in <span class="mono">lib/win-sounds.ts</span>.
+</p>
+<div class="panel">
+  <textarea id="export" spellcheck="false" readonly></textarea>
+  <div style="margin-top:10px;display:flex;gap:9px;flex-wrap:wrap">
+    <button class="ghost" id="copy">Copy to clipboard</button>
+    <button class="ghost" id="reset">Reset to defaults</button>
+  </div>
+</div>
+
+</div>
+
+<script>
+const BASE = '/sounds/wins/';
+const ROLES = ['impact','body','tail','coins'];
+const ROLE_BLURB = {
+  impact:'lands under the word',
+  body:'carries the tune',
+  tail:'rings out behind it',
+  coins:'rattles the payout'
+};
+
+/* Must mirror WIN_RECIPES in lib/win-sounds.ts. This page exists to change
+   these, so if the two ever disagree the file is right and this is stale. */
+const DEFAULTS = {
+  small:{
+    label:'Small win', when:'ordinary wins — fires constantly',
+    layers:{
+      impact:{file:null, gain:0.30, delay:0},
+      body:  {file:'body-collect.mp3', gain:0.60, delay:0},
+      tail:  {file:'tail-victory-chime.mp3', gain:0.22, delay:90},
+      coins: {file:null, gain:0.26, delay:520}
+    }
+  },
+  big:{
+    label:'Big win', when:'1.5x profit and up',
+    layers:{
+      impact:{file:'impact-orchestral-hit.mp3', gain:0.30, delay:0},
+      body:  {file:'body-tada-fanfare-a.mp3', gain:0.62, delay:60},
+      tail:  {file:'tail-achievement-sparkle.mp3', gain:0.30, delay:340},
+      coins: {file:'coins-badge-coin-win.mp3', gain:0.26, delay:520}
+    }
+  },
+  huge:{
+    label:'Huge win', when:'4x profit and up',
+    layers:{
+      impact:{file:'impact-soft-cinematic-impact.mp3', gain:0.34, delay:0},
+      body:  {file:'body-success-fanfare-trumpets.mp3', gain:0.62, delay:40},
+      tail:  {file:'tail-achievement-chimes.mp3', gain:0.30, delay:700},
+      coins: {file:'coins-slot-machine-payout.mp3', gain:0.28, delay:900}
+    }
+  }
+};
+
+let CATALOG = [];
+let BY_FILE = {};
+const state = JSON.parse(JSON.stringify(DEFAULTS));
+
+// ── audio ────────────────────────────────────────────────────────────────
+let ctx = null, master = null;
+const buffers = new Map();
+let live = [];
+
+function audio(){
+  if (ctx) return ctx;
+  ctx = new (window.AudioContext || window.webkitAudioContext)();
+  master = ctx.createGain();
+  master.gain.value = parseFloat(document.getElementById('master').value);
+  master.connect(ctx.destination);
+  return ctx;
+}
+
+async function load(file){
+  if (buffers.has(file)) return buffers.get(file);
+  const c = audio();
+  const res = await fetch(BASE + file);
+  if (!res.ok) throw new Error(file + ' -> HTTP ' + res.status);
+  const buf = await c.decodeAudioData(await res.arrayBuffer());
+  buffers.set(file, buf);
+  return buf;
+}
+
+function stopAll(){
+  live.forEach(s => { try { s.stop(); } catch(e){} });
+  live = [];
+  document.querySelectorAll('.row.playing').forEach(r => r.classList.remove('playing'));
+}
+
+async function fire(file, gain, delayMs){
+  if (!file || gain <= 0) return;
+  const c = audio();
+  if (c.state === 'suspended') await c.resume();
+  let buf;
+  try { buf = await load(file); }
+  catch (e){ console.warn(e); return; }
+  // The same measured norm the app applies, so this page is not a nicer mix
+  // than the one that ships.
+  const norm = (BY_FILE[file] && BY_FILE[file].norm) || 1;
+  const src = c.createBufferSource();
+  const g = c.createGain();
+  src.buffer = buf;
+  g.gain.value = gain * norm;
+  src.connect(g); g.connect(master);
+  src.start(c.currentTime + (delayMs || 0) / 1000);
+  live.push(src);
+  src.onended = () => { live = live.filter(s => s !== src); };
+}
+
+async function playTier(tier, soloRole){
+  stopAll();
+  const t = state[tier];
+  for (const role of ROLES){
+    if (soloRole && role !== soloRole) continue;
+    const L = t.layers[role];
+    await fire(L.file, L.gain, soloRole ? 0 : L.delay);
+  }
+}
+
+async function playOne(file, row){
+  stopAll();
+  if (row) row.classList.add('playing');
+  await fire(file, 0.7, 0);
+}
+
+// ── recipe UI ────────────────────────────────────────────────────────────
+function cleanTitle(t){ return t.replace(/\.(wav|mp3|aif|flac)$/i, ''); }
+
+function optionsFor(role){
+  const list = CATALOG.filter(m => m.role === role).sort((a,b) => a.dur - b.dur);
+  let html = '<option value="">&mdash; none &mdash;</option>';
+  for (const m of list){
+    html += '<option value="' + m.file + '">' + cleanTitle(m.title)
+          + '  ·  ' + m.dur.toFixed(2) + 's  ·  @' + m.author + '</option>';
+  }
+  return html;
+}
+
+function buildTiers(){
+  const host = document.getElementById('tiers');
+  host.innerHTML = '';
+  for (const tier of ['small','big','huge']){
+    const t = state[tier];
+    const panel = document.createElement('div');
+    panel.className = 'panel';
+    let h = '<div class="tier-head"><span class="tier-name">' + t.label + '</span>'
+          + '<span class="tier-when mono">' + t.when + '</span><span class="spacer"></span>'
+          + '<button class="play" data-tier="' + tier + '">&#9654; Play tier</button></div>'
+          + '<div class="layers">';
+    for (const role of ROLES){
+      const L = t.layers[role];
+      h += '<div class="layer" data-tier="' + tier + '" data-role="' + role + '">'
+         + '<div class="layer-tag" title="' + ROLE_BLURB[role] + '">' + role + '</div>'
+         + '<select data-k="file">' + optionsFor(role) + '</select>'
+         + '<span class="knob"><label>lvl</label>'
+         + '<input type="range" data-k="gain" min="0" max="1" step="0.01" value="' + L.gain + '" />'
+         + '<span class="val mono">' + L.gain.toFixed(2) + '</span></span>'
+         + '<span class="knob"><label>dly</label>'
+         + '<input type="range" data-k="delay" min="0" max="1500" step="10" value="' + L.delay + '" />'
+         + '<span class="val mono">' + L.delay + '</span></span>'
+         + '<button class="solo" title="Solo this layer">&#9673;</button>'
+         + '</div>';
+    }
+    h += '</div>';
+    panel.innerHTML = h;
+    host.appendChild(panel);
+    for (const role of ROLES){
+      panel.querySelector('.layer[data-role="' + role + '"] select').value = t.layers[role].file || '';
+    }
+  }
+  wireTiers();
+  refreshExport();
+}
+
+function wireTiers(){
+  document.querySelectorAll('.layer').forEach(el => {
+    const tier = el.dataset.tier, role = el.dataset.role;
+    const L = () => state[tier].layers[role];
+
+    el.querySelector('select').addEventListener('change', e => {
+      L().file = e.target.value || null;
+      refreshExport();
+      playTier(tier, role);
+    });
+    el.querySelectorAll('input[type=range]').forEach(inp => {
+      inp.addEventListener('input', e => {
+        const k = e.target.dataset.k;
+        const v = parseFloat(e.target.value);
+        L()[k] = k === 'gain' ? v : Math.round(v);
+        e.target.parentElement.querySelector('.val').textContent =
+          k === 'gain' ? v.toFixed(2) : Math.round(v);
+        refreshExport();
+      });
+      // Audition on release, not on every pixel of the drag.
+      inp.addEventListener('change', () => playTier(tier));
+    });
+    el.querySelector('.solo').addEventListener('click', () => playTier(tier, role));
+  });
+  document.querySelectorAll('button.play[data-tier]').forEach(b => {
+    b.addEventListener('click', () => playTier(b.dataset.tier));
+  });
+}
+
+// ── library UI ───────────────────────────────────────────────────────────
+function buildLibrary(){
+  const host = document.getElementById('library');
+  let h = '';
+  for (const role of ROLES){
+    const list = CATALOG.filter(m => m.role === role).sort((a,b) => a.dur - b.dur);
+    h += '<div class="libgroup"><h3>' + role + ' &mdash; ' + ROLE_BLURB[role]
+       + ' <span>(' + list.length + ')</span></h3>';
+    for (const m of list){
+      h += '<div class="row" data-file="' + m.file + '">'
+         + '<button class="pbtn">&#9654;</button>'
+         + '<div class="rmeta"><div class="rname">' + cleanTitle(m.title) + '</div>'
+         + '<div class="rsub">' + m.dur.toFixed(2) + 's &middot; <a href="' + m.page
+         + '" target="_blank" rel="noopener">@' + m.author + '</a> &middot; ' + m.file + '</div></div>'
+         + '<span class="cc0">CC0</span></div>';
+    }
+    h += '</div>';
+  }
+  host.innerHTML = h;
+  host.querySelectorAll('.row').forEach(row => {
+    row.querySelector('.pbtn').addEventListener('click', () => playOne(row.dataset.file, row));
+  });
+}
+
+// ── export ───────────────────────────────────────────────────────────────
+function refreshExport(){
+  const out = {};
+  for (const tier of ['small','big','huge']){
+    const layers = {};
+    for (const role of ROLES){
+      const L = state[tier].layers[role];
+      if (!L.file || L.gain <= 0) continue;
+      layers[role] = { file: L.file, gain: +L.gain.toFixed(2), delay: L.delay };
+    }
+    out[tier] = layers;
+  }
+  document.getElementById('export').value = JSON.stringify(out, null, 2);
+}
+
+// ── boot ─────────────────────────────────────────────────────────────────
+document.getElementById('master').addEventListener('input', e => {
+  const v = parseFloat(e.target.value);
+  document.getElementById('masterval').textContent = v.toFixed(2);
+  if (master) master.gain.value = v;
+});
+document.getElementById('stopall').addEventListener('click', stopAll);
+document.getElementById('copy').addEventListener('click', async () => {
+  const btn = document.getElementById('copy');
+  try {
+    await navigator.clipboard.writeText(document.getElementById('export').value);
+    btn.textContent = 'Copied';
+  } catch (e){
+    // Clipboard is blocked on insecure origins; selecting the text still lets
+    // the reader hit Ctrl+C rather than leaving them with a dead button.
+    const ta = document.getElementById('export');
+    ta.removeAttribute('readonly'); ta.select(); ta.setAttribute('readonly','');
+    btn.textContent = 'Select + copy';
+  }
+  setTimeout(() => { btn.textContent = 'Copy to clipboard'; }, 1600);
+});
+document.getElementById('reset').addEventListener('click', () => {
+  Object.assign(state, JSON.parse(JSON.stringify(DEFAULTS)));
+  buildTiers();
+});
+
+fetch(BASE + 'catalog.json')
+  .then(r => r.json())
+  .then(list => {
+    CATALOG = list;
+    BY_FILE = Object.fromEntries(list.map(m => [m.file, m]));
+    buildTiers();
+    buildLibrary();
+  })
+  .catch(e => {
+    document.getElementById('library').textContent =
+      'Could not load /sounds/wins/catalog.json — ' + e;
+  });
+</script>
+</body>
+</html>

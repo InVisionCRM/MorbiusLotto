@@ -24,7 +24,6 @@
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useAccount } from 'wagmi';
-import confetti from 'canvas-confetti';
 import { Volume2, VolumeX } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -215,12 +214,6 @@ export function PaiGowPokerGame() {
 
   const winFx = useCallback(() => {
     paiGowAudio.playWin();
-    confetti({
-      particleCount: 110,
-      spread: 75,
-      origin: { y: 0.5 },
-      colors: ['#22D3EE', '#FCD34D', '#ffffff'],
-    });
   }, []);
 
   // ---------------------------------------------------------------- deal

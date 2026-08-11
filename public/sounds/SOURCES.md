@@ -7,6 +7,12 @@ are 100% original and carry no third-party licensing obligations. This file
 governs the *externally sourced* samples a team member may add (layer C of the
 Sound Lab).
 
+> **Exception worth knowing: the win sounds are samples now.** Wins across the
+> whole floor are recorded audio (§3.1), not oscillators. The synthesised
+> versions still exist in each game's audio module, but only as the fallback for
+> when a sample has not downloaded yet. Everything else — cards, chips, dice,
+> pegs, ticks — is still generated.
+
 Currency in all copy is **MORBIUS**. This is a play-money / demo studio.
 
 ---
@@ -55,14 +61,66 @@ Search hints for slot/casino coverage: `coin`, `reel`, `slot`, `jackpot`,
 
 ## 3. Manifest — log every externally sourced sample here
 
-Add one row per file you place in `public/sounds/`. The example row below is a
-**placeholder** showing the required format — it does not describe a real file.
-Replace or delete it once real assets are added. **Do not** claim any specific
+Add one row per file you place in `public/sounds/`. **Do not** claim any specific
 real-world file is CC0 without verifying it on the source page first.
+
+### 3.1 Win stings — `public/sounds/wins/`
+
+Thirty samples backing the layered win sting (`lib/win-sounds.ts`, played by
+`lib/win-audio.ts`). Every one was confirmed CC0 **on its own Freesound page**,
+not merely filtered for in search — the search facet is a starting point, and
+this manifest records the per-asset check.
+
+Ten are wired into the shipped recipes; the rest are the alternatives offered by
+`/win-sound-lab.html`, kept so the sting can be re-voiced without another
+sourcing round. The `event` column says which.
+
+CC0 requires no attribution. Authors are credited anyway, per the policy above.
 
 | file | event | source URL | author | license | date added |
 | --- | --- | --- | --- | --- | --- |
-| _example-placeholder.wav_ | coin-rollup | https://example.org/ASSET_PAGE | AUTHOR_NAME | CC0 | YYYY-MM-DD |
+| `impact-brass-hit.mp3` | library (unused) | https://freesound.org/people/germona/sounds/653604/ | germona | CC0 | 2026-08-10 |
+| `impact-orchestral-hit.mp3` | win-big (impact) | https://freesound.org/people/Rizzard/sounds/559391/ | Rizzard | CC0 | 2026-08-10 |
+| `impact-riser-hit.mp3` | library (unused) | https://freesound.org/people/AudioPapkin/sounds/511863/ | AudioPapkin | CC0 | 2026-08-10 |
+| `impact-soft-cinematic-impact.mp3` | win-huge (impact) | https://freesound.org/people/Rizzard/sounds/560156/ | Rizzard | CC0 | 2026-08-10 |
+| `body-achievement-jingle.mp3` | library (unused) | https://freesound.org/people/CogFireStudios/sounds/619840/ | CogFireStudios | CC0 | 2026-08-10 |
+| `body-bonus-points.mp3` | library (unused) | https://freesound.org/people/Joao_Janz/sounds/482653/ | Joao_Janz | CC0 | 2026-08-10 |
+| `body-collect.mp3` | win-small (body) | https://freesound.org/people/Wagna/sounds/325805/ | Wagna | CC0 | 2026-08-10 |
+| `body-game-reward.mp3` | library (unused) | https://freesound.org/people/IENBA/sounds/656643/ | IENBA | CC0 | 2026-08-10 |
+| `body-game-success-fanfare.mp3` | library (unused) | https://freesound.org/people/el_boss/sounds/677859/ | el_boss | CC0 | 2026-08-10 |
+| `body-glockenspiel-treasure.mp3` | library (unused) | https://freesound.org/people/FunWithSound/sounds/456965/ | FunWithSound | CC0 | 2026-08-10 |
+| `body-level-win.mp3` | library (unused) | https://freesound.org/people/Tuudurt/sounds/258142/ | Tuudurt | CC0 | 2026-08-10 |
+| `body-magic-win-success-2.mp3` | library (unused) | https://freesound.org/people/MLaudio/sounds/615100/ | MLaudio | CC0 | 2026-08-10 |
+| `body-magic-win-success.mp3` | library (unused) | https://freesound.org/people/MLaudio/sounds/615099/ | MLaudio | CC0 | 2026-08-10 |
+| `body-mission-complete.mp3` | library (unused) | https://freesound.org/people/Beetlemuse/sounds/528958/ | Beetlemuse | CC0 | 2026-08-10 |
+| `body-success-fanfare-trumpets.mp3` | win-huge (body) | https://freesound.org/people/FunWithSound/sounds/456966/ | FunWithSound | CC0 | 2026-08-10 |
+| `body-tada-fanfare-a.mp3` | win-big (body) | https://freesound.org/people/plasterbrain/sounds/397355/ | plasterbrain | CC0 | 2026-08-10 |
+| `body-triumph-jingle.mp3` | library (unused) | https://freesound.org/people/lightbulbafagd/sounds/518750/ | lightbulbafagd | CC0 | 2026-08-10 |
+| `body-victory-sting.mp3` | library (unused) | https://freesound.org/people/xkeril/sounds/706753/ | xkeril | CC0 | 2026-08-10 |
+| `body-win-brass.mp3` | library (unused) | https://freesound.org/people/Fupicat/sounds/521639/ | Fupicat | CC0 | 2026-08-10 |
+| `body-win-spacey.mp3` | library (unused) | https://freesound.org/people/GameAudio/sounds/220184/ | GameAudio | CC0 | 2026-08-10 |
+| `tail-achievement-chimes.mp3` | win-huge (tail) | https://freesound.org/people/LaurenPonder/sounds/635665/ | LaurenPonder | CC0 | 2026-08-10 |
+| `tail-achievement-sparkle.mp3` | win-big (tail) | https://freesound.org/people/SkySpeira/sounds/715067/ | SkySpeira | CC0 | 2026-08-10 |
+| `tail-magic-sparkle.mp3` | library (unused) | https://freesound.org/people/MLaudio/sounds/511485/ | MLaudio | CC0 | 2026-08-10 |
+| `tail-sparkling-star.mp3` | library (unused) | https://freesound.org/people/LilMati/sounds/462092/ | LilMati | CC0 | 2026-08-10 |
+| `tail-success-bell.mp3` | library (unused) | https://freesound.org/people/MLaudio/sounds/511484/ | MLaudio | CC0 | 2026-08-10 |
+| `tail-victory-chime.mp3` | win-small (tail) | https://freesound.org/people/1bob/sounds/717771/ | 1bob | CC0 | 2026-08-10 |
+| `coins-badge-coin-win.mp3` | win-big (coins) | https://freesound.org/people/steaq/sounds/387232/ | steaq | CC0 | 2026-08-10 |
+| `coins-casino-hit-big-money.mp3` | library (unused) | https://freesound.org/people/modusmogulus/sounds/787908/ | modusmogulus | CC0 | 2026-08-10 |
+| `coins-money-handful.mp3` | library (unused) | https://freesound.org/people/rolandseer/sounds/443334/ | rolandseer | CC0 | 2026-08-10 |
+| `coins-slot-machine-payout.mp3` | win-huge (coins) | https://freesound.org/people/jack126guy/sounds/361346/ | jack126guy | CC0 | 2026-08-10 |
+
+Files are the Freesound HQ previews (VBR MP3, 44.1/48 kHz stereo), which are
+served without an account and are already the right weight for the web. Each one
+carries a measured `norm` in `lib/win-sounds.ts` that trims it to a common
+loudness; that figure is derived from the file, so **re-download means
+re-measure**.
+
+### 3.2 Everything else
+
+| file | event | source URL | author | license | date added |
+| --- | --- | --- | --- | --- | --- |
+| _none logged yet_ | | | | | |
 
 Column meaning:
 

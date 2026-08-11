@@ -21,7 +21,6 @@
  */
 
 import { useEffect, useRef } from 'react';
-import confetti from 'canvas-confetti';
 import { useCrashStore } from './useCrashStore';
 import { useBigWin } from '@/contexts/big-win-context';
 import { crashAudio } from './crash-audio';
@@ -87,12 +86,6 @@ export default function CrashEngine({ clientSeed, onRoundSettled }: CrashEngineP
   // spot to fire the big-win share card (bet from the live round).
   useEffect(() => {
     if (winAmount && phase === 'flying') {
-      confetti({
-        particleCount: 100,
-        spread: 70,
-        origin: { y: 0.6 },
-        colors: ['#00ff00', '#ffff00'],
-      });
       crashAudio.playCashout();
       const s = useCrashStore.getState();
       reportWin({ game: 'Crash', bet: s.round?.bet ?? s.betAmount, payout: winAmount });
@@ -331,12 +324,6 @@ export default function CrashEngine({ clientSeed, onRoundSettled }: CrashEngineP
       if (cashoutX100 != null && !cashoutFired && multX100 >= cashoutX100) {
         cashoutFired = true;
         crashAudio.playCashout();
-        confetti({
-          particleCount: 100,
-          spread: 70,
-          origin: { y: 0.6 },
-          colors: ['#00ff00', '#ffff00'],
-        });
       }
 
       useCrashStore.getState().setReplayMultiplier(mult);

@@ -6,6 +6,8 @@
  * conventions as three-card-audio.ts.
  */
 
+import { playWinSting, preloadWinSounds } from '@/lib/win-audio';
+
 class PaiGowAudio {
   ctx: AudioContext | null = null;
   master: GainNode | null = null;
@@ -13,6 +15,7 @@ class PaiGowAudio {
 
   init() {
     if (this.ctx || typeof window === 'undefined') return;
+    preloadWinSounds();
     try {
       const Ctx =
         window.AudioContext ||
@@ -66,6 +69,9 @@ class PaiGowAudio {
 
   /** Win chime — ascending major triad. */
   playWin() {
+    // Recorded sting first; the tones below are the fallback for when it
+    // has not loaded yet. See lib/win-audio.ts.
+    if (playWinSting('small', { muted: this.muted })) return;
     this.tone(1046.5, 'sine', 0.12, 0.32);
     setTimeout(() => this.tone(1318.51, 'sine', 0.12, 0.32), 110);
     setTimeout(() => this.tone(1567.98, 'sine', 0.35, 0.38), 220);

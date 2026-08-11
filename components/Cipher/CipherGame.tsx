@@ -25,7 +25,6 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAccount } from 'wagmi';
-import confetti from 'canvas-confetti';
 import { Volume2, VolumeX, Delete } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -303,12 +302,6 @@ export function CipherGame() {
 
   const winFx = useCallback(() => {
     cipherAudio.playCrack();
-    confetti({
-      particleCount: 110,
-      spread: 75,
-      origin: { y: 0.5 },
-      colors: ['#22D3EE', '#FCD34D', '#ffffff'],
-    });
   }, []);
 
   const startRound = useCallback(async () => {
@@ -469,7 +462,6 @@ export function CipherGame() {
       }
       setPhase('banked');
       cipherAudio.playCash();
-      confetti({ particleCount: 70, spread: 60, origin: { y: 0.5 }, colors: ['#F59E0B', '#FCD34D', '#ffffff'] });
       reportWin({ game: 'Cipher', bet: betAmount, payout: r.payout });
       settleHistory(roundId, betAmount, diff, guessCount, r.bestExact, false, true, r.multiplierX100, r.payout, r.code, guesses);
       setSession((prev) => [...prev, { drop: prev.length + 1, bet: betAmount, profit: r.payout - betAmount }]);
