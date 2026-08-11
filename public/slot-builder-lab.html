@@ -685,6 +685,11 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
         <option value="Deep Abyss">Preset: Deep Abyss</option>
         <option value="Golden Vault">Preset: Golden Vault</option>
         <option value="Neon Arcade">Preset: Neon Arcade</option>
+        <optgroup label="Branded cabinets">
+          <option value="Green Wick">Green Wick &middot; The Marker</option>
+          <option value="SuperStake">SuperStake &middot; Compound</option>
+          <option value="Morbius">Morbius &middot; Vault of the Shield</option>
+        </optgroup>
       </select>
       <button class="pill-btn" id="fairBtn"><span class="dot"></span>Provably fair</button>
     </div>
@@ -1599,6 +1604,202 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
   function baseSound(over){var s={pack:'Synth',volume:0.8,muted:false,autoPreview:false,fx:{}}; if(over)deepMerge(s,over); if(!SND_PROFILES[s.pack])s.pack='Synth'; s.volume=Math.max(0,Math.min(1,+s.volume||0)); s.autoPreview=!!s.autoPreview; if(!s.fx||typeof s.fx!=='object'||Array.isArray(s.fx))s.fx={}; return s;}
   function deepMerge(dst,src){for(var k in src){if(src[k]&&typeof src[k]==='object'&&!Array.isArray(src[k])){if(!dst[k])dst[k]={};deepMerge(dst[k],src[k]);}else dst[k]=src[k];}return dst;}
 
+  /* ═══════════════════════════════════════════════════════════════════════
+     BRANDED MACHINES — symbol art for the three partner-token cabinets.
+
+     Drawn as inline SVG rather than shipped as files. A reel symbol is a bold
+     silhouette read at roughly 60px, which is exactly what vector art is good
+     at, and it means a machine can be re-tinted by editing one hex instead of
+     re-exporting nine PNGs. Nothing here is licensed from anyone.
+
+     The three logos ARE real art, because a brand's own mark is the one thing
+     that must not be an approximation: Green Wick and Morbius ship isolated
+     logos already, and the SuperStake mark was cropped out of its branded
+     blackjack table into /slots/superstake-mark.png since no standalone file
+     existed.
+
+     Palettes are sampled from that same art rather than eyeballed — Green
+     Wick's #0C8E06 green and #1539B6 tie-blue, Morbius's #36C3D2 cyan, and
+     SuperStake's orange→magenta→purple ramp are all measured off the pixels.
+     ═══════════════════════════════════════════════════════════════════════ */
+  function svgArt(defs,body){
+    // encodeURIComponent rather than base64: it keeps the markup readable in
+    // devtools and sidesteps every quoting problem inside an img src.
+    var s='<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">'+
+      (defs?'<defs>'+defs+'</defs>':'')+body+'</svg>';
+    return 'data:image/svg+xml;charset=utf-8,'+encodeURIComponent(s);
+  }
+  /** Vertical two-stop gradient, the workhorse for every metal and gem here. */
+  function grad(id,a,b){
+    return '<linearGradient id="'+id+'" x1="0" y1="0" x2="0" y2="1">'+
+      '<stop offset="0" stop-color="'+a+'"/><stop offset="1" stop-color="'+b+'"/></linearGradient>';
+  }
+  function gradD(id,a,b){
+    return '<linearGradient id="'+id+'" x1="0" y1="0" x2="1" y2="1">'+
+      '<stop offset="0" stop-color="'+a+'"/><stop offset="1" stop-color="'+b+'"/></linearGradient>';
+  }
+
+  /* ── Green Wick — the contract-killer kit ─────────────────────────────── */
+  var GW = {
+    green:'#0C8E06', deep:'#0A4A08', olive:'#4A7B2D', gold:'#E8B923',
+    goldDk:'#8C6A0F', steel:'#B9C4D0', steelDk:'#4A5663', blue:'#1539B6',
+    bone:'#E8E4D8', blood:'#A11B1B'
+  };
+  var GW_ART = {
+    // The blood-oath marker: a gold coin with a thumbprint pressed into wax.
+    marker: svgArt(grad('mg',GW.gold,GW.goldDk)+grad('mw','#C42B2B',GW.blood),
+      '<circle cx="50" cy="50" r="40" fill="url(#mg)" stroke="'+GW.goldDk+'" stroke-width="3"/>'+
+      '<circle cx="50" cy="50" r="31" fill="none" stroke="'+GW.goldDk+'" stroke-width="2" opacity=".8"/>'+
+      '<circle cx="50" cy="50" r="20" fill="url(#mw)"/>'+
+      '<path d="M50 36c8 0 13 6 13 13 0 9-6 15-13 15s-13-6-13-15c0-7 5-13 13-13z" fill="none" stroke="#F2C4C4" stroke-width="2.4" opacity=".75"/>'+
+      '<path d="M50 42c4 0 7 3 7 7 0 5-3 9-7 9" fill="none" stroke="#F2C4C4" stroke-width="2" opacity=".6"/>'),
+    // Suppressed pistol, barrel left, so the silhouette reads as a gun fast.
+    pistol: svgArt(grad('pg',GW.steel,GW.steelDk),
+      '<rect x="6" y="38" width="34" height="15" rx="7" fill="url(#pg)"/>'+
+      '<rect x="10" y="42" width="26" height="2.5" fill="'+GW.steelDk+'" opacity=".7"/>'+
+      '<rect x="38" y="34" width="40" height="17" rx="3" fill="url(#pg)"/>'+
+      '<rect x="42" y="38" width="30" height="3" fill="'+GW.steelDk+'" opacity=".55"/>'+
+      '<path d="M60 51l14 0-6 30-16 0z" fill="url(#pg)"/>'+
+      '<path d="M52 51h12l-3 12H50z" fill="'+GW.steelDk+'"/>'+
+      '<path d="M62 60l10 0-4 20-9 0z" fill="'+GW.steelDk+'" opacity=".55"/>'),
+    // Combat knife on the diagonal — fills the cell better than upright.
+    // The blade is deliberately narrow and hard-outlined: drawn wide and pale
+    // it read at reel size as a white blob rather than as a knife.
+    knife: svgArt(grad('kb','#F4F8FC','#8D9AA8')+grad('kh','#3A3F46','#16191D'),
+      '<g stroke="#0B0F14" stroke-width="3" stroke-linejoin="round">'+
+      '<path d="M30 74L64 26l6 5-31 49z" fill="url(#kb)"/>'+
+      '<path d="M22 86l10-14 9 6-10 14z" fill="'+GW.steelDk+'"/>'+
+      '<path d="M12 88l10-6 7 5-9 11z" fill="url(#kh)"/></g>'+
+      '<path d="M64 26l6 5-4 6-5-3z" fill="#FFFFFF" opacity=".7"/>'+
+      '<path d="M36 66l7 5" stroke="#5A6673" stroke-width="2.4" stroke-linecap="round"/>'),
+    // Continental coin — the currency of the world Green Wick lives in.
+    coin: svgArt(grad('cg','#F6D765',GW.goldDk),
+      '<circle cx="50" cy="50" r="38" fill="url(#cg)" stroke="'+GW.goldDk+'" stroke-width="3"/>'+
+      '<circle cx="50" cy="50" r="29" fill="none" stroke="#FBEBA8" stroke-width="2" opacity=".65"/>'+
+      '<path d="M50 30l16 8v14c0 11-8 17-16 21-8-4-16-10-16-21V38z" fill="'+GW.goldDk+'" opacity=".55"/>'+
+      '<path d="M50 36l10 5v10c0 7-5 11-10 13-5-2-10-6-10-13V41z" fill="#F6D765"/>'),
+    // Spent brass, tipped so it looks dropped rather than standing.
+    shell: svgArt(grad('sb','#F0C24E','#8A6412'),
+      '<g transform="rotate(24 50 50)">'+
+      '<rect x="38" y="22" width="24" height="48" rx="4" fill="url(#sb)"/>'+
+      '<rect x="36" y="64" width="28" height="12" rx="3" fill="'+GW.goldDk+'"/>'+
+      '<ellipse cx="50" cy="22" rx="12" ry="5" fill="#FBE39B"/>'+
+      '<rect x="43" y="28" width="4" height="34" fill="#FBE39B" opacity=".45"/></g>'),
+    // The pencil. Anyone who knows the films knows why it is on the reels.
+    pencil: svgArt(grad('pc','#F3B93B','#B07C0C'),
+      '<g transform="rotate(38 50 50)">'+
+      '<rect x="42" y="18" width="16" height="52" fill="url(#pc)"/>'+
+      '<rect x="42" y="18" width="5" height="52" fill="#FBE0A0" opacity=".55"/>'+
+      '<path d="M42 70h16l-8 16z" fill="#E8CFA6"/>'+
+      '<path d="M46 80h8l-4 6z" fill="#2A2A2A"/>'+
+      '<rect x="42" y="10" width="16" height="8" fill="#C9CDD2"/>'+
+      '<rect x="42" y="2" width="16" height="8" rx="3" fill="#E86A6A"/></g>'),
+    // Dog tag on its chain.
+    tag: svgArt(grad('tg',GW.steel,GW.steelDk),
+      '<path d="M30 14a20 20 0 0 1 40 0" fill="none" stroke="'+GW.steelDk+'" stroke-width="3" stroke-dasharray="1 4" stroke-linecap="round"/>'+
+      '<rect x="34" y="20" width="32" height="62" rx="14" fill="url(#tg)" stroke="'+GW.steelDk+'" stroke-width="2"/>'+
+      '<circle cx="50" cy="30" r="4" fill="'+GW.steelDk+'"/>'+
+      '<rect x="40" y="42" width="20" height="3.5" rx="1.7" fill="'+GW.steelDk+'" opacity=".8"/>'+
+      '<rect x="40" y="51" width="20" height="3.5" rx="1.7" fill="'+GW.steelDk+'" opacity=".6"/>'+
+      '<rect x="40" y="60" width="14" height="3.5" rx="1.7" fill="'+GW.steelDk+'" opacity=".45"/>'),
+    // The blue tie off the logo — the one flash of colour in the suit.
+    tie: svgArt(grad('ti','#2E5BE0',GW.blue),
+      '<path d="M40 12h20l-4 12H44z" fill="#1B2A4A"/>'+
+      '<path d="M44 26h12l7 40-13 24-13-24z" fill="url(#ti)"/>'+
+      '<path d="M44 26h6l-4 40 4 24-6-24z" fill="#5B82F2" opacity=".45"/>'),
+    // The dog. If you know, you know.
+    dog: svgArt(grad('dg','#C89A63','#7A5730'),
+      '<path d="M22 34c-6-14 2-22 10-18l8 5h20l8-5c8-4 16 4 10 18z" fill="#6E4B27"/>'+
+      '<ellipse cx="50" cy="56" rx="27" ry="26" fill="url(#dg)"/>'+
+      '<path d="M23 40c-7 6-8 22-1 30 5 6 9 2 9-6z" fill="#5A3D1F"/>'+
+      '<path d="M77 40c7 6 8 22 1 30-5 6-9 2-9-6z" fill="#5A3D1F"/>'+
+      '<circle cx="40" cy="52" r="4.5" fill="#241608"/><circle cx="60" cy="52" r="4.5" fill="#241608"/>'+
+      '<ellipse cx="50" cy="66" rx="7" ry="5.5" fill="#241608"/>'+
+      '<path d="M50 71v6M43 78c3 3 11 3 14 0" stroke="#241608" stroke-width="2.6" fill="none" stroke-linecap="round"/>'),
+    // The car he keeps having to get back.
+    car: svgArt(grad('ca','#4A5663','#161B21'),
+      '<path d="M12 62c0-6 4-9 9-10l10-14c2-3 5-4 8-4h22c3 0 6 1 8 4l10 14c5 1 9 4 9 10v9H12z" fill="url(#ca)"/>'+
+      '<path d="M33 42h34l7 10H26z" fill="#7FD3E8" opacity=".75"/>'+
+      '<rect x="12" y="58" width="76" height="5" fill="'+GW.green+'" opacity=".8"/>'+
+      '<circle cx="28" cy="72" r="9" fill="#101418"/><circle cx="28" cy="72" r="4" fill="#6E7A87"/>'+
+      '<circle cx="72" cy="72" r="9" fill="#101418"/><circle cx="72" cy="72" r="4" fill="#6E7A87"/>'+
+      '<rect x="14" y="52" width="8" height="5" rx="2" fill="#FFE9A8"/>'+
+      '<rect x="78" y="52" width="8" height="5" rx="2" fill="#FFE9A8"/>')
+  };
+
+  /* ── SuperStake — the yield rig ───────────────────────────────────────── */
+  var SS = {
+    orange:'#F97316', ember:'#EA5934', magenta:'#D6246E', rose:'#8F172E',
+    purple:'#7C1FA2', plum:'#5B0E4A', ink:'#1A0714'
+  };
+  var SS_ART = {
+    // Vault dial — the scatter. Locking is the whole metaphor of the machine.
+    vault: svgArt(gradD('vg',SS.orange,SS.purple),
+      '<circle cx="50" cy="50" r="40" fill="'+SS.ink+'" stroke="url(#vg)" stroke-width="5"/>'+
+      '<circle cx="50" cy="50" r="26" fill="none" stroke="url(#vg)" stroke-width="3" opacity=".8"/>'+
+      '<g stroke="url(#vg)" stroke-width="5" stroke-linecap="round">'+
+      '<path d="M50 12v12"/><path d="M50 76v12"/><path d="M12 50h12"/><path d="M76 50h12"/>'+
+      '<path d="M23 23l9 9"/><path d="M68 68l9 9"/><path d="M77 23l-9 9"/><path d="M32 68l-9 9"/></g>'+
+      '<circle cx="50" cy="50" r="9" fill="url(#vg)"/>'),
+    // Three ascending bars: the position getting bigger every epoch.
+    bars: svgArt(gradD('bg',SS.orange,SS.magenta),
+      '<rect x="14" y="58" width="20" height="30" rx="4" fill="'+SS.rose+'"/>'+
+      '<rect x="40" y="40" width="20" height="48" rx="4" fill="'+SS.ember+'"/>'+
+      '<rect x="66" y="20" width="20" height="68" rx="4" fill="url(#bg)"/>'+
+      '<path d="M18 46l22-14 20 8 22-22" fill="none" stroke="#FFD9A0" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>'+
+      '<circle cx="82" cy="18" r="6" fill="#FFD9A0"/>'),
+    // Yield orb with an orbit — payout accruing around a locked stake.
+    orb: svgArt(gradD('og','#FFC46B',SS.magenta),
+      '<ellipse cx="50" cy="52" rx="44" ry="16" fill="none" stroke="'+SS.purple+'" stroke-width="4" opacity=".85" transform="rotate(-22 50 52)"/>'+
+      '<circle cx="50" cy="50" r="24" fill="url(#og)"/>'+
+      '<circle cx="42" cy="42" r="7" fill="#FFF0D0" opacity=".65"/>'+
+      '<ellipse cx="50" cy="52" rx="44" ry="16" fill="none" stroke="'+SS.orange+'" stroke-width="4" opacity=".55" transform="rotate(20 50 52)"/>'),
+    // Compounding: two arrows chasing each other round.
+    compound: svgArt(gradD('cg2',SS.orange,SS.purple),
+      '<path d="M78 38a32 32 0 1 0 4 18" fill="none" stroke="url(#cg2)" stroke-width="10" stroke-linecap="round"/>'+
+      '<path d="M62 34l20 2-4 20z" fill="'+SS.orange+'"/>'+
+      '<text x="50" y="61" font-family="monospace" font-size="30" font-weight="700" fill="#FFD9A0" text-anchor="middle">%</text>'),
+    // Stake ladder — the tier you climb by leaving it locked.
+    ladder: svgArt(gradD('lg2',SS.magenta,SS.purple),
+      '<g fill="url(#lg2)">'+
+      '<path d="M20 74h60l-10 12H30z"/><path d="M26 56h48l-8 12H34z"/><path d="M32 38h36l-6 12H38z"/></g>'+
+      '<path d="M50 8l14 20H36z" fill="'+SS.orange+'"/>'),
+    gemO: svgArt(grad('go','#FFB259',SS.orange),
+      '<path d="M50 12l30 22-30 54-30-54z" fill="url(#go)"/>'+
+      '<path d="M50 12l30 22H20z" fill="#FFD8A8" opacity=".55"/>'+
+      '<path d="M50 12v76" stroke="'+SS.ember+'" stroke-width="2" opacity=".5"/>'),
+    gemM: svgArt(grad('gm','#F2568F',SS.magenta),
+      '<path d="M50 12l30 22-30 54-30-54z" fill="url(#gm)"/>'+
+      '<path d="M50 12l30 22H20z" fill="#FFC0D8" opacity=".5"/>'+
+      '<path d="M50 12v76" stroke="'+SS.rose+'" stroke-width="2" opacity=".5"/>'),
+    gemP: svgArt(grad('gp','#B368E0',SS.purple),
+      '<path d="M50 12l30 22-30 54-30-54z" fill="url(#gp)"/>'+
+      '<path d="M50 12l30 22H20z" fill="#D9A8F2" opacity=".5"/>'+
+      '<path d="M50 12v76" stroke="'+SS.plum+'" stroke-width="2" opacity=".5"/>'),
+    gemR: svgArt(grad('gr','#FF8FA8',SS.rose),
+      '<path d="M50 12l30 22-30 54-30-54z" fill="url(#gr)"/>'+
+      '<path d="M50 12l30 22H20z" fill="#FFD3DC" opacity=".5"/>'+
+      '<path d="M50 12v76" stroke="'+SS.rose+'" stroke-width="2" opacity=".5"/>'),
+    // Locked position — the shackle closed over the stake.
+    lock: svgArt(gradD('lk',SS.orange,SS.magenta),
+      '<path d="M32 44V34a18 18 0 0 1 36 0v10" fill="none" stroke="'+SS.purple+'" stroke-width="9" stroke-linecap="round"/>'+
+      '<rect x="20" y="42" width="60" height="46" rx="10" fill="url(#lk)"/>'+
+      '<circle cx="50" cy="62" r="8" fill="'+SS.ink+'"/>'+
+      '<rect x="46" y="62" width="8" height="16" rx="4" fill="'+SS.ink+'"/>'),
+    // A green candle. The reason anyone stakes anything.
+    candle: svgArt(grad('cd','#5BE58A','#1E8F4A'),
+      '<rect x="44" y="8" width="4" height="20" fill="#5BE58A"/>'+
+      '<rect x="44" y="70" width="4" height="20" fill="#5BE58A"/>'+
+      '<rect x="30" y="28" width="32" height="42" rx="3" fill="url(#cd)"/>'+
+      '<rect x="70" y="52" width="4" height="14" fill="'+SS.ember+'"/>'+
+      '<rect x="62" y="60" width="20" height="24" rx="3" fill="'+SS.ember+'"/>'),
+    // The token itself.
+    coin: svgArt(gradD('cn',SS.orange,SS.purple),
+      '<circle cx="50" cy="50" r="38" fill="url(#cn)"/>'+
+      '<circle cx="50" cy="50" r="30" fill="'+SS.ink+'" opacity=".55"/>'+
+      '<path d="M62 34H44a8 8 0 0 0 0 16h12a8 8 0 0 1 0 16H38" fill="none" stroke="#FFD9A0" stroke-width="7" stroke-linecap="round"/>')
+  };
+
   var PRESETS = {
     'Deep Abyss': function(){
       return finalizeDef({
@@ -1619,6 +1820,198 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
         sound: baseSound({pack:'Casino'})
       });
     },
+    /* ── GREEN WICK · THE MARKER ───────────────────────────────────────────
+       A 7×7 cluster board where every cleared cluster raises the multiplier —
+       a kill chain. The wild walks a reel left each spin, so a hit that misses
+       this spin can still land the next one, and markers collect into the meta
+       the way the films' blood-oath coins pile up.
+
+       Cluster maths indexes the pay table by cluster size (floor(size/2),
+       clamped to the column count), so this ladder runs the full 0..7 — a
+       5-column ladder padded out would silently pay ZERO on the biggest
+       clusters, which are the entire point of the board. */
+    'Green Wick': function(){
+      var syms=[
+        {id:'W', name:'Green Wick', role:'wild', art:'Logos/WICK.png', weight:4,
+         pays:[0,0,0,0,0,0,0,0], frame:{effect:'neon',color:GW.green,speed:1.15}, sizePct:94},
+        {id:'S', name:'The Marker', role:'scatter', art:GW_ART.marker, weight:3,
+         pays:[], frame:{effect:'pulsering',color:GW.blood,speed:1.2}, sizePct:88},
+        {id:'H1',name:'Suppressed .45', role:'normal', art:GW_ART.pistol, weight:6,
+         pays:[0,0,0,6.4,18,59,193,668], frame:{effect:'electric',color:GW.green,speed:1}, sizePct:96},
+        {id:'H2',name:'Combat Knife', role:'normal', art:GW_ART.knife, weight:7,
+         pays:[0,0,0,5.1,13,41,135,437], frame:{effect:'shimmer',color:'#8FE06A',speed:1}, sizePct:94},
+        {id:'H3',name:'Continental Coin', role:'normal', art:GW_ART.coin, weight:9,
+         pays:[0,0,0,3.9,9,28.5,90,270], frame:{effect:'ember',color:GW.gold,speed:.9}, sizePct:88},
+        {id:'H4',name:'Spent Brass', role:'normal', art:GW_ART.shell, weight:11,
+         pays:[0,0,0,2.6,6.4,19.5,59,170], frame:{effect:'static',color:GW.goldDk,speed:1}, sizePct:84},
+        {id:'A', name:'The Pencil', role:'normal', art:GW_ART.pencil, weight:13,
+         pays:[0,0,0,2.6,5.1,14,41,113], frame:{effect:'breath',color:'#F3B93B',speed:1}, sizePct:86},
+        {id:'K', name:'Dog Tag', role:'normal', art:GW_ART.tag, weight:15,
+         pays:[0,0,0,1.3,3.9,10.5,31,82], frame:{effect:'frost',color:'#7FB0C4',speed:1}, sizePct:82},
+        {id:'Q', name:'Blue Tie', role:'normal', art:GW_ART.tie, weight:17,
+         pays:[0,0,0,1.3,2.6,7.7,23,61.5], frame:{effect:'breath',color:GW.blue,speed:1}, sizePct:80},
+        {id:'J', name:'The Dog', role:'normal', art:GW_ART.dog, weight:18,
+         pays:[0,0,0,1.3,2.6,6.4,19.5,51.5], frame:{effect:'breath',color:'#C89A63',speed:1}, sizePct:86},
+        {id:'T', name:'The Mustang', role:'normal', art:GW_ART.car, weight:19,
+         pays:[0,0,0,1.3,2.6,5.1,16.5,43.5], frame:{effect:'static',color:GW.olive,speed:1}, sizePct:88}
+      ];
+      return finalizeDef({
+        name:'Green Wick · The Marker', cols:7, rows:7, symbols:syms,
+        scatterPay:{3:2.6,4:13,5:58,6:257},
+        // Six, not five: at five nearly three spins in four paid something and
+        // the board never felt quiet. Six drops the hit rate to ~28% and lets
+        // the pay ladder breathe.
+        win:{mode:'cluster', clusterMin:6},
+        grid:{system:'cluster-7x7'},
+        // The kill chain: every cleared cluster hands the next one a bigger stick.
+        flow:{cascades:true, ladder:[1,2,3,5,8], winMult:true},
+        feature:'walking-wilds',
+        bonus:{round:'freespins', freeSpins:12, autoTrigger:true},
+        meta:'collection',
+        theme: baseTheme({
+          bg:{style:'sweep', colorA:'#0E3A12', colorB:'#030A04'},
+          reelFrame:'sharp', radius:4, gap:5, symSize:100, cellBg:'black',
+          vignette:true,
+          fonts:{heading:'Rajdhani', mono:'JetBrains Mono'},
+          winLine:{color:GW.green, thickness:4, glow:9, march:true},
+          button:{shape:'sharp', fill:'gradient', glow:true}
+        }),
+        fx: baseFx({ambient:30}),
+        anim: baseAnim({land:'drop', celebration:'shake', bigWin:8, spinBlur:3, cruise:12}),
+        sound: baseSound({pack:'Cyber', volume:0.85})
+      });
+    },
+
+    /* ── SUPERSTAKE · COMPOUND ─────────────────────────────────────────────
+       4,096 ways on a 6×4, built around Hold & Win because locking a position
+       and letting it pay is literally what the project does. Winners stick,
+       everything else respins around them, and sticky wilds keep a good
+       position alive across spins.
+
+       Ways maths pays on runs of 3..6 from the left, so the ladder is 7 long
+       and the top entry is the six-reel hit. */
+    'SuperStake': function(){
+      var syms=[
+        {id:'W', name:'SuperStake Wild', role:'wild', art:'slots/superstake-mark.png', weight:5,
+         pays:[0,0,0,18.5,108,589,2479], frame:{effect:'plasma',color:SS.orange,speed:1.2}, sizePct:92},
+        {id:'S', name:'Vault Scatter', role:'scatter', art:SS_ART.vault, weight:4,
+         pays:[], frame:{effect:'laser',color:SS.magenta,speed:1.15}, sizePct:90},
+        {id:'H1',name:'Stake Bars', role:'normal', art:SS_ART.bars, weight:7,
+         pays:[0,0,0,12.5,65,279,961], frame:{effect:'rainbow',color:SS.orange,speed:1}, sizePct:92},
+        {id:'H2',name:'Yield Orb', role:'normal', art:SS_ART.orb, weight:9,
+         pays:[0,0,0,7.7,40.5,170,589], frame:{effect:'orbit',color:SS.magenta,speed:1.1}, sizePct:94},
+        {id:'H3',name:'Compound', role:'normal', art:SS_ART.compound, weight:11,
+         pays:[0,0,0,6.2,28,112,372], frame:{effect:'plasma',color:SS.purple,speed:.9}, sizePct:90},
+        {id:'H4',name:'Tier Ladder', role:'normal', art:SS_ART.ladder, weight:13,
+         pays:[0,0,0,4.6,18.5,74.5,240], frame:{effect:'shimmer',color:SS.rose,speed:1}, sizePct:88},
+        // The bottom of the ladder runs long on purpose. 4,096 ways over nine
+        // symbols paid on five spins in six, which is not winning, it is
+        // weather — these four thin the grid out to a ~65% hit.
+        {id:'J', name:'Locked Stake', role:'normal', art:SS_ART.lock, weight:15,
+         pays:[0,0,0,4.6,14,52.5,170], frame:{effect:'neon',color:SS.orange,speed:1}, sizePct:86},
+        {id:'A', name:'Ember Gem', role:'normal', art:SS_ART.gemO, weight:16,
+         pays:[0,0,0,3.1,11,38.5,124], frame:{effect:'ember',color:SS.orange,speed:1}, sizePct:80},
+        {id:'T', name:'Green Candle', role:'normal', art:SS_ART.candle, weight:17,
+         pays:[0,0,0,3.1,9.3,29.5,96], frame:{effect:'breath',color:'#5BE58A',speed:1}, sizePct:84},
+        {id:'K', name:'Rose Gem', role:'normal', art:SS_ART.gemM, weight:18,
+         pays:[0,0,0,3.1,7.7,23,74.5], frame:{effect:'breath',color:SS.magenta,speed:1}, sizePct:78},
+        {id:'N', name:'Stake Token', role:'normal', art:SS_ART.coin, weight:19,
+         pays:[0,0,0,1.5,6.2,18.5,59], frame:{effect:'shimmer',color:SS.ember,speed:1}, sizePct:82},
+        {id:'Q', name:'Plum Gem', role:'normal', art:SS_ART.gemP, weight:20,
+         pays:[0,0,0,1.5,4.6,14,46.5], frame:{effect:'breath',color:SS.purple,speed:1}, sizePct:78},
+        {id:'R', name:'Rose Shard', role:'normal', art:SS_ART.gemR, weight:22,
+         pays:[0,0,0,1.5,4.6,11,37], frame:{effect:'breath',color:SS.rose,speed:1}, sizePct:76}
+      ];
+      return finalizeDef({
+        name:'SuperStake · Compound', cols:6, rows:4, symbols:syms,
+        scatterPay:{3:4.6,4:23,5:116,6:620},
+        win:{mode:'ways'},
+        grid:{system:'ways-6x4'},
+        // Hold & Win IS the staking metaphor — the position locks and keeps paying.
+        flow:{holdWin:true, winMult:true},
+        feature:'sticky-wilds',
+        bonus:{round:'wheel', freeSpins:10, autoTrigger:true},
+        meta:'level',
+        theme: baseTheme({
+          bg:{style:'aurora', colorA:SS.orange, colorB:SS.purple},
+          reelFrame:'glass', radius:16, gap:9, symSize:100, cellBg:'glass',
+          vignette:true,
+          fonts:{heading:'Space Grotesk', mono:'Space Mono'},
+          winLine:{color:SS.orange, thickness:4, glow:8, march:true},
+          button:{shape:'pill', fill:'gradient', glow:true},
+          panel:{blur:12, opacity:0.72}
+        }),
+        fx: baseFx({ambient:55}),
+        anim: baseAnim({land:'pop', celebration:'ring', bigWin:10, spinBlur:2, cruise:11}),
+        sound: baseSound({pack:'Synth', volume:0.8})
+      });
+    },
+
+    /* ── MORBIUS · VAULT OF THE SHIELD ─────────────────────────────────────
+       The house's own cabinet, and the loudest of the three: scatter-pays on a
+       6×5 where eight of anything anywhere pays, cascading with an ENDLESS
+       multiplier ladder that never caps. Expanding shields fill their reel and
+       the four-tier jackpot rides above it all.
+
+       Art is entirely real MORBIUS material — the shield, the chip and the six
+       VIP badges — so this one needs no invented symbols. The background is
+       'logoglow', which breathes the shield itself behind the reels.
+
+       Scatter-pays indexes pays by 3+floor((size-8)/2) clamped to the column
+       count, so index 6 is the 14-plus hit and has to carry real weight. */
+    'Morbius': function(){
+      var syms=[
+        {id:'W', name:'MORB Shield', role:'wild', art:'morbius/OfficialMorbiusLogo.png', weight:5,
+         pays:[0,0,0,22,99,461,1977], frame:{effect:'electric',color:'#36C3D2',speed:1.2}, sizePct:92},
+        {id:'S', name:'MORB Chip', role:'scatter', art:'morbius/MorbiusChip.png', weight:4,
+         pays:[], frame:{effect:'pulsering',color:'#F59E0B',speed:1.1}, sizePct:88},
+        {id:'H1',name:'Obsidian', role:'normal', art:'vip-badges/obsidian.png', weight:7,
+         pays:[0,0,0,15.5,66,286,1076], frame:{effect:'plasma',color:'#8B5CF6',speed:.9}, sizePct:88},
+        {id:'H2',name:'Diamond', role:'normal', art:'vip-badges/diamond.png', weight:9,
+         pays:[0,0,0,9.9,41.5,176,659], frame:{effect:'frost',color:'#67E8F9',speed:1}, sizePct:88},
+        {id:'H3',name:'Platinum', role:'normal', art:'vip-badges/platinum.png', weight:11,
+         pays:[0,0,0,6.6,26.5,110,417], frame:{effect:'shimmer',color:'#CBD5E1',speed:1}, sizePct:86},
+        {id:'H4',name:'Gold', role:'normal', art:'vip-badges/gold.png', weight:13,
+         pays:[0,0,0,4.4,17.5,72.5,264], frame:{effect:'ember',color:'#F59E0B',speed:1}, sizePct:86},
+        {id:'A', name:'Silver', role:'normal', art:'vip-badges/silver.png', weight:16,
+         pays:[0,0,0,3.3,12,48.5,170], frame:{effect:'breath',color:'#94A3B8',speed:1}, sizePct:84},
+        {id:'K', name:'Bronze', role:'normal', art:'vip-badges/bronze.png', weight:18,
+         pays:[0,0,0,2.2,8.8,33,115], frame:{effect:'breath',color:'#B98A54',speed:1}, sizePct:84},
+        {id:'Q', name:'Cyan Chip', role:'normal', art:'PokerChips/cyanpokerchip020.png', weight:21,
+         pays:[0,0,0,2.2,6.6,24,81.5], frame:{effect:'static',color:'#22D3EE',speed:1}, sizePct:78},
+        {id:'J', name:'Red Chip', role:'normal', art:'PokerChips/redpokerchip015.png', weight:23,
+         pays:[0,0,0,2.2,5.5,20,66], frame:{effect:'static',color:'#FB7185',speed:1}, sizePct:78},
+        {id:'T', name:'Blue Chip', role:'normal', art:'PokerChips/bluepokerchip010.png', weight:25,
+         pays:[0,0,0,1.1,4.4,16.5,55], frame:{effect:'static',color:'#60A5FA',speed:1}, sizePct:78}
+      ];
+      return finalizeDef({
+        name:'Morbius · Vault of the Shield', cols:6, rows:5, symbols:syms,
+        scatterPay:{3:4.4,4:20,5:99,6:549},
+        // Twelve, not eight. Eight-of-anything on a 30-cell board with an
+        // endless multiplier ladder behind it paid on seven spins in eight and
+        // simulated at 8,000% RTP. Twelve makes the hit mean something.
+        win:{mode:'scatterpays', scatterMin:12},
+        grid:{system:'scatter-6x5'},
+        // Endless ladder: the chain multiplier keeps climbing with no cap.
+        flow:{cascades:true, ladder:[1,2,3,5,8,13], endless:true, winMult:true},
+        feature:'expanding-wilds',
+        bonus:{round:'pick', freeSpins:10, autoTrigger:true},
+        meta:'tiered',
+        theme: baseTheme({
+          bg:{style:'logoglow', colorA:'#0B2F38', colorB:'#02070B',
+              logo:{source:'auto', blur:44, opacity:34, scale:118, spin:true}},
+          reelFrame:'neon', radius:14, gap:7, symSize:100, cellBg:'deep',
+          scanlines:true, vignette:true,
+          fonts:{heading:'Chakra Petch', mono:'JetBrains Mono'},
+          winLine:{color:'#22D3EE', thickness:4, glow:10, march:true},
+          button:{shape:'rounded', fill:'gradient', glow:true}
+        }),
+        fx: baseFx({ambient:70}),
+        anim: baseAnim({land:'spinin', celebration:'burst', bigWin:12, spinBlur:2.5, cruise:10}),
+        sound: baseSound({pack:'Casino', volume:0.85})
+      });
+    },
+
     'Neon Arcade': function(){
       return finalizeDef({
         name:'Neon Arcade', cols:5, rows:3,
@@ -3645,7 +4038,13 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
 
   // preset
   on('presetSel','change',function(e){ loadPreset(e.target.value); });
-  function loadPreset(name){ S.def=PRESETS[name]?PRESETS[name]():PRESETS['Deep Abyss'](); S.lastGrid=null; S.recent=[]; renderAll(); status('Loaded preset: '+esc(name)); }
+  /* initMetaState / featureState reset alongside the def, matching applyDef.
+     renderMetaStrip only re-initialises when S.metaState is falsy, and boot
+     leaves it as the truthy empty object that meta:'none' produces — so a
+     preset carrying a real meta used to inherit that empty state and render
+     its meter as NaN / undefined. Nothing shipped a non-'none' meta until the
+     branded cabinets, which is why this went unnoticed. */
+  function loadPreset(name){ S.def=PRESETS[name]?PRESETS[name]():PRESETS['Deep Abyss'](); S.lastGrid=null; S.recent=[]; S.featureState={}; initMetaState(); renderAll(); status('Loaded preset: '+esc(name)); }
 
   // spin
   on('spinBtn','click',spin);

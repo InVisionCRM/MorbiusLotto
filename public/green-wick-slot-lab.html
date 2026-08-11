@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>GREEN WICK · The Marker — slot cabinet</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@600;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="/slots/cabinet.css" />
+<style>
+/* ── GREEN WICK · THE MARKER — standalone cabinet ──────────────────────────
+   Page identity is taken from the project's actual site (greenwick.tiiny.site):
+   a matrix terminal — #00ff41 phosphor green on black, Share Tech Mono, thin
+   red warnings. The hero is the token's real avatar (DexScreener-listed logo,
+   /slots/greenwick/wick-avatar.png). Machine: 7×7 cluster pays, cascades with
+   a multiplier ladder, walking wild, free spins, marker collection. Maths from
+   /slots/greenwick.json — tuned in Reel Forge, played via cabinet-math.js. */
+:root{
+  --mx:#00ff41; --mx-dim:#0a8f2c; --red:#ff3333; --black:#020703;
+}
+*{ box-sizing:border-box; }
+html{ color-scheme:dark; }
+body{ margin:0; min-height:100svh; background:var(--black); color:#c8ffd8;
+  font-family:'Share Tech Mono',ui-monospace,monospace; overflow-x:hidden; }
+#rain{ position:fixed; inset:0; z-index:0; opacity:.5; }
+.scanlines{ position:fixed; inset:0; z-index:1; pointer-events:none;
+  background:repeating-linear-gradient(0deg,rgba(0,0,0,.22) 0 1px,transparent 1px 3px); }
+.vig{ position:fixed; inset:0; z-index:1; pointer-events:none;
+  background:radial-gradient(ellipse 120% 80% at 50% 30%,transparent 55%,rgba(0,0,0,.75)); }
+
+.wrap{ position:relative; z-index:2; max-width:920px; margin:0 auto; padding:22px 14px 80px; }
+
+/* dossier header */
+.dossier{ display:flex; gap:18px; align-items:center; border:1px solid rgba(0,255,65,.35);
+  background:rgba(0,10,3,.82); border-radius:6px; padding:14px 18px; margin-bottom:18px;
+  box-shadow:0 0 30px -10px rgba(0,255,65,.5), inset 0 0 40px -30px rgba(0,255,65,.6); }
+.dossier img{ width:96px; height:96px; border-radius:4px; border:1px solid rgba(0,255,65,.5);
+  filter:drop-shadow(0 0 14px rgba(0,255,65,.55)); }
+.d-meta{ flex:1; min-width:0; }
+.d-tag{ font-size:11px; letter-spacing:.34em; color:var(--red); animation:blink 2.2s steps(2) infinite; }
+@keyframes blink{ 50%{ opacity:.35; } }
+.d-name{ font-family:'Rajdhani',sans-serif; font-weight:700; font-size:clamp(26px,6vw,44px);
+  line-height:1; color:var(--mx); text-shadow:0 0 18px rgba(0,255,65,.65); letter-spacing:.04em; }
+.d-sub{ margin-top:5px; font-size:12.5px; color:#8fdca6; opacity:.9; }
+.d-sub b{ color:var(--mx); }
+.d-links{ margin-top:7px; font-size:11px; display:flex; gap:14px; flex-wrap:wrap; }
+.d-links a{ color:#6fbf83; text-decoration:none; border-bottom:1px dotted #2f7a45; }
+.d-links a:hover{ color:var(--mx); border-color:var(--mx); }
+
+/* terminal chatter line */
+.term{ font-size:11.5px; color:var(--mx-dim); margin:0 2px 14px; white-space:nowrap; overflow:hidden; }
+.term::before{ content:'> '; color:var(--mx); }
+
+/* brand-tint the shared cabinet */
+.cab-scope{ --acc:#00ff41; --acc2:#ffd24a; --ink:#d9ffe4;
+  --panel:rgba(1,12,4,.88);
+  --cell:linear-gradient(180deg,#03170a,#010a04);
+  --font-disp:'Rajdhani',sans-serif; --font-mono:'Share Tech Mono',monospace; }
+.cab-scope .cab-board{ border-radius:6px; border-color:rgba(0,255,65,.4); }
+.cab-scope .cab-cell{ border-radius:3px; }
+.cab-scope .hud-box,.cab-scope .meta-strip,.cab-scope .bet-ctl,.cab-scope .mini-btn{ border-radius:5px; }
+.cab-scope .spin-btn{ border-radius:5px; color:#01130a; }
+.cab-scope .float-msg.bad{ color:var(--red); }
+
+.rules{ margin-top:22px; border:1px solid rgba(0,255,65,.22); border-radius:6px;
+  background:rgba(1,10,4,.75); padding:14px 18px; font-size:12.5px; line-height:1.75; color:#9fe2b3; }
+.rules b{ color:var(--mx); }
+.rules .r-red{ color:var(--red); }
+.backlink{ display:inline-block; margin-top:16px; font-size:12px; color:#6fbf83; text-decoration:none; }
+.backlink:hover{ color:var(--mx); }
+</style>
+</head>
+<body>
+<canvas id="rain"></canvas>
+<div class="scanlines"></div><div class="vig"></div>
+
+<div class="wrap">
+  <header class="dossier">
+    <img src="/slots/greenwick/wick-avatar.png" alt="Green Wick" />
+    <div class="d-meta">
+      <div class="d-tag">ACTIVE CONTRACT // EXCOMMUNICADO</div>
+      <div class="d-name">GREEN WICK &middot; THE MARKER</div>
+      <div class="d-sub">7&times;7 cluster board &middot; cascades chain <b>&times;1 &rarr; &times;8</b> &middot; the wild walks &middot; collect the markers</div>
+      <div class="d-links">
+        <a href="https://greenwick.tiiny.site/" target="_blank" rel="noopener">greenwick.tiiny.site</a>
+        <a href="https://x.com/mr_green_wick" target="_blank" rel="noopener">@mr_green_wick</a>
+        <span>$WICK &middot; PulseChain</span>
+      </div>
+    </div>
+  </header>
+
+  <div class="term" id="termLine">system online — the table is waiting</div>
+
+  <main class="cab-scope"><div id="gameHost"></div></main>
+
+  <section class="rules">
+    <b>HOW IT PAYS.</b> Groups of <b>6+</b> matching symbols touching orthogonally pay, anywhere on the board.
+    Winners are cleared and the board cascades; every clear in a chain steps the multiplier
+    <b>&times;1 &rarr; &times;2 &rarr; &times;3 &rarr; &times;5 &rarr; &times;8</b>.
+    The <b>Green Wick wild</b> joins any cluster and <span class="r-red">walks one reel left</span> every spin
+    until he leaves the board. Markers (the blood-oath coins) collect above the reels —
+    a full set of <b>15 pays 20&times; bet</b>. <b>3+ markers</b> in one spin trigger <b>CONTRACT SPINS</b>.
+    A random <span class="r-red">&times;2&ndash;&times;10 slam</span> can hit any win.
+  </section>
+
+  <a class="backlink" href="/labs-hub.html">&larr; labs hub</a>
+</div>
+
+<script src="/slots/cabinet-math.js"></script>
+<script src="/slots/cabinet-engine.js"></script>
+<script>
+/* matrix rain — the site's whole personality, so it is the page background */
+(function(){
+  var cv=document.getElementById('rain'), ctx=cv.getContext('2d');
+  var CH='アイウエオカキクケコサシスセソタチツテト0123456789$WICK'.split('');
+  var drops=[], fs=14;
+  function size(){ cv.width=innerWidth; cv.height=innerHeight;
+    var n=Math.floor(cv.width/fs); drops=[];
+    for(var i=0;i<n;i++) drops.push(Math.random()*-60); }
+  size(); addEventListener('resize',size);
+  var reduced=matchMedia('(prefers-reduced-motion: reduce)').matches;
+  function tick(){
+    ctx.fillStyle='rgba(2,7,3,0.12)'; ctx.fillRect(0,0,cv.width,cv.height);
+    ctx.font=fs+'px "Share Tech Mono",monospace';
+    for(var i=0;i<drops.length;i++){
+      var ch=CH[Math.floor(Math.random()*CH.length)];
+      var y=drops[i]*fs;
+      ctx.fillStyle=Math.random()<0.06?'#b4ffc8':'#00ff41';
+      ctx.fillText(ch,i*fs,y);
+      if(y>cv.height&&Math.random()>0.975) drops[i]=0; else drops[i]++;
+    }
+  }
+  if(!reduced) setInterval(tick,66); else { ctx.fillStyle='#02150a'; ctx.fillRect(0,0,cv.width,cv.height); }
+})();
+/* terminal chatter */
+(function(){
+  var lines=['system online — the table is waiting','rule #1: never bet what you cannot lose',
+    'tracking wild: he moves left when you are not looking','markers honoured. always.',
+    'cluster protocol armed: 6+ to fire','fortune favours the patient'];
+  var i=0, eln=document.getElementById('termLine');
+  setInterval(function(){ i=(i+1)%lines.length; eln.textContent=lines[i]; },5200);
+})();
+
+CabinetEngine.boot({
+  host:'#gameHost',
+  defUrl:'/slots/greenwick.json',
+  key:'greenwick',
+  accent:'#00ff41', accent2:'#ffd24a',
+  bonusTitle:{ freespins:'CONTRACT SPINS' },
+  mechanics:'Cluster pays: 6+ orthogonally connected symbols pay anywhere. Cascades chain a ×1→×2→×3→×5→×8 multiplier ladder. The wild walks one reel left per spin. 3+ marker scatters trigger Contract Spins. Collect 15 markers for 20× bet.'
+});
+</script>
+</body>
+</html>
