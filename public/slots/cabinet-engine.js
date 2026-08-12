@@ -175,6 +175,8 @@ function sfx(name){
     case 'scatter':tone(700,'sine',.2,.3,1400); tone(1400,'triangle',.18,.16,null,90); break;
     case 'lose':   tone(150,'sine',.3,.3,60); break;
     case 'tick':   tone(900,'square',.03,.12); break;
+    // one per count-up frame while the win rolls, so a big number is audible
+    case 'coin':   tone(1250+Math.random()*500,'triangle',.06,.035); break;
     case 'award':  tone(880,'triangle',.09,.24); tone(1174,'triangle',.09,.24,null,80); tone(1760,'sine',.22,.24,null,160); break;
   }
 }
@@ -240,6 +242,7 @@ function buildUI(){
     '</div>'+
     '<div class="cab-board" id="cabBoard"><div class="cab-reels" id="cabReels"></div>'+
       '<div class="cab-flash" id="cabFlash"></div>'+
+      '<canvas class="cab-fx" id="cabFx"></canvas>'+
       '<div class="cab-float" id="cabFloat"></div></div>'+
     '<div class="cab-meta" id="cabMeta"></div>'+
     '<div class="cab-deck">'+
@@ -322,6 +325,103 @@ function updateHud(){
   if(t) t.textContent=fmt(S.bet);
 }
 function setWin(v){ var w=$('#cabWin'); if(!w) return; w.innerHTML=v==null?'&mdash;':('+'+fmt(v)); }
+
+/* ── the payoff ──────────────────────────────────────────────────────────
+   The reels were ported from the reference; this is the half that was not.
+   A win used to be an outline pulse and a number that snapped into the HUD.
+   Now it counts up over coin ticks, each winning group is walked through in
+   turn with its own value, the board flashes and kicks, and symbol art
+   erupts out of the middle scaled to how much was actually won. */
+var rollRaf=null;
+function stopRollup(){ if(rollRaf){ cancelAnimationFrame(rollRaf); rollRaf=null; } }
+function rollupWin(to, tier){
+  stopRollup();
+  var w=$('#cabWin'); if(!w) return;
+  var dur=PACE.rollup[tier]||PACE.rollup.small;
+  var t0=null, lastTick=0;
+  w.classList.add('counting');
+  function step(ts){
+    if(t0===null) t0=ts;
+    var k=Math.min(1,(ts-t0)/dur), eased=1-Math.pow(1-k,3);
+    w.innerHTML='+'+fmt(to*eased);
+    if(ts-lastTick>78){ sfx('coin'); lastTick=ts; }
+    if(k<1) rollRaf=requestAnimationFrame(step);
+    else { rollRaf=null; w.classList.remove('counting'); w.classList.add('landed');
+           setTimeout(function(){ w.classList.remove('landed'); },420); }
+  }
+  rollRaf=requestAnimationFrame(step);
+}
+
+/* Walk the winning groups one at a time instead of lighting the whole board
+   at once — you cannot tell what paid when nine cells flash together. */
+var cycleIv=null;
+function stopWinCycle(){
+  if(cycleIv){ clearInterval(cycleIv); cycleIv=null; }
+  var reels=$('#cabReels');
+  if(reels) [].forEach.call(reels.querySelectorAll('.cab-sym.is-focus'),function(c){ c.classList.remove('is-focus'); });
+}
+function startWinCycle(wins){
+  stopWinCycle();
+  if(!wins||wins.length<2) return;          // one group needs no cycling
+  var i=0;
+  function show(){
+    var reels=$('#cabReels'); if(!reels) return;
+    [].forEach.call(reels.querySelectorAll('.cab-sym.is-focus'),function(c){ c.classList.remove('is-focus'); });
+    var w=wins[i%wins.length];
+    (w.cells||[]).forEach(function(k){
+      var p=k.split(','), cell=cellAt(+p[0],+p[1]);
+      if(cell) cell.classList.add('is-focus');
+    });
+    i++;
+  }
+  show();
+  cycleIv=setInterval(show, PACE.cycleGap);
+}
+
+/* Confetti made of the machine's own reel symbols, so the celebration looks
+   like this game rather than a generic shower of dots. */
+var fx={ raf:null, parts:[], ctx:null, imgs:null };
+function fxImages(){
+  if(fx.imgs) return fx.imgs;
+  fx.imgs=[];
+  (S.def.symbols||[]).slice(0,7).forEach(function(s){
+    var im=new Image(); im.src=artOf(s.id); fx.imgs.push(im);
+  });
+  return fx.imgs;
+}
+function winBurst(tier){
+  if(reduced()) return;
+  var cv=$('#cabFx'), board=$('#cabBoard');
+  if(!cv||!board||!cv.getContext) return;
+  var r=board.getBoundingClientRect();
+  cv.width=Math.max(1,Math.round(r.width)); cv.height=Math.max(1,Math.round(r.height));
+  fx.ctx=cv.getContext('2d');
+  var n=tier==='huge'?78:tier==='big'?46:24;
+  var imgs=fxImages(), W=cv.width, H=cv.height;
+  for(var i=0;i<n;i++){
+    fx.parts.push({ img:imgs[Math.floor(Math.random()*imgs.length)],
+      x:W/2+(Math.random()-0.5)*W*0.34, y:H*0.56,
+      vx:(Math.random()-0.5)*12, vy:-(5+Math.random()*9),
+      rot:Math.random()*6.283, vr:(Math.random()-0.5)*0.26,
+      size:18+Math.random()*22, life:1 });
+  }
+  if(!fx.raf) fxTick();
+}
+function fxTick(){
+  var c=fx.ctx, cv=$('#cabFx');
+  if(!c||!cv){ fx.raf=null; return; }
+  c.clearRect(0,0,cv.width,cv.height);
+  fx.parts=fx.parts.filter(function(p){ return p.life>0&&p.y<cv.height+50; });
+  fx.parts.forEach(function(p){
+    p.x+=p.vx; p.y+=p.vy; p.vy+=0.44; p.rot+=p.vr; p.life-=0.008;
+    c.save(); c.globalAlpha=Math.max(0,Math.min(1,p.life*1.4));
+    c.translate(p.x,p.y); c.rotate(p.rot);
+    try{ c.drawImage(p.img,-p.size/2,-p.size/2,p.size,p.size); }catch(e){}
+    c.restore();
+  });
+  if(fx.parts.length) fx.raf=requestAnimationFrame(fxTick);
+  else { c.clearRect(0,0,cv.width,cv.height); fx.raf=null; }
+}
 /* Auto-spin, as the midnight cabinet plays it: the toggle keeps re-pressing
    spin after each round settles, and because a bonus round is part of the
    round the next spin naturally waits for it to finish. */
@@ -482,6 +582,30 @@ var SPIN_TIMING={
 /* Scatters needed for the bonus — settle() triggers on 3, so 2 on screen with
    reels still turning is the moment worth stretching. */
 var ANTIC_NEED=3;
+
+/* ── pacing ──────────────────────────────────────────────────────────────
+   TURBO IS A REEL CONTROL. It makes the reels stop sooner and it does not
+   touch anything else. It used to be threaded through all twenty timings in
+   the engine, which meant a turbo round did not just spin faster — it clipped
+   the cascade, halved the win count-up, cut the big-win moment from 2.6s to
+   1.2s and rushed the bonus. Turbo should shorten the wait for the result,
+   never the celebration of it.
+
+   These are also just slower than they were. A cascade step held for 520ms is
+   not long enough to read a multiplier, let alone enjoy one. */
+var PACE={
+  winHold:   1000,   // a winning board is held before anything else happens
+  cycleGap:   850,   // between one highlighted win and the next
+  popOut:     460,   // winners popping out of a cascade
+  refill:     420,   // the refill dropping in
+  lockStep:   560,   // hold-and-win locking before the respin
+  respin:     700,
+  noWin:      260,
+  toBonus:   1500,   // beat between the board settling and the cutscene
+  autoGap:    950,   // between an auto round ending and the next starting
+  bigWinHold:3400,   // how long BIG WIN / HUGE WIN stays up
+  rollup:  { small:700, big:1600, huge:2400 }
+};
 function scatterId(){
   var syms=S.def.symbols;
   for(var i=0;i<syms.length;i++) if(syms[i].role==='scatter') return syms[i].id;
@@ -674,8 +798,14 @@ function walkSteps(res){
         renderGrid(step.grid,wc,flow.lockedRespin||flow.holdWin?lockedAcc:null);
         Object.keys(wc).forEach(function(k){ lockedAcc[k]=1; });
         sfx('pop');
+        // walk the winning groups one at a time so it is readable
+        var groups=(step.ev&&step.ev.wins)||[];
+        startWinCycle(groups);
         if(step.mult>1) floatText('&times;'+step.mult,'mult');
-        return wait(S.turbo?160:520).then(function(){
+        // a board that is paying is held long enough to actually look at
+        var hold=PACE.winHold+(groups.length>1?PACE.cycleGap*Math.min(3,groups.length-1):0);
+        return wait(hold).then(function(){
+          stopWinCycle();
           var next=res.steps[i+1];
           if(!next) return;
           if(flow.cascades){
@@ -685,28 +815,29 @@ function walkSteps(res){
               if(cell) cell.classList.add('popping');
             });
             noiseHit(.14,.2,900);
-            return wait(S.turbo?120:280).then(function(){
+            return wait(PACE.popOut).then(function(){
               renderGrid(next.grid,null,null,true);   // refilled cells really do drop in
               $('#cabReels').classList.add('impact');
               setTimeout(function(){ $('#cabReels').classList.remove('impact'); },260);
+              return wait(PACE.refill);
             });
           }
           if(flow.lockedRespin||flow.holdWin){
             sfx('lock');
-            return wait(S.turbo?100:340).then(function(){
+            return wait(PACE.lockStep).then(function(){
               renderGrid(next.grid,null,lockedAcc);
             });
           }
-          return wait(80);
+          return wait(160);
         });
       }
       // no-win step: a respin marker means one reel goes again
       if(step.respin!=null&&res.steps[i+1]){
         floatText('RESPIN','info'); sfx('spin');
-        return wait(S.turbo?120:420).then(function(){ renderGrid(res.steps[i+1].grid); });
+        return wait(PACE.respin).then(function(){ renderGrid(res.steps[i+1].grid); });
       }
       renderGrid(step.grid,null,(flow.lockedRespin||flow.holdWin)&&Object.keys(lockedAcc).length?lockedAcc:null);
-      return wait(S.turbo?60:160);
+      return wait(PACE.noWin);
     });
   });
   return chainP;
@@ -715,20 +846,35 @@ function walkSteps(res){
 /* ── settlement, win moment, meta, bonus ────────────────────────────────── */
 function settle(res,payout){
   var profitX=payout>0?(payout-S.bet)/S.bet:-1;
+  var tier='small';
   if(payout>0){
     S.balance+=payout; store('balance',S.balance); updateHud();
-    setWin(payout);
-    var tier=profitX>=4?'huge':profitX>=1.5?'big':'small';
+    tier=profitX>=4?'huge':profitX>=1.5?'big':'small';
+    rollupWin(payout, tier);          // counts up over coin ticks, not a snap
+    winBurst(tier);                   // this machine's own symbols, thrown
     playWinTier(tier);
-    if(tier!=='small') bigWinOverlay(tier,payout);
+    if(tier!=='small'){ boardFlash(); boardShake(); bigWinOverlay(tier,payout); }
     if(res.slam>1) floatText('SLAM &times;'+res.slam,'mult');
   }else{
     sfx('lose'); store('balance',S.balance);
   }
   metaTick(res,payout);
 
+  /* The round is not over until the celebration is. This used to fire the
+     rollup and release immediately, so a 2.4s count-up on a huge win was
+     racing a 950ms auto-spin — the next round started over the top of it and
+     the win you just had was gone before you could read it. Hold the round
+     open for as long as the payoff takes. */
+  var celebrate = payout>0
+    ? wait((PACE.rollup[tier]||PACE.rollup.small) + (tier==='small'?260:PACE.bigWinHold-PACE.rollup[tier]))
+    : wait(220);
+
   var doBonus=res.scatter>=3&&S.def.bonus&&S.def.bonus.round!=='none'&&S.def.bonus.autoTrigger!==false;
-  var after=doBonus?wait(S.turbo?300:900).then(function(){ sfx('scatter'); return runBonus(S.def.bonus.round); }):Promise.resolve();
+  var after=celebrate.then(function(){
+    if(!doBonus) return;
+    // a beat of quiet between the win settling and the cutscene taking over
+    return wait(PACE.toBonus).then(function(){ sfx('scatter'); return runBonus(S.def.bonus.round); });
+  });
   after.then(function(){
     S.spinning=false; $('#cabSpin').classList.remove('busy');
     if(!S.auto) return;
@@ -737,7 +883,7 @@ function settle(res,payout){
     S.autoTimer=setTimeout(function(){
       S.autoTimer=null;
       if(S.auto&&!S.spinning) spin();
-    }, S.turbo?380:850);
+    }, PACE.autoGap);
   });
 }
 
@@ -753,7 +899,7 @@ function bigWinOverlay(tier,payout){
   ov.hidden=false; ov.className='cab-overlay bigwin';
   ov.innerHTML='<div class="bw-wrap"><div class="bw-word '+tier+'">'+
     (tier==='huge'?'HUGE WIN':'BIG WIN')+'</div><div class="bw-amt" id="bwAmt">0</div></div>';
-  var t0=performance.now(), dur=S.turbo?700:1600;
+  var t0=performance.now(), dur=PACE.rollup.big;
   function tick(t){
     var k=Math.min(1,(t-t0)/dur);
     var eased=1-Math.pow(1-k,3);
@@ -761,7 +907,7 @@ function bigWinOverlay(tier,payout){
     if(k<1&&!ov.hidden) requestAnimationFrame(tick);
   }
   requestAnimationFrame(tick);
-  setTimeout(function(){ ov.hidden=true; ov.className='cab-overlay'; ov.innerHTML=''; }, S.turbo?1200:2600);
+  setTimeout(function(){ ov.hidden=true; ov.className='cab-overlay'; ov.innerHTML=''; }, PACE.bigWinHold);
 }
 
 /* meta strips — the persistent layer above the base game */
@@ -828,7 +974,7 @@ function bonusIntro(){
   if(!spec||!window.CabinetFX) return Promise.resolve();
   var board=$('#cabBoard'); if(!board) return Promise.resolve();
   return window.CabinetFX.playIntro(board, spec, {
-    turbo:S.turbo, reduced:reduced(),
+    turbo:false, reduced:reduced(),   // the cutscene never runs at turbo speed
     onBeat:function(name, i){
       if(name==='open')   packCue('ciOpen');
       if(name==='kicker') packCue('ciKicker');
@@ -842,7 +988,9 @@ function bonusIntro(){
    itself, pay out and make noise, without reaching into engine internals. */
 function bonusApi(){
   return {
-    bet:S.bet, def:S.def, turbo:S.turbo, meta:S.meta,
+    // no `turbo` here on purpose: turbo is a reel control, and a bonus
+    // round always plays at full length.
+    bet:S.bet, def:S.def, meta:S.meta,
     rng:Math.random, fmt:fmt, esc:esc, wait:wait,
     overlay:function(title, html){ return overlayShell(title, html); },
     body:function(){ var o=$('#cabOverlay'); return o?o.querySelector('.bn-body'):null; },
@@ -915,7 +1063,7 @@ function bonusFreeSpins(){
       fsN.textContent=i;
       fsT.textContent=fmt(total);
       if(pay>0) sfx('award'); else sfx('tick');
-      setTimeout(one, S.turbo?260:700);
+      setTimeout(one, 700);
     }
     one();
   });
@@ -950,7 +1098,7 @@ function bonusWheel(){
   }
   // land the chosen wedge under the pointer (pointer at -90deg)
   var target=-Math.PI/2-(idx*seg+seg/2)+Math.PI*2*6;
-  var t0=performance.now(), dur=S.turbo?1400:3400;
+  var t0=performance.now(), dur=3400;
   return new Promise(function(done){
     function anim(t){
       var k=Math.min(1,(t-t0)/dur), eased=1-Math.pow(1-k,3);
@@ -987,7 +1135,7 @@ function bonusPick(){
         var left=grid?grid.querySelectorAll('.pk-chip:not(.open)'):[];
         if(left.length) left[Math.floor(Math.random()*left.length)].click();
         else finish();                    // chips are gone — pay out and release
-      }, S.turbo?4000:12000);
+      }, 12000);
     }
     function finish(){
       if(finished) return; finished=true;

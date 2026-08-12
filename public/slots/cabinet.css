@@ -101,6 +101,23 @@
 .cab-reels.impact{ animation:cabImpact .26s ease-out; }
 @keyframes cabImpact{ 0%{ transform:translateY(-6px);} 60%{ transform:translateY(2px);} 100%{ transform:translateY(0);} }
 
+/* ── the payoff ──────────────────────────────────────────────────────────
+   is-win marks every paying cell; is-focus is the one group currently being
+   walked through, so a board with four wins can be read one at a time
+   instead of flashing all at once. */
+.cab-sym.is-focus{ z-index:3; animation:cabFocus .7s ease-in-out infinite alternate; }
+.cab-sym.is-focus::after{ content:""; position:absolute; inset:-2px; border-radius:9px;
+  pointer-events:none; box-shadow:inset 0 0 0 3px var(--acc), 0 0 26px -2px var(--acc); }
+@keyframes cabFocus{ from{ transform:scale(1);} to{ transform:scale(1.11);} }
+
+/* the win counter, while it is rolling up */
+.hud-win .hud-val.counting{ color:#fff; text-shadow:0 0 18px var(--acc2); }
+.hud-win .hud-val.landed{ animation:cabWinLand .42s cubic-bezier(.34,1.56,.64,1); }
+@keyframes cabWinLand{ 0%{ transform:scale(1.28);} 100%{ transform:scale(1);} }
+
+/* symbol confetti thrown out of the board on a win */
+.cab-fx{ position:absolute; inset:0; z-index:7; pointer-events:none; width:100%; height:100%; }
+
 /* floats */
 .cab-float{ position:absolute; inset:0; pointer-events:none; display:grid; place-items:center; z-index:5; }
 .float-msg{ position:absolute; font-family:var(--font-mono); font-weight:700; font-size:clamp(15px,3vw,24px);

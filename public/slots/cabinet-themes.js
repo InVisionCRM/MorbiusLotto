@@ -22,7 +22,7 @@
                                 can hit a live tier off the jackpot rail
 
    A round is: fn(api) -> Promise, where api is supplied by the engine:
-     api.bet, api.def, api.turbo, api.overlay(title, html), api.close(),
+     api.bet, api.def, api.overlay(title, html), api.close(),
      api.credit(n), api.sfx(name), api.win(tier), api.rng(), api.meta,
      api.fmt(n), api.wait(ms), api.esc(s)
    ───────────────────────────────────────────────────────────────────────── */
@@ -75,7 +75,7 @@ function contractRound(api){
           '<br/><b>+'+api.fmt(total)+' MORBIUS</b>'+
           (clean?'<div class="ct-clean">FULL LIST &middot; &times;25 BET BONUS</div>':'')+'</div>';
         api.win(total>api.bet*8?'huge':total>0?'big':'small');
-        setTimeout(function(){ api.close(); done(); }, api.turbo?900:2000);
+        setTimeout(function(){ api.close(); done(); }, 2000);
         return;
       }
       spin++;
@@ -98,7 +98,7 @@ function contractRound(api){
       }else{
         api.sfx('miss');
       }
-      setTimeout(step, api.turbo?200:hit?680:380);
+      setTimeout(step, hit?680:380);
     }
     step();
   });
@@ -141,7 +141,7 @@ function compoundRound(api){
     function armIdle(){
       clearTimeout(idle);
       // never leave the round waiting on a player who has walked away
-      idle=setTimeout(function(){ bank(true); }, api.turbo?5000:15000);
+      idle=setTimeout(function(){ bank(true); }, 15000);
     }
     function finish(html, tier, amount){
       if(finished) return; finished=true;
@@ -150,7 +150,7 @@ function compoundRound(api){
       var body=api.body(); if(!body) return done();
       body.innerHTML=html;
       api.win(tier);
-      setTimeout(function(){ api.close(); done(); }, api.turbo?900:2200);
+      setTimeout(function(){ api.close(); done(); }, 2200);
     }
     function bank(auto){
       if(finished||!alive) return;
@@ -223,7 +223,7 @@ function breachRound(api){
       idle=setTimeout(function(){
         var left=api.qa('.vb-door:not(.open)');
         if(left.length) left[Math.floor(api.rng()*left.length)].click();
-      }, api.turbo?4000:12000);
+      }, 12000);
     }
     function finish(){
       if(finished) return; finished=true;
@@ -232,7 +232,7 @@ function breachRound(api){
       var body=api.body(); if(!body) return done();
       body.innerHTML='<div class="vb-done">VAULT EMPTIED<br/><b>+'+api.fmt(total)+' MORBIUS</b></div>';
       api.win(total>=api.bet*20?'huge':'big');
-      setTimeout(function(){ api.close(); done(); }, api.turbo?900:2200);
+      setTimeout(function(){ api.close(); done(); }, 2200);
     }
     function wire(){
       armIdle();
@@ -266,7 +266,7 @@ function breachRound(api){
             depth++;
             if(depth>=DOORS.length){ finish(); return; }
             render(); wire();
-          }, api.turbo?450:1000);
+          }, 1000);
         });
       });
     }
