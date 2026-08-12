@@ -641,17 +641,22 @@ var ANTIC_NEED=3;
    These are also just slower than they were. A cascade step held for 520ms is
    not long enough to read a multiplier, let alone enjoy one. */
 var PACE={
-  winHold:   1000,   // a winning board is held before anything else happens
-  cycleGap:   850,   // between one highlighted win and the next
-  popOut:     460,   // winners popping out of a cascade
-  refill:     420,   // the refill dropping in
-  lockStep:   560,   // hold-and-win locking before the respin
-  respin:     700,
-  noWin:      260,
-  toBonus:   1500,   // beat between the board settling and the cutscene
-  autoGap:    950,   // between an auto round ending and the next starting
-  bigWinHold:3400,   // how long BIG WIN / HUGE WIN stays up
-  rollup:  { small:700, big:1600, huge:2400 }
+  /* Step pacing is the BUILDER'S, measured from slot-builder-lab.html's
+     finishSpin: a winning cascade step holds 430ms, a no-win step 260ms,
+     winners shatter 190ms before the tumble. My previous numbers held every
+     winning step 1000ms plus up to three 850ms cycles — with hit rates
+     retuned to 41-65% that put a multi-second ceremony on most spins, which
+     is why the games stopped being playable. The builder celebrates BIG wins
+     and releases small ones fast; so does this. */
+  winStep:     430,
+  noWin:       260,
+  shatterLead: 190,
+  cycleGap:    850,   // win-group cycling cadence (non-blocking)
+  respin:      700,
+  toBonus:     950,
+  autoGap:     850,
+  bigWinHold: 3400,
+  rollup:  { small:600, big:1600, huge:2400 }
 };
 function scatterId(){
   var syms=S.def.symbols;
@@ -798,54 +803,16 @@ function spinReelAnim(finalGrid){
     }, stopAt[anticFrom]);
   }
 
-  /* ── scatter escalation ────────────────────────────────────────────────
-     Landing a scatter is a SLAM, and each one raises the stakes physically:
-     the first kicks the board and spins the remaining reels faster, the
-     second hits harder — particles, shake, a zoom — and whips them faster
-     still, and the one that completes the set is a massive slam that hands
-     straight into the bonus cutscene. The stops still arrive on the
-     stretched anticipation schedule, so the reels are running hot exactly
-     while the machine is withholding the result.
-
-     Speeding up a mid-flight reel without a visible jump OR a missed stop:
-     position is (start + D·e(u))·h and the landing needs start+D' ≡ stop
-     (mod L). Adding m whole loops over the REMAINING profile solves both:
-
-         D' = D + m·L/(1 − e(u₁))          (same position at u₁, and
-         start' = start + (D − D')·e(u₁)    start'+D' = start+D+m·L)     */
-  function boostReel(R, m, elapsed){
-    var u1=elapsed/R.T;
-    if(u1>=0.85) return;                 // already decelerating — let it land
-    var e1=easeProfile(u1);
-    var D2=R.D + m*R.L/Math.max(0.1, 1-e1);
-    R.start=R.start + (R.D-D2)*e1;
-    R.D=D2;
-  }
-  function slam(level){
-    if(rm) return;
-    var board=$('#cabBoard');
-    boardFlash();
-    if(level>=2){ boardShake(); winBurst(level>=3?'huge':'big'); }
-    if(board){
-      board.classList.remove('rush1','rush2');
-      if(level===1) board.classList.add('rush1');
-      if(level===2) board.classList.add('rush2');
-      if(level>=3){
-        board.classList.remove('shake'); void board.offsetWidth;
-        board.classList.add('shake');
-        setTimeout(function(){ board.classList.remove('shake'); },550);
-      }
-    }
-    sfx('slam'+Math.min(3,level));    // sfx tries the theme's cue first
-  }
+  /* Scatters: midnight's behaviour, restored. A scatter landing gets its
+     climbing cue, two on screen arm the stretched anticipation schedule and
+     the heartbeat, and the reel that completes the set flashes and kicks the
+     board. The zoom/shake/particle "slams" that used to fire on every
+     scatter — and the mid-flight reel boosts — are gone: they fought the
+     player instead of exciting them, and neither reference lab does them. */
 
   startTicks();
   return new Promise(function(resolve){
-    function finish(){
-      stopTicks(); stopAnticLoop();
-      var board=$('#cabBoard'); if(board) board.classList.remove('rush1','rush2');
-      resolve();
-    }
+    function finish(){ stopTicks(); stopAnticLoop(); resolve(); }
     var cellH=states[0].el.clientHeight/rows;
     if(!(cellH>0)){                       // never animate against a zero — just show the result
       states.forEach(function(R){ settleReel(R); });
@@ -864,16 +831,8 @@ function spinReelAnim(finalGrid){
           if(scPerCol[R.c]>0){
             scLanded+=scPerCol[R.c];
             sfxScatterLand(scLanded);
-            var level=Math.min(3,scLanded);
-            slam(level);
-            if(level<3&&!rm){
-              // whip every reel still turning: +3 loops on the first scatter,
-              // +7 more on the second
-              for(var j=0;j<states.length;j++)
-                if(!states[j].done) boostReel(states[j], level===1?3:7, elapsed);
-            }
           }
-          if(R.c===celebrateReel){ stopAnticLoop(); sfxFanfare(); }
+          if(R.c===celebrateReel){ stopAnticLoop(); boardFlash(); boardShake(); sfxFanfare(); }
         }else{
           allDone=false;
           var off=(R.start+R.D*easeProfile(u))%R.L;
@@ -889,47 +848,204 @@ function spinReelAnim(finalGrid){
   });
 }
 
+/* ── the tumble, ported from the builder ─────────────────────────────────
+   slot-builder-lab.html's popAndDrop, verbatim in behaviour: winners SHATTER
+   (scale-down spin + an 11-particle burst per cell), survivors FALL by
+   exactly the gap they open — gravity 3000·(1+chain·0.42) with one weighted
+   bounce and a landing squash — fresh symbols drop in from above, and the
+   board impact scales with the cascade chain so deeper chains land heavier.
+   The previous cascade here popped winners and re-rendered the whole grid
+   with a drop-in class; nothing fell, which is why it never read as the
+   tumble the builder ships. */
+function rowPitch(){
+  var R=S.reels[0]; if(!R) return 80;
+  var cells=R.strip.children;
+  if(cells.length>1){ var p=Math.abs(cells[1].offsetTop-cells[0].offsetTop); if(p>2) return p; }
+  return (cells[0]&&cells[0].offsetHeight)||80;
+}
+function shatterParticles(points){
+  var cv=$('#cabFx'), board=$('#cabBoard');
+  if(!cv||!board||!cv.getContext) return;
+  var rect=board.getBoundingClientRect();
+  cv.width=Math.max(1,Math.round(rect.width)); cv.height=Math.max(1,Math.round(rect.height));
+  var ctx=cv.getContext('2d');
+  var cols=[S.cfg&&S.cfg.accent||'#22d3ee', S.cfg&&S.cfg.accent2||'#f5c343', '#ffffff'];
+  var parts=[];
+  points.forEach(function(pt){
+    for(var i=0;i<11;i++){
+      var a=Math.random()*6.283, sp=1+Math.random()*5.5;
+      parts.push({x:pt.x,y:pt.y,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp-2.2,life:1,
+        c:cols[i%cols.length],sz:2+Math.random()*3.2,rot:Math.random()*6.283,vr:(Math.random()-.5)*0.5});
+    }
+  });
+  var t0=performance.now();
+  (function frame(now){
+    t0=now; ctx.clearRect(0,0,cv.width,cv.height); var alive=false;
+    parts.forEach(function(pp){
+      pp.vy+=0.38; pp.x+=pp.vx; pp.y+=pp.vy; pp.rot+=pp.vr; pp.life-=0.022;
+      if(pp.life>0){ alive=true; ctx.save(); ctx.globalAlpha=Math.max(0,pp.life);
+        ctx.translate(pp.x,pp.y); ctx.rotate(pp.rot); ctx.fillStyle=pp.c;
+        ctx.fillRect(-pp.sz/2,-pp.sz/2,pp.sz,pp.sz); ctx.restore(); }
+    });
+    if(alive) requestAnimationFrame(frame); else ctx.clearRect(0,0,cv.width,cv.height);
+  })(t0);
+}
+function shatterWinners(wc){
+  var board=$('#cabBoard'); if(!board) return;
+  var bs=board.getBoundingClientRect(), burst=[];
+  for(var c=0;c<S.def.cols;c++){
+    var R=S.reels[c]; if(!R) continue;
+    var cells=R.strip.children;
+    for(var r=0;r<cells.length;r++){
+      if(wc[c+','+r]){
+        var cell=cells[r];
+        cell.classList.remove('is-win','is-focus');
+        cell.classList.add('shatter');
+        if(!reduced()){ var cr=cell.getBoundingClientRect();
+          burst.push({x:cr.left+cr.width/2-bs.left, y:cr.top+cr.height/2-bs.top}); }
+      }
+    }
+  }
+  if(burst.length&&!reduced()) shatterParticles(burst);
+}
+function landSquash(cell, chain){
+  cell.style.setProperty('--sq',(0.86-Math.min(0.18,chain*0.035)).toFixed(2));
+  cell.classList.remove('land-sq'); void cell.offsetWidth; cell.classList.add('land-sq');
+}
+function boardImpact(chain){
+  if(reduced()) return;
+  var reels=$('#cabReels'); if(!reels) return;
+  reels.style.setProperty('--imp',(Math.min(1,0.32+chain*0.24)).toFixed(2));
+  reels.classList.remove('cascade-impact'); void reels.offsetWidth; reels.classList.add('cascade-impact');
+  sfxReelLand(Math.min(chain+2,5));
+}
+function animateDrops(drops, chain, done){
+  if(reduced()||!drops.length){
+    drops.forEach(function(d){ d.el.style.transform=''; d.el.style.willChange=''; });
+    done(); return;
+  }
+  var grav=3000*(1+chain*0.42), rest=0.24+Math.min(0.14,chain*0.035), last=performance.now();
+  function frame(now){
+    var dt=Math.min(0.032,(now-last)/1000); last=now; var moving=false;
+    for(var i=0;i<drops.length;i++){
+      var d=drops[i]; if(d.done) continue;
+      d.vy+=grav*dt; d.off+=d.vy*dt;
+      if(d.off>=0){
+        if(Math.abs(d.vy)>360&&d.bounced<1){ d.off=0; d.vy=-Math.abs(d.vy)*rest; d.bounced++; }
+        else { d.off=0; d.vy=0; d.done=true; d.el.style.transform=''; d.el.style.willChange=''; landSquash(d.el,chain); }
+      }
+      if(!d.done){ moving=true; d.el.style.transform='translateY('+d.off.toFixed(1)+'px)'; }
+    }
+    if(moving) requestAnimationFrame(frame); else { boardImpact(chain); done(); }
+  }
+  requestAnimationFrame(frame);
+}
+function popAndDrop(wc, nextGrid, chain){
+  return new Promise(function(resolve){
+    chain=chain||0;
+    var cols=S.def.cols, rows=S.def.rows, pitch=rowPitch();
+    shatterWinners(wc);                      // winners crash out first
+    setTimeout(function(){
+      var drops=[];
+      for(var c=0;c<cols;c++){
+        var R=S.reels[c]; if(!R) continue;
+        var survOld=[]; for(var r=0;r<rows;r++){ if(!wc[c+','+r]) survOld.push(r); }
+        var need=rows-survOld.length;
+        R.strip.innerHTML='';
+        for(var nr=0;nr<rows;nr++){
+          var cell=symCell(nextGrid[c][nr], c, nr);
+          R.strip.appendChild(cell);
+          // fresh symbols start above the reel; survivors start where they
+          // WERE, so they fall exactly the gap the winners opened
+          var off = nr<need ? -((need-nr)*pitch+pitch*0.7) : -(nr-survOld[nr-need])*pitch;
+          if(off<-0.5){
+            cell.style.transform='translateY('+off.toFixed(1)+'px)';
+            cell.style.willChange='transform';
+            drops.push({el:cell,off:off,vy:0,done:false,bounced:0});
+          }
+        }
+      }
+      animateDrops(drops, chain, resolve);
+    }, reduced()?0:PACE.shatterLead);
+  });
+}
+/* Respin / hold-and-win reveal, also the builder's: this is a RE-SPIN, not a
+   cascade — unchanged (locked/held) cells stay put, and each cell that
+   changed does a quick in-place reel-roll before snapping to its result. */
+function respinReveal(prevGrid, nextGrid, locked){
+  return new Promise(function(resolve){
+    var syms=S.def.symbols, changed=[];
+    for(var c=0;c<S.def.cols;c++){
+      for(var r=0;r<S.def.rows;r++){
+        if(prevGrid&&prevGrid[c]&&prevGrid[c][r]===nextGrid[c][r]) continue;
+        var cell=cellAt(c,r); if(cell) changed.push({el:cell,c:c,r:r,finalId:nextGrid[c][r]});
+      }
+    }
+    function finalize(){
+      changed.forEach(function(o){
+        o.el.style.filter=''; o.el.style.transform=''; o.el.style.willChange='';
+        applyCell(o.el, o.finalId, o.c, o.r, null, locked);
+        if(!reduced()) landSquash(o.el,0);
+      });
+      resolve();
+    }
+    if(!changed.length) return resolve();
+    if(reduced()) return finalize();
+    changed.forEach(function(o){ o.el.style.willChange='filter,transform'; o.el.style.filter='blur(1.3px) brightness(1.05)'; });
+    var frames=6, i=0;
+    var iv=setInterval(function(){
+      i++;
+      if(i>=frames){ clearInterval(iv); finalize(); return; }
+      changed.forEach(function(o){
+        var rs=syms[Math.floor(Math.random()*syms.length)];
+        var img=o.el.querySelector('img'); if(img) img.setAttribute('src', artOf(rs.id));
+        o.el.style.transform='translateY('+((i%2?-1:1)*3)+'px)';
+      });
+    }, 45);
+  });
+}
+
 /* Walk the resolved steps: cascades pop and refill, holds lock and respin. */
 function walkSteps(res){
   var flow=S.def.flow||{}, chainP=Promise.resolve();
   var lockedAcc={};
+  /* Which step's grid the DOM already shows because an ANIMATION put it
+     there. popAndDrop rebuilds the strips as the next grid and respinReveal
+     rolls the changed cells in place — re-rendering on top of either rewrites
+     every cell's className and kills the landing squash it just played (the
+     builder never re-renders after a tumble; neither can we). */
+  var domIs=-1;
+  function markWins(wc){
+    for(var c=0;c<S.def.cols;c++) for(var r=0;r<S.def.rows;r++){
+      var cell=cellAt(c,r);
+      if(cell) cell.classList.toggle('is-win', !!wc[c+','+r]);
+    }
+  }
   res.steps.forEach(function(step,i){
     chainP=chainP.then(function(){
       var wc=step.winCells||{};
       var hasWin=Object.keys(wc).length>0;
+      var moreSteps=i<res.steps.length-1;
       if(hasWin){
-        renderGrid(step.grid,wc,flow.lockedRespin||flow.holdWin?lockedAcc:null);
+        if(domIs===i) markWins(wc);   // board already correct — just light the wins
+        else renderGrid(step.grid,wc,flow.lockedRespin||flow.holdWin?lockedAcc:null);
         Object.keys(wc).forEach(function(k){ lockedAcc[k]=1; });
         sfx('pop');
-        // walk the winning groups one at a time so it is readable
         var groups=(step.ev&&step.ev.wins)||[];
-        startWinCycle(groups);
+        startWinCycle(groups);            // non-blocking — cycles while we move on
         if(step.mult>1) floatText('&times;'+step.mult,'mult');
-        // a board that is paying is held long enough to actually look at
-        var hold=PACE.winHold+(groups.length>1?PACE.cycleGap*Math.min(3,groups.length-1):0);
-        return wait(hold).then(function(){
-          stopWinCycle();
+        if(!moreSteps) return;            // final board stays up; settle() takes over
+        // the builder holds a winning cascade step 430ms — enough to read it,
+        // short enough that a chain still feels like a chain
+        return wait(PACE.winStep).then(function(){
+          stopWinCycle(); clearWinLines();
           var next=res.steps[i+1];
-          if(!next) return;
           if(flow.cascades){
-            // pop winners, then drop the refilled grid in
-            Object.keys(wc).forEach(function(k){
-              var p=k.split(','); var cell=cellAt(+p[0],+p[1]);
-              if(cell) cell.classList.add('popping');
-            });
-            noiseHit(.14,.2,900);
-            return wait(PACE.popOut).then(function(){
-              renderGrid(next.grid,null,null,true);   // refilled cells really do drop in
-              $('#cabReels').classList.add('impact');
-              setTimeout(function(){ $('#cabReels').classList.remove('impact'); },260);
-              return wait(PACE.refill);
-            });
+            return popAndDrop(wc, next.grid, i).then(function(){ domIs=i+1; });
           }
           if(flow.lockedRespin||flow.holdWin){
             sfx('lock');
-            return wait(PACE.lockStep).then(function(){
-              renderGrid(next.grid,null,lockedAcc);
-            });
+            return respinReveal(step.grid, next.grid, lockedAcc).then(function(){ domIs=i+1; });
           }
           return wait(160);
         });
@@ -937,10 +1053,13 @@ function walkSteps(res){
       // no-win step: a respin marker means one reel goes again
       if(step.respin!=null&&res.steps[i+1]){
         floatText('RESPIN','info'); sfx('spin');
-        return wait(PACE.respin).then(function(){ renderGrid(res.steps[i+1].grid); });
+        return wait(PACE.respin).then(function(){
+          return respinReveal(step.grid, res.steps[i+1].grid, null).then(function(){ domIs=i+1; });
+        });
       }
-      renderGrid(step.grid,null,(flow.lockedRespin||flow.holdWin)&&Object.keys(lockedAcc).length?lockedAcc:null);
-      return wait(PACE.noWin);
+      if(domIs!==i)
+        renderGrid(step.grid,null,(flow.lockedRespin||flow.holdWin)&&Object.keys(lockedAcc).length?lockedAcc:null);
+      if(moreSteps) return wait(PACE.noWin);
     });
   });
   return chainP;
@@ -954,9 +1073,9 @@ function settle(res,payout){
     S.balance+=payout; store('balance',S.balance); updateHud();
     tier=profitX>=4?'huge':profitX>=1.5?'big':'small';
     rollupWin(payout, tier);          // counts up over coin ticks, not a snap
-    winBurst(tier);                   // this machine's own symbols, thrown
     playWinTier(tier);
-    if(tier!=='small'){ boardFlash(); boardShake(); bigWinOverlay(tier,payout); }
+    // the builder celebrates BIG wins; a small win is coin ticks and out
+    if(tier!=='small'){ winBurst(tier); boardFlash(); boardShake(); bigWinOverlay(tier,payout); }
     if(res.slam>1) floatText('SLAM &times;'+res.slam,'mult');
   }else{
     sfx('lose'); store('balance',S.balance);
@@ -969,8 +1088,8 @@ function settle(res,payout){
      the win you just had was gone before you could read it. Hold the round
      open for as long as the payoff takes. */
   var celebrate = payout>0
-    ? wait((PACE.rollup[tier]||PACE.rollup.small) + (tier==='small'?260:PACE.bigWinHold-PACE.rollup[tier]))
-    : wait(220);
+    ? wait(tier==='small' ? PACE.rollup.small : PACE.bigWinHold)
+    : wait(120);
 
   var doBonus=res.scatter>=3&&S.def.bonus&&S.def.bonus.round!=='none'&&S.def.bonus.autoTrigger!==false;
   var after=celebrate.then(function(){

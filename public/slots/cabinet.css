@@ -63,19 +63,14 @@
 .cab-flash.go{ animation:cabFeltFlash .7s ease-out both; }
 @keyframes cabFeltFlash{ 0%{ opacity:0;} 18%{ opacity:1;} 100%{ opacity:0;} }
 .cab-board.shake{ animation:cabShellShake .5s cubic-bezier(.36,.07,.19,.97); }
-/* scatter escalation: after the first scatter slams down the board leans in;
-   after the second it is visibly straining — zoom, continuous judder, hotter
-   blur — until the final slam or the miss lets it settle back. */
-.cab-board.rush1{ animation:cabRush1 .8s ease-in-out infinite; }
-@keyframes cabRush1{ 0%,100%{ transform:scale(1.004);} 50%{ transform:scale(1.012);} }
-.cab-board.rush1 .cab-reel.spinning .cab-strip{ filter:blur(calc(var(--spin-blur,2px) * 1.5)); }
-.cab-board.rush2{ animation:cabRush2 .18s linear infinite; }
-@keyframes cabRush2{
-  0%,100%{ transform:scale(1.025) translate(0,0);}
-  25%{ transform:scale(1.025) translate(-2px,1px);}
-  50%{ transform:scale(1.028) translate(2px,-1px);}
-  75%{ transform:scale(1.025) translate(-1px,-1px);} }
-.cab-board.rush2 .cab-reel.spinning .cab-strip{ filter:blur(calc(var(--spin-blur,2px) * 2.4)); }
+/* the tumble, straight from the builder: winners shatter, fallers land with a
+   squash, and the whole board takes an impact scaled to the cascade chain */
+.cab-sym.shatter{ animation:cabShatter .2s ease-in forwards; pointer-events:none; z-index:2; }
+@keyframes cabShatter{ 0%{ transform:scale(1);} 35%{ transform:scale(1.12);} 100%{ transform:scale(.14) rotate(16deg); opacity:0;} }
+.cab-sym.land-sq{ animation:cabLandSq .2s cubic-bezier(.3,1.1,.5,1); }
+@keyframes cabLandSq{ 0%{ transform:scaleY(var(--sq,.86)) scaleX(calc(1.9 - var(--sq,.86)));} 55%{ transform:scaleY(1.05) scaleX(.97);} 100%{ transform:none;} }
+.cab-reels.cascade-impact{ animation:cabCascImpact .26s ease-out; }
+@keyframes cabCascImpact{ 0%{ transform:translateY(calc(4px * var(--imp,.5)));} 45%{ transform:translateY(calc(-2px * var(--imp,.5)));} 100%{ transform:translateY(0);} }
 @keyframes cabShellShake{
   0%,100%{ transform:translate(0,0);} 15%{ transform:translate(-6px,2px);} 30%{ transform:translate(6px,-2px);}
   45%{ transform:translate(-5px,-2px);} 60%{ transform:translate(5px,2px);}
@@ -383,42 +378,25 @@
    burn risk you are taking to reach it. */
 .cp-read{ font-family:var(--font-mono); font-size:13px; letter-spacing:.16em; margin-bottom:12px; }
 .cp-read b{ font-size:22px; color:var(--acc2); }
-.cp-ladder{ display:flex; flex-direction:column-reverse; gap:4px; margin-bottom:14px; }
-.cp-rung{ display:grid; grid-template-columns:64px 1fr auto; gap:10px; align-items:center;
-  padding:6px 12px; border-radius:9px; font-family:var(--font-mono); font-size:11.5px;
-  background:rgba(255,255,255,.04); opacity:.42; transition:opacity .3s, background .3s, transform .2s; }
-.cp-rung .cp-x{ font-weight:700; font-size:14px; }
-.cp-bar{ height:5px; border-radius:99px; background:rgba(255,255,255,.1); overflow:hidden; }
-.cp-bar i{ display:block; height:100%; background:linear-gradient(90deg,var(--acc),#FB7185); }
-.cp-risk{ opacity:.7; white-space:nowrap; }
-.cp-rung.done{ opacity:1; background:color-mix(in srgb,var(--acc) 16%,transparent); }
-.cp-rung.done .cp-x{ color:var(--acc); }
-.cp-rung.next{ opacity:1; background:color-mix(in srgb,var(--acc2) 16%,transparent);
-  transform:scale(1.03); box-shadow:0 0 0 1px var(--acc2), 0 0 20px -6px var(--acc2); }
-.cp-rung.next .cp-x{ color:var(--acc2); }
-.cp-rung.burnt{ opacity:1; background:rgba(251,113,133,.22); box-shadow:0 0 0 1px #FB7185; }
-/* the stake orb that climbs the tower, and the gauge that decides its fate */
-.cp-tower{ position:relative; }
-.cp-orb{ position:absolute; right:-4px; width:28px; height:28px; border-radius:50%; z-index:2;
-  background:radial-gradient(circle at 36% 30%,#fff, var(--acc2) 42%, var(--acc) 90%);
-  box-shadow:0 0 18px var(--acc2), inset 0 -3px 6px rgba(0,0,0,.35);
-  transition:top .55s cubic-bezier(.34,1.56,.64,1); }
-.cp-orb.grounded{ opacity:.75; }
-.cp-orb.leap{ animation:cpLeap .55s cubic-bezier(.34,1.56,.64,1); }
-@keyframes cpLeap{ 0%{ filter:brightness(1);} 45%{ filter:brightness(1.9); transform:scale(1.25);} 100%{ transform:scale(1);} }
-.cp-orb.burst{ animation:cpBurst .8s ease-out forwards; }
-@keyframes cpBurst{ 30%{ transform:scale(1.7); filter:brightness(2.4);} 100%{ transform:scale(.1); opacity:0; filter:brightness(.4);} }
-.cp-gauge{ position:relative; display:flex; height:30px; border-radius:8px; overflow:hidden;
-  margin:2px 0 12px; border:1px solid color-mix(in srgb,var(--acc) 30%,transparent);
-  font-family:var(--font-mono); font-size:10px; letter-spacing:.22em; }
-.cpg-safe{ display:grid; place-items:center; color:#04141b; width:80%;
-  background:linear-gradient(90deg,color-mix(in srgb,var(--acc) 75%,#0a0) ,var(--acc)); transition:width .4s; }
-.cpg-burn{ display:grid; place-items:center; color:#fff; flex:1;
-  background:linear-gradient(90deg,#f43f5e,#7f1d1d); }
-.cpg-needle{ position:absolute; top:-2px; bottom:-2px; left:12%; width:3px; background:#fff;
-  box-shadow:0 0 10px #fff, 0 0 4px #fff; }
-.cp-gauge.live{ box-shadow:0 0 24px -6px var(--acc2); }
-.cp-gauge.live .cpg-needle{ box-shadow:0 0 14px var(--acc2), 0 0 6px #fff; }
+/* STAKE LOCK — the timing ring. The canvas draws the track, the SAFE arc and
+   the orbiting spark; the centre readout shows what a lock is worth right
+   now. The chips below are the multiplier ladder as a progress strip. */
+.cpw-wrap{ position:relative; width:240px; margin:0 auto 10px; cursor:pointer; }
+.cpw-ring{ display:block; }
+.cpw-mult{ position:absolute; inset:0; display:grid; place-items:center; pointer-events:none;
+  font-family:var(--font-disp); font-weight:800; font-size:34px;
+  background:linear-gradient(120deg,var(--acc2),var(--acc));
+  -webkit-background-clip:text; background-clip:text; color:transparent;
+  filter:drop-shadow(0 0 14px color-mix(in srgb,var(--acc2) 55%,transparent)); }
+.cpw-chips{ display:flex; justify-content:center; gap:6px; flex-wrap:wrap; margin-bottom:12px; }
+.cpw-chip{ font-family:var(--font-mono); font-size:11.5px; font-weight:700; padding:4px 9px;
+  border-radius:7px; background:rgba(255,255,255,.05); opacity:.42;
+  transition:opacity .3s, background .3s; }
+.cpw-chip.done{ opacity:1; background:color-mix(in srgb,var(--acc) 20%,transparent); color:var(--acc); }
+.cpw-chip.next{ opacity:1; background:color-mix(in srgb,var(--acc2) 20%,transparent); color:var(--acc2);
+  box-shadow:0 0 0 1px var(--acc2), 0 0 14px -4px var(--acc2); }
+.cpw-chip.pop{ animation:cpwPop .5s cubic-bezier(.34,1.56,.64,1); }
+@keyframes cpwPop{ 0%{ transform:scale(1.6);} 100%{ transform:scale(1);} }
 
 .cp-actions{ display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:10px; }
 .cp-btn{ padding:14px 10px; border-radius:13px; cursor:pointer; border:0;
@@ -522,7 +500,8 @@
   .side-ctl{ justify-content:center; }
 }
 @media (prefers-reduced-motion:reduce){
-  .cab-sym[class*="land-"],.cab-sym.is-win,.cab-reels.impact,.bw-word.huge,
+  .cab-sym[class*="land-"],.cab-sym.is-win,.cab-sym.shatter,.cab-sym.land-sq,
+  .cab-reels.impact,.cab-reels.cascade-impact,.bw-word.huge,
   .cab-reel.landed,.cab-reel.antic::after,.cab-board.shake,.cab-flash.go,
   .btn-auto.on,.btn-auto.on .dot{ animation:none!important; }
   .cab-reel.spinning .cab-strip{ filter:none; }

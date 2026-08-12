@@ -15,9 +15,9 @@
 
      greenwick   THE CONTRACT   a hit list — marks are permanent, and each one
                                 raises the multiplier for the rest of the round
-     superstake  COMPOUND       a real decision every rung: bank what you have
-                                or compound it and risk the lot. The whole
-                                staking pitch, as a bonus game.
+     superstake  COMPOUND       a timing game: lock the orbiting spark inside
+                                a SAFE arc that shrinks and speeds up every
+                                rung. Your timing compounds the stake.
      morbius     VAULT BREACH   three doors, deeper is richer, and the last one
                                 can hit a live tier off the jackpot rail
 
@@ -127,54 +127,65 @@ function contractRound(api){
   });
 }
 
-/* ── SUPERSTAKE · COMPOUND ───────────────────────────────────────────────
-   The only round here with a real decision in it. Your stake compounds every
-   rung; every rung you either bank it or push. The bust chance climbs with
-   the rung, so the interesting choice arrives exactly when the number starts
-   to matter. Idle players are banked automatically rather than left hanging. */
+/* ── SUPERSTAKE · STAKE LOCK ─────────────────────────────────────────────
+   A timing game, not a menu. A spark orbits the stake ring and a SAFE arc
+   sits somewhere on it; press LOCK while the spark is inside the arc and the
+   stake compounds — the arc then shrinks, jumps to a new position and the
+   spark runs faster. Miss and the stake burns. BANK is always available
+   between attempts, and an idle player is banked automatically.
+
+   The old round was press-COMPOUND-and-watch-a-needle: the same decision
+   every rung, resolved by a hidden roll with an animation on top. This one
+   is resolved by WHERE THE SPARK IS WHEN YOU PRESS — the player's timing is
+   the game. That is honest for a play-money lab; a real-money port must draw
+   the outcome server-side and demote the ring to presentation, so this round
+   is exactly the thing the RTP simulation still needs to absorb.
+
+   Reduced motion: no orbit to time, so LOCK resolves at the printed odds
+   (arc/360) — the same expected game without the moving part. */
 function compoundRound(api){
   var RUNGS=[
-    { mult:1.6,  risk:0.10 }, { mult:2.6,  risk:0.16 }, { mult:4.2,  risk:0.22 },
-    { mult:7.0,  risk:0.28 }, { mult:12.0, risk:0.34 }, { mult:22.0, risk:0.42 },
-    { mult:40.0, risk:0.50 }
+    { mult:1.6,  arc:120, speed:200 },
+    { mult:2.6,  arc:100, speed:260 },
+    { mult:4.2,  arc:82,  speed:320 },
+    { mult:7.0,  arc:66,  speed:390 },
+    { mult:12.0, arc:52,  speed:470 },
+    { mult:22.0, arc:40,  speed:560 },
+    { mult:40.0, arc:30,  speed:660 }
   ];
   var rung=0, alive=true;
 
   api.overlay('COMPOUND',
     '<div class="cp-read">STAKE <b id="cpVal">'+api.fmt(api.bet)+'</b> MORBIUS</div>'+
-    '<div class="cp-tower"><div class="cp-ladder" id="cpLadder">'+RUNGS.map(function(r,i){
-      return '<div class="cp-rung" data-i="'+i+'"><span class="cp-x">&times;'+r.mult.toFixed(1)+'</span>'+
-             '<span class="cp-bar"><i style="width:'+Math.round(r.risk*100)+'%"></i></span>'+
-             '<span class="cp-risk">'+Math.round(r.risk*100)+'% BURN</span></div>';
-    }).join('')+'</div><div class="cp-orb" id="cpOrb"></div></div>'+
-    /* the burn check is played out in the open: the needle sweeps a gauge
-       whose SAFE and BURN zones are drawn at the real odds, and settles */
-    '<div class="cp-gauge" id="cpGauge"><div class="cpg-safe" id="cpgSafe">SAFE</div>'+
-      '<div class="cpg-burn" id="cpgBurn">BURN</div><div class="cpg-needle" id="cpgNeedle"></div></div>'+
+    '<div class="cpw-wrap"><canvas class="cpw-ring" id="cpwRing" width="240" height="240"></canvas>'+
+      '<div class="cpw-mult" id="cpwMult">&times;1.6</div></div>'+
+    '<div class="cpw-chips" id="cpwChips">'+RUNGS.map(function(r,i){
+      return '<span class="cpw-chip" data-i="'+i+'">&times;'+r.mult.toFixed(1)+'</span>';
+    }).join('')+'</div>'+
     '<div class="cp-actions"><button class="cp-btn bank" id="cpBank">BANK</button>'+
-      '<button class="cp-btn go" id="cpGo">COMPOUND</button></div>'+
-    '<div class="cp-note" id="cpNote">Compound to climb. Burn and you lose the lot.</div>');
+      '<button class="cp-btn go" id="cpGo">LOCK</button></div>'+
+    '<div class="cp-note" id="cpNote">Lock inside the bright arc to compound. It shrinks every rung.</div>');
 
   return new Promise(function(done){
-    var idle=null, finished=false, sweeping=false, sweepRaf=null;
+    var idle=null, finished=false, raf=null, resolving=false;
+    var reduced=typeof matchMedia==='function'&&matchMedia('(prefers-reduced-motion: reduce)').matches;
+    var angle=0, arcStart=api.rng()*360, last=null, flash=0, burstAt=null;
+    var cv=api.q('#cpwRing'), ctx=cv?cv.getContext('2d'):null;
+
     function value(){ return rung===0?api.bet:Math.round(api.bet*RUNGS[rung-1].mult); }
+    function arcDeg(){ return RUNGS[Math.min(rung,RUNGS.length-1)].arc; }
+    function inArc(a){
+      var rel=((a-arcStart)%360+360)%360;
+      return rel<=arcDeg();
+    }
     function paint(){
       var v=api.q('#cpVal'); if(v) v.textContent=api.fmt(value());
-      var risk=alive&&rung<RUNGS.length?RUNGS[rung].risk:0;
-      var sf=api.q('#cpgSafe'), bn=api.q('#cpgBurn');
-      if(sf) sf.style.width=((1-risk)*100)+'%';
-      if(bn) bn.style.width=(risk*100)+'%';
-      api.qa('.cp-rung').forEach(function(el,i){
+      var m=api.q('#cpwMult');
+      if(m) m.innerHTML=alive&&rung<RUNGS.length?('&times;'+RUNGS[rung].mult.toFixed(1)):'';
+      api.qa('.cpw-chip').forEach(function(el,i){
         el.classList.toggle('done', i<rung);
         el.classList.toggle('next', i===rung&&alive);
       });
-      // the orb sits on the rung it has climbed to (ladder is column-reverse)
-      var orb=api.q('#cpOrb'), lad=api.q('#cpLadder');
-      var target=api.q('.cp-rung[data-i="'+Math.max(0,rung-1)+'"]');
-      if(orb&&lad&&target){
-        orb.style.top=(rung===0?lad.offsetHeight-14:target.offsetTop+target.offsetHeight/2-14)+'px';
-        orb.classList.toggle('grounded', rung===0);
-      }
     }
     function armIdle(){
       clearTimeout(idle);
@@ -182,7 +193,7 @@ function compoundRound(api){
     }
     function finish(html, tier, amount){
       if(finished) return; finished=true;
-      clearTimeout(idle); if(sweepRaf) cancelAnimationFrame(sweepRaf);
+      clearTimeout(idle); if(raf) cancelAnimationFrame(raf);
       api.credit(amount);
       var body=api.body(); if(!body) return done();
       body.innerHTML=html;
@@ -190,77 +201,110 @@ function compoundRound(api){
       setTimeout(function(){ api.close(); done(); }, 2200);
     }
     function bank(auto){
-      if(finished||!alive||sweeping) return;
+      if(finished||!alive||resolving) return;
       var v=value();
       finish('<div class="cp-done">BANKED'+(auto?' <span class="cp-auto">(auto)</span>':'')+
         '<br/><b>+'+api.fmt(v)+' MORBIUS</b></div>',
         v>=api.bet*8?'huge':'big', v);
     }
-    /* the sweep: a damped oscillation that settles on a point drawn inside
-       the true outcome's zone, so the resolution is watchable, physical, and
-       honest about the odds it printed on the gauge */
-    function sweep(risk, burnt, cb){
-      sweeping=true;
-      var needle=api.q('#cpgNeedle'), gauge=api.q('#cpGauge');
-      if(!needle){ sweeping=false; return cb(); }
-      if(gauge) gauge.classList.add('live');
-      var target=burnt ? (1-risk)+0.06+api.rng()*(risk-0.1>0?risk-0.1:risk*0.5)
-                       : 0.08+api.rng()*((1-risk)-0.16);
-      target=Math.max(0.03,Math.min(0.97,target));
-      var t0=null, DUR=1750, lastTick=0;
-      function step(ts){
-        if(t0===null) t0=ts;
-        var t=(ts-t0)/DUR;
-        if(t>=1){
-          needle.style.left=(target*100)+'%';
-          if(gauge) gauge.classList.remove('live');
-          sweeping=false; return cb();
-        }
-        // start wide, ring down onto the target
-        var amp=0.5*Math.pow(1-t,1.6);
-        var p=target+amp*Math.cos(t*22);
-        needle.style.left=(Math.max(0.01,Math.min(0.99,p))*100)+'%';
-        if(ts-lastTick>70){ api.sfx('tick'); lastTick=ts; }
-        sweepRaf=requestAnimationFrame(step);
+
+    /* the ring: track, hex accents, SAFE arc, orbiting spark with a tail */
+    function draw(){
+      if(!ctx) return;
+      var W=cv.width, H=cv.height, cx=W/2, cy=H/2, R=W/2-18;
+      ctx.clearRect(0,0,W,H);
+      // hexagon accent under the track — the brand shape
+      ctx.beginPath();
+      for(var k=0;k<6;k++){
+        var ha=k*Math.PI/3-Math.PI/2;
+        ctx[k?'lineTo':'moveTo'](cx+Math.cos(ha)*(R-14), cy+Math.sin(ha)*(R-14));
       }
-      sweepRaf=requestAnimationFrame(step);
+      ctx.closePath();
+      ctx.strokeStyle='rgba(255,122,0,.18)'; ctx.lineWidth=1.5; ctx.stroke();
+      // track
+      ctx.beginPath(); ctx.arc(cx,cy,R,0,6.2832);
+      ctx.strokeStyle='rgba(255,255,255,.12)'; ctx.lineWidth=10; ctx.stroke();
+      // SAFE arc, drawn at its true angular size
+      var a0=(arcStart-90)*Math.PI/180, a1=(arcStart+arcDeg()-90)*Math.PI/180;
+      var grad=ctx.createLinearGradient(cx-R,cy,cx+R,cy);
+      grad.addColorStop(0,'#ff00c7'); grad.addColorStop(.55,'#ff7a00'); grad.addColorStop(1,'#ffd200');
+      ctx.beginPath(); ctx.arc(cx,cy,R,a0,a1);
+      ctx.strokeStyle=grad; ctx.lineWidth=flash>0?15:10; ctx.lineCap='round'; ctx.stroke();
+      if(flash>0){ ctx.globalAlpha=Math.min(1,flash); ctx.stroke(); ctx.globalAlpha=1; flash-=0.06; }
+      // spark trail then head
+      var rad=(angle-90)*Math.PI/180;
+      for(var t=6;t>=1;t--){
+        var ta=(angle-t*4-90)*Math.PI/180;
+        ctx.beginPath(); ctx.arc(cx+Math.cos(ta)*R, cy+Math.sin(ta)*R, 2.4+ (6-t)*0.5, 0, 6.2832);
+        ctx.fillStyle='rgba(255,210,0,'+(0.10*(7-t))+')'; ctx.fill();
+      }
+      ctx.beginPath(); ctx.arc(cx+Math.cos(rad)*R, cy+Math.sin(rad)*R, 6.5, 0, 6.2832);
+      ctx.fillStyle=inArc(angle)?'#ffd200':'#fff';
+      ctx.shadowColor=inArc(angle)?'#ff7a00':'#fff'; ctx.shadowBlur=14;
+      ctx.fill(); ctx.shadowBlur=0;
+      // burn burst frames
+      if(burstAt!==null){
+        for(var b=0;b<10;b++){
+          var ba=burstAt.a+(b/10)*6.2832, br=burstAt.r;
+          ctx.beginPath();
+          ctx.arc(cx+Math.cos(ba)*(R+br), cy+Math.sin(ba)*(R+br), 2.5, 0, 6.2832);
+          ctx.fillStyle='rgba(251,113,133,'+Math.max(0,1-br/34)+')'; ctx.fill();
+        }
+        burstAt.r+=2.2;
+        if(burstAt.r>36) burstAt=null;
+      }
     }
-    function go(){
-      if(finished||!alive||sweeping) return;
+    function loop(ts){
+      if(finished) return;
+      if(last===null) last=ts;
+      var dt=Math.min(0.05,(ts-last)/1000); last=ts;
+      if(alive&&!resolving) angle=(angle+RUNGS[Math.min(rung,RUNGS.length-1)].speed*dt)%360;
+      draw();
+      // live state for the test harness — the game is the spark position, so
+      // the harness needs to read it to time a deliberate hit or miss
+      if(cv){ cv.dataset.angle=angle.toFixed(1); cv.dataset.a0=arcStart.toFixed(1);
+              cv.dataset.arc=arcDeg(); cv.dataset.hot=inArc(angle)?'1':'0'; }
+      raf=requestAnimationFrame(loop);
+    }
+
+    function lock(){
+      if(finished||!alive||resolving) return;
       clearTimeout(idle);
-      var r=RUNGS[rung];
-      var burnt=api.rng()<r.risk;
+      var hit=reduced ? (api.rng()<arcDeg()/360) : inArc(angle);
+      resolving=true;
       api.sfx('compound');
-      sweep(r.risk, burnt, function(){
-        if(finished) return;
-        if(burnt){
-          alive=false;
-          var el=api.q('.cp-rung[data-i="'+rung+'"]'); if(el) el.classList.add('burnt');
-          var orb=api.q('#cpOrb'); if(orb) orb.classList.add('burst');
-          api.sfx('burn');
-          setTimeout(function(){
-            finish('<div class="cp-done burnt">BURNT<br/><b>+0 MORBIUS</b>'+
-              '<div class="cp-lost">the stake went up at &times;'+r.mult.toFixed(1)+'</div></div>','small',0);
-          }, 900);
-          return;
-        }
-        rung++; api.sfx('safe'); paint();
-        var orb2=api.q('#cpOrb');
-        if(orb2){ orb2.classList.remove('leap'); void orb2.offsetWidth; orb2.classList.add('leap'); }
-        if(rung>=RUNGS.length){
-          var v=value();
-          finish('<div class="cp-done">LADDER TOPPED<br/><b>+'+api.fmt(v)+' MORBIUS</b></div>','huge',v);
-          return;
-        }
-        var note=api.q('#cpNote');
-        if(note) note.textContent='Next rung burns '+Math.round(RUNGS[rung].risk*100)+'% of the time.';
-        armIdle();
-      });
+      if(!hit){
+        alive=false;
+        burstAt={a:(angle-90)*Math.PI/180, r:2};
+        api.sfx('burn');
+        var missBy=RUNGS[rung].mult;
+        setTimeout(function(){
+          finish('<div class="cp-done burnt">BURNT<br/><b>+0 MORBIUS</b>'+
+            '<div class="cp-lost">the lock missed at &times;'+missBy.toFixed(1)+'</div></div>','small',0);
+        }, 900);
+        return;
+      }
+      flash=1; rung++; api.sfx('safe'); paint();
+      var chip=api.q('.cpw-chip[data-i="'+(rung-1)+'"]');
+      if(chip){ chip.classList.remove('pop'); void chip.offsetWidth; chip.classList.add('pop'); }
+      if(rung>=RUNGS.length){
+        var v=value();
+        finish('<div class="cp-done">LADDER TOPPED<br/><b>+'+api.fmt(v)+' MORBIUS</b></div>','huge',v);
+        return;
+      }
+      // new rung: the arc jumps somewhere new so the press cannot be camped
+      arcStart=api.rng()*360;
+      var note=api.q('#cpNote');
+      if(note) note.textContent='Rung '+(rung+1)+': the arc is '+arcDeg()+'\u00B0 wide and faster.';
+      setTimeout(function(){ resolving=false; armIdle(); }, 380);
     }
+
     var b=api.q('#cpBank'), g=api.q('#cpGo');
     if(b) b.addEventListener('click',function(){ bank(false); });
-    if(g) g.addEventListener('click', go);
+    if(g) g.addEventListener('click', lock);
+    if(cv) cv.addEventListener('click', lock);      // the ring itself is a target
     paint(); armIdle();
+    raf=requestAnimationFrame(loop);
   });
 }
 
@@ -412,7 +456,7 @@ window.CabinetThemes={
     intro:{
       kicker:'PROTOCOL ENGAGED',
       title:'COMPOUND',
-      subtitle:'BANK IT OR PUSH IT · YOUR CALL EVERY RUNG',
+      subtitle:'LOCK THE SPARK IN THE ARC · IT SHRINKS EVERY RUNG',
       font:"'Space Grotesk',sans-serif",
       colors:['#ff00c7','#ffd200'],
       particles:'hex',
