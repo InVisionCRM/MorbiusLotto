@@ -60,6 +60,14 @@ body{ margin:0; min-height:100svh; background:var(--black); color:#c8ffd8;
 .cab-scope .cab-board{ border-radius:6px; border-color:rgba(0,255,65,.4); }
 .cab-scope .cab-reel{ border-radius:3px; }
 .cab-scope .cab-sym.is-win,.cab-scope .cab-sym.is-wild,.cab-scope .cab-sym.is-scatter{ border-radius:2px; }
+/* The reel sights are Kenney's white glow crosshairs (CC0) tinted into the
+   terminal's phosphor. The two top pays run hot red — the threats. */
+.cab-scope .cab-sym img[src*="/slots/greenwick/sym/cross-"]{
+  filter:brightness(1.05) sepia(1) saturate(5) hue-rotate(65deg)
+         drop-shadow(0 0 7px rgba(0,255,65,.7)); }
+.cab-scope .cab-sym img[src*="cross-h1"],.cab-scope .cab-sym img[src*="cross-h2"]{
+  filter:brightness(1.05) sepia(1) saturate(6) hue-rotate(-30deg)
+         drop-shadow(0 0 8px rgba(255,51,51,.75)); }
 .cab-scope .hud-box,.cab-scope .meta-strip,.cab-scope .bet-ctl,.cab-scope .mini-btn{ border-radius:5px; }
 .cab-scope .spin-btn{ border-radius:5px; color:#01130a; }
 .cab-scope .float-msg.bad{ color:var(--red); }
@@ -96,7 +104,7 @@ body{ margin:0; min-height:100svh; background:var(--black); color:#c8ffd8;
   <main class="cab-scope"><div id="gameHost"></div></main>
 
   <section class="rules">
-    <b>HOW IT PAYS.</b> Groups of <b>6+</b> matching symbols touching orthogonally pay, anywhere on the board.
+    <b>HOW IT PAYS.</b> Groups of <b>5+</b> matching symbols touching orthogonally pay, anywhere on the board.
     Winners are cleared and the board cascades; every clear in a chain steps the multiplier
     <b>&times;1 &rarr; &times;2 &rarr; &times;3 &rarr; &times;5 &rarr; &times;8</b>.
     The <b>Green Wick wild</b> joins any cluster and <span class="r-red">walks one reel left</span> every spin
@@ -140,7 +148,7 @@ body{ margin:0; min-height:100svh; background:var(--black); color:#c8ffd8;
 (function(){
   var lines=['system online — the table is waiting','rule #1: never bet what you cannot lose',
     'tracking wild: he moves left when you are not looking','markers honoured. always.',
-    'cluster protocol armed: 6+ to fire','fortune favours the patient'];
+    'cluster protocol armed: 5+ to fire','fortune favours the patient'];
   var i=0, eln=document.getElementById('termLine');
   setInterval(function(){ i=(i+1)%lines.length; eln.textContent=lines[i]; },5200);
 })();
@@ -152,7 +160,7 @@ CabinetEngine.boot({
   accent:'#00ff41', accent2:'#ffd24a',
   bonusTitle:{ freespins:'CONTRACT SPINS' },
   theme:'greenwick',
-  mechanics:'Cluster pays: 6+ orthogonally connected symbols pay anywhere. Cascades chain a ×1→×2→×3→×5→×8 multiplier ladder. The wild walks one reel left per spin. 3+ marker scatters trigger Contract Spins. Collect 15 markers for 20× bet.'
+  mechanics:'Cluster pays: 5+ orthogonally connected symbols pay anywhere. Cascades chain a ×1→×2→×3→×5→×8 multiplier ladder. The wild walks one reel left per spin. 3+ marker scatters trigger Contract Spins. Collect 15 markers for 20× bet.'
 });
 </script>
 </body>

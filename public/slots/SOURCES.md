@@ -21,3 +21,29 @@ Morbius cabinets use the in-repo official art (`public/morbius/`,
 Site palettes sampled for the cabinet pages:
 - greenwick.tiiny.site — matrix terminal: `#00ff41` on black, `#ff3333` accents, Share Tech Mono.
 - superstake.win — dark hex field, HEX gradient (`#ff00c7` → `#ff7a00` → `#ffd200`), purple/orange S-mark.
+
+## Third-party reel art (added 2026-08-12)
+
+All licence texts were read from the bundled `License.txt` / the asset's own
+page before use — same standard as `public/sounds/SOURCES.md`.
+
+### Kenney — Crosshair Pack v1.1 (CC0 1.0)
+- Source: https://kenney.nl/assets/crosshair-pack (License.txt in the pack: Creative Commons Zero)
+- Files: `greenwick/sym/cross-*.png` — Glow (2x) variants of crosshairs
+  011, 036, 021, 026, 101, 063, 143, 108, tinted phosphor green / threat red
+  in page CSS.
+
+### Kenney — Puzzle Pack II (CC0 1.0)
+- Source: https://kenney.nl/assets/puzzle-pack-2 (License.txt in the pack: Creative Commons Zero)
+- File: `greenwick/sym/coin-gold.png` (`PNG/Coins/coin_06.png`) — the
+  Continental coin.
+
+### OpenGameArt — "Gems 4" by dannorder (CC0)
+- Source: https://opengameart.org/content/gems-4 (licence field on the page: CC0)
+- Files: `superstake/gems/gem-*.png` — eleven bevelled gems; the HEX ramp
+  colours (pink / orange / yellow) on the high pays, cool colours on the lows.
+
+### Brand art already in the repo
+- `superstake/hex-logo.png` is now also the HEX Vault scatter symbol.
+- Morbius Vault keeps its platform art (glass chips, VIP badges) — that art
+  is first-party and already production quality.

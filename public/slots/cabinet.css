@@ -63,6 +63,19 @@
 .cab-flash.go{ animation:cabFeltFlash .7s ease-out both; }
 @keyframes cabFeltFlash{ 0%{ opacity:0;} 18%{ opacity:1;} 100%{ opacity:0;} }
 .cab-board.shake{ animation:cabShellShake .5s cubic-bezier(.36,.07,.19,.97); }
+/* scatter escalation: after the first scatter slams down the board leans in;
+   after the second it is visibly straining — zoom, continuous judder, hotter
+   blur — until the final slam or the miss lets it settle back. */
+.cab-board.rush1{ animation:cabRush1 .8s ease-in-out infinite; }
+@keyframes cabRush1{ 0%,100%{ transform:scale(1.004);} 50%{ transform:scale(1.012);} }
+.cab-board.rush1 .cab-reel.spinning .cab-strip{ filter:blur(calc(var(--spin-blur,2px) * 1.5)); }
+.cab-board.rush2{ animation:cabRush2 .18s linear infinite; }
+@keyframes cabRush2{
+  0%,100%{ transform:scale(1.025) translate(0,0);}
+  25%{ transform:scale(1.025) translate(-2px,1px);}
+  50%{ transform:scale(1.028) translate(2px,-1px);}
+  75%{ transform:scale(1.025) translate(-1px,-1px);} }
+.cab-board.rush2 .cab-reel.spinning .cab-strip{ filter:blur(calc(var(--spin-blur,2px) * 2.4)); }
 @keyframes cabShellShake{
   0%,100%{ transform:translate(0,0);} 15%{ transform:translate(-6px,2px);} 30%{ transform:translate(6px,-2px);}
   45%{ transform:translate(-5px,-2px);} 60%{ transform:translate(5px,2px);}
@@ -117,6 +130,15 @@
 
 /* symbol confetti thrown out of the board on a win */
 .cab-fx{ position:absolute; inset:0; z-index:7; pointer-events:none; width:100%; height:100%; }
+
+/* win lines traced over the reels — the platform's slot-series pattern */
+.cab-lines{ position:absolute; inset:0; z-index:5; pointer-events:none; }
+.cab-lines polyline{ fill:none; stroke-linecap:round; stroke-linejoin:round; }
+.cab-lines .wl-faint{ stroke:color-mix(in srgb,var(--acc) 32%,transparent); stroke-width:2.5; }
+.cab-lines .wl-active{ stroke:var(--acc2); stroke-width:3.5;
+  filter:drop-shadow(0 0 6px color-mix(in srgb,var(--acc2) 80%,transparent));
+  stroke-dasharray:2400; stroke-dashoffset:2400; animation:wlDraw .55s ease-out forwards; }
+@keyframes wlDraw{ to{ stroke-dashoffset:0; } }
 
 /* floats */
 .cab-float{ position:absolute; inset:0; pointer-events:none; display:grid; place-items:center; z-index:5; }
@@ -332,6 +354,30 @@
 .ct-clean{ margin-top:8px; font-family:var(--font-mono); font-size:11.5px;
   letter-spacing:.2em; color:var(--acc); }
 
+/* THE CONTRACT's shooting range: a target crosses, you fire on it */
+.gw-range{ position:relative; height:92px; margin-bottom:12px; overflow:hidden; cursor:crosshair;
+  border:1px solid color-mix(in srgb,var(--acc) 35%,transparent); border-radius:8px;
+  background:linear-gradient(180deg,color-mix(in srgb,var(--acc) 7%,transparent),rgba(0,0,0,.4)); }
+.gw-scan{ position:absolute; inset:0; pointer-events:none;
+  background:repeating-linear-gradient(0deg,rgba(0,0,0,.25) 0 1px,transparent 1px 3px); }
+.gw-hint{ position:absolute; left:0; right:0; bottom:5px; text-align:center; pointer-events:none;
+  font-family:var(--font-mono); font-size:9.5px; letter-spacing:.3em; opacity:.45; }
+.gw-target{ position:absolute; top:10px; left:-24%; width:76px; cursor:crosshair;
+  display:flex; flex-direction:column; align-items:center; gap:3px; }
+.gw-sil{ width:34px; height:46px; border-radius:6px 6px 2px 2px;
+  background:radial-gradient(circle at 50% 22%, color-mix(in srgb,var(--acc) 85%,#fff 10%) 0 9px, transparent 10px),
+             linear-gradient(180deg, transparent 0 16px, color-mix(in srgb,var(--acc) 70%,transparent) 17px 100%);
+  box-shadow:0 0 14px -3px var(--acc); }
+.gw-target .gw-tag{ font-family:var(--font-mono); font-size:8.5px; letter-spacing:.08em;
+  color:var(--acc); white-space:nowrap; text-shadow:0 0 8px color-mix(in srgb,var(--acc) 70%,transparent); }
+.gw-target.hit .gw-sil{ background:radial-gradient(circle at 50% 40%,var(--acc2),transparent 70%);
+  box-shadow:0 0 22px var(--acc2); animation:gwDrop .5s ease-in forwards; }
+@keyframes gwDrop{ to{ transform:translateY(34px) rotate(80deg); opacity:0; } }
+.gw-range.muzzle::after{ content:""; position:absolute; inset:0; pointer-events:none;
+  background:radial-gradient(ellipse at 50% 100%,color-mix(in srgb,var(--acc2) 45%,transparent),transparent 60%);
+  animation:gwMuzzle .16s ease-out both; }
+@keyframes gwMuzzle{ from{ opacity:1; } to{ opacity:0; } }
+
 /* ── SUPERSTAKE · COMPOUND ──────────────────────────────────────────────
    The ladder is the whole screen: every rung shows its multiplier and the
    burn risk you are taking to reach it. */
@@ -351,6 +397,29 @@
   transform:scale(1.03); box-shadow:0 0 0 1px var(--acc2), 0 0 20px -6px var(--acc2); }
 .cp-rung.next .cp-x{ color:var(--acc2); }
 .cp-rung.burnt{ opacity:1; background:rgba(251,113,133,.22); box-shadow:0 0 0 1px #FB7185; }
+/* the stake orb that climbs the tower, and the gauge that decides its fate */
+.cp-tower{ position:relative; }
+.cp-orb{ position:absolute; right:-4px; width:28px; height:28px; border-radius:50%; z-index:2;
+  background:radial-gradient(circle at 36% 30%,#fff, var(--acc2) 42%, var(--acc) 90%);
+  box-shadow:0 0 18px var(--acc2), inset 0 -3px 6px rgba(0,0,0,.35);
+  transition:top .55s cubic-bezier(.34,1.56,.64,1); }
+.cp-orb.grounded{ opacity:.75; }
+.cp-orb.leap{ animation:cpLeap .55s cubic-bezier(.34,1.56,.64,1); }
+@keyframes cpLeap{ 0%{ filter:brightness(1);} 45%{ filter:brightness(1.9); transform:scale(1.25);} 100%{ transform:scale(1);} }
+.cp-orb.burst{ animation:cpBurst .8s ease-out forwards; }
+@keyframes cpBurst{ 30%{ transform:scale(1.7); filter:brightness(2.4);} 100%{ transform:scale(.1); opacity:0; filter:brightness(.4);} }
+.cp-gauge{ position:relative; display:flex; height:30px; border-radius:8px; overflow:hidden;
+  margin:2px 0 12px; border:1px solid color-mix(in srgb,var(--acc) 30%,transparent);
+  font-family:var(--font-mono); font-size:10px; letter-spacing:.22em; }
+.cpg-safe{ display:grid; place-items:center; color:#04141b; width:80%;
+  background:linear-gradient(90deg,color-mix(in srgb,var(--acc) 75%,#0a0) ,var(--acc)); transition:width .4s; }
+.cpg-burn{ display:grid; place-items:center; color:#fff; flex:1;
+  background:linear-gradient(90deg,#f43f5e,#7f1d1d); }
+.cpg-needle{ position:absolute; top:-2px; bottom:-2px; left:12%; width:3px; background:#fff;
+  box-shadow:0 0 10px #fff, 0 0 4px #fff; }
+.cp-gauge.live{ box-shadow:0 0 24px -6px var(--acc2); }
+.cp-gauge.live .cpg-needle{ box-shadow:0 0 14px var(--acc2), 0 0 6px #fff; }
+
 .cp-actions{ display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:10px; }
 .cp-btn{ padding:14px 10px; border-radius:13px; cursor:pointer; border:0;
   font-family:var(--font-disp); font-weight:800; font-size:15px; letter-spacing:.16em;
@@ -385,9 +454,29 @@
   display:grid; place-items:center; transition:transform .12s, background .2s; }
 .vb-door:hover{ transform:translateY(-3px); background:color-mix(in srgb,var(--acc) 22%,transparent); }
 .vb-lock{ opacity:.5; font-size:15px; }
+/* cracking: the dial spins over the clunks before the door gives */
+.vb-grid{ perspective:700px; }
+.vb-door.cracking{ cursor:wait; }
+.vb-dial{ width:56%; height:56%; border-radius:50%; position:relative;
+  border:3px solid color-mix(in srgb,var(--acc) 70%,transparent);
+  box-shadow:inset 0 0 10px color-mix(in srgb,var(--acc) 40%,transparent);
+  animation:vbDial 1.15s cubic-bezier(.3,.1,.2,1) both; }
+.vb-dial::before{ content:""; position:absolute; top:2px; left:50%; width:3px; height:26%;
+  margin-left:-1.5px; border-radius:2px; background:var(--acc); box-shadow:0 0 8px var(--acc); }
+@keyframes vbDial{ from{ transform:rotate(0);} to{ transform:rotate(1170deg);} }
 .vb-door.open{ cursor:default; background:color-mix(in srgb,var(--acc2) 22%,transparent);
-  border-color:var(--acc2); animation:vbOpen .4s cubic-bezier(.34,1.56,.64,1); }
-@keyframes vbOpen{ 0%{ transform:rotateY(80deg) scale(.7);} 100%{ transform:rotateY(0) scale(1);} }
+  border-color:var(--acc2); animation:vbSwing .55s cubic-bezier(.2,.9,.3,1.1); }
+@keyframes vbSwing{ 0%{ transform:rotateY(-88deg);} 60%{ transform:rotateY(10deg);} 100%{ transform:rotateY(0);} }
+/* the light spilling out as it opens */
+.vb-door.open::after{ content:""; position:absolute; inset:-8px; pointer-events:none; border-radius:14px;
+  background:radial-gradient(ellipse at 50% 50%,color-mix(in srgb,var(--acc2) 55%,transparent),transparent 70%);
+  animation:vbSpill .9s ease-out both; }
+@keyframes vbSpill{ 0%{ opacity:0;} 25%{ opacity:1;} 100%{ opacity:0;} }
+/* descending a level: this depth flies past the camera, the next rises in */
+.bn-body.vb-zoom{ animation:vbZoom .46s ease-in both; }
+@keyframes vbZoom{ to{ transform:scale(1.35); opacity:0; filter:brightness(1.6);} }
+.bn-body.vb-enter{ animation:vbEnter .5s cubic-bezier(.2,.9,.3,1) both; }
+@keyframes vbEnter{ from{ transform:scale(.82); opacity:0;} to{ transform:scale(1); opacity:1;} }
 .vb-door.open .vb-x{ color:var(--acc2); }
 .vb-door.jackpot{ background:radial-gradient(circle at 50% 40%,var(--acc2),color-mix(in srgb,var(--acc2) 30%,transparent));
   box-shadow:0 0 30px -4px var(--acc2); animation:vbJp .9s cubic-bezier(.34,1.56,.64,1) 2; }

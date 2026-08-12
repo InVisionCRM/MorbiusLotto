@@ -39,23 +39,27 @@ function weighted(rng, table){            // table: [[weight, value], ...]
 }
 
 /* ── GREEN WICK · THE CONTRACT ───────────────────────────────────────────
-   Free spins with a ledger. Every spin that pays puts a mark against a name
-   on the list; marks are permanent and each one steps the multiplier, so the
-   round builds instead of being twelve independent spins. Clearing the whole
-   list pays the contract bonus on top. */
+   A shooting gallery, not a slideshow. Each round a target crosses the range
+   carrying the next name on the list — CLICK THE TARGET to take the shot. A
+   hit strikes the name, pays a fee and steps the multiplier; marks are
+   permanent. If the player does not fire, an auto-shot goes off late in the
+   crossing at house odds, so watching costs you edge but never hangs the
+   round. Clearing the whole list pays the contract bonus. */
 function contractRound(api){
   var NAMES=['THE BOWERY KING','THE ADJUDICATOR','SANTINO D\'ANTONIO','MS. PERKINS',
              'CASSIAN','ZERO','THE ELDER','WINSTON'];
-  // The first mark has to visibly move the multiplier or the mechanic reads as
-  // doing nothing, so the ladder starts at x2 rather than x1.
   var LADDER=[2,3,5,8,13,20];
   var N=(api.def.bonus&&api.def.bonus.freeSpins)||12;
+  var CROSS=1650, GAP=420;
   var list=NAMES.slice(0,6);
-  var marked=[], total=0, spin=0, mult=1;
+  var marked=0, total=0, pass=0, mult=1;
 
   api.overlay('THE CONTRACT',
-    '<div class="ct-head"><span class="ct-k">SPINS</span><span class="ct-v" id="ctN">0 / '+N+'</span>'+
+    '<div class="ct-head"><span class="ct-k">TARGETS</span><span class="ct-v" id="ctN">0 / '+N+'</span>'+
       '<span class="ct-k">MULT</span><span class="ct-v hot" id="ctM">&times;1</span></div>'+
+    '<div class="gw-range" id="gwRange"><div class="gw-scan"></div>'+
+      '<div class="gw-target" id="gwT" hidden><span class="gw-sil"></span><span class="gw-tag" id="gwTag"></span></div>'+
+      '<div class="gw-hint">FIRE ON THE TARGET</div></div>'+
     '<div class="ct-list" id="ctList">'+list.map(function(n,i){
       return '<div class="ct-row" data-i="'+i+'"><span class="ct-dot"></span>'+
              '<span class="ct-name">'+api.esc(n)+'</span><span class="ct-fee" id="ctFee'+i+'">&mdash;</span></div>';
@@ -63,44 +67,63 @@ function contractRound(api){
     '<div class="ct-total">MARKERS PAID <span id="ctTotal">0</span></div>');
 
   return new Promise(function(done){
-    function step(){
-      if(spin>=N||marked.length>=list.length){
-        // clearing the board is the contract bonus
-        var clean=marked.length>=list.length;
-        if(clean) total+=api.bet*25;
-        api.credit(total);
-        var body=api.body();
-        if(!body) return done();
-        body.innerHTML='<div class="ct-done">'+(clean?'CONTRACT FULFILLED':'CONTRACT CLOSED')+
-          '<br/><b>+'+api.fmt(total)+' MORBIUS</b>'+
-          (clean?'<div class="ct-clean">FULL LIST &middot; &times;25 BET BONUS</div>':'')+'</div>';
-        api.win(total>api.bet*8?'huge':total>0?'big':'small');
-        setTimeout(function(){ api.close(); done(); }, 2000);
-        return;
-      }
-      spin++;
-      var hit=api.rng()<0.44;            // a paying spin marks the next name
-      var nEl=api.q('#ctN'); if(!nEl) return done();
-      nEl.textContent=spin+' / '+N;
-      if(hit){
-        var idx=marked.length;
-        marked.push(idx);
-        mult=LADDER[Math.min(LADDER.length-1, marked.length-1)];
-        // base is deliberately small — the ladder is what makes the round grow
-        var pay=Math.round(api.bet*(0.15+api.rng()*0.45)*mult);
-        total+=pay;
-        var row=api.q('.ct-row[data-i="'+idx+'"]');
-        if(row){ row.classList.add('marked'); }
-        var fee=api.q('#ctFee'+idx); if(fee) fee.textContent='+'+api.fmt(pay);
-        var m=api.q('#ctM'); if(m) m.textContent='×'+mult;
-        var t=api.q('#ctTotal'); if(t) t.textContent=api.fmt(total);
-        api.sfx('mark');
-      }else{
-        api.sfx('miss');
-      }
-      setTimeout(step, hit?680:380);
+    var finished=false;
+    function finish(){
+      if(finished) return; finished=true;
+      var clean=marked>=list.length;
+      if(clean) total+=api.bet*25;
+      api.credit(total);
+      var body=api.body(); if(!body) return done();
+      body.innerHTML='<div class="ct-done">'+(clean?'CONTRACT FULFILLED':'CONTRACT CLOSED')+
+        '<br/><b>+'+api.fmt(total)+' MORBIUS</b>'+
+        (clean?'<div class="ct-clean">FULL LIST &middot; &times;25 BET BONUS</div>':'')+'</div>';
+      api.win(total>api.bet*8?'huge':total>0?'big':'small');
+      setTimeout(function(){ api.close(); done(); }, 2000);
     }
-    step();
+    function mark(){
+      var idx=marked; marked++;
+      mult=LADDER[Math.min(LADDER.length-1, marked-1)];
+      var pay=Math.round(api.bet*(0.15+api.rng()*0.45)*mult);
+      total+=pay;
+      var row=api.q('.ct-row[data-i="'+idx+'"]'); if(row) row.classList.add('marked');
+      var fee=api.q('#ctFee'+idx); if(fee) fee.textContent='+'+api.fmt(pay);
+      var m=api.q('#ctM'); if(m) m.textContent='×'+mult;
+      var t=api.q('#ctTotal'); if(t) t.textContent=api.fmt(total);
+      api.sfx('mark');
+    }
+    function crossing(){
+      if(finished) return;
+      if(pass>=N||marked>=list.length) return finish();
+      pass++;
+      var nEl=api.q('#ctN'); if(!nEl) return finish();
+      nEl.textContent=pass+' / '+N;
+      var range=api.q('#gwRange'), tgt=api.q('#gwT'), tag=api.q('#gwTag');
+      if(!range||!tgt) return finish();
+      tag.textContent=list[Math.min(marked, list.length-1)];
+      var fired=false, ltr=pass%2===1;
+      tgt.hidden=false;
+      tgt.classList.remove('hit');
+      tgt.style.transition='none';
+      tgt.style.left=ltr?'-24%':'104%';
+      void tgt.offsetWidth;
+      tgt.style.transition='left '+CROSS+'ms linear';
+      tgt.style.left=ltr?'104%':'-24%';
+      function shot(hit){
+        if(fired||finished) return; fired=true;
+        api.sfx('fire');
+        range.classList.remove('muzzle'); void range.offsetWidth; range.classList.add('muzzle');
+        if(hit){ tgt.classList.add('hit'); mark(); }
+        else api.sfx('miss');
+        setTimeout(function(){ tgt.hidden=true; crossing(); }, hit?620:GAP);
+      }
+      // the player's shot: clicking the TARGET is a hit, the empty range a miss
+      tgt.onclick=function(ev){ ev.stopPropagation(); shot(true); };
+      range.onclick=function(){ shot(false); };
+      // the house shot, late in the crossing, at house odds — the round never
+      // waits on a player, it just shoots worse than one
+      setTimeout(function(){ if(!fired) shot(api.rng()<0.44); }, CROSS*0.8);
+    }
+    crossing();
   });
 }
 
@@ -119,33 +142,47 @@ function compoundRound(api){
 
   api.overlay('COMPOUND',
     '<div class="cp-read">STAKE <b id="cpVal">'+api.fmt(api.bet)+'</b> MORBIUS</div>'+
-    '<div class="cp-ladder" id="cpLadder">'+RUNGS.map(function(r,i){
+    '<div class="cp-tower"><div class="cp-ladder" id="cpLadder">'+RUNGS.map(function(r,i){
       return '<div class="cp-rung" data-i="'+i+'"><span class="cp-x">&times;'+r.mult.toFixed(1)+'</span>'+
              '<span class="cp-bar"><i style="width:'+Math.round(r.risk*100)+'%"></i></span>'+
              '<span class="cp-risk">'+Math.round(r.risk*100)+'% BURN</span></div>';
-    }).join('')+'</div>'+
+    }).join('')+'</div><div class="cp-orb" id="cpOrb"></div></div>'+
+    /* the burn check is played out in the open: the needle sweeps a gauge
+       whose SAFE and BURN zones are drawn at the real odds, and settles */
+    '<div class="cp-gauge" id="cpGauge"><div class="cpg-safe" id="cpgSafe">SAFE</div>'+
+      '<div class="cpg-burn" id="cpgBurn">BURN</div><div class="cpg-needle" id="cpgNeedle"></div></div>'+
     '<div class="cp-actions"><button class="cp-btn bank" id="cpBank">BANK</button>'+
       '<button class="cp-btn go" id="cpGo">COMPOUND</button></div>'+
     '<div class="cp-note" id="cpNote">Compound to climb. Burn and you lose the lot.</div>');
 
   return new Promise(function(done){
-    var idle=null, finished=false;
+    var idle=null, finished=false, sweeping=false, sweepRaf=null;
     function value(){ return rung===0?api.bet:Math.round(api.bet*RUNGS[rung-1].mult); }
     function paint(){
       var v=api.q('#cpVal'); if(v) v.textContent=api.fmt(value());
+      var risk=alive&&rung<RUNGS.length?RUNGS[rung].risk:0;
+      var sf=api.q('#cpgSafe'), bn=api.q('#cpgBurn');
+      if(sf) sf.style.width=((1-risk)*100)+'%';
+      if(bn) bn.style.width=(risk*100)+'%';
       api.qa('.cp-rung').forEach(function(el,i){
         el.classList.toggle('done', i<rung);
         el.classList.toggle('next', i===rung&&alive);
       });
+      // the orb sits on the rung it has climbed to (ladder is column-reverse)
+      var orb=api.q('#cpOrb'), lad=api.q('#cpLadder');
+      var target=api.q('.cp-rung[data-i="'+Math.max(0,rung-1)+'"]');
+      if(orb&&lad&&target){
+        orb.style.top=(rung===0?lad.offsetHeight-14:target.offsetTop+target.offsetHeight/2-14)+'px';
+        orb.classList.toggle('grounded', rung===0);
+      }
     }
     function armIdle(){
       clearTimeout(idle);
-      // never leave the round waiting on a player who has walked away
       idle=setTimeout(function(){ bank(true); }, 15000);
     }
     function finish(html, tier, amount){
       if(finished) return; finished=true;
-      clearTimeout(idle);
+      clearTimeout(idle); if(sweepRaf) cancelAnimationFrame(sweepRaf);
       api.credit(amount);
       var body=api.body(); if(!body) return done();
       body.innerHTML=html;
@@ -153,34 +190,72 @@ function compoundRound(api){
       setTimeout(function(){ api.close(); done(); }, 2200);
     }
     function bank(auto){
-      if(finished||!alive) return;
+      if(finished||!alive||sweeping) return;
       var v=value();
       finish('<div class="cp-done">BANKED'+(auto?' <span class="cp-auto">(auto)</span>':'')+
         '<br/><b>+'+api.fmt(v)+' MORBIUS</b></div>',
         v>=api.bet*8?'huge':'big', v);
     }
+    /* the sweep: a damped oscillation that settles on a point drawn inside
+       the true outcome's zone, so the resolution is watchable, physical, and
+       honest about the odds it printed on the gauge */
+    function sweep(risk, burnt, cb){
+      sweeping=true;
+      var needle=api.q('#cpgNeedle'), gauge=api.q('#cpGauge');
+      if(!needle){ sweeping=false; return cb(); }
+      if(gauge) gauge.classList.add('live');
+      var target=burnt ? (1-risk)+0.06+api.rng()*(risk-0.1>0?risk-0.1:risk*0.5)
+                       : 0.08+api.rng()*((1-risk)-0.16);
+      target=Math.max(0.03,Math.min(0.97,target));
+      var t0=null, DUR=1750, lastTick=0;
+      function step(ts){
+        if(t0===null) t0=ts;
+        var t=(ts-t0)/DUR;
+        if(t>=1){
+          needle.style.left=(target*100)+'%';
+          if(gauge) gauge.classList.remove('live');
+          sweeping=false; return cb();
+        }
+        // start wide, ring down onto the target
+        var amp=0.5*Math.pow(1-t,1.6);
+        var p=target+amp*Math.cos(t*22);
+        needle.style.left=(Math.max(0.01,Math.min(0.99,p))*100)+'%';
+        if(ts-lastTick>70){ api.sfx('tick'); lastTick=ts; }
+        sweepRaf=requestAnimationFrame(step);
+      }
+      sweepRaf=requestAnimationFrame(step);
+    }
     function go(){
-      if(finished||!alive) return;
+      if(finished||!alive||sweeping) return;
       clearTimeout(idle);
       var r=RUNGS[rung];
+      var burnt=api.rng()<r.risk;
       api.sfx('compound');
-      if(api.rng()<r.risk){
-        alive=false;
-        var el=api.q('.cp-rung[data-i="'+rung+'"]'); if(el) el.classList.add('burnt');
-        api.sfx('burn');
-        finish('<div class="cp-done burnt">BURNT<br/><b>+0 MORBIUS</b>'+
-          '<div class="cp-lost">the stake went up at &times;'+r.mult.toFixed(1)+'</div></div>','small',0);
-        return;
-      }
-      rung++; paint();
-      if(rung>=RUNGS.length){
-        var v=value();
-        finish('<div class="cp-done">LADDER TOPPED<br/><b>+'+api.fmt(v)+' MORBIUS</b></div>','huge',v);
-        return;
-      }
-      var note=api.q('#cpNote');
-      if(note) note.textContent='Next rung burns '+Math.round(RUNGS[rung].risk*100)+'% of the time.';
-      armIdle();
+      sweep(r.risk, burnt, function(){
+        if(finished) return;
+        if(burnt){
+          alive=false;
+          var el=api.q('.cp-rung[data-i="'+rung+'"]'); if(el) el.classList.add('burnt');
+          var orb=api.q('#cpOrb'); if(orb) orb.classList.add('burst');
+          api.sfx('burn');
+          setTimeout(function(){
+            finish('<div class="cp-done burnt">BURNT<br/><b>+0 MORBIUS</b>'+
+              '<div class="cp-lost">the stake went up at &times;'+r.mult.toFixed(1)+'</div></div>','small',0);
+          }, 900);
+          return;
+        }
+        rung++; api.sfx('safe'); paint();
+        var orb2=api.q('#cpOrb');
+        if(orb2){ orb2.classList.remove('leap'); void orb2.offsetWidth; orb2.classList.add('leap'); }
+        if(rung>=RUNGS.length){
+          var v=value();
+          finish('<div class="cp-done">LADDER TOPPED<br/><b>+'+api.fmt(v)+' MORBIUS</b></div>','huge',v);
+          return;
+        }
+        var note=api.q('#cpNote');
+        if(note) note.textContent='Next rung burns '+Math.round(RUNGS[rung].risk*100)+'% of the time.';
+        armIdle();
+      });
     }
     var b=api.q('#cpBank'), g=api.q('#cpGo');
     if(b) b.addEventListener('click',function(){ bank(false); });
@@ -236,9 +311,11 @@ function breachRound(api){
     }
     function wire(){
       armIdle();
+      var busy=false;
       api.qa('.vb-door').forEach(function(btn){
         btn.addEventListener('click',function(){
-          if(finished||btn.classList.contains('open')) return;
+          if(finished||busy||btn.classList.contains('open')) return;
+          busy=true;
           clearTimeout(idle);
           var d=DOORS[depth];
           // the deepest door is the only one that can break the rail
@@ -246,27 +323,45 @@ function breachRound(api){
           if(depth===DOORS.length-1&&api.meta&&api.meta.kind==='tiered'&&api.rng()<0.14){
             jackpot=api.rng()<0.78?'mini':'minor';
           }
-          btn.classList.add('open');
-          if(jackpot){
-            var amt=api.meta[jackpot];
-            total+=amt;
-            api.meta[jackpot]=jackpot==='mini'?250:1250;
-            btn.innerHTML='<span class="vb-jphit">'+jackpot.toUpperCase()+'</span>';
-            btn.classList.add('jackpot');
-            api.sfx('jackpot');
-          }else{
-            var x=weighted(api.rng, d.table);
-            var amt2=x*api.bet;
-            total+=amt2;
-            btn.innerHTML='<span class="vb-x">&times;'+x+'</span>';
-            api.sfx('breach');
-          }
-          var t=api.q('#vbTotal'); if(t) t.textContent=api.fmt(total);
+          /* crack it like a vault: the dial spins over three clunks, the door
+             swings, light spills, THEN the value stamps in */
+          btn.classList.add('cracking');
+          btn.innerHTML='<span class="vb-dial"></span>';
+          [140,480,880].forEach(function(ms){ setTimeout(function(){ api.sfx('dial'); },ms); });
           setTimeout(function(){
-            depth++;
-            if(depth>=DOORS.length){ finish(); return; }
-            render(); wire();
-          }, 1000);
+            if(finished) return;
+            btn.classList.remove('cracking');
+            btn.classList.add('open');
+            if(jackpot){
+              var amt=api.meta[jackpot];
+              total+=amt;
+              api.meta[jackpot]=jackpot==='mini'?250:1250;
+              btn.innerHTML='<span class="vb-jphit">'+jackpot.toUpperCase()+'</span>';
+              btn.classList.add('jackpot');
+              api.sfx('jackpot');
+            }else{
+              var x=weighted(api.rng, d.table);
+              total+=x*api.bet;
+              btn.innerHTML='<span class="vb-x">&times;'+x+'</span>';
+              api.sfx('breach');
+            }
+            var t=api.q('#vbTotal'); if(t) t.textContent=api.fmt(total);
+            setTimeout(function(){
+              depth++;
+              if(depth>=DOORS.length){ finish(); return; }
+              /* descend: this depth zooms past the camera, the next one
+                 rises to meet it */
+              var body=api.body();
+              if(body) body.classList.add('vb-zoom');
+              setTimeout(function(){
+                render();
+                var b2=api.body();
+                if(b2){ b2.classList.add('vb-enter');
+                        setTimeout(function(){ b2.classList.remove('vb-enter'); },520); }
+                wire();
+              }, 460);
+            }, 1150);
+          }, 1150);
         });
       });
     }
@@ -300,6 +395,7 @@ window.CabinetThemes={
       award:function(t,n){ [660,880,1320].forEach(function(f,i){ t(f,'square',.09,.05,null,i*80); }); },
       tick: function(t,n){ t(1400,'square',.02,.03); },
       mark: function(t,n){ n(.05,.16,1800); t(180,'square',.1,.07,60); t(1320,'square',.05,.04,null,60); },
+      fire: function(t,n){ n(.05,.24,2200); t(120,'square',.08,.09,50); },
       miss: function(t,n){ t(150,'square',.08,.04,90); },
       // intro beats
       ciOpen:function(t,n){ n(.9,.09,140); t(41,'sawtooth',1.1,.09,28); },
@@ -332,6 +428,7 @@ window.CabinetThemes={
       award:function(t,n){ [784,988,1175,1568].forEach(function(f,i){ t(f,'sine',.12,.07,null,i*70); }); },
       tick: function(t,n){ t(1760,'sine',.025,.03); },
       compound:function(t,n){ [440,554,659,880].forEach(function(f,i){ t(f,'triangle',.1,.06,null,i*45); }); },
+      safe: function(t,n){ t(659,'sine',.12,.07); t(988,'sine',.16,.07,null,90); },
       burn: function(t,n){ n(.5,.18,320); t(220,'sawtooth',.6,.1,42); },
       // intro beats
       ciOpen:function(t,n){ t(110,'sine',1.0,.08,55); n(.5,.05,900); },
@@ -364,6 +461,7 @@ window.CabinetThemes={
       award:function(t,n){ t(880,'sine',.14,.07); t(1174,'sine',.14,.07,null,90); t(1760,'sine',.26,.06,null,180); },
       tick: function(t,n){ t(1100,'sine',.03,.028); },
       breach:function(t,n){ n(.1,.18,260); t(80,'sine',.24,.1,44); t(1400,'sine',.1,.04,null,60); },
+      dial: function(t,n){ n(.04,.14,900); t(240,'square',.05,.06,140); },
       jackpot:function(t,n){ n(1.2,.12,140); [523,784,1047,1568,2093].forEach(function(f,i){ t(f,'sine',.3,.08,null,180+i*110); }); },
       // intro beats
       ciOpen:function(t,n){ n(1.1,.12,120); t(38,'sine',1.3,.11,24); },

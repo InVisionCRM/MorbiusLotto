@@ -177,6 +177,11 @@ function sfx(name){
     case 'tick':   tone(900,'square',.03,.12); break;
     // one per count-up frame while the win rolls, so a big number is audible
     case 'coin':   tone(1250+Math.random()*500,'triangle',.06,.035); break;
+    // scatter slams, escalating: thump -> harder thump + crack -> full hit
+    case 'slam1':  noiseHit(.1,.22,300); tone(70,'sine',.22,.12,36); break;
+    case 'slam2':  noiseHit(.14,.3,240); tone(55,'sine',.3,.14,28); tone(880,'square',.08,.05,null,60); break;
+    case 'slam3':  noiseHit(.2,.34,180); tone(45,'sine',.5,.16,22);
+                   [440,554,659,880].forEach(function(f,i){ tone(f,'square',.16,.05,null,90+i*70); }); break;
     case 'award':  tone(880,'triangle',.09,.24); tone(1174,'triangle',.09,.24,null,80); tone(1760,'sine',.22,.24,null,160); break;
   }
 }
@@ -241,6 +246,7 @@ function buildUI(){
       '<div class="hud-box hud-win"><span class="hud-lbl">WIN</span><span class="hud-val" id="cabWin">&mdash;</span></div>'+
     '</div>'+
     '<div class="cab-board" id="cabBoard"><div class="cab-reels" id="cabReels"></div>'+
+      '<svg class="cab-lines" id="cabLines"></svg>'+
       '<div class="cab-flash" id="cabFlash"></div>'+
       '<canvas class="cab-fx" id="cabFx"></canvas>'+
       '<div class="cab-float" id="cabFloat"></div></div>'+
@@ -352,30 +358,71 @@ function rollupWin(to, tier){
   rollRaf=requestAnimationFrame(step);
 }
 
+/* Win LINES, like the platform's other slot machines: every winning group is
+   traced through its cell centers on an SVG overlay — the whole set faint,
+   the group currently in focus bright. Ways and line wins read left to right;
+   clusters and scatter groups get their cells ordered by column then row so
+   the trace still describes the group. */
+function cellCenter(k){
+  var p=k.split(','), cell=cellAt(+p[0],+p[1]);
+  var svg=$('#cabLines');
+  if(!cell||!svg) return null;
+  var cr=cell.getBoundingClientRect(), sr=svg.getBoundingClientRect();
+  return (cr.left-sr.left+cr.width/2).toFixed(1)+','+(cr.top-sr.top+cr.height/2).toFixed(1);
+}
+function groupPoints(w){
+  var cells=(w.cells||[]).slice();
+  cells.sort(function(a,b){
+    var pa=a.split(','), pb=b.split(',');
+    return (+pa[0]-+pb[0])||(+pa[1]-+pb[1]);
+  });
+  return cells.map(cellCenter).filter(Boolean).join(' ');
+}
+function drawWinLines(wins, focusIdx){
+  var svg=$('#cabLines'); if(!svg) return;
+  var b=$('#cabBoard');
+  if(b){ svg.setAttribute('viewBox','0 0 '+b.clientWidth+' '+b.clientHeight);
+         svg.setAttribute('width',b.clientWidth); svg.setAttribute('height',b.clientHeight); }
+  var html='';
+  wins.forEach(function(w,i){
+    if(i===focusIdx) return;
+    var pts=groupPoints(w); if(!pts) return;
+    html+='<polyline class="wl-faint" points="'+pts+'"/>';
+  });
+  if(wins[focusIdx]){
+    var pts=groupPoints(wins[focusIdx]);
+    if(pts) html+='<polyline class="wl-active" points="'+pts+'"/>';
+  }
+  svg.innerHTML=html;
+}
+function clearWinLines(){ var svg=$('#cabLines'); if(svg) svg.innerHTML=''; }
+
 /* Walk the winning groups one at a time instead of lighting the whole board
    at once — you cannot tell what paid when nine cells flash together. */
 var cycleIv=null;
 function stopWinCycle(){
   if(cycleIv){ clearInterval(cycleIv); cycleIv=null; }
+  clearWinLines();
   var reels=$('#cabReels');
   if(reels) [].forEach.call(reels.querySelectorAll('.cab-sym.is-focus'),function(c){ c.classList.remove('is-focus'); });
 }
 function startWinCycle(wins){
   stopWinCycle();
-  if(!wins||wins.length<2) return;          // one group needs no cycling
+  if(!wins||!wins.length) return;
   var i=0;
   function show(){
     var reels=$('#cabReels'); if(!reels) return;
     [].forEach.call(reels.querySelectorAll('.cab-sym.is-focus'),function(c){ c.classList.remove('is-focus'); });
-    var w=wins[i%wins.length];
-    (w.cells||[]).forEach(function(k){
+    var idx=i%wins.length;
+    drawWinLines(wins, idx);
+    (wins[idx].cells||[]).forEach(function(k){
       var p=k.split(','), cell=cellAt(+p[0],+p[1]);
       if(cell) cell.classList.add('is-focus');
     });
     i++;
   }
   show();
-  cycleIv=setInterval(show, PACE.cycleGap);
+  if(wins.length>1) cycleIv=setInterval(show, PACE.cycleGap);
 }
 
 /* Confetti made of the machine's own reel symbols, so the celebration looks
@@ -751,15 +798,60 @@ function spinReelAnim(finalGrid){
     }, stopAt[anticFrom]);
   }
 
+  /* ── scatter escalation ────────────────────────────────────────────────
+     Landing a scatter is a SLAM, and each one raises the stakes physically:
+     the first kicks the board and spins the remaining reels faster, the
+     second hits harder — particles, shake, a zoom — and whips them faster
+     still, and the one that completes the set is a massive slam that hands
+     straight into the bonus cutscene. The stops still arrive on the
+     stretched anticipation schedule, so the reels are running hot exactly
+     while the machine is withholding the result.
+
+     Speeding up a mid-flight reel without a visible jump OR a missed stop:
+     position is (start + D·e(u))·h and the landing needs start+D' ≡ stop
+     (mod L). Adding m whole loops over the REMAINING profile solves both:
+
+         D' = D + m·L/(1 − e(u₁))          (same position at u₁, and
+         start' = start + (D − D')·e(u₁)    start'+D' = start+D+m·L)     */
+  function boostReel(R, m, elapsed){
+    var u1=elapsed/R.T;
+    if(u1>=0.85) return;                 // already decelerating — let it land
+    var e1=easeProfile(u1);
+    var D2=R.D + m*R.L/Math.max(0.1, 1-e1);
+    R.start=R.start + (R.D-D2)*e1;
+    R.D=D2;
+  }
+  function slam(level){
+    if(rm) return;
+    var board=$('#cabBoard');
+    boardFlash();
+    if(level>=2){ boardShake(); winBurst(level>=3?'huge':'big'); }
+    if(board){
+      board.classList.remove('rush1','rush2');
+      if(level===1) board.classList.add('rush1');
+      if(level===2) board.classList.add('rush2');
+      if(level>=3){
+        board.classList.remove('shake'); void board.offsetWidth;
+        board.classList.add('shake');
+        setTimeout(function(){ board.classList.remove('shake'); },550);
+      }
+    }
+    sfx('slam'+Math.min(3,level));    // sfx tries the theme's cue first
+  }
+
   startTicks();
   return new Promise(function(resolve){
-    function finish(){ stopTicks(); stopAnticLoop(); resolve(); }
+    function finish(){
+      stopTicks(); stopAnticLoop();
+      var board=$('#cabBoard'); if(board) board.classList.remove('rush1','rush2');
+      resolve();
+    }
     var cellH=states[0].el.clientHeight/rows;
     if(!(cellH>0)){                       // never animate against a zero — just show the result
       states.forEach(function(R){ settleReel(R); });
       return finish();
     }
-    var t0=null;
+    var t0=null, scLanded=0;
     function frame(ts){
       if(t0===null) t0=ts;
       var elapsed=ts-t0, allDone=true;
@@ -769,12 +861,23 @@ function spinReelAnim(finalGrid){
         var u=elapsed/R.T;
         if(u>=1){
           R.done=true; settleReel(R);
-          var upTo=0; for(var q=0;q<=R.c;q++) upTo+=scPerCol[q];
-          if(scPerCol[R.c]>0) sfxScatterLand(upTo);
-          if(R.c===celebrateReel){ stopAnticLoop(); boardFlash(); boardShake(); sfxFanfare(); }
+          if(scPerCol[R.c]>0){
+            scLanded+=scPerCol[R.c];
+            sfxScatterLand(scLanded);
+            var level=Math.min(3,scLanded);
+            slam(level);
+            if(level<3&&!rm){
+              // whip every reel still turning: +3 loops on the first scatter,
+              // +7 more on the second
+              for(var j=0;j<states.length;j++)
+                if(!states[j].done) boostReel(states[j], level===1?3:7, elapsed);
+            }
+          }
+          if(R.c===celebrateReel){ stopAnticLoop(); sfxFanfare(); }
         }else{
           allDone=false;
           var off=(R.start+R.D*easeProfile(u))%R.L;
+          off=((off%R.L)+R.L)%R.L;             // boosted start can go negative
           R.strip.style.transform='translate3d(0,'+(-off*cellH).toFixed(2)+'px,0)';
           // drop the blur just before the stop so the result reads clean
           if(R.T-elapsed<240) R.el.classList.remove('spinning');
