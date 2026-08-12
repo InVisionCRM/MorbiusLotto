@@ -241,6 +241,11 @@ function buildUI(){
       '</div>'+
     '</div>'+
     '<div class="cab-foot" id="cabFoot">Play-money demo &middot; currency MORBIUS &middot; RTP &asymp;95% (simulated 150k spins)</div>'+
+    // The big win gets its OWN node. It used to share #cabOverlay with the
+    // bonus rounds, and its 2.6s self-clear wiped whatever the bonus had put
+    // there 900ms earlier — which killed the pick bonus outright, because its
+    // chips were gone before anyone could click one and it never resolved.
+    '<div class="cab-overlay" id="cabBigWin" hidden></div>'+
     '<div class="cab-overlay" id="cabOverlay" hidden></div>';
   S.host.innerHTML=''; S.host.appendChild(root);
 
@@ -336,11 +341,20 @@ function sizeReels(){
   if(w>0) reels.style.setProperty('--cellh', w+'px');
   return w;
 }
-function renderGrid(grid, winCells, locked){
+/* `dropIn` plays the machine's anim.land on each cell. Only the cascade refill
+   passes it — those cells genuinely appear out of nothing. A reel settling
+   from a spin must NOT, or the symbol animates twice. */
+function renderGrid(grid, winCells, locked, dropIn){
   var reels=$('#cabReels'); reels.innerHTML=''; S.reels=[];
+  var land=(S.def.anim&&S.def.anim.land)||'pop';
+  var animate=dropIn&&land!=='none'&&!reduced();
   for(var c=0;c<S.def.cols;c++){
     var reel=el('div','cab-reel'), strip=el('div','cab-strip');
-    for(var r=0;r<S.def.rows;r++) strip.appendChild(symCell(grid[c][r], c, r, winCells, locked));
+    for(var r=0;r<S.def.rows;r++){
+      var cell=symCell(grid[c][r], c, r, winCells, locked);
+      if(animate) cell.classList.add('land-'+land);
+      strip.appendChild(cell);
+    }
     reel.appendChild(strip); reels.appendChild(reel);
     S.reels.push({ c:c, el:reel, strip:strip });
   }
@@ -470,9 +484,12 @@ function settleReel(R){
   for(r=0;r<rows;r++) cells.push(R.strip.children[R.stop+r]);
   R.strip.replaceChildren.apply(R.strip, cells);
   R.strip.style.transform='translate3d(0,0,0)';
-  var land=(S.def.anim&&S.def.anim.land)||'pop';
+  /* No per-cell land animation here. These cells arrived by SCROLLING into
+     place, so spinning/dropping/popping them on top makes every symbol twist
+     after it has already landed. Midnight bounces the reel and flashes it,
+     nothing more. anim.land belongs where a cell really does appear out of
+     nothing — the cascade refill in walkSteps. */
   if(!reduced()){
-    if(land!=='none') for(r=0;r<cells.length;r++) if(cells[r]) cells[r].classList.add('land-'+land);
     R.el.classList.add('landed','rflash');
     setTimeout(function(){ R.el.classList.remove('landed','rflash'); }, 260);
   }
@@ -608,7 +625,7 @@ function walkSteps(res){
             });
             noiseHit(.14,.2,900);
             return wait(S.turbo?120:280).then(function(){
-              renderGrid(next.grid);
+              renderGrid(next.grid,null,null,true);   // refilled cells really do drop in
               $('#cabReels').classList.add('impact');
               setTimeout(function(){ $('#cabReels').classList.remove('impact'); },260);
             });
@@ -671,7 +688,7 @@ function floatText(html,kind){
 }
 
 function bigWinOverlay(tier,payout){
-  var ov=$('#cabOverlay');
+  var ov=$('#cabBigWin');
   ov.hidden=false; ov.className='cab-overlay bigwin';
   ov.innerHTML='<div class="bw-wrap"><div class="bw-word '+tier+'">'+
     (tier==='huge'?'HUGE WIN':'BIG WIN')+'</div><div class="bw-amt" id="bwAmt">0</div></div>';
@@ -741,11 +758,19 @@ function overlayShell(title,body){
 }
 function closeOverlay(){ var ov=$('#cabOverlay'); ov.hidden=true; ov.className='cab-overlay'; ov.innerHTML=''; }
 
+/* Last-resort guard. Each round is meant to resolve on its own; this only
+   exists so that a bug in one of them can never leave the cabinet stuck with
+   S.spinning true and the spin button dead. It races, it does not cancel — a
+   round that finishes late still pays out, it just no longer holds the game. */
 function runBonus(kind){
-  if(kind==='freespins') return bonusFreeSpins();
-  if(kind==='wheel')     return bonusWheel();
-  if(kind==='pick')      return bonusPick();
-  return Promise.resolve();
+  var round = kind==='freespins' ? bonusFreeSpins()
+            : kind==='wheel'     ? bonusWheel()
+            : kind==='pick'      ? bonusPick()
+            : null;
+  if(!round) return Promise.resolve();
+  return Promise.race([round, new Promise(function(r){
+    setTimeout(function(){ r(); }, 120000);
+  })]);
 }
 
 function bonusFreeSpins(){
@@ -850,6 +875,29 @@ function bonusPick(){
     '<div class="fs-total">TOTAL <span id="pkTotal">0</span></div>');
   var grid=ov.querySelector('#pkGrid');
   return new Promise(function(done){
+    var idle=null, finished=false;
+    /* This round is the only one that waits on a human. Without a fallback a
+       player who walks away — or an overlay that gets torn out from under the
+       chips — leaves the promise unresolved and the cabinet stuck spinning
+       forever. Every pick re-arms an idle timer that picks for them. */
+    function armIdle(){
+      clearTimeout(idle);
+      idle=setTimeout(function(){
+        var left=grid?grid.querySelectorAll('.pk-chip:not(.open)'):[];
+        if(left.length) left[Math.floor(Math.random()*left.length)].click();
+        else finish();                    // chips are gone — pay out and release
+      }, S.turbo?4000:12000);
+    }
+    function finish(){
+      if(finished) return; finished=true;
+      clearTimeout(idle);
+      if(grid) grid.querySelectorAll('.pk-chip').forEach(function(x,j){
+        if(!x.classList.contains('open')){ x.classList.add('open','dim'); x.innerHTML=values[j]+'&times;'; }
+      });
+      S.balance+=total; store('balance',S.balance); updateHud();
+      playWinTier(total>=S.bet*8?'huge':'big');
+      setTimeout(function(){ closeOverlay(); done(); },2200);
+    }
     values.forEach(function(v,i){
       var b=el('button','pk-chip','?');
       b.addEventListener('click',function(){
@@ -860,19 +908,11 @@ function bonusPick(){
         var pkN=ov.querySelector('#pkN'), pkT=ov.querySelector('#pkTotal');
         if(pkN) pkN.textContent=picksLeft;
         if(pkT) pkT.textContent=fmt(total);
-        if(picksLeft===0){
-          setTimeout(function(){
-            grid.querySelectorAll('.pk-chip').forEach(function(x,j){
-              if(!x.classList.contains('open')){ x.classList.add('open','dim'); x.innerHTML=values[j]+'&times;'; }
-            });
-            S.balance+=total; store('balance',S.balance); updateHud();
-            playWinTier(total>=S.bet*8?'huge':'big');
-            setTimeout(function(){ closeOverlay(); done(); },2200);
-          },500);
-        }
+        if(picksLeft===0) setTimeout(finish,500); else armIdle();
       });
       grid.appendChild(b);
     });
+    armIdle();
   });
 }
 
