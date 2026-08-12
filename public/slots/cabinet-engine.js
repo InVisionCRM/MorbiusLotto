@@ -32,7 +32,8 @@ var M = null;                 // CabinetMath, checked at boot
 var S = {                     // engine state
   def:null, strips:null, key:'slot', bet:100, balance:10000,
   spinning:false, featureState:{}, meta:null, muted:false,
-  turbo:false, cfg:null, seedN:0, host:null, reels:[], lastRes:null, lastGrid:null
+  turbo:false, auto:false, autoTimer:null, tickIv:null, anticIv:null,
+  cfg:null, seedN:0, host:null, reels:[], lastRes:null
 };
 
 /* ── tiny DOM helpers ───────────────────────────────────────────────────── */
@@ -84,7 +85,9 @@ function tone(freq,type,dur,vol,slide,delay){
   var o=AC.createOscillator(), g=AC.createGain();
   o.type=type; o.frequency.setValueAtTime(freq,t0);
   if(slide) o.frequency.exponentialRampToValueAtTime(slide,t0+dur);
-  g.gain.setValueAtTime(vol,t0); g.gain.exponentialRampToValueAtTime(0.01,t0+dur);
+  // Floor has to sit well under the quietest cue (the spin tick is 0.022) or
+  // that cue never decays — it just steps to the floor and cuts.
+  g.gain.setValueAtTime(vol,t0); g.gain.exponentialRampToValueAtTime(0.0008,t0+dur);
   o.connect(g); g.connect(master); o.start(t0); o.stop(t0+dur);
 }
 function noiseHit(dur,vol,freq,delay){
@@ -95,7 +98,7 @@ function noiseHit(dur,vol,freq,delay){
   for(var i=0;i<n;i++) d[i]=Math.random()*2-1;
   var src=AC.createBufferSource(); src.buffer=buf;
   var f=AC.createBiquadFilter(); f.type='bandpass'; f.frequency.value=freq; f.Q.value=1.4;
-  var g=AC.createGain(); g.gain.setValueAtTime(vol,t0); g.gain.exponentialRampToValueAtTime(0.01,t0+dur);
+  var g=AC.createGain(); g.gain.setValueAtTime(vol,t0); g.gain.exponentialRampToValueAtTime(0.0008,t0+dur);
   src.connect(f); f.connect(g); g.connect(master); src.start(t0); src.stop(t0+dur);
 }
 function playWinTier(tier){
@@ -114,16 +117,45 @@ function playWinTier(tier){
     src.start(AC.currentTime+l[2]/1000);
   });
 }
-/* Reels land left to right and the pitch climbs with them — the cue that
-   tells you how far through the spin you are without looking. */
+/* ── the midnight cabinet's spin voice ───────────────────────────────────
+   Ported cue-for-cue from morbius-midnight-lab.html so a reel here stops with
+   the same thunk, and the same tension builds when the scatters start
+   arriving. Midnight's blip(f,dur,type,gain,when,slideTo) maps to tone() and
+   its noise(dur,freq,gain,when) to noiseHit(). */
+/* echoing synth pluck — a triangle with two decaying repeats */
+function pluck(f,gain,when){
+  var g=gain||0.06, w=(when||0)*1000;
+  tone(f,'triangle',.16,g,null,w);
+  tone(f,'triangle',.14,g*0.5,null,w+170);
+  tone(f,'triangle',.12,g*0.24,null,w+340);
+}
+/* reel stop — a short filtered thunk that drops in pitch, brighter each reel,
+   so you hear how far through the spin you are without looking */
 function sfxReelLand(i){
-  noiseHit(.055,.2,1500+i*260);
-  tone(300+i*58,'triangle',.07,.16);
+  noiseHit(.06,.07,600+i*120);
+  tone(150+i*34,'square',.09,.05,110+i*30);
+}
+/* a scatter arriving — the pluck climbs with the running count */
+function sfxScatterLand(n){ pluck(392+n*110,.06); tone(196,'sawtooth',.3,.03,120); }
+/* the anticipation heartbeat under a slowed reel */
+function sfxAnticBeat(){ tone(60,'sawtooth',.14,.08); tone(60,'sawtooth',.12,.05,null,220); }
+function startAnticLoop(){ stopAnticLoop(); sfxAnticBeat(); S.anticIv=setInterval(sfxAnticBeat,620); }
+function stopAnticLoop(){ if(S.anticIv){ clearInterval(S.anticIv); S.anticIv=null; } }
+/* the tick bed that runs for as long as any reel is still moving */
+function sfxTick(){ tone(600+Math.random()*200,'square',.03,.022); }
+function startTicks(){ stopTicks(); S.tickIv=setInterval(sfxTick,85); }
+function stopTicks(){ if(S.tickIv){ clearInterval(S.tickIv); S.tickIv=null; } }
+/* the scatters are in — fanfare over the celebrate reel */
+function sfxFanfare(){
+  [440,554,659,880].forEach(function(f,i){
+    tone(f,'square',.16,.04,null,i*100); pluck(f,.05,i*0.1);
+  });
 }
 function sfx(name){
   switch(name){
     case 'button': tone(520,'triangle',.05,.25); break;
-    case 'spin':   noiseHit(.3,.2,2400); tone(150,'sine',.34,.3,360); break;
+    // low detuned saw drone — the cabinet powering up, midnight's sDrone
+    case 'spin':   tone(55,'sawtooth',1.1,.06,42); tone(55.8,'sawtooth',1.1,.05,42.6); noiseHit(.6,.03,220); break;
     case 'land':   noiseHit(.06,.22,1800); tone(330,'triangle',.06,.14); break;
     case 'pop':    tone(700,'triangle',.07,.22,1500); noiseHit(.08,.16,3200); break;
     case 'lock':   tone(220,'square',.08,.18); tone(440,'sine',.1,.14,null,60); break;
@@ -153,6 +185,7 @@ function boot(cfg){
     S.balance=load('balance',10000);
     S.bet=load('bet', defaultBet());
     S.muted=load('muted',false);
+    S.turbo=load('turbo',false);
     S.meta=load('meta', initMeta());
     buildUI();
     renderGrid(blankGrid());
@@ -188,7 +221,8 @@ function buildUI(){
       '<div class="hud-box"><span class="hud-lbl">BALANCE</span><span class="hud-val" id="cabBal">0</span></div>'+
       '<div class="hud-box hud-win"><span class="hud-lbl">WIN</span><span class="hud-val" id="cabWin">&mdash;</span></div>'+
     '</div>'+
-    '<div class="cab-board"><div class="cab-reels" id="cabReels"></div>'+
+    '<div class="cab-board" id="cabBoard"><div class="cab-reels" id="cabReels"></div>'+
+      '<div class="cab-flash" id="cabFlash"></div>'+
       '<div class="cab-float" id="cabFloat"></div></div>'+
     '<div class="cab-meta" id="cabMeta"></div>'+
     '<div class="cab-deck">'+
@@ -196,8 +230,12 @@ function buildUI(){
         '<div class="bet-read"><span class="hud-lbl">BET</span><span class="hud-val" id="cabBet">0</span></div>'+
         '<button class="bet-btn" id="betUp">+</button></div>'+
       '<button class="spin-btn" id="cabSpin"><span>SPIN</span></button>'+
+      '<button class="btn-auto" id="cabAuto" type="button" aria-pressed="false"'+
+        ' title="Auto-spin — keeps spinning until you stop it (plays out bonus rounds first)">'+
+        '<span class="dot"></span>Auto</button>'+
+      '<button class="btn-turbo" id="cabTurbo" type="button" aria-pressed="false"'+
+        ' title="Turbo — the reels stop almost instantly">&#9889; Turbo</button>'+
       '<div class="side-ctl">'+
-        '<button class="mini-btn" id="cabTurbo" title="Turbo">&#9889;</button>'+
         '<button class="mini-btn" id="cabMute" title="Sound">&#128266;</button>'+
         '<button class="mini-btn" id="cabPays" title="Paytable">&#8505;</button>'+
       '</div>'+
@@ -213,7 +251,18 @@ function buildUI(){
   $('#cabSpin').addEventListener('click',function(){ audio(); sfx('button'); spin(); });
   $('#betDn').addEventListener('click',function(){ audio(); stepBet(-1); });
   $('#betUp').addEventListener('click',function(){ audio(); stepBet(1); });
-  $('#cabTurbo').addEventListener('click',function(){ S.turbo=!S.turbo; this.classList.toggle('on',S.turbo); });
+  $('#cabTurbo').addEventListener('click',function(){
+    audio(); sfx('tick');
+    S.turbo=!S.turbo; store('turbo',S.turbo);
+    this.classList.toggle('on',S.turbo);
+    this.setAttribute('aria-pressed',S.turbo?'true':'false');
+  });
+  $('#cabAuto').addEventListener('click',function(){
+    audio(); sfx('button');
+    setAuto(!S.auto);
+    if(S.auto&&!S.spinning) spin();
+  });
+  if(S.turbo){ var tb=$('#cabTurbo'); tb.classList.add('on'); tb.setAttribute('aria-pressed','true'); }
   $('#cabMute').addEventListener('click',function(){
     audio(); S.muted=!S.muted; store('muted',S.muted);
     if(master) master.gain.value=S.muted?0:0.5;
@@ -247,6 +296,17 @@ function updateHud(){
   if(t) t.textContent=fmt(S.bet);
 }
 function setWin(v){ var w=$('#cabWin'); if(!w) return; w.innerHTML=v==null?'&mdash;':('+'+fmt(v)); }
+/* Auto-spin, as the midnight cabinet plays it: the toggle keeps re-pressing
+   spin after each round settles, and because a bonus round is part of the
+   round the next spin naturally waits for it to finish. */
+function setAuto(on){
+  S.auto=!!on;
+  if(!S.auto&&S.autoTimer){ clearTimeout(S.autoTimer); S.autoTimer=null; }
+  var b=$('#cabAuto'); if(!b) return;
+  b.classList.toggle('on',S.auto);
+  b.innerHTML='<span class="dot"></span>'+(S.auto?'Stop':'Auto');
+  b.setAttribute('aria-pressed',S.auto?'true':'false');
+}
 
 function artOf(id){
   var s=S.def._byId[id]; if(!s) return '';
@@ -291,7 +351,8 @@ function cellAt(c,r){ var R=S.reels[c]; return R?R.strip.children[r]:null; }
 /* ── the spin ───────────────────────────────────────────────────────────── */
 function spin(){
   if(S.spinning) return;
-  if(S.balance<S.bet){ floatText('NOT ENOUGH MORBIUS','bad'); return; }
+  if(S.balance<S.bet){ setAuto(false); floatText('NOT ENOUGH MORBIUS','bad'); return; }
+  if(S.autoTimer){ clearTimeout(S.autoTimer); S.autoTimer=null; }
   S.spinning=true;
   $('#cabSpin').classList.add('busy');
   S.balance-=S.bet; updateHud(); setWin(null);
@@ -307,12 +368,9 @@ function spin(){
   var payout=M.payoutOf(S.def,S.bet,res);
   $('#cabFoot').innerHTML='seed <span class="mono">'+esc(seed)+'</span> &middot; play-money demo &middot; MORBIUS';
 
-  presentSpin(res,payout).then(function(){
-    // Remember what is on screen: the next spin scrolls out of it.
-    var last=res.steps[res.steps.length-1];
-    S.lastGrid=last?last.grid:grid;
-    settle(res,payout);
-  });
+  // The cyclic strip carries its own symbols, so a spin no longer needs the
+  // previous window handed to it — it scrolls out of whatever the pool holds.
+  presentSpin(res,payout).then(function(){ settle(res,payout); });
 }
 
 function presentSpin(res,payout){
@@ -322,31 +380,37 @@ function presentSpin(res,payout){
 }
 
 /* ── the reel engine ─────────────────────────────────────────────────────
-   Ported from slot-builder-lab.html, which took it from slots-lab.html,
-   which modelled it on the app's transaction slot machine. Every reel is a
-   long vertical STRIP that scrolls: the current window on top, weighted
-   filler through the middle, and the final window at the bottom — so the
-   result scrolls INTO place and landing needs no symbol swap.
+   Ported from morbius-midnight-lab.html — the series reel feel, cue for cue.
 
-   offset(t) = travel * easeProfile(t/T) * cellHeight, driven by rAF. Each
-   reel has its own T (first stop, then one per gap), so they stop left to
-   right. This is the house reel feel; do not replace it with a timer that
-   shuffles img.src — that reads as flicker, not as a spinning reel. */
-/* The builder uses a FIXED 1000 ms gap between reel stops, which was tuned on
-   a 5-reel board and drags badly as boards get wider — measured, it takes 5.5 s
-   at 5 reels and 7.5 s at 7. These machines are 6 and 7 wide, so the schedule
-   is spread across a fixed WINDOW instead: the first reel stops at `first`, the
-   last at `last`, and the gap falls out of the column count. Same motion
-   profile, same feel, constant length whatever the board. */
+   A reel is a clipped column holding its FULL weighted strip laid out once,
+   plus `rows` cells wrapped round from the front, and the scroll runs MODULO
+   the pool:
+
+       offset(t) = (start + D · easeProfile(t/T)) mod L      (in cells)
+
+   so the reel never runs out of symbols, the blur shows this machine's real
+   symbol mix rather than random filler, and D is picked to land exactly on
+   the drawn stop. Landing REUSES the strip's own cells for the window — the
+   same <img> nodes, nothing re-decodes, so there is no settle flash.
+
+   Reels stop left to right, `gap` apart. Once the second scatter is on screen
+   the remaining reels stretch to `anticGap` and light up: that anticipation
+   beat is the thing the midnight cabinet is built around, and it is why the
+   gap is fixed rather than squeezed into a constant-length window.
+
+   Do not replace this with a timer that shuffles img.src — that reads as
+   flicker, not as a spinning reel. */
 var SPIN_TIMING={
-  normal:{ first:900, last:2600, cruise:17 },
-  turbo: { first:320, last:820,  cruise:26 }
+  normal:{ first:1300, gap:1000, anticGap:2000, cruise:17 },
+  turbo: { first:420,  gap:170,  anticGap:650,  cruise:26 }
 };
-function stopSchedule(cols, tm){
-  if(cols<=1) return [tm.first];
-  var gap=(tm.last-tm.first)/(cols-1), out=[];
-  for(var c=0;c<cols;c++) out.push(Math.round(tm.first+c*gap));
-  return out;
+/* Scatters needed for the bonus — settle() triggers on 3, so 2 on screen with
+   reels still turning is the moment worth stretching. */
+var ANTIC_NEED=3;
+function scatterId(){
+  var syms=S.def.symbols;
+  for(var i=0;i<syms.length;i++) if(syms[i].role==='scatter') return syms[i].id;
+  return null;
 }
 /* Quick accel to a, linear cruise to b, smooth decel out — normalised so the
    area under it is exactly 1 and the reel lands precisely on its stop. */
@@ -361,71 +425,137 @@ function easeProfile(u){
 function reduced(){
   return typeof matchMedia==='function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
 }
-/* prev window → weighted filler → final window. Filler is drawn from the
-   reel's own weighted strip so the blur shows this machine's symbol mix. */
-function buildSpinStrip(strip, c, travel, grid, prevGrid){
-  var rows=S.def.rows, pool=S.strips[c]||[], syms=S.def.symbols, r;
-  for(r=0;r<rows;r++){
-    var pid=prevGrid&&prevGrid[c]?prevGrid[c][r]:null;
-    strip.appendChild(symCell(pid||syms[Math.floor(Math.random()*syms.length)].id, c, r));
+/* The visible reel is a LOOP of VIS_LOOP cells plus `rows` wrapped from the
+   front, so a modular scroll always has somewhere to go.
+
+   VIS_LOOP is midnight's own strip length, and that is the whole point.
+   Midnight's D formula picks a whole number of loop revolutions, so the loop
+   length — not `cruise` — is what actually sets the speed: measured, midnight
+   travels 67–97 cells per reel at 52→15 cells/sec. A cabinet's WEIGHTED pool
+   is 122–176 long (it is sized by the weights, not by how a reel should look),
+   and running the same formula over that doubled the travel to ~200 cells.
+   Same L and same cruise as the reference gives the same motion; the cells are
+   drawn from this reel's weighted pool, so the blur still shows the machine's
+   real symbol mix.
+
+   Midnight's stop comes straight out of its strip, so its landing window
+   already IS the result. A cabinet's features can rewrite the grid after the
+   stops are drawn — walking, stacked, expanding and sticky wilds all do — so
+   the landing window is written in here from what the maths actually produced.
+   Keeping the stop inside [0, VIS_LOOP-rows] means that window never straddles
+   the wrap, so it can never be half-written. */
+var VIS_LOOP=62;
+function buildCyclicStrip(strip, c, grid){
+  var rows=S.def.rows, pool=S.strips[c]||[];
+  if(!pool.length) pool=S.def.symbols.map(function(s){return s.id;});
+  var L=Math.max(VIS_LOOP, rows*3);
+  var stop=Math.floor(Math.random()*(L-rows+1));
+  var ids=[], frag=document.createDocumentFragment();
+  for(var i=0;i<L+rows;i++){
+    var inWin=i>=stop&&i<stop+rows;
+    // i>=L is the wrapped head — it has to repeat cell i-L exactly, or the
+    // loop visibly jumps every time the scroll passes the seam
+    ids[i]=inWin?grid[c][i-stop]
+               :(i>=L?ids[i-L]:pool[Math.floor(Math.random()*pool.length)]);
+    frag.appendChild(symCell(ids[i], c, inWin?i-stop:0));
   }
-  for(var i=0;i<travel-rows;i++){
-    var id=pool.length?pool[Math.floor(Math.random()*pool.length)]
-                      :syms[Math.floor(Math.random()*syms.length)].id;
-    strip.appendChild(symCell(id, c, 0));
-  }
-  for(r=0;r<rows;r++) strip.appendChild(symCell(grid[c][r], c, r));
+  strip.appendChild(frag);
+  return { L:L, stop:stop };
 }
-function settleReel(R, grid){
-  R.el.classList.remove('spinning');
-  R.strip.style.transform='';
-  R.strip.innerHTML='';
+/* Land by REUSING the strip's own landing-window cells — the same nodes that
+   were already on screen, so nothing re-decodes and the reel does not flash. */
+function settleReel(R){
+  R.el.classList.remove('spinning','antic');
+  var rows=S.def.rows, cells=[], r;
+  for(r=0;r<rows;r++) cells.push(R.strip.children[R.stop+r]);
+  R.strip.replaceChildren.apply(R.strip, cells);
+  R.strip.style.transform='translate3d(0,0,0)';
   var land=(S.def.anim&&S.def.anim.land)||'pop';
-  for(var r=0;r<S.def.rows;r++){
-    var cell=symCell(grid[R.c][r], R.c, r);
-    if(land!=='none'&&!reduced()) cell.classList.add('land-'+land);
-    R.strip.appendChild(cell);
-  }
   if(!reduced()){
+    if(land!=='none') for(r=0;r<cells.length;r++) if(cells[r]) cells[r].classList.add('land-'+land);
     R.el.classList.add('landed','rflash');
     setTimeout(function(){ R.el.classList.remove('landed','rflash'); }, 260);
   }
   sfxReelLand(R.c);
 }
+function boardFlash(){
+  if(reduced()) return;
+  var f=$('#cabFlash'); if(!f) return;
+  f.classList.remove('go'); void f.offsetWidth; f.classList.add('go');
+}
+function boardShake(){
+  if(reduced()) return;
+  var b=$('#cabBoard'); if(!b) return;
+  b.classList.remove('shake'); void b.offsetWidth; b.classList.add('shake');
+  setTimeout(function(){ b.classList.remove('shake'); },550);
+}
 function spinReelAnim(finalGrid){
-  var d=S.def, rows=d.rows, anim=d.anim||{};
+  var d=S.def, rows=d.rows, anim=d.anim||{}, c, r;
   var tm=SPIN_TIMING[S.turbo?'turbo':'normal'];
   var rm=reduced();
-  var sched=rm ? stopSchedule(d.cols,{first:180,last:420})
-               : stopSchedule(d.cols,tm);
   var cruise=tm.cruise*((anim.cruise||10)/10);
-  var prevGrid=S.lastGrid;
   var reelsEl=$('#cabReels');
+
+  /* Scatters this spin will land, per reel — the schedule needs them up front
+     to know where the anticipation starts. */
+  var sid=scatterId(), scPerCol=[];
+  for(c=0;c<d.cols;c++){
+    var n=0;
+    if(sid) for(r=0;r<rows;r++) if(finalGrid[c][r]===sid) n++;
+    scPerCol.push(n);
+  }
+  /* Stop schedule. The gap widens from the reel that puts the second scatter
+     on screen onward, exactly as midnight does it. */
+  var stopAt=[], anticFrom=-1, celebrateReel=-1, scSoFar=0;
+  var t=rm?260:tm.first;
+  for(c=0;c<d.cols;c++){
+    stopAt[c]=t;
+    scSoFar+=scPerCol[c];
+    if(anticFrom<0&&c<d.cols-1&&scSoFar===ANTIC_NEED-1) anticFrom=c;
+    if(celebrateReel<0&&scSoFar>=ANTIC_NEED) celebrateReel=c;
+    t+=rm?120:((anticFrom>=0&&c>=anticFrom)?tm.anticGap:tm.gap);
+  }
 
   reelsEl.innerHTML=''; S.reels=[];
   var states=[];
-  for(var c=0;c<d.cols;c++){
-    var T=sched[c];
-    var travel=Math.max(rows+2, Math.round(cruise*T/1000));
+  for(c=0;c<d.cols;c++){
+    var T=stopAt[c];
     var reel=el('div','cab-reel'), strip=el('div','cab-strip');
     if(!rm){
       reel.classList.add('spinning');
       reel.style.setProperty('--spin-blur',(anim.spinBlur==null?2:anim.spinBlur)+'px');
     }
-    buildSpinStrip(strip, c, travel, finalGrid, prevGrid);
+    var built=buildCyclicStrip(strip, c, finalGrid);
+    var L=built.L, stop=built.stop;
+    var start=Math.floor(Math.random()*L);
+    // D is the whole-pool travel that both reaches `stop` and cruises at about
+    // `cruise` cells a second for this reel's T.
+    var base=((stop-start)%L+L)%L;
+    var ideal=cruise*T/1000;
+    var D=base+Math.max(1,Math.round((ideal-base)/L))*L;
     reel.appendChild(strip); reelsEl.appendChild(reel);
     S.reels.push({ c:c, el:reel, strip:strip });
-    states.push({ c:c, el:reel, strip:strip, T:T, travel:travel, done:false });
+    states.push({ c:c, el:reel, strip:strip, T:T, L:L, start:start, D:D, stop:stop, done:false });
   }
   // --cellh must be set before the height is read, or cellH comes out zero and
   // every reel travels nowhere.
   sizeReels();
 
+  if(anticFrom>=0&&!rm){
+    setTimeout(function(){
+      if(!S.spinning) return;
+      startAnticLoop();
+      for(var i=anticFrom+1;i<states.length;i++) if(!states[i].done) states[i].el.classList.add('antic');
+    }, stopAt[anticFrom]);
+  }
+
+  startTicks();
   return new Promise(function(resolve){
+    function finish(){ stopTicks(); stopAnticLoop(); resolve(); }
     var cellH=states[0].el.clientHeight/rows;
     if(!(cellH>0)){                       // never animate against a zero — just show the result
-      states.forEach(function(R){ settleReel(R, finalGrid); });
-      return resolve();
+      states.forEach(function(R){ settleReel(R); });
+      return finish();
     }
     var t0=null;
     function frame(ts){
@@ -435,13 +565,20 @@ function spinReelAnim(finalGrid){
         var R=states[i];
         if(R.done) continue;
         var u=elapsed/R.T;
-        if(u>=1){ R.done=true; settleReel(R, finalGrid); }
-        else{
+        if(u>=1){
+          R.done=true; settleReel(R);
+          var upTo=0; for(var q=0;q<=R.c;q++) upTo+=scPerCol[q];
+          if(scPerCol[R.c]>0) sfxScatterLand(upTo);
+          if(R.c===celebrateReel){ stopAnticLoop(); boardFlash(); boardShake(); sfxFanfare(); }
+        }else{
           allDone=false;
-          R.strip.style.transform='translate3d(0,'+(-(R.travel*easeProfile(u))*cellH).toFixed(2)+'px,0)';
+          var off=(R.start+R.D*easeProfile(u))%R.L;
+          R.strip.style.transform='translate3d(0,'+(-off*cellH).toFixed(2)+'px,0)';
+          // drop the blur just before the stop so the result reads clean
+          if(R.T-elapsed<240) R.el.classList.remove('spinning');
         }
       }
-      if(allDone) resolve(); else requestAnimationFrame(frame);
+      if(allDone) finish(); else requestAnimationFrame(frame);
     }
     requestAnimationFrame(frame);
   });
@@ -516,6 +653,13 @@ function settle(res,payout){
   var after=doBonus?wait(S.turbo?300:900).then(function(){ sfx('scatter'); return runBonus(S.def.bonus.round); }):Promise.resolve();
   after.then(function(){
     S.spinning=false; $('#cabSpin').classList.remove('busy');
+    if(!S.auto) return;
+    // The bonus round is part of `after`, so auto has already waited it out.
+    if(S.balance<S.bet){ setAuto(false); floatText('AUTO OFF &middot; LOW BALANCE','info'); return; }
+    S.autoTimer=setTimeout(function(){
+      S.autoTimer=null;
+      if(S.auto&&!S.spinning) spin();
+    }, S.turbo?380:850);
   });
 }
 
