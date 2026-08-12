@@ -33,7 +33,7 @@ var S = {                     // engine state
   def:null, strips:null, key:'slot', bet:100, balance:10000,
   spinning:false, featureState:{}, meta:null, muted:false,
   turbo:false, auto:false, autoTimer:null, tickIv:null, anticIv:null,
-  cfg:null, seedN:0, host:null, reels:[], lastRes:null
+  cfg:null, seedN:0, host:null, reels:[], lastRes:null, theme:null
 };
 
 /* ── tiny DOM helpers ───────────────────────────────────────────────────── */
@@ -132,6 +132,7 @@ function pluck(f,gain,when){
 /* reel stop — a short filtered thunk that drops in pitch, brighter each reel,
    so you hear how far through the spin you are without looking */
 function sfxReelLand(i){
+  if(packCue('land', i)) return;
   noiseHit(.06,.07,600+i*120);
   tone(150+i*34,'square',.09,.05,110+i*30);
 }
@@ -151,7 +152,19 @@ function sfxFanfare(){
     tone(f,'square',.16,.04,null,i*100); pluck(f,.05,i*0.1);
   });
 }
+/* A machine's theme can replace any mechanic cue with its own voice, so the
+   three cabinets do not all click and thunk identically. The pack is handed
+   tone() and noiseHit() rather than reaching for them, and anything it does
+   not define falls through to the house sound below. */
+function packCue(name, arg){
+  var th=S.theme; if(!th||!th.sound) return false;
+  var fn=th.sound[name]; if(typeof fn!=='function') return false;
+  if(!AC||S.muted) return true;               // themed cue exists; just silent
+  try{ fn(tone, noiseHit, arg); }catch(e){}
+  return true;
+}
 function sfx(name){
+  if(packCue(name)) return;
   switch(name){
     case 'button': tone(520,'triangle',.05,.25); break;
     // low detuned saw drone — the cabinet powering up, midnight's sDrone
@@ -176,6 +189,9 @@ window.CabinetEngine = {
 
 function boot(cfg){
   S.cfg=cfg; S.key=cfg.key;
+  // Everything that should differ between the three machines — wording, voice,
+  // bonus round, button shape — comes from here. Absent theme = house default.
+  S.theme=(window.CabinetThemes&&window.CabinetThemes[cfg.theme||cfg.key])||null;
   S.host=document.querySelector(cfg.host);
   M=window.CabinetMath;
   if(!M){ S.host.innerHTML='<div class="cab-err">cabinet-math.js failed to load</div>'; return; }
@@ -213,7 +229,8 @@ function initMeta(){
 /* ── UI scaffolding ─────────────────────────────────────────────────────── */
 function buildUI(){
   var d=S.def;
-  var root=el('div','cab-root');
+  var L=(S.theme&&S.theme.labels)||{ spin:'SPIN', auto:'Auto', turbo:'Turbo' };
+  var root=el('div','cab-root'+(S.theme&&S.theme.shape?' shape-'+S.theme.shape:''));
   root.innerHTML=
     '<div class="cab-hud">'+
       '<div class="hud-box"><span class="hud-lbl">'+(d.win.mode==='ways'?'WAYS':d.win.mode==='cluster'?'CLUSTER':d.win.mode==='scatterpays'?'SCATTER PAYS':'LINES')+'</span>'+
@@ -229,18 +246,22 @@ function buildUI(){
       '<div class="bet-ctl"><button class="bet-btn" id="betDn">&minus;</button>'+
         '<div class="bet-read"><span class="hud-lbl">BET</span><span class="hud-val" id="cabBet">0</span></div>'+
         '<button class="bet-btn" id="betUp">+</button></div>'+
-      '<button class="spin-btn" id="cabSpin"><span>SPIN</span></button>'+
+      '<button class="spin-btn" id="cabSpin"><span>'+esc(L.spin)+'</span></button>'+
       '<button class="btn-auto" id="cabAuto" type="button" aria-pressed="false"'+
-        ' title="Auto-spin — keeps spinning until you stop it (plays out bonus rounds first)">'+
-        '<span class="dot"></span>Auto</button>'+
+        ' title="'+esc(L.auto)+' — keeps spinning until you stop it (plays out bonus rounds first)">'+
+        '<span class="dot"></span>'+esc(L.auto)+'</button>'+
       '<button class="btn-turbo" id="cabTurbo" type="button" aria-pressed="false"'+
-        ' title="Turbo — the reels stop almost instantly">&#9889; Turbo</button>'+
+        ' title="'+esc(L.turbo)+' — the reels stop almost instantly">&#9889; '+esc(L.turbo)+'</button>'+
       '<div class="side-ctl">'+
         '<button class="mini-btn" id="cabMute" title="Sound">&#128266;</button>'+
         '<button class="mini-btn" id="cabPays" title="Paytable">&#8505;</button>'+
       '</div>'+
     '</div>'+
-    '<div class="cab-foot" id="cabFoot">Play-money demo &middot; currency MORBIUS &middot; RTP &asymp;95% (simulated 150k spins)</div>'+
+    // "base game" is doing real work in this string: cabinet-math's simulate()
+    // only ever covered the reels. Bonus rounds live in the theme layer and
+    // have never been in that number, so the footer must not imply they are.
+    '<div class="cab-foot" id="cabFoot">Play-money demo &middot; currency MORBIUS &middot; '+
+      'base game RTP &asymp;95% (simulated 150k spins, bonus rounds not included)</div>'+
     // The big win gets its OWN node. It used to share #cabOverlay with the
     // bonus rounds, and its 2.6s self-clear wiped whatever the bonus had put
     // there 900ms earlier — which killed the pick bonus outright, because its
@@ -798,19 +819,59 @@ function overlayShell(title,body){
 }
 function closeOverlay(){ var ov=$('#cabOverlay'); ov.hidden=true; ov.className='cab-overlay'; ov.innerHTML=''; }
 
+/* The cutscene. Winning a bonus is the biggest thing that happens on a slot,
+   so it stops being a panel that fades in and becomes an event that takes over
+   the reel container first. Each machine supplies its own words, font, palette
+   and particle character; CabinetFX does the staging. */
+function bonusIntro(){
+  var spec=S.theme&&S.theme.intro;
+  if(!spec||!window.CabinetFX) return Promise.resolve();
+  var board=$('#cabBoard'); if(!board) return Promise.resolve();
+  return window.CabinetFX.playIntro(board, spec, {
+    turbo:S.turbo, reduced:reduced(),
+    onBeat:function(name, i){
+      if(name==='open')   packCue('ciOpen');
+      if(name==='kicker') packCue('ciKicker');
+      if(name==='slam')   packCue('ciSlam', i||0);
+      if(name==='flare')  packCue('ciFlare');
+    }
+  });
+}
+
+/* The api handed to a themed bonus round. Everything a round needs to draw
+   itself, pay out and make noise, without reaching into engine internals. */
+function bonusApi(){
+  return {
+    bet:S.bet, def:S.def, turbo:S.turbo, meta:S.meta,
+    rng:Math.random, fmt:fmt, esc:esc, wait:wait,
+    overlay:function(title, html){ return overlayShell(title, html); },
+    body:function(){ var o=$('#cabOverlay'); return o?o.querySelector('.bn-body'):null; },
+    q:function(sel){ var o=$('#cabOverlay'); return o?o.querySelector(sel):null; },
+    qa:function(sel){ var o=$('#cabOverlay'); return o?[].slice.call(o.querySelectorAll(sel)):[]; },
+    close:closeOverlay,
+    credit:function(n){ if(!n) return; S.balance+=n; store('balance',S.balance); updateHud(); renderMeta(); },
+    sfx:sfx, win:playWinTier
+  };
+}
+
 /* Last-resort guard. Each round is meant to resolve on its own; this only
    exists so that a bug in one of them can never leave the cabinet stuck with
    S.spinning true and the spin button dead. It races, it does not cancel — a
    round that finishes late still pays out, it just no longer holds the game. */
 function runBonus(kind){
-  var round = kind==='freespins' ? bonusFreeSpins()
-            : kind==='wheel'     ? bonusWheel()
-            : kind==='pick'      ? bonusPick()
-            : null;
-  if(!round) return Promise.resolve();
-  return Promise.race([round, new Promise(function(r){
-    setTimeout(function(){ r(); }, 120000);
-  })]);
+  return bonusIntro().then(function(){
+    // A machine's own round replaces the house one entirely.
+    var custom=S.theme&&S.theme.bonus&&S.theme.bonus[kind];
+    var round = typeof custom==='function' ? custom(bonusApi())
+              : kind==='freespins' ? bonusFreeSpins()
+              : kind==='wheel'     ? bonusWheel()
+              : kind==='pick'      ? bonusPick()
+              : null;
+    if(!round) return;
+    return Promise.race([round, new Promise(function(r){
+      setTimeout(function(){ r(); }, 120000);
+    })]);
+  });
 }
 
 function bonusFreeSpins(){
