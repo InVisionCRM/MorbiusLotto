@@ -168,6 +168,79 @@
 .cab-foot{ margin-top:12px; font-size:11px; font-family:var(--font-mono); opacity:.5; text-align:center;
   overflow-wrap:anywhere; }
 
+/* ── bonus intro sequence ──────────────────────────────────────────────
+   Plays over the REEL CONTAINER, not the page: winning a bonus should take
+   over the board it was won on. The type is deliberately oversized — it is
+   clamped against the board width and allowed to overflow its box, because
+   a bonus announcement that politely fits is not an announcement. Each theme
+   supplies --ci-font, --ci-a and --ci-b. */
+.cab-intro{ position:absolute; inset:0; z-index:20; overflow:hidden; border-radius:18px;
+  display:grid; place-items:center; opacity:0; transition:opacity .18s ease-out;
+  --ci-font:var(--font-disp); --ci-a:var(--acc); --ci-b:var(--acc2); }
+.cab-intro.ci-on,.cab-intro.shown{ opacity:1; }
+.cab-intro::before{ content:""; position:absolute; inset:0;
+  background:radial-gradient(ellipse 75% 60% at 50% 50%,
+    color-mix(in srgb,var(--ci-a) 12%,rgba(2,5,9,.86)), rgba(1,3,6,.95) 72%); }
+/* the iris: how the board gets swallowed. bars = terminal wipe,
+   hex = corner cut, ring = circular vault door */
+.cab-intro.ci-iris-bars::after{ content:""; position:absolute; inset:0; pointer-events:none;
+  background:repeating-linear-gradient(0deg,rgba(0,0,0,.5) 0 2px,transparent 2px 5px);
+  animation:ciBars .5s steps(6) both; }
+@keyframes ciBars{ from{ opacity:0; transform:scaleY(.3);} to{ opacity:1; transform:scaleY(1);} }
+.cab-intro.ci-iris-ring::after{ content:""; position:absolute; inset:-20%; pointer-events:none;
+  border-radius:50%; box-shadow:0 0 0 42vmax rgba(1,4,8,.92);
+  animation:ciIris .55s cubic-bezier(.2,.9,.3,1) both; }
+@keyframes ciIris{ from{ transform:scale(1.7);} to{ transform:scale(1);} }
+.cab-intro.ci-iris-hex::after{ content:""; position:absolute; inset:0; pointer-events:none;
+  background:linear-gradient(135deg,transparent 46%,color-mix(in srgb,var(--ci-b) 26%,transparent) 50%,transparent 54%);
+  animation:ciSweep .7s ease-out both; }
+@keyframes ciSweep{ from{ transform:translateX(-100%);} to{ transform:translateX(100%);} }
+
+.ci-canvas{ position:absolute; inset:0; width:100%; height:100%; }
+.ci-stack{ position:relative; z-index:2; text-align:center; padding:0 6px; width:100%;
+  display:flex; flex-direction:column; align-items:center; gap:clamp(7px,1.8vw,18px); }
+
+.ci-kicker{ font-family:var(--font-mono); font-size:clamp(9px,1.9vw,13px); letter-spacing:.44em;
+  color:var(--ci-b); opacity:0; transform:translateY(8px);
+  text-shadow:0 0 14px color-mix(in srgb,var(--ci-b) 70%,transparent); }
+.ci-kicker.in{ animation:ciKick .45s cubic-bezier(.2,.9,.3,1) forwards; }
+@keyframes ciKick{ to{ opacity:1; transform:translateY(0);} }
+
+/* Sized against the BOARD, not the viewport: CabinetFX measures the rendered
+   width and scales this down until the title fits the reel container. Wrapping
+   is off so that measurement is honest — a wrapped title reports the container
+   width and the fit pass would never fire. */
+.ci-title{ font-family:var(--ci-font); font-weight:900; line-height:.86;
+  font-size:clamp(30px,11.5vw,104px); letter-spacing:-.01em;
+  display:flex; justify-content:center; flex-wrap:nowrap; white-space:nowrap; }
+.ci-space{ width:.28em; }
+/* No static transform: the entry scale lives in the keyframe's 0% instead, so
+   the letters sit at their true size until they animate and CabinetFX can
+   measure them honestly to fit the title to the board. */
+.ci-ch{ display:inline-block; opacity:0;
+  background:linear-gradient(180deg,#fff 8%,var(--ci-a) 46%,var(--ci-b) 96%);
+  -webkit-background-clip:text; background-clip:text; color:transparent;
+  filter:drop-shadow(0 3px 0 rgba(0,0,0,.6))
+         drop-shadow(0 0 26px color-mix(in srgb,var(--ci-a) 85%,transparent)); }
+.ci-ch.in{ animation:ciSlam .34s cubic-bezier(.16,1.5,.4,1) forwards; }
+@keyframes ciSlam{
+  0%{ opacity:0; transform:scale(2.6) translateY(-14px) rotate(-7deg);}
+  62%{ opacity:1; transform:scale(.9) translateY(2px) rotate(1.5deg);}
+  100%{ opacity:1; transform:scale(1) translateY(0) rotate(0);} }
+
+.ci-sub{ font-family:var(--font-mono); font-size:clamp(10px,2.3vw,15px); letter-spacing:.2em;
+  color:var(--ink); opacity:0; transform:translateY(10px); }
+.ci-sub.in{ animation:ciKick .4s .05s cubic-bezier(.2,.9,.3,1) forwards; }
+
+.cab-intro.ci-flare::before{ animation:ciFlare .5s ease-out; }
+@keyframes ciFlare{ 0%{ filter:brightness(3.4);} 100%{ filter:brightness(1);} }
+.cab-intro.ci-bloom{ animation:ciBloom .26s ease-in forwards; }
+@keyframes ciBloom{ to{ opacity:0; transform:scale(1.16); filter:brightness(2);} }
+.cab-intro.ci-skippable{ cursor:pointer; }
+/* the board itself kicks on every letter impact */
+.cab-board.ci-kick{ animation:ciBoardKick .16s cubic-bezier(.36,.07,.19,.97); }
+@keyframes ciBoardKick{ 0%,100%{ transform:scale(1);} 45%{ transform:scale(1.014) translateY(-3px);} }
+
 /* ── overlays ── */
 .cab-overlay{ position:fixed; inset:0; z-index:60; display:grid; place-items:center;
   background:rgba(2,6,10,.82); backdrop-filter:blur(6px); }
@@ -213,6 +286,119 @@
 .pk-chip:hover{ transform:translateY(-2px); background:color-mix(in srgb,var(--acc) 22%,transparent); }
 .pk-chip.open{ background:color-mix(in srgb,var(--acc2) 25%,transparent); border-color:var(--acc2); cursor:default; }
 .pk-chip.dim{ opacity:.4; }
+/* ── GREEN WICK · THE CONTRACT ──────────────────────────────────────────
+   A ledger, not a grid. Names get struck through as they are marked and the
+   multiplier climbs in the header. */
+.ct-head{ display:grid; grid-template-columns:auto 1fr auto auto; gap:8px; align-items:center;
+  font-family:var(--font-mono); font-size:11px; letter-spacing:.2em; opacity:.8; margin-bottom:12px; }
+.ct-head .ct-v{ font-weight:700; opacity:1; color:var(--acc); }
+.ct-head .ct-v.hot{ color:var(--acc2); }
+.ct-list{ text-align:left; border:1px solid color-mix(in srgb,var(--acc) 24%,transparent);
+  border-radius:10px; overflow:hidden; margin-bottom:12px; }
+.ct-row{ display:flex; align-items:center; gap:10px; padding:8px 12px;
+  font-family:var(--font-mono); font-size:12.5px;
+  border-bottom:1px solid rgba(255,255,255,.06); transition:background .3s, opacity .3s; }
+.ct-row:last-child{ border-bottom:0; }
+.ct-dot{ width:7px; height:7px; border-radius:50%; flex:none;
+  background:color-mix(in srgb,var(--acc) 40%,transparent); }
+.ct-name{ flex:1; }
+.ct-fee{ font-weight:700; opacity:.55; }
+.ct-row.marked{ background:color-mix(in srgb,var(--acc2) 12%,transparent); }
+.ct-row.marked .ct-dot{ background:var(--acc2); box-shadow:0 0 10px var(--acc2); }
+.ct-row.marked .ct-name{ text-decoration:line-through; opacity:.5; }
+.ct-row.marked .ct-fee{ color:var(--acc2); opacity:1; animation:ctFee .5s cubic-bezier(.34,1.56,.64,1); }
+@keyframes ctFee{ 0%{ transform:scale(1.7); } 100%{ transform:scale(1); } }
+.ct-total{ font-family:var(--font-mono); font-size:14px; letter-spacing:.16em; }
+.ct-total span{ color:var(--acc2); font-weight:700; }
+.ct-done{ font-size:19px; line-height:1.7; }
+.ct-done b{ color:var(--acc2); font-size:26px; }
+.ct-clean{ margin-top:8px; font-family:var(--font-mono); font-size:11.5px;
+  letter-spacing:.2em; color:var(--acc); }
+
+/* ── SUPERSTAKE · COMPOUND ──────────────────────────────────────────────
+   The ladder is the whole screen: every rung shows its multiplier and the
+   burn risk you are taking to reach it. */
+.cp-read{ font-family:var(--font-mono); font-size:13px; letter-spacing:.16em; margin-bottom:12px; }
+.cp-read b{ font-size:22px; color:var(--acc2); }
+.cp-ladder{ display:flex; flex-direction:column-reverse; gap:4px; margin-bottom:14px; }
+.cp-rung{ display:grid; grid-template-columns:64px 1fr auto; gap:10px; align-items:center;
+  padding:6px 12px; border-radius:9px; font-family:var(--font-mono); font-size:11.5px;
+  background:rgba(255,255,255,.04); opacity:.42; transition:opacity .3s, background .3s, transform .2s; }
+.cp-rung .cp-x{ font-weight:700; font-size:14px; }
+.cp-bar{ height:5px; border-radius:99px; background:rgba(255,255,255,.1); overflow:hidden; }
+.cp-bar i{ display:block; height:100%; background:linear-gradient(90deg,var(--acc),#FB7185); }
+.cp-risk{ opacity:.7; white-space:nowrap; }
+.cp-rung.done{ opacity:1; background:color-mix(in srgb,var(--acc) 16%,transparent); }
+.cp-rung.done .cp-x{ color:var(--acc); }
+.cp-rung.next{ opacity:1; background:color-mix(in srgb,var(--acc2) 16%,transparent);
+  transform:scale(1.03); box-shadow:0 0 0 1px var(--acc2), 0 0 20px -6px var(--acc2); }
+.cp-rung.next .cp-x{ color:var(--acc2); }
+.cp-rung.burnt{ opacity:1; background:rgba(251,113,133,.22); box-shadow:0 0 0 1px #FB7185; }
+.cp-actions{ display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:10px; }
+.cp-btn{ padding:14px 10px; border-radius:13px; cursor:pointer; border:0;
+  font-family:var(--font-disp); font-weight:800; font-size:15px; letter-spacing:.16em;
+  transition:transform .12s, filter .15s; }
+.cp-btn:hover{ filter:brightness(1.12); }
+.cp-btn:active{ transform:scale(.97); }
+.cp-btn.bank{ background:var(--panel); color:var(--ink);
+  box-shadow:inset 0 0 0 1.5px color-mix(in srgb,var(--acc) 55%,transparent); }
+.cp-btn.go{ color:#0b0616;
+  background:linear-gradient(120deg,var(--acc2),var(--acc));
+  box-shadow:0 0 26px -6px var(--acc2); }
+.cp-note{ font-family:var(--font-mono); font-size:11px; opacity:.6; letter-spacing:.08em; }
+.cp-done{ font-size:19px; line-height:1.7; }
+.cp-done b{ color:var(--acc2); font-size:26px; }
+.cp-done.burnt b{ color:#FB7185; }
+.cp-auto{ font-size:12px; opacity:.55; }
+.cp-lost{ margin-top:6px; font-family:var(--font-mono); font-size:11.5px; opacity:.6; }
+
+/* ── MORBIUS · VAULT BREACH ─────────────────────────────────────────────── */
+.vb-depth{ display:flex; align-items:center; gap:7px; justify-content:center; margin-bottom:14px;
+  font-family:var(--font-mono); font-size:11px; letter-spacing:.24em; opacity:.85; }
+.vb-pip{ width:9px; height:9px; border-radius:2px; background:rgba(255,255,255,.15); }
+.vb-pip.done{ background:var(--acc); }
+.vb-pip.now{ background:var(--acc2); box-shadow:0 0 10px var(--acc2); animation:vbPip 1.1s ease-in-out infinite; }
+@keyframes vbPip{ 0%,100%{ opacity:1; } 50%{ opacity:.4; } }
+.vb-dname{ margin-left:8px; color:var(--acc); }
+.vb-grid{ display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin-bottom:14px; }
+.vb-door{ aspect-ratio:1; border-radius:12px; cursor:pointer;
+  border:1px solid color-mix(in srgb,var(--acc) 45%,transparent);
+  background:linear-gradient(180deg,color-mix(in srgb,var(--acc) 12%,transparent),rgba(0,0,0,.3));
+  color:var(--ink); font-family:var(--font-mono); font-weight:800; font-size:19px;
+  display:grid; place-items:center; transition:transform .12s, background .2s; }
+.vb-door:hover{ transform:translateY(-3px); background:color-mix(in srgb,var(--acc) 22%,transparent); }
+.vb-lock{ opacity:.5; font-size:15px; }
+.vb-door.open{ cursor:default; background:color-mix(in srgb,var(--acc2) 22%,transparent);
+  border-color:var(--acc2); animation:vbOpen .4s cubic-bezier(.34,1.56,.64,1); }
+@keyframes vbOpen{ 0%{ transform:rotateY(80deg) scale(.7);} 100%{ transform:rotateY(0) scale(1);} }
+.vb-door.open .vb-x{ color:var(--acc2); }
+.vb-door.jackpot{ background:radial-gradient(circle at 50% 40%,var(--acc2),color-mix(in srgb,var(--acc2) 30%,transparent));
+  box-shadow:0 0 30px -4px var(--acc2); animation:vbJp .9s cubic-bezier(.34,1.56,.64,1) 2; }
+@keyframes vbJp{ 0%,100%{ transform:scale(1);} 40%{ transform:scale(1.16);} }
+.vb-jphit{ font-size:12px; letter-spacing:.14em; color:#06090d; }
+.vb-total{ font-family:var(--font-mono); font-size:14px; letter-spacing:.16em; }
+.vb-total span{ color:var(--acc2); font-weight:700; }
+.vb-jp{ margin-top:8px; font-family:var(--font-mono); font-size:11px; letter-spacing:.14em;
+  color:var(--acc2); opacity:.8; }
+.vb-done{ font-size:19px; line-height:1.7; }
+.vb-done b{ color:var(--acc2); font-size:26px; }
+
+/* ── per-machine deck shapes ─────────────────────────────────────────────
+   The three cabinets should not all have the same buttons. Terminal-square
+   for the contract board, hex-clipped for the staking one, corner-notched
+   for the vault. */
+.shape-square .spin-btn,.shape-square .btn-auto,.shape-square .btn-turbo,
+.shape-square .bet-ctl,.shape-square .mini-btn{ border-radius:3px; }
+.shape-square .spin-btn{ letter-spacing:.3em; }
+.shape-hex .spin-btn{ clip-path:polygon(14px 0,100% 0,calc(100% - 14px) 100%,0 100%); border-radius:0; }
+.shape-hex .btn-auto,.shape-hex .btn-turbo{ clip-path:polygon(9px 0,100% 0,calc(100% - 9px) 100%,0 100%);
+  border-radius:0; }
+.shape-notch .spin-btn{ clip-path:polygon(0 0,calc(100% - 16px) 0,100% 16px,100% 100%,16px 100%,0 calc(100% - 16px));
+  border-radius:0; }
+.shape-notch .btn-auto,.shape-notch .btn-turbo{
+  clip-path:polygon(0 0,calc(100% - 10px) 0,100% 10px,100% 100%,10px 100%,0 calc(100% - 10px));
+  border-radius:0; }
+
 .pt-scroll{ max-height:56vh; overflow:auto; text-align:left; padding-right:6px; }
 .pt-row{ display:flex; gap:12px; align-items:center; padding:7px 4px; border-bottom:1px solid rgba(255,255,255,.06); }
 .pt-row img{ width:44px; height:44px; object-fit:contain; }

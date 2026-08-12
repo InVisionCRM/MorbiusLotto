@@ -33,7 +33,7 @@ var S = {                     // engine state
   def:null, strips:null, key:'slot', bet:100, balance:10000,
   spinning:false, featureState:{}, meta:null, muted:false,
   turbo:false, auto:false, autoTimer:null, tickIv:null, anticIv:null,
-  cfg:null, seedN:0, host:null, reels:[], lastRes:null
+  cfg:null, seedN:0, host:null, reels:[], lastRes:null, theme:null
 };
 
 /* ── tiny DOM helpers ───────────────────────────────────────────────────── */
@@ -132,6 +132,7 @@ function pluck(f,gain,when){
 /* reel stop — a short filtered thunk that drops in pitch, brighter each reel,
    so you hear how far through the spin you are without looking */
 function sfxReelLand(i){
+  if(packCue('land', i)) return;
   noiseHit(.06,.07,600+i*120);
   tone(150+i*34,'square',.09,.05,110+i*30);
 }
@@ -151,7 +152,19 @@ function sfxFanfare(){
     tone(f,'square',.16,.04,null,i*100); pluck(f,.05,i*0.1);
   });
 }
+/* A machine's theme can replace any mechanic cue with its own voice, so the
+   three cabinets do not all click and thunk identically. The pack is handed
+   tone() and noiseHit() rather than reaching for them, and anything it does
+   not define falls through to the house sound below. */
+function packCue(name, arg){
+  var th=S.theme; if(!th||!th.sound) return false;
+  var fn=th.sound[name]; if(typeof fn!=='function') return false;
+  if(!AC||S.muted) return true;               // themed cue exists; just silent
+  try{ fn(tone, noiseHit, arg); }catch(e){}
+  return true;
+}
 function sfx(name){
+  if(packCue(name)) return;
   switch(name){
     case 'button': tone(520,'triangle',.05,.25); break;
     // low detuned saw drone — the cabinet powering up, midnight's sDrone
@@ -176,6 +189,9 @@ window.CabinetEngine = {
 
 function boot(cfg){
   S.cfg=cfg; S.key=cfg.key;
+  // Everything that should differ between the three machines — wording, voice,
+  // bonus round, button shape — comes from here. Absent theme = house default.
+  S.theme=(window.CabinetThemes&&window.CabinetThemes[cfg.theme||cfg.key])||null;
   S.host=document.querySelector(cfg.host);
   M=window.CabinetMath;
   if(!M){ S.host.innerHTML='<div class="cab-err">cabinet-math.js failed to load</div>'; return; }
@@ -213,7 +229,8 @@ function initMeta(){
 /* ── UI scaffolding ─────────────────────────────────────────────────────── */
 function buildUI(){
   var d=S.def;
-  var root=el('div','cab-root');
+  var L=(S.theme&&S.theme.labels)||{ spin:'SPIN', auto:'Auto', turbo:'Turbo' };
+  var root=el('div','cab-root'+(S.theme&&S.theme.shape?' shape-'+S.theme.shape:''));
   root.innerHTML=
     '<div class="cab-hud">'+
       '<div class="hud-box"><span class="hud-lbl">'+(d.win.mode==='ways'?'WAYS':d.win.mode==='cluster'?'CLUSTER':d.win.mode==='scatterpays'?'SCATTER PAYS':'LINES')+'</span>'+
@@ -229,18 +246,27 @@ function buildUI(){
       '<div class="bet-ctl"><button class="bet-btn" id="betDn">&minus;</button>'+
         '<div class="bet-read"><span class="hud-lbl">BET</span><span class="hud-val" id="cabBet">0</span></div>'+
         '<button class="bet-btn" id="betUp">+</button></div>'+
-      '<button class="spin-btn" id="cabSpin"><span>SPIN</span></button>'+
+      '<button class="spin-btn" id="cabSpin"><span>'+esc(L.spin)+'</span></button>'+
       '<button class="btn-auto" id="cabAuto" type="button" aria-pressed="false"'+
-        ' title="Auto-spin — keeps spinning until you stop it (plays out bonus rounds first)">'+
-        '<span class="dot"></span>Auto</button>'+
+        ' title="'+esc(L.auto)+' — keeps spinning until you stop it (plays out bonus rounds first)">'+
+        '<span class="dot"></span>'+esc(L.auto)+'</button>'+
       '<button class="btn-turbo" id="cabTurbo" type="button" aria-pressed="false"'+
-        ' title="Turbo — the reels stop almost instantly">&#9889; Turbo</button>'+
+        ' title="'+esc(L.turbo)+' — the reels stop almost instantly">&#9889; '+esc(L.turbo)+'</button>'+
       '<div class="side-ctl">'+
         '<button class="mini-btn" id="cabMute" title="Sound">&#128266;</button>'+
         '<button class="mini-btn" id="cabPays" title="Paytable">&#8505;</button>'+
       '</div>'+
     '</div>'+
-    '<div class="cab-foot" id="cabFoot">Play-money demo &middot; currency MORBIUS &middot; RTP &asymp;95% (simulated 150k spins)</div>'+
+    // "base game" is doing real work in this string: cabinet-math's simulate()
+    // only ever covered the reels. Bonus rounds live in the theme layer and
+    // have never been in that number, so the footer must not imply they are.
+    '<div class="cab-foot" id="cabFoot">Play-money demo &middot; currency MORBIUS &middot; '+
+      'base game RTP &asymp;95% (simulated 150k spins, bonus rounds not included)</div>'+
+    // The big win gets its OWN node. It used to share #cabOverlay with the
+    // bonus rounds, and its 2.6s self-clear wiped whatever the bonus had put
+    // there 900ms earlier — which killed the pick bonus outright, because its
+    // chips were gone before anyone could click one and it never resolved.
+    '<div class="cab-overlay" id="cabBigWin" hidden></div>'+
     '<div class="cab-overlay" id="cabOverlay" hidden></div>';
   S.host.innerHTML=''; S.host.appendChild(root);
 
@@ -317,15 +343,29 @@ function artOf(id){
 /* One symbol cell. Cells live inside a per-reel strip, never in a flat grid —
    a reel has to be able to scroll, and you cannot scroll a grid cell. */
 function symCell(id, c, r, winCells, locked){
-  var s=S.def._byId[id];
-  var cell=el('div','cab-sym'+(s&&s.role==='wild'?' is-wild':'')+(s&&s.role==='scatter'?' is-scatter':''));
-  var key=c+','+r;
-  if(winCells&&winCells[key]) cell.className+=' is-win';
-  if(locked&&locked[key]) cell.className+=' is-locked';
-  var img=el('img'); img.src=artOf(id); img.alt=s?s.name:id;
-  img.style.width=((s&&s.sizePct||88))+'%';
-  cell.appendChild(img);
-  if(locked&&locked[key]) cell.appendChild(el('span','lock-badge','&#128274;'));
+  return applyCell(el('div'), id, c, r, winCells, locked);
+}
+/* Write a symbol INTO an existing cell. The src is only assigned when it
+   actually differs: re-assigning the same src, or replacing the <img> node
+   outright, makes the browser re-decode and repaint the image — which is what
+   the player sees as every symbol blinking the instant the reels stop. */
+function applyCell(cell, id, c, r, winCells, locked){
+  var s=S.def._byId[id], key=c+','+r;
+  var cls='cab-sym';
+  if(s&&s.role==='wild') cls+=' is-wild';
+  if(s&&s.role==='scatter') cls+=' is-scatter';
+  if(winCells&&winCells[key]) cls+=' is-win';
+  if(locked&&locked[key]) cls+=' is-locked';
+  if(cell.className!==cls) cell.className=cls;
+  var img=cell.firstElementChild;
+  if(!img||img.tagName!=='IMG'){ img=el('img'); cell.insertBefore(img, cell.firstChild); }
+  var src=artOf(id);
+  if(img.getAttribute('src')!==src){ img.setAttribute('src',src); img.alt=s?s.name:id; }
+  var w=((s&&s.sizePct)||88)+'%';
+  if(img.style.width!==w) img.style.width=w;
+  var badge=cell.querySelector('.lock-badge'), wantBadge=!!(locked&&locked[key]);
+  if(wantBadge&&!badge) cell.appendChild(el('span','lock-badge','&#128274;'));
+  else if(!wantBadge&&badge) badge.remove();
   return cell;
 }
 /* Square the cells off the measured column width. The reel needs a real pixel
@@ -336,13 +376,48 @@ function sizeReels(){
   if(w>0) reels.style.setProperty('--cellh', w+'px');
   return w;
 }
-function renderGrid(grid, winCells, locked){
-  var reels=$('#cabReels'); reels.innerHTML=''; S.reels=[];
-  for(var c=0;c<S.def.cols;c++){
-    var reel=el('div','cab-reel'), strip=el('div','cab-strip');
-    for(var r=0;r<S.def.rows;r++) strip.appendChild(symCell(grid[c][r], c, r, winCells, locked));
-    reel.appendChild(strip); reels.appendChild(reel);
-    S.reels.push({ c:c, el:reel, strip:strip });
+/* `dropIn` plays the machine's anim.land on each cell. Only the cascade refill
+   passes it — those cells genuinely appear out of nothing. A reel settling
+   from a spin must NOT, or the symbol animates twice.
+
+   This UPDATES the board in place whenever the shape already matches. It used
+   to blow the whole thing away with innerHTML='' and rebuild it, which meant
+   every <img> was a brand new element — a re-decode and a repaint of all of
+   them, ~140ms after the reels had settled. That is the blink. Since the
+   symbols it is asked to draw are usually the ones already on screen, reusing
+   the nodes makes the common case touch nothing at all. */
+function renderGrid(grid, winCells, locked, dropIn){
+  var reels=$('#cabReels'), d=S.def;
+  var land=(d.anim&&d.anim.land)||'pop';
+  var animate=dropIn&&land!=='none'&&!reduced();
+  var c, r;
+  var reusable = S.reels.length===d.cols && reels.children.length===d.cols &&
+    S.reels.every(function(R){
+      return R.el.parentNode===reels && R.strip.children.length===d.rows;
+    });
+  if(!reusable){
+    reels.innerHTML=''; S.reels=[];
+    for(c=0;c<d.cols;c++){
+      var reel=el('div','cab-reel'), strip=el('div','cab-strip');
+      for(r=0;r<d.rows;r++) strip.appendChild(symCell(grid[c][r], c, r, winCells, locked));
+      reel.appendChild(strip); reels.appendChild(reel);
+      S.reels.push({ c:c, el:reel, strip:strip });
+    }
+  }else{
+    for(c=0;c<d.cols;c++){
+      var R=S.reels[c];
+      // leave the reel's own classes alone — settleReel's landed/rflash are
+      // mid-animation here and clear themselves
+      if(R.strip.style.transform) R.strip.style.transform='translate3d(0,0,0)';
+      for(r=0;r<d.rows;r++) applyCell(R.strip.children[r], grid[c][r], c, r, winCells, locked);
+    }
+  }
+  if(animate){
+    var cells=[];
+    for(c=0;c<d.cols;c++) for(r=0;r<d.rows;r++) cells.push(S.reels[c].strip.children[r]);
+    cells.forEach(function(x){ x.classList.remove('land-'+land); });
+    void reels.offsetWidth;                       // one reflow for the whole board
+    cells.forEach(function(x){ x.classList.add('land-'+land); });
   }
   sizeReels();
 }
@@ -470,9 +545,12 @@ function settleReel(R){
   for(r=0;r<rows;r++) cells.push(R.strip.children[R.stop+r]);
   R.strip.replaceChildren.apply(R.strip, cells);
   R.strip.style.transform='translate3d(0,0,0)';
-  var land=(S.def.anim&&S.def.anim.land)||'pop';
+  /* No per-cell land animation here. These cells arrived by SCROLLING into
+     place, so spinning/dropping/popping them on top makes every symbol twist
+     after it has already landed. Midnight bounces the reel and flashes it,
+     nothing more. anim.land belongs where a cell really does appear out of
+     nothing — the cascade refill in walkSteps. */
   if(!reduced()){
-    if(land!=='none') for(r=0;r<cells.length;r++) if(cells[r]) cells[r].classList.add('land-'+land);
     R.el.classList.add('landed','rflash');
     setTimeout(function(){ R.el.classList.remove('landed','rflash'); }, 260);
   }
@@ -608,7 +686,7 @@ function walkSteps(res){
             });
             noiseHit(.14,.2,900);
             return wait(S.turbo?120:280).then(function(){
-              renderGrid(next.grid);
+              renderGrid(next.grid,null,null,true);   // refilled cells really do drop in
               $('#cabReels').classList.add('impact');
               setTimeout(function(){ $('#cabReels').classList.remove('impact'); },260);
             });
@@ -671,7 +749,7 @@ function floatText(html,kind){
 }
 
 function bigWinOverlay(tier,payout){
-  var ov=$('#cabOverlay');
+  var ov=$('#cabBigWin');
   ov.hidden=false; ov.className='cab-overlay bigwin';
   ov.innerHTML='<div class="bw-wrap"><div class="bw-word '+tier+'">'+
     (tier==='huge'?'HUGE WIN':'BIG WIN')+'</div><div class="bw-amt" id="bwAmt">0</div></div>';
@@ -741,11 +819,59 @@ function overlayShell(title,body){
 }
 function closeOverlay(){ var ov=$('#cabOverlay'); ov.hidden=true; ov.className='cab-overlay'; ov.innerHTML=''; }
 
+/* The cutscene. Winning a bonus is the biggest thing that happens on a slot,
+   so it stops being a panel that fades in and becomes an event that takes over
+   the reel container first. Each machine supplies its own words, font, palette
+   and particle character; CabinetFX does the staging. */
+function bonusIntro(){
+  var spec=S.theme&&S.theme.intro;
+  if(!spec||!window.CabinetFX) return Promise.resolve();
+  var board=$('#cabBoard'); if(!board) return Promise.resolve();
+  return window.CabinetFX.playIntro(board, spec, {
+    turbo:S.turbo, reduced:reduced(),
+    onBeat:function(name, i){
+      if(name==='open')   packCue('ciOpen');
+      if(name==='kicker') packCue('ciKicker');
+      if(name==='slam')   packCue('ciSlam', i||0);
+      if(name==='flare')  packCue('ciFlare');
+    }
+  });
+}
+
+/* The api handed to a themed bonus round. Everything a round needs to draw
+   itself, pay out and make noise, without reaching into engine internals. */
+function bonusApi(){
+  return {
+    bet:S.bet, def:S.def, turbo:S.turbo, meta:S.meta,
+    rng:Math.random, fmt:fmt, esc:esc, wait:wait,
+    overlay:function(title, html){ return overlayShell(title, html); },
+    body:function(){ var o=$('#cabOverlay'); return o?o.querySelector('.bn-body'):null; },
+    q:function(sel){ var o=$('#cabOverlay'); return o?o.querySelector(sel):null; },
+    qa:function(sel){ var o=$('#cabOverlay'); return o?[].slice.call(o.querySelectorAll(sel)):[]; },
+    close:closeOverlay,
+    credit:function(n){ if(!n) return; S.balance+=n; store('balance',S.balance); updateHud(); renderMeta(); },
+    sfx:sfx, win:playWinTier
+  };
+}
+
+/* Last-resort guard. Each round is meant to resolve on its own; this only
+   exists so that a bug in one of them can never leave the cabinet stuck with
+   S.spinning true and the spin button dead. It races, it does not cancel — a
+   round that finishes late still pays out, it just no longer holds the game. */
 function runBonus(kind){
-  if(kind==='freespins') return bonusFreeSpins();
-  if(kind==='wheel')     return bonusWheel();
-  if(kind==='pick')      return bonusPick();
-  return Promise.resolve();
+  return bonusIntro().then(function(){
+    // A machine's own round replaces the house one entirely.
+    var custom=S.theme&&S.theme.bonus&&S.theme.bonus[kind];
+    var round = typeof custom==='function' ? custom(bonusApi())
+              : kind==='freespins' ? bonusFreeSpins()
+              : kind==='wheel'     ? bonusWheel()
+              : kind==='pick'      ? bonusPick()
+              : null;
+    if(!round) return;
+    return Promise.race([round, new Promise(function(r){
+      setTimeout(function(){ r(); }, 120000);
+    })]);
+  });
 }
 
 function bonusFreeSpins(){
@@ -850,6 +976,29 @@ function bonusPick(){
     '<div class="fs-total">TOTAL <span id="pkTotal">0</span></div>');
   var grid=ov.querySelector('#pkGrid');
   return new Promise(function(done){
+    var idle=null, finished=false;
+    /* This round is the only one that waits on a human. Without a fallback a
+       player who walks away — or an overlay that gets torn out from under the
+       chips — leaves the promise unresolved and the cabinet stuck spinning
+       forever. Every pick re-arms an idle timer that picks for them. */
+    function armIdle(){
+      clearTimeout(idle);
+      idle=setTimeout(function(){
+        var left=grid?grid.querySelectorAll('.pk-chip:not(.open)'):[];
+        if(left.length) left[Math.floor(Math.random()*left.length)].click();
+        else finish();                    // chips are gone — pay out and release
+      }, S.turbo?4000:12000);
+    }
+    function finish(){
+      if(finished) return; finished=true;
+      clearTimeout(idle);
+      if(grid) grid.querySelectorAll('.pk-chip').forEach(function(x,j){
+        if(!x.classList.contains('open')){ x.classList.add('open','dim'); x.innerHTML=values[j]+'&times;'; }
+      });
+      S.balance+=total; store('balance',S.balance); updateHud();
+      playWinTier(total>=S.bet*8?'huge':'big');
+      setTimeout(function(){ closeOverlay(); done(); },2200);
+    }
     values.forEach(function(v,i){
       var b=el('button','pk-chip','?');
       b.addEventListener('click',function(){
@@ -860,19 +1009,11 @@ function bonusPick(){
         var pkN=ov.querySelector('#pkN'), pkT=ov.querySelector('#pkTotal');
         if(pkN) pkN.textContent=picksLeft;
         if(pkT) pkT.textContent=fmt(total);
-        if(picksLeft===0){
-          setTimeout(function(){
-            grid.querySelectorAll('.pk-chip').forEach(function(x,j){
-              if(!x.classList.contains('open')){ x.classList.add('open','dim'); x.innerHTML=values[j]+'&times;'; }
-            });
-            S.balance+=total; store('balance',S.balance); updateHud();
-            playWinTier(total>=S.bet*8?'huge':'big');
-            setTimeout(function(){ closeOverlay(); done(); },2200);
-          },500);
-        }
+        if(picksLeft===0) setTimeout(finish,500); else armIdle();
       });
       grid.appendChild(b);
     });
+    armIdle();
   });
 }
 
