@@ -322,15 +322,29 @@ function artOf(id){
 /* One symbol cell. Cells live inside a per-reel strip, never in a flat grid —
    a reel has to be able to scroll, and you cannot scroll a grid cell. */
 function symCell(id, c, r, winCells, locked){
-  var s=S.def._byId[id];
-  var cell=el('div','cab-sym'+(s&&s.role==='wild'?' is-wild':'')+(s&&s.role==='scatter'?' is-scatter':''));
-  var key=c+','+r;
-  if(winCells&&winCells[key]) cell.className+=' is-win';
-  if(locked&&locked[key]) cell.className+=' is-locked';
-  var img=el('img'); img.src=artOf(id); img.alt=s?s.name:id;
-  img.style.width=((s&&s.sizePct||88))+'%';
-  cell.appendChild(img);
-  if(locked&&locked[key]) cell.appendChild(el('span','lock-badge','&#128274;'));
+  return applyCell(el('div'), id, c, r, winCells, locked);
+}
+/* Write a symbol INTO an existing cell. The src is only assigned when it
+   actually differs: re-assigning the same src, or replacing the <img> node
+   outright, makes the browser re-decode and repaint the image — which is what
+   the player sees as every symbol blinking the instant the reels stop. */
+function applyCell(cell, id, c, r, winCells, locked){
+  var s=S.def._byId[id], key=c+','+r;
+  var cls='cab-sym';
+  if(s&&s.role==='wild') cls+=' is-wild';
+  if(s&&s.role==='scatter') cls+=' is-scatter';
+  if(winCells&&winCells[key]) cls+=' is-win';
+  if(locked&&locked[key]) cls+=' is-locked';
+  if(cell.className!==cls) cell.className=cls;
+  var img=cell.firstElementChild;
+  if(!img||img.tagName!=='IMG'){ img=el('img'); cell.insertBefore(img, cell.firstChild); }
+  var src=artOf(id);
+  if(img.getAttribute('src')!==src){ img.setAttribute('src',src); img.alt=s?s.name:id; }
+  var w=((s&&s.sizePct)||88)+'%';
+  if(img.style.width!==w) img.style.width=w;
+  var badge=cell.querySelector('.lock-badge'), wantBadge=!!(locked&&locked[key]);
+  if(wantBadge&&!badge) cell.appendChild(el('span','lock-badge','&#128274;'));
+  else if(!wantBadge&&badge) badge.remove();
   return cell;
 }
 /* Square the cells off the measured column width. The reel needs a real pixel
@@ -343,20 +357,46 @@ function sizeReels(){
 }
 /* `dropIn` plays the machine's anim.land on each cell. Only the cascade refill
    passes it — those cells genuinely appear out of nothing. A reel settling
-   from a spin must NOT, or the symbol animates twice. */
+   from a spin must NOT, or the symbol animates twice.
+
+   This UPDATES the board in place whenever the shape already matches. It used
+   to blow the whole thing away with innerHTML='' and rebuild it, which meant
+   every <img> was a brand new element — a re-decode and a repaint of all of
+   them, ~140ms after the reels had settled. That is the blink. Since the
+   symbols it is asked to draw are usually the ones already on screen, reusing
+   the nodes makes the common case touch nothing at all. */
 function renderGrid(grid, winCells, locked, dropIn){
-  var reels=$('#cabReels'); reels.innerHTML=''; S.reels=[];
-  var land=(S.def.anim&&S.def.anim.land)||'pop';
+  var reels=$('#cabReels'), d=S.def;
+  var land=(d.anim&&d.anim.land)||'pop';
   var animate=dropIn&&land!=='none'&&!reduced();
-  for(var c=0;c<S.def.cols;c++){
-    var reel=el('div','cab-reel'), strip=el('div','cab-strip');
-    for(var r=0;r<S.def.rows;r++){
-      var cell=symCell(grid[c][r], c, r, winCells, locked);
-      if(animate) cell.classList.add('land-'+land);
-      strip.appendChild(cell);
+  var c, r;
+  var reusable = S.reels.length===d.cols && reels.children.length===d.cols &&
+    S.reels.every(function(R){
+      return R.el.parentNode===reels && R.strip.children.length===d.rows;
+    });
+  if(!reusable){
+    reels.innerHTML=''; S.reels=[];
+    for(c=0;c<d.cols;c++){
+      var reel=el('div','cab-reel'), strip=el('div','cab-strip');
+      for(r=0;r<d.rows;r++) strip.appendChild(symCell(grid[c][r], c, r, winCells, locked));
+      reel.appendChild(strip); reels.appendChild(reel);
+      S.reels.push({ c:c, el:reel, strip:strip });
     }
-    reel.appendChild(strip); reels.appendChild(reel);
-    S.reels.push({ c:c, el:reel, strip:strip });
+  }else{
+    for(c=0;c<d.cols;c++){
+      var R=S.reels[c];
+      // leave the reel's own classes alone — settleReel's landed/rflash are
+      // mid-animation here and clear themselves
+      if(R.strip.style.transform) R.strip.style.transform='translate3d(0,0,0)';
+      for(r=0;r<d.rows;r++) applyCell(R.strip.children[r], grid[c][r], c, r, winCells, locked);
+    }
+  }
+  if(animate){
+    var cells=[];
+    for(c=0;c<d.cols;c++) for(r=0;r<d.rows;r++) cells.push(S.reels[c].strip.children[r]);
+    cells.forEach(function(x){ x.classList.remove('land-'+land); });
+    void reels.offsetWidth;                       // one reflow for the whole board
+    cells.forEach(function(x){ x.classList.add('land-'+land); });
   }
   sizeReels();
 }
