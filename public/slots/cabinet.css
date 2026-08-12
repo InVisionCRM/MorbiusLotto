@@ -63,19 +63,14 @@
 .cab-flash.go{ animation:cabFeltFlash .7s ease-out both; }
 @keyframes cabFeltFlash{ 0%{ opacity:0;} 18%{ opacity:1;} 100%{ opacity:0;} }
 .cab-board.shake{ animation:cabShellShake .5s cubic-bezier(.36,.07,.19,.97); }
-/* scatter escalation: after the first scatter slams down the board leans in;
-   after the second it is visibly straining — zoom, continuous judder, hotter
-   blur — until the final slam or the miss lets it settle back. */
-.cab-board.rush1{ animation:cabRush1 .8s ease-in-out infinite; }
-@keyframes cabRush1{ 0%,100%{ transform:scale(1.004);} 50%{ transform:scale(1.012);} }
-.cab-board.rush1 .cab-reel.spinning .cab-strip{ filter:blur(calc(var(--spin-blur,2px) * 1.5)); }
-.cab-board.rush2{ animation:cabRush2 .18s linear infinite; }
-@keyframes cabRush2{
-  0%,100%{ transform:scale(1.025) translate(0,0);}
-  25%{ transform:scale(1.025) translate(-2px,1px);}
-  50%{ transform:scale(1.028) translate(2px,-1px);}
-  75%{ transform:scale(1.025) translate(-1px,-1px);} }
-.cab-board.rush2 .cab-reel.spinning .cab-strip{ filter:blur(calc(var(--spin-blur,2px) * 2.4)); }
+/* the tumble, straight from the builder: winners shatter, fallers land with a
+   squash, and the whole board takes an impact scaled to the cascade chain */
+.cab-sym.shatter{ animation:cabShatter .2s ease-in forwards; pointer-events:none; z-index:2; }
+@keyframes cabShatter{ 0%{ transform:scale(1);} 35%{ transform:scale(1.12);} 100%{ transform:scale(.14) rotate(16deg); opacity:0;} }
+.cab-sym.land-sq{ animation:cabLandSq .2s cubic-bezier(.3,1.1,.5,1); }
+@keyframes cabLandSq{ 0%{ transform:scaleY(var(--sq,.86)) scaleX(calc(1.9 - var(--sq,.86)));} 55%{ transform:scaleY(1.05) scaleX(.97);} 100%{ transform:none;} }
+.cab-reels.cascade-impact{ animation:cabCascImpact .26s ease-out; }
+@keyframes cabCascImpact{ 0%{ transform:translateY(calc(4px * var(--imp,.5)));} 45%{ transform:translateY(calc(-2px * var(--imp,.5)));} 100%{ transform:translateY(0);} }
 @keyframes cabShellShake{
   0%,100%{ transform:translate(0,0);} 15%{ transform:translate(-6px,2px);} 30%{ transform:translate(6px,-2px);}
   45%{ transform:translate(-5px,-2px);} 60%{ transform:translate(5px,2px);}
@@ -505,7 +500,8 @@
   .side-ctl{ justify-content:center; }
 }
 @media (prefers-reduced-motion:reduce){
-  .cab-sym[class*="land-"],.cab-sym.is-win,.cab-reels.impact,.bw-word.huge,
+  .cab-sym[class*="land-"],.cab-sym.is-win,.cab-sym.shatter,.cab-sym.land-sq,
+  .cab-reels.impact,.cab-reels.cascade-impact,.bw-word.huge,
   .cab-reel.landed,.cab-reel.antic::after,.cab-board.shake,.cab-flash.go,
   .btn-auto.on,.btn-auto.on .dot{ animation:none!important; }
   .cab-reel.spinning .cab-strip{ filter:none; }
