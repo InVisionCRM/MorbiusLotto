@@ -1,4 +1,5 @@
 import { Pool, PoolClient } from 'pg';
+import { randomBytes } from 'crypto';
 import { formatEther } from 'viem';
 import type { MoneyDatabasePort } from './money-database.port';
 import { logger } from '../utils/logger';
@@ -223,6 +224,32 @@ export interface BlackjackSpWagerTierRow {
   slug: string | null;
   created_at: Date;
   updated_at: Date;
+}
+
+export interface CommunitySlotMachine {
+  id: string;
+  slug: string;
+  owner_address: string;
+  name: string;
+  machine_def: Record<string, unknown>;
+  def_size_bytes: number;
+  status: 'draft' | 'published' | 'disabled';
+  rtp_pct: number | null;
+  hit_pct: number | null;
+  max_x_win: number | null;
+  sim_spins: number | null;
+  rtp_flagged: boolean;
+  validated_at: Date | null;
+  created_at: Date;
+  updated_at: Date;
+}
+
+export interface SlotMachineRtpResult {
+  rtp: number;
+  hit: number;
+  maxX: number;
+  spins: number;
+  flagged: boolean;
 }
 
 export interface MoneyDatabaseQueries extends MoneyDatabasePort {}
@@ -5236,5 +5263,120 @@ export class DatabaseService implements MoneyDatabaseQueries {
       displayName: r.display_name ?? null,
       avatarConfig: r.avatar_config ?? null,
     }));
+  }
+
+  // ── Community slot machines ──────────────────────────────────────────
+
+  private normalizeSlotMachineRow(row: any): CommunitySlotMachine {
+    return {
+      id: row.id,
+      slug: row.slug,
+      owner_address: row.owner_address,
+      name: row.name,
+      machine_def: row.machine_def,
+      def_size_bytes: row.def_size_bytes,
+      status: row.status,
+      rtp_pct: row.rtp_pct != null ? Number(row.rtp_pct) : null,
+      hit_pct: row.hit_pct != null ? Number(row.hit_pct) : null,
+      max_x_win: row.max_x_win != null ? Number(row.max_x_win) : null,
+      sim_spins: row.sim_spins ?? null,
+      rtp_flagged: !!row.rtp_flagged,
+      validated_at: row.validated_at ?? null,
+      created_at: row.created_at,
+      updated_at: row.updated_at,
+    };
+  }
+
+  async createSlotMachine(
+    ownerAddress: string,
+    name: string,
+    def: Record<string, unknown>,
+    sizeBytes: number,
+    rtp: SlotMachineRtpResult,
+  ): Promise<CommunitySlotMachine> {
+    const normalized = this.normalizeAddress(ownerAddress);
+    // Collisions are astronomically unlikely at this keyspace (9 random bytes,
+    // base64url) but the UNIQUE constraint plus a bounded retry keeps a save
+    // from ever failing outright on the rare clash.
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const slug = randomBytes(9).toString('base64url');
+      try {
+        const result = await this.pool.query(
+          `INSERT INTO community_slot_machines
+             (slug, owner_address, name, machine_def, def_size_bytes,
+              rtp_pct, hit_pct, max_x_win, sim_spins, rtp_flagged, validated_at)
+           VALUES ($1, $2, $3, $4::jsonb, $5, $6, $7, $8, $9, $10, NOW())
+           RETURNING *`,
+          [slug, normalized, name, JSON.stringify(def), sizeBytes,
+            rtp.rtp, rtp.hit, rtp.maxX, rtp.spins, rtp.flagged],
+        );
+        return this.normalizeSlotMachineRow(result.rows[0]);
+      } catch (err: any) {
+        if (err?.code === '23505' && attempt < 4) continue; // unique_violation on slug — retry
+        throw err;
+      }
+    }
+    throw new Error('failed to allocate a unique slug for the machine');
+  }
+
+  async updateSlotMachine(
+    id: string,
+    name: string,
+    def: Record<string, unknown>,
+    sizeBytes: number,
+    rtp: SlotMachineRtpResult,
+  ): Promise<CommunitySlotMachine | null> {
+    // A def change must re-earn publication: any previously published
+    // machine drops back to 'draft' until the owner re-publishes, so an
+    // already-embedded slug can never silently start serving an edited def.
+    const result = await this.pool.query(
+      `UPDATE community_slot_machines
+       SET name = $2, machine_def = $3::jsonb, def_size_bytes = $4,
+           rtp_pct = $5, hit_pct = $6, max_x_win = $7, sim_spins = $8,
+           rtp_flagged = $9, validated_at = NOW(), status = 'draft', updated_at = NOW()
+       WHERE id = $1
+       RETURNING *`,
+      [id, name, JSON.stringify(def), sizeBytes,
+        rtp.rtp, rtp.hit, rtp.maxX, rtp.spins, rtp.flagged],
+    );
+    return result.rows[0] ? this.normalizeSlotMachineRow(result.rows[0]) : null;
+  }
+
+  async publishSlotMachine(id: string): Promise<CommunitySlotMachine | null> {
+    const result = await this.pool.query(
+      `UPDATE community_slot_machines
+       SET status = 'published', updated_at = NOW()
+       WHERE id = $1
+       RETURNING *`,
+      [id],
+    );
+    return result.rows[0] ? this.normalizeSlotMachineRow(result.rows[0]) : null;
+  }
+
+  async disableSlotMachine(id: string): Promise<void> {
+    await this.pool.query(
+      `UPDATE community_slot_machines SET status = 'disabled', updated_at = NOW() WHERE id = $1`,
+      [id],
+    );
+  }
+
+  async getSlotMachineBySlug(slug: string): Promise<CommunitySlotMachine | null> {
+    const result = await this.pool.query(
+      `SELECT * FROM community_slot_machines WHERE slug = $1`,
+      [slug],
+    );
+    return result.rows[0] ? this.normalizeSlotMachineRow(result.rows[0]) : null;
+  }
+
+  async listSlotMachinesByOwner(ownerAddress: string, limit = 60): Promise<CommunitySlotMachine[]> {
+    const normalized = this.normalizeAddress(ownerAddress);
+    const result = await this.pool.query(
+      `SELECT * FROM community_slot_machines
+       WHERE owner_address = $1 AND status != 'disabled'
+       ORDER BY updated_at DESC
+       LIMIT $2`,
+      [normalized, limit],
+    );
+    return result.rows.map((r: any) => this.normalizeSlotMachineRow(r));
   }
 }

@@ -71,6 +71,7 @@ import { VipService } from './services/vip.service';
 import { registerVipRoutes } from './routes/vip.routes';
 import { ReferralService } from './services/referral.service';
 import { registerReferralRoutes } from './routes/referral.routes';
+import { registerSlotMachineRoutes } from './routes/slot-machines.routes';
 import { GameActivityService } from './services/game-activity.service';
 import { registerActivityRoutes } from './routes/activity.routes';
 import { registerAdminOpsRoutes } from './routes/admin-ops.routes';
@@ -193,9 +194,11 @@ const limiter = rateLimit({
 });
 app.use('/api/', limiter);
 
-// Body parsing
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+// Body parsing. 5mb (up from Express's 100kb default) so community slot
+// machine saves — which carry inline base64 symbol art — fit; see
+// routes/slot-machines.routes.ts for the app-level size cap on top of this.
+app.use(express.json({ limit: '5mb' }));
+app.use(express.urlencoded({ extended: true, limit: '5mb' }));
 
 // Cookie parsing for SIWE session lookup. Must come before any handler that reads cookies.
 app.use(cookieParser());
@@ -608,6 +611,7 @@ async function initializeServices() {
     registerHolderRewardsPublicRoutes({ app, holderChipRewardsService });
     registerVipRoutes({ app, vipService, authService });
     registerReferralRoutes({ app, referralService, authService });
+    registerSlotMachineRoutes({ app, dbService, authService });
     registerDropRoutes({ app, weeklyDropService, authService });
     registerActivityRoutes({ app, gameActivityService });
     registerAdminOpsRoutes({ app, dbService, authService, referralService });

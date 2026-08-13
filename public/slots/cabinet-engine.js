@@ -200,6 +200,17 @@ function boot(cfg){
   // bonus round, button shape — comes from here. Absent theme = house default.
   S.theme=(window.CabinetThemes&&window.CabinetThemes[cfg.theme||cfg.key])||null;
   S.host=document.querySelector(cfg.host);
+  // accent/accent2/ink/panel were previously only read by two minor FX call
+  // sites and never actually themed the board — a page with no bespoke
+  // <style> block (e.g. a generic embed) got no colour from cfg at all.
+  // Setting them as custom properties here lets them cascade to everything
+  // buildUI() appends below, on top of cabinet.css's generic defaults.
+  if(S.host){
+    if(cfg.accent)  S.host.style.setProperty('--acc',  cfg.accent);
+    if(cfg.accent2) S.host.style.setProperty('--acc2', cfg.accent2);
+    if(cfg.ink)     S.host.style.setProperty('--ink',   cfg.ink);
+    if(cfg.panel)   S.host.style.setProperty('--panel', cfg.panel);
+  }
   M=window.CabinetMath;
   if(!M){ S.host.innerHTML='<div class="cab-err">cabinet-math.js failed to load</div>'; return; }
   fetch(cfg.defUrl).then(function(r){ return r.json(); }).then(function(def){
