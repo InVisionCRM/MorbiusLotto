@@ -32,7 +32,7 @@ function escapeHtmlAttr(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
-export async function GET(_req: NextRequest, { params }: { params: Promise<{ slug: string }> }) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
   if (!SLUG_RE.test(slug)) {
     return new NextResponse('Not found', { status: 404 });
@@ -42,6 +42,11 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ slu
   if (!apiBase) {
     return new NextResponse('Embed is not configured (missing API URL).', { status: 503 });
   }
+
+  // ?play=server switches the cabinet to server-authoritative play: the
+  // backend rolls every spin against the caller's session (SIWE cookie
+  // required). Default stays the client-side play-money demo.
+  const serverPlay = req.nextUrl.searchParams.get('play') === 'server';
 
   const defUrl = `${apiBase}/api/slot-machines/${encodeURIComponent(slug)}/def`;
   const html = `<!doctype html>
@@ -65,7 +70,8 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ slu
 CabinetEngine.boot({
   host: '#gameHost',
   defUrl: '${escapeHtmlAttr(defUrl)}',
-  key: '${escapeHtmlAttr(slug)}'
+  key: '${escapeHtmlAttr(slug)}'${serverPlay ? `,
+  serverPlay: { apiBase: '${escapeHtmlAttr(apiBase)}', slug: '${escapeHtmlAttr(slug)}' }` : ''}
 });
 </script>
 </body>

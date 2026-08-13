@@ -33,7 +33,10 @@ var S = {                     // engine state
   def:null, strips:null, key:'slot', bet:100, balance:10000,
   spinning:false, featureState:{}, meta:null, muted:false,
   turbo:false, auto:false, autoTimer:null, tickIv:null, anticIv:null,
-  cfg:null, seedN:0, host:null, reels:[], lastRes:null, theme:null
+  cfg:null, seedN:0, host:null, reels:[], lastRes:null, theme:null,
+  // Server play (cfg.serverPlay): the backend rolls every spin and owns the
+  // balance; this engine becomes the renderer. null = classic local demo.
+  remote:null, pendingBonus:null, remoteSettleBalance:null
 };
 
 /* ── tiny DOM helpers ───────────────────────────────────────────────────── */
@@ -42,7 +45,12 @@ function $(sel){ return S.host.querySelector(sel); }
 function fmt(n){ return Math.round(n).toLocaleString('en-US'); }
 function esc(s){ return String(s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
 function wait(ms){ return new Promise(function(r){ setTimeout(r, ms); }); }
-function store(k,v){ try{ localStorage.setItem('cab.'+S.key+'.'+k, JSON.stringify(v)); }catch(e){} }
+function store(k,v){
+  // Server play owns balance and meta — never let them shadow into the demo's
+  // localStorage slots (a demo session would resume with server numbers).
+  if(S.remote&&(k==='balance'||k==='meta')) return;
+  try{ localStorage.setItem('cab.'+S.key+'.'+k, JSON.stringify(v)); }catch(e){}
+}
 function load(k,d){ try{ var v=localStorage.getItem('cab.'+S.key+'.'+k); return v==null?d:JSON.parse(v); }catch(e){ return d; } }
 
 /* ── audio ──────────────────────────────────────────────────────────────
@@ -221,6 +229,28 @@ function boot(cfg){
     S.muted=load('muted',false);
     S.turbo=load('turbo',false);
     S.meta=load('meta', initMeta());
+    // Server play: the backend rolls spins and owns the balance. Bootstrap the
+    // session (SIWE cookie must already be present) before building the UI so
+    // the HUD never flashes demo numbers.
+    // apiBase may legitimately be '' (same-origin API), so test presence, not truthiness.
+    if(cfg.serverPlay&&cfg.serverPlay.slug&&cfg.serverPlay.apiBase!=null){
+      return remoteFetch('/api/slot-machines/'+encodeURIComponent(cfg.serverPlay.slug)+'/session')
+        .then(function(sess){
+          S.remote={ apiBase:cfg.serverPlay.apiBase, slug:cfg.serverPlay.slug,
+                     minBet:sess.minBet, steps:sess.betSteps, winCapX:sess.winCapX };
+          S.balance=sess.balance;
+          // Snap the remembered bet onto this machine's real ladder.
+          if(S.remote.steps.indexOf(S.bet)<0) S.bet=S.remote.steps[2]||S.remote.minBet;
+          buildUI(); renderGrid(blankGrid()); updateHud();
+          setFoot('server play &middot; provably fair &middot; sign-out safe: your credits live on the server');
+        })
+        .catch(function(e){
+          var msg=/401|auth|session/i.test(String(e&&e.message||e))
+            ? 'Sign in with your wallet on the main site first, then reload this page.'
+            : 'Could not start a server-play session — '+esc(String(e&&e.message||e));
+          S.host.innerHTML='<div class="cab-err">'+msg+'</div>';
+        });
+    }
     buildUI();
     renderGrid(blankGrid());
     updateHud();
@@ -228,8 +258,21 @@ function boot(cfg){
     S.host.innerHTML='<div class="cab-err">Could not load machine definition — '+esc(e)+'</div>';
   });
 }
-function defaultBet(){ return 140; }
-function betSteps(){ return [20,60,140,300,700,1500]; }
+/* fetch against the server-play API: cookie-authenticated, JSON both ways. */
+function remoteFetch(path,opts){
+  var base=(S.remote&&S.remote.apiBase)||(S.cfg.serverPlay&&S.cfg.serverPlay.apiBase)||'';
+  opts=opts||{}; opts.credentials='include';
+  if(opts.body){ opts.headers=opts.headers||{}; opts.headers['Content-Type']='application/json'; }
+  return fetch(base+path,opts).then(function(r){
+    return r.json().catch(function(){ return {}; }).then(function(body){
+      if(!r.ok||body.ok===false) throw new Error((body&&body.error)||('request failed ('+r.status+')'));
+      return body;
+    });
+  });
+}
+function setFoot(html){ var f=$('#cabFoot'); if(f) f.innerHTML=html; }
+function defaultBet(){ return S.remote?(S.remote.steps[2]||S.remote.minBet):140; }
+function betSteps(){ return S.remote?S.remote.steps:[20,60,140,300,700,1500]; }
 
 function blankGrid(){
   var g=[], ids=S.def.symbols.filter(function(s){return s.role==='normal';}).map(function(s){return s.id;});
@@ -584,6 +627,7 @@ function cellAt(c,r){ var R=S.reels[c]; return R?R.strip.children[r]:null; }
 /* ── the spin ───────────────────────────────────────────────────────────── */
 function spin(){
   if(S.spinning) return;
+  if(S.remote) return spinRemote();
   if(S.balance<S.bet){ setAuto(false); floatText('NOT ENOUGH MORBIUS','bad'); return; }
   if(S.autoTimer){ clearTimeout(S.autoTimer); S.autoTimer=null; }
   S.spinning=true;
@@ -604,6 +648,56 @@ function spin(){
   // The cyclic strip carries its own symbols, so a spin no longer needs the
   // previous window handed to it — it scrolls out of whatever the pool holds.
   presentSpin(res,payout).then(function(){ settle(res,payout); });
+}
+
+/* Server play: the backend debits, rolls the whole round (bonus included)
+   from the wallet's pre-committed seed, and returns the exact result shape
+   the presentation layer already consumes. This function only renders. */
+function spinRemote(){
+  if(S.balance<S.bet){
+    // Play credits: refill automatically instead of dead-ending the player.
+    setAuto(false);
+    remoteFetch('/api/slot-machines/'+encodeURIComponent(S.remote.slug)+'/session/reset',{method:'POST'})
+      .then(function(r){
+        if(r.balance>=S.bet){ S.balance=r.balance; updateHud(); floatText('CREDITS REFILLED','info'); }
+        else floatText('NOT ENOUGH CREDITS','bad');
+      })
+      .catch(function(){ floatText('NOT ENOUGH CREDITS','bad'); });
+    return;
+  }
+  if(S.autoTimer){ clearTimeout(S.autoTimer); S.autoTimer=null; }
+  S.spinning=true;
+  $('#cabSpin').classList.add('busy');
+  S.balance-=S.bet; updateHud(); setWin(null);
+  sfx('spin');
+
+  remoteFetch('/api/slot-machines/'+encodeURIComponent(S.remote.slug)+'/spin',
+    {method:'POST', body:JSON.stringify({bet:S.bet})})
+  .then(function(resp){
+    S.lastRes=resp.res;
+    // Post-debit, pre-credit view: the presentation re-adds the base payout
+    // (settle) and the bonus award (scripted round), landing exactly on the
+    // server's final number — which settle() then snaps to, killing any drift.
+    S.balance=resp.balance-resp.payout; updateHud();
+    S.remoteSettleBalance=resp.balance;
+    S.pendingBonus=resp.bonus
+      ? Object.assign({}, resp.bonus, {displayAward:resp.payout-resp.basePayout})
+      : null;
+    setFoot('server play &middot; PF hash <span class="mono">'+esc(String(resp.seed.serverSeedHash).slice(0,16))+'…</span>'+
+      ' &middot; nonce '+resp.seed.nonce+
+      ' &middot; <a href="'+S.remote.apiBase+'/api/slot-machines/spins/'+resp.spinId+'/verify" target="_blank" rel="noopener">verify</a>');
+    return presentSpin(resp.res,resp.basePayout).then(function(){ settle(resp.res,resp.basePayout); });
+  })
+  .catch(function(e){
+    // The bet may or may not have landed server-side; the session is the
+    // truth — re-sync instead of guessing.
+    setAuto(false);
+    floatText('SPIN FAILED','bad');
+    remoteFetch('/api/slot-machines/'+encodeURIComponent(S.remote.slug)+'/session')
+      .then(function(sess){ S.balance=sess.balance; updateHud(); })
+      .catch(function(){});
+    S.spinning=false; $('#cabSpin').classList.remove('busy');
+  });
 }
 
 function presentSpin(res,payout){
@@ -1109,6 +1203,12 @@ function settle(res,payout){
     return wait(PACE.toBonus).then(function(){ sfx('scatter'); return runBonus(S.def.bonus.round); });
   });
   after.then(function(){
+    // Server play: the response's final balance is the truth — snap to it so
+    // presentation rounding can never drift the HUD from the server.
+    if(S.remote&&S.remoteSettleBalance!=null){
+      S.balance=S.remoteSettleBalance; S.remoteSettleBalance=null;
+      S.pendingBonus=null; updateHud();
+    }
     S.spinning=false; $('#cabSpin').classList.remove('busy');
     if(!S.auto) return;
     // The bonus round is part of `after`, so auto has already waited it out.
@@ -1136,7 +1236,7 @@ function bigWinOverlay(tier,payout){
   function tick(t){
     var k=Math.min(1,(t-t0)/dur);
     var eased=1-Math.pow(1-k,3);
-    var n=ov.querySelector('#bwAmt'); if(n) n.textContent='+'+fmt(payout*eased)+' MORBIUS';
+    var n=ov.querySelector('#bwAmt'); if(n) n.textContent='+'+fmt(payout*eased)+' '+(S.remote?'CREDITS':'MORBIUS');
     if(k<1&&!ov.hidden) requestAnimationFrame(tick);
   }
   requestAnimationFrame(tick);
@@ -1162,6 +1262,10 @@ function renderMeta(){
   }else host.innerHTML='';
 }
 function metaTick(res,payout){
+  // Server play: meta strips are decorative for now. Their awards mint
+  // credits client-side, which a server-owned balance cannot honor — the
+  // server-side meta layer is a Phase 2/3 job.
+  if(S.remote){ renderMeta(); return; }
   var m=S.meta;
   if(m.kind==='collection'){
     if(res.scatter>0){ m.count+=res.scatter; floatText('+'+res.scatter+' MARKER'+(res.scatter>1?'S':''),'info'); }
@@ -1256,7 +1360,10 @@ function runBonus(kind){
 }
 
 function bonusFreeSpins(){
-  var N=S.def.bonus.freeSpins||10, total=0, i=0;
+  // Server play hands the round in pre-rolled: same mini-board playback, but
+  // every sub-spin (and the total) was decided by the committed seed stream.
+  var script=(S.remote&&S.pendingBonus&&S.pendingBonus.kind==='freespins')?S.pendingBonus:null;
+  var N=script?script.spins.length:(S.def.bonus.freeSpins||10), total=0, i=0;
   var ov=overlayShell(bonusName('freespins'),
     '<div class="fs-read"><span id="fsN">0</span> / '+N+'</div><div class="fs-grid" id="fsGrid"></div>'+
     '<div class="fs-total">TOTAL <span id="fsTotal">0</span></div>');
@@ -1273,20 +1380,26 @@ function bonusFreeSpins(){
   return new Promise(function(done){
     function one(){
       if(i>=N){
-        S.balance+=total; store('balance',S.balance); updateHud();
+        var credit=script?script.displayAward:total;
+        S.balance+=credit; store('balance',S.balance); updateHud();
         var body=ov.querySelector('.bn-body');
         if(!body) return done();
-        body.innerHTML='<div class="fs-done">'+bonusName('freespins')+' PAID<br/><b>+'+fmt(total)+' MORBIUS</b></div>';
-        playWinTier(total>S.bet*4?'huge':total>0?'big':'small');
+        body.innerHTML='<div class="fs-done">'+bonusName('freespins')+' PAID<br/><b>+'+fmt(credit)+' '+(S.remote?'CREDITS':'MORBIUS')+'</b></div>';
+        playWinTier(credit>S.bet*4?'huge':credit>0?'big':'small');
         setTimeout(function(){ closeOverlay(); done(); }, 2000);
         return;
       }
       i++;
-      var rng=M.makeRng(S.key+'-fs-'+Date.now()+'-'+i);
-      var stops=M.drawStops(rng,S.strips);
-      var g=M.windowAt(stops,S.strips,S.def.rows);
-      var res=M.resolveSpin(S.def,S.strips,g,rng,{});
-      var pay=M.payoutOf(S.def,S.bet,res);
+      var res,pay;
+      if(script){
+        res=script.spins[i-1].res; pay=script.spins[i-1].pay;
+      }else{
+        var rng=M.makeRng(S.key+'-fs-'+Date.now()+'-'+i);
+        var stops=M.drawStops(rng,S.strips);
+        var g=M.windowAt(stops,S.strips,S.def.rows);
+        res=M.resolveSpin(S.def,S.strips,g,rng,{});
+        pay=M.payoutOf(S.def,S.bet,res);
+      }
       total+=pay;
       var lastWin=null;
       for(var k=res.steps.length-1;k>=0;k--){ if(Object.keys(res.steps[k].winCells||{}).length){ lastWin=res.steps[k]; break; } }
@@ -1303,13 +1416,20 @@ function bonusFreeSpins(){
 }
 
 function bonusWheel(){
-  var mults=[2,3,4,5,8,10,15,25];
-  // weighted pick, small odds on the big wedges
-  var weights=[22,20,16,14,10,9,6,3];
-  var totalW=weights.reduce(function(a,b){return a+b;},0);
-  var roll=Math.random()*totalW, idx=0;
-  for(var i=0;i<weights.length;i++){ roll-=weights[i]; if(roll<=0){ idx=i; break; } }
-  var award=mults[idx]*S.bet;
+  // Server play predetermines the wedge; the wheel animation lands on it.
+  var script=(S.remote&&S.pendingBonus&&S.pendingBonus.kind==='wheel')?S.pendingBonus:null;
+  var mults=(script&&script.mults)||[2,3,4,5,8,10,15,25];
+  var idx, award;
+  if(script){
+    idx=script.idx; award=script.displayAward;
+  }else{
+    // weighted pick, small odds on the big wedges
+    var weights=[22,20,16,14,10,9,6,3];
+    var totalW=weights.reduce(function(a,b){return a+b;},0);
+    var roll=Math.random()*totalW; idx=0;
+    for(var i=0;i<weights.length;i++){ roll-=weights[i]; if(roll<=0){ idx=i; break; } }
+    award=mults[idx]*S.bet;
+  }
 
   var ov=overlayShell(bonusName('wheel'),
     '<canvas id="whC" width="340" height="340"></canvas><div class="wh-read" id="whRead">&nbsp;</div>');
@@ -1339,7 +1459,7 @@ function bonusWheel(){
       if(k<1){ if(Math.floor(k*24)!==Math.floor((k-0.01)*24)) sfx('tick'); requestAnimationFrame(anim); }
       else{
         var whR=ov.querySelector('#whRead');
-        if(whR) whR.innerHTML='<b>'+mults[idx]+'&times;</b> BET &middot; +'+fmt(award)+' MORBIUS';
+        if(whR) whR.innerHTML='<b>'+mults[idx]+'&times;</b> BET &middot; +'+fmt(award)+' '+(S.remote?'CREDITS':'MORBIUS');
         S.balance+=award; store('balance',S.balance); updateHud();
         playWinTier(mults[idx]>=10?'huge':'big');
         setTimeout(function(){ closeOverlay(); done(); },2200);
@@ -1350,10 +1470,16 @@ function bonusWheel(){
 }
 
 function bonusPick(){
-  var values=[1,1,2,2,3,3,4,5,6,8,10,15].sort(function(){return Math.random()-0.5;});
-  var picksLeft=3, total=0;
+  /* Server play predetermines the outcome: the k-th chip a player opens
+     reveals picks[k] no matter which chip it is, and the leftover chips show
+     `rest` at the end — the picking is presentation, the award was decided by
+     the committed seed (standard for real-money pick bonuses). */
+  var script=(S.remote&&S.pendingBonus&&S.pendingBonus.kind==='pick')?S.pendingBonus:null;
+  var values=script?null:[1,1,2,2,3,3,4,5,6,8,10,15].sort(function(){return Math.random()-0.5;});
+  var picksTotal=script?script.picks.length:3;
+  var picksLeft=picksTotal, total=0;
   var ov=overlayShell(bonusName('pick'),
-    '<div class="pk-read">PICK <b id="pkN">3</b></div><div class="pk-grid" id="pkGrid"></div>'+
+    '<div class="pk-read">PICK <b id="pkN">'+picksTotal+'</b></div><div class="pk-grid" id="pkGrid"></div>'+
     '<div class="fs-total">TOTAL <span id="pkTotal">0</span></div>');
   var grid=ov.querySelector('#pkGrid');
   return new Promise(function(done){
@@ -1373,27 +1499,37 @@ function bonusPick(){
     function finish(){
       if(finished) return; finished=true;
       clearTimeout(idle);
-      if(grid) grid.querySelectorAll('.pk-chip').forEach(function(x,j){
-        if(!x.classList.contains('open')){ x.classList.add('open','dim'); x.innerHTML=values[j]+'&times;'; }
-      });
-      S.balance+=total; store('balance',S.balance); updateHud();
-      playWinTier(total>=S.bet*8?'huge':'big');
+      if(grid){
+        var restLeft=script?script.rest.slice():null;
+        grid.querySelectorAll('.pk-chip').forEach(function(x,j){
+          if(!x.classList.contains('open')){
+            x.classList.add('open','dim');
+            x.innerHTML=(script?(restLeft.shift()||1):values[j])+'&times;';
+          }
+        });
+      }
+      var credit=script?script.displayAward:total;
+      S.balance+=credit; store('balance',S.balance); updateHud();
+      playWinTier(credit>=S.bet*8?'huge':'big');
       setTimeout(function(){ closeOverlay(); done(); },2200);
     }
-    values.forEach(function(v,i){
-      var b=el('button','pk-chip','?');
-      b.addEventListener('click',function(){
-        if(picksLeft<=0||b.classList.contains('open')) return;
-        picksLeft--; b.classList.add('open');
-        b.innerHTML=v+'&times;';
-        total+=v*S.bet; sfx('award');
-        var pkN=ov.querySelector('#pkN'), pkT=ov.querySelector('#pkTotal');
-        if(pkN) pkN.textContent=picksLeft;
-        if(pkT) pkT.textContent=fmt(total);
-        if(picksLeft===0) setTimeout(finish,500); else armIdle();
-      });
-      grid.appendChild(b);
-    });
+    for(var chipI=0;chipI<12;chipI++){
+      (function(localV){
+        var b=el('button','pk-chip','?');
+        b.addEventListener('click',function(){
+          if(picksLeft<=0||b.classList.contains('open')) return;
+          var v=script?script.picks[picksTotal-picksLeft]:localV;
+          picksLeft--; b.classList.add('open');
+          b.innerHTML=v+'&times;';
+          total+=v*S.bet; sfx('award');
+          var pkN=ov.querySelector('#pkN'), pkT=ov.querySelector('#pkTotal');
+          if(pkN) pkN.textContent=picksLeft;
+          if(pkT) pkT.textContent=fmt(total);
+          if(picksLeft===0) setTimeout(finish,500); else armIdle();
+        });
+        grid.appendChild(b);
+      })(values?values[chipI]:0);
+    }
     armIdle();
   });
 }

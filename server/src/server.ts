@@ -72,6 +72,7 @@ import { registerVipRoutes } from './routes/vip.routes';
 import { ReferralService } from './services/referral.service';
 import { registerReferralRoutes } from './routes/referral.routes';
 import { registerSlotMachineRoutes } from './routes/slot-machines.routes';
+import { registerSlotMachinePlayRoutes } from './routes/slot-machines-play.routes';
 import { GameActivityService } from './services/game-activity.service';
 import { registerActivityRoutes } from './routes/activity.routes';
 import { registerAdminOpsRoutes } from './routes/admin-ops.routes';
@@ -612,6 +613,7 @@ async function initializeServices() {
     registerVipRoutes({ app, vipService, authService });
     registerReferralRoutes({ app, referralService, authService });
     registerSlotMachineRoutes({ app, dbService, authService });
+    registerSlotMachinePlayRoutes({ app, dbService, authService });
     registerDropRoutes({ app, weeklyDropService, authService });
     registerActivityRoutes({ app, gameActivityService });
     registerAdminOpsRoutes({ app, dbService, authService, referralService });

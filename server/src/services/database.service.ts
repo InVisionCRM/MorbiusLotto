@@ -240,6 +240,8 @@ export interface CommunitySlotMachine {
   sim_spins: number | null;
   rtp_flagged: boolean;
   validated_at: Date | null;
+  def_version: number;
+  win_cap_x: number;
   created_at: Date;
   updated_at: Date;
 }
@@ -5282,6 +5284,8 @@ export class DatabaseService implements MoneyDatabaseQueries {
       sim_spins: row.sim_spins ?? null,
       rtp_flagged: !!row.rtp_flagged,
       validated_at: row.validated_at ?? null,
+      def_version: Number(row.def_version ?? 1),
+      win_cap_x: Number(row.win_cap_x ?? 5000),
       created_at: row.created_at,
       updated_at: row.updated_at,
     };
@@ -5301,16 +5305,25 @@ export class DatabaseService implements MoneyDatabaseQueries {
     for (let attempt = 0; attempt < 5; attempt++) {
       const slug = randomBytes(9).toString('base64url');
       try {
-        const result = await this.pool.query(
-          `INSERT INTO community_slot_machines
-             (slug, owner_address, name, machine_def, def_size_bytes,
-              rtp_pct, hit_pct, max_x_win, sim_spins, rtp_flagged, validated_at)
-           VALUES ($1, $2, $3, $4::jsonb, $5, $6, $7, $8, $9, $10, NOW())
-           RETURNING *`,
-          [slug, normalized, name, JSON.stringify(def), sizeBytes,
-            rtp.rtp, rtp.hit, rtp.maxX, rtp.spins, rtp.flagged],
-        );
-        return this.normalizeSlotMachineRow(result.rows[0]);
+        return await this.withTransaction(async (client) => {
+          const result = await client.query(
+            `INSERT INTO community_slot_machines
+               (slug, owner_address, name, machine_def, def_size_bytes,
+                rtp_pct, hit_pct, max_x_win, sim_spins, rtp_flagged, validated_at, def_version)
+             VALUES ($1, $2, $3, $4::jsonb, $5, $6, $7, $8, $9, $10, NOW(), 1)
+             RETURNING *`,
+            [slug, normalized, name, JSON.stringify(def), sizeBytes,
+              rtp.rtp, rtp.hit, rtp.maxX, rtp.spins, rtp.flagged],
+          );
+          const row = result.rows[0];
+          // Def history row 1 — spins verify against the revision that rolled them.
+          await client.query(
+            `INSERT INTO community_slot_machine_defs (machine_id, version, machine_def)
+             VALUES ($1, 1, $2::jsonb)`,
+            [row.id, JSON.stringify(def)],
+          );
+          return this.normalizeSlotMachineRow(row);
+        });
       } catch (err: any) {
         if (err?.code === '23505' && attempt < 4) continue; // unique_violation on slug — retry
         throw err;
@@ -5329,17 +5342,28 @@ export class DatabaseService implements MoneyDatabaseQueries {
     // A def change must re-earn publication: any previously published
     // machine drops back to 'draft' until the owner re-publishes, so an
     // already-embedded slug can never silently start serving an edited def.
-    const result = await this.pool.query(
-      `UPDATE community_slot_machines
-       SET name = $2, machine_def = $3::jsonb, def_size_bytes = $4,
-           rtp_pct = $5, hit_pct = $6, max_x_win = $7, sim_spins = $8,
-           rtp_flagged = $9, validated_at = NOW(), status = 'draft', updated_at = NOW()
-       WHERE id = $1
-       RETURNING *`,
-      [id, name, JSON.stringify(def), sizeBytes,
-        rtp.rtp, rtp.hit, rtp.maxX, rtp.spins, rtp.flagged],
-    );
-    return result.rows[0] ? this.normalizeSlotMachineRow(result.rows[0]) : null;
+    return this.withTransaction(async (client) => {
+      const result = await client.query(
+        `UPDATE community_slot_machines
+         SET name = $2, machine_def = $3::jsonb, def_size_bytes = $4,
+             rtp_pct = $5, hit_pct = $6, max_x_win = $7, sim_spins = $8,
+             rtp_flagged = $9, validated_at = NOW(), status = 'draft', updated_at = NOW(),
+             def_version = def_version + 1
+         WHERE id = $1
+         RETURNING *`,
+        [id, name, JSON.stringify(def), sizeBytes,
+          rtp.rtp, rtp.hit, rtp.maxX, rtp.spins, rtp.flagged],
+      );
+      if (!result.rows[0]) return null;
+      const row = result.rows[0];
+      await client.query(
+        `INSERT INTO community_slot_machine_defs (machine_id, version, machine_def)
+         VALUES ($1, $2, $3::jsonb)
+         ON CONFLICT (machine_id, version) DO NOTHING`,
+        [row.id, Number(row.def_version), JSON.stringify(def)],
+      );
+      return this.normalizeSlotMachineRow(row);
+    });
   }
 
   async publishSlotMachine(id: string): Promise<CommunitySlotMachine | null> {

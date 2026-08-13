@@ -34,18 +34,42 @@ export interface SlotMachineRtpResult {
   flagged: boolean;
 }
 
-function runInSandbox(def: unknown, spins: number, seedBase: string): { rtp: number; hit: number; maxX: number; spins: number } {
+/** The full CabinetMath surface the vendored file exposes. */
+export interface CabinetMathApi {
+  makeRng: (seed: string) => () => number;
+  buildStrips: (def: any) => string[][];
+  drawStops: (rng: () => number, strips: string[][]) => number[];
+  windowAt: (stops: number[], strips: string[][], rows: number) => string[][];
+  evalSpin: (def: any, grid: string[][]) => any;
+  spinPayout: (def: any, bet: number, ev: any) => number;
+  resolveSpin: (def: any, strips: string[][], grid: string[][], rng: () => number, state: any) => any;
+  payoutOf: (def: any, bet: number, res: any) => number;
+  indexSyms: (def: any) => Record<string, any>;
+  cloneGrid: (g: string[][]) => string[][];
+  simulate: (def: any, spins: number, seedBase: string) => { rtp: number; hit: number; maxX: number; spins: number };
+}
+
+let cachedMath: CabinetMathApi | null = null;
+
+/** The vendored math core, evaluated once in a sandboxed vm and cached. */
+export function getCabinetMath(): CabinetMathApi {
+  if (cachedMath) return cachedMath;
   const sandboxWindow: Record<string, any> = {};
   const context = vm.createContext({ window: sandboxWindow });
   vm.runInContext(VENDOR_SRC, context, { timeout: 10000 });
-  const CabinetMath = sandboxWindow.CabinetMath;
+  const CabinetMath = sandboxWindow.CabinetMath as CabinetMathApi | undefined;
   if (!CabinetMath || typeof CabinetMath.simulate !== 'function') {
     throw new Error('vendored cabinet-math.js failed to expose CabinetMath.simulate');
   }
+  cachedMath = CabinetMath;
+  return CabinetMath;
+}
+
+function runInSandbox(def: unknown, spins: number, seedBase: string): { rtp: number; hit: number; maxX: number; spins: number } {
   // simulate() mutates the def it's given (indexSyms stamps def._byId) —
   // pass a structural clone so the caller's object is never touched.
   const clonedDef = JSON.parse(JSON.stringify(def));
-  return CabinetMath.simulate(clonedDef, spins, seedBase);
+  return getCabinetMath().simulate(clonedDef, spins, seedBase);
 }
 
 /** Simulates a machine definition and flags it if the result looks broken. Throws if `def` isn't shaped like a machine (missing symbols/cols/rows). */
