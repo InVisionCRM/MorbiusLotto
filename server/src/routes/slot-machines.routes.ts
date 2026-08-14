@@ -27,6 +27,7 @@ import type { DatabaseService } from '../services/database.service';
 import type { AuthService } from '../services/auth.service';
 import { attachUser, requireAuth } from '../middleware/require-auth';
 import { simulateDef } from '../lib/cabinet-math-runner';
+import { RTP_GATE_MIN_PCT, RTP_GATE_MAX_PCT } from '../lib/community-slot-real';
 import { sendJson } from '../http/json';
 import { logger } from '../utils/logger';
 
@@ -136,6 +137,11 @@ export function registerSlotMachineRoutes({ app, dbService, authService }: Regis
   );
 
   // POST /api/slot-machines/:slug/publish — make it publicly embeddable.
+  // Free-play machines publish with the RTP figure as an informational
+  // warning; a machine with a betting token is REAL MONEY, so its simulated
+  // RTP must sit inside the hard gate band — below 100% or the creator's
+  // bankroll drains by design, above the floor or the machine is a scam
+  // against players.
   app.post(
     '/api/slot-machines/:slug/publish',
     writeLimiter,
@@ -146,6 +152,21 @@ export function registerSlotMachineRoutes({ app, dbService, authService }: Regis
         if (!existing) return res.status(404).json({ error: 'not found' });
         if (existing.owner_address.toLowerCase() !== req.user!.address.toLowerCase()) {
           return res.status(403).json({ error: 'not your machine', code: 'WRONG_WALLET' });
+        }
+        const tok = await dbService.getPool().query(
+          `SELECT token_address FROM community_slot_machines WHERE id = $1`,
+          [existing.id],
+        );
+        if (tok.rows[0]?.token_address) {
+          const rtp = existing.rtp_pct;
+          if (rtp == null || rtp < RTP_GATE_MIN_PCT || rtp > RTP_GATE_MAX_PCT) {
+            return res.status(422).json({
+              error: `This machine has a betting token, so its simulated RTP must be between ${RTP_GATE_MIN_PCT}% and ${RTP_GATE_MAX_PCT}% to publish (currently ${rtp == null ? 'unvalidated' : rtp.toFixed(1) + '%'}). Tune the paytable/weights in the builder and re-save.`,
+              code: 'RTP_GATE',
+              rtpPct: rtp,
+              gate: { min: RTP_GATE_MIN_PCT, max: RTP_GATE_MAX_PCT },
+            });
+          }
         }
         const row = await dbService.publishSlotMachine(existing.id);
         return sendJson(res, row);

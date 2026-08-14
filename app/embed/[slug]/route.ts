@@ -43,10 +43,12 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ slug
     return new NextResponse('Embed is not configured (missing API URL).', { status: 503 });
   }
 
-  // ?play=server switches the cabinet to server-authoritative play: the
-  // backend rolls every spin against the caller's session (SIWE cookie
-  // required). Default stays the client-side play-money demo.
-  const serverPlay = req.nextUrl.searchParams.get('play') === 'server';
+  // ?play=server — server-authoritative play credits (SIWE cookie required).
+  // ?play=real   — real-money session in the machine's PRC-20 (deposits/cashouts).
+  // Default stays the client-side play-money demo.
+  const playParam = req.nextUrl.searchParams.get('play');
+  const serverPlay = playParam === 'server' || playParam === 'real';
+  const realPlay = playParam === 'real';
 
   const defUrl = `${apiBase}/api/slot-machines/${encodeURIComponent(slug)}/def`;
   const html = `<!doctype html>
@@ -71,7 +73,7 @@ CabinetEngine.boot({
   host: '#gameHost',
   defUrl: '${escapeHtmlAttr(defUrl)}',
   key: '${escapeHtmlAttr(slug)}'${serverPlay ? `,
-  serverPlay: { apiBase: '${escapeHtmlAttr(apiBase)}', slug: '${escapeHtmlAttr(slug)}' }` : ''}
+  serverPlay: { apiBase: '${escapeHtmlAttr(apiBase)}', slug: '${escapeHtmlAttr(slug)}'${realPlay ? ', real: true' : ''} }` : ''}
 });
 </script>
 </body>

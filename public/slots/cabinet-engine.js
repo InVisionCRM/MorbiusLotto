@@ -234,15 +234,27 @@ function boot(cfg){
     // the HUD never flashes demo numbers.
     // apiBase may legitimately be '' (same-origin API), so test presence, not truthiness.
     if(cfg.serverPlay&&cfg.serverPlay.slug&&cfg.serverPlay.apiBase!=null){
-      return remoteFetch('/api/slot-machines/'+encodeURIComponent(cfg.serverPlay.slug)+'/session')
+      var wantReal=cfg.serverPlay.real===true;
+      return remoteFetch('/api/slot-machines/'+encodeURIComponent(cfg.serverPlay.slug)+'/session'+(wantReal?'?mode=real':''))
         .then(function(sess){
           S.remote={ apiBase:cfg.serverPlay.apiBase, slug:cfg.serverPlay.slug,
-                     minBet:sess.minBet, steps:sess.betSteps, winCapX:sess.winCapX };
+                     minBet:sess.minBet, steps:sess.betSteps, winCapX:sess.winCapX,
+                     real:wantReal, currency:sess.currency||'CREDITS',
+                     effMax:(sess.effectiveMaxBet!=null?sess.effectiveMaxBet:null),
+                     paused:!!sess.paused };
           S.balance=sess.balance;
-          // Snap the remembered bet onto this machine's real ladder.
-          if(S.remote.steps.indexOf(S.bet)<0) S.bet=S.remote.steps[2]||S.remote.minBet;
+          // Snap the remembered bet onto this machine's real ladder (and
+          // under the solvency ceiling in real mode).
+          var usable=usableSteps();
+          if(usable.indexOf(S.bet)<0) S.bet=usable[2]||usable[0]||S.remote.minBet;
           buildUI(); renderGrid(blankGrid()); updateHud();
-          setFoot('server play &middot; provably fair &middot; sign-out safe: your credits live on the server');
+          if(wantReal){
+            setFoot(S.remote.paused
+              ? 'REAL MONEY &middot; '+esc(S.remote.currency)+' &middot; machine paused — bankroll too low, ask the creator to top up'
+              : 'REAL MONEY &middot; '+esc(S.remote.currency)+' &middot; provably fair &middot; max bet '+fmt(S.remote.effMax));
+          }else{
+            setFoot('server play &middot; provably fair &middot; sign-out safe: your credits live on the server');
+          }
         })
         .catch(function(e){
           var msg=/401|auth|session/i.test(String(e&&e.message||e))
@@ -272,7 +284,17 @@ function remoteFetch(path,opts){
 }
 function setFoot(html){ var f=$('#cabFoot'); if(f) f.innerHTML=html; }
 function defaultBet(){ return S.remote?(S.remote.steps[2]||S.remote.minBet):140; }
-function betSteps(){ return S.remote?S.remote.steps:[20,60,140,300,700,1500]; }
+function betSteps(){ return S.remote?usableSteps():[20,60,140,300,700,1500]; }
+/* Real mode: the ladder is clamped to what the machine's bankroll can safely
+   cover right now (the server enforces this too — the clamp just keeps the
+   bet buttons honest). */
+function usableSteps(){
+  if(!S.remote) return [20,60,140,300,700,1500];
+  var steps=S.remote.steps;
+  if(!S.remote.real||S.remote.effMax==null) return steps;
+  var ok=steps.filter(function(s){ return s<=S.remote.effMax; });
+  return ok.length?ok:steps.slice(0,1);
+}
 
 function blankGrid(){
   var g=[], ids=S.def.symbols.filter(function(s){return s.role==='normal';}).map(function(s){return s.id;});
@@ -654,9 +676,17 @@ function spin(){
    from the wallet's pre-committed seed, and returns the exact result shape
    the presentation layer already consumes. This function only renders. */
 function spinRemote(){
+  if(S.remote.real&&S.remote.paused){
+    setAuto(false); floatText('MACHINE PAUSED &middot; BANKROLL LOW','bad'); return;
+  }
   if(S.balance<S.bet){
-    // Play credits: refill automatically instead of dead-ending the player.
     setAuto(false);
+    if(S.remote.real){
+      // Real money never refills itself — balance only enters via deposits.
+      floatText('DEPOSIT '+esc(S.remote.currency)+' TO PLAY','bad');
+      return;
+    }
+    // Play credits: refill automatically instead of dead-ending the player.
     remoteFetch('/api/slot-machines/'+encodeURIComponent(S.remote.slug)+'/session/reset',{method:'POST'})
       .then(function(r){
         if(r.balance>=S.bet){ S.balance=r.balance; updateHud(); floatText('CREDITS REFILLED','info'); }
@@ -672,7 +702,7 @@ function spinRemote(){
   sfx('spin');
 
   remoteFetch('/api/slot-machines/'+encodeURIComponent(S.remote.slug)+'/spin',
-    {method:'POST', body:JSON.stringify({bet:S.bet})})
+    {method:'POST', body:JSON.stringify({bet:S.bet, real:S.remote.real===true})})
   .then(function(resp){
     S.lastRes=resp.res;
     // Post-debit, pre-credit view: the presentation re-adds the base payout
@@ -683,7 +713,15 @@ function spinRemote(){
     S.pendingBonus=resp.bonus
       ? Object.assign({}, resp.bonus, {displayAward:resp.payout-resp.basePayout})
       : null;
-    setFoot('server play &middot; PF hash <span class="mono">'+esc(String(resp.seed.serverSeedHash).slice(0,16))+'…</span>'+
+    // Real mode: the bankroll just moved, so the solvency ceiling did too.
+    if(S.remote.real&&resp.effectiveMaxBet!=null){
+      S.remote.effMax=resp.effectiveMaxBet;
+      S.remote.paused=resp.effectiveMaxBet<S.remote.minBet;
+      var usable=usableSteps();
+      if(usable.indexOf(S.bet)<0&&usable.length){ S.bet=usable[usable.length-1]; updateHud(); }
+    }
+    setFoot((S.remote.real?'REAL MONEY &middot; '+esc(S.remote.currency):'server play')+
+      ' &middot; PF hash <span class="mono">'+esc(String(resp.seed.serverSeedHash).slice(0,16))+'…</span>'+
       ' &middot; nonce '+resp.seed.nonce+
       ' &middot; <a href="'+S.remote.apiBase+'/api/slot-machines/spins/'+resp.spinId+'/verify" target="_blank" rel="noopener">verify</a>');
     return presentSpin(resp.res,resp.basePayout).then(function(){ settle(resp.res,resp.basePayout); });
@@ -1236,7 +1274,7 @@ function bigWinOverlay(tier,payout){
   function tick(t){
     var k=Math.min(1,(t-t0)/dur);
     var eased=1-Math.pow(1-k,3);
-    var n=ov.querySelector('#bwAmt'); if(n) n.textContent='+'+fmt(payout*eased)+' '+(S.remote?'CREDITS':'MORBIUS');
+    var n=ov.querySelector('#bwAmt'); if(n) n.textContent='+'+fmt(payout*eased)+' '+(S.remote?S.remote.currency:'MORBIUS');
     if(k<1&&!ov.hidden) requestAnimationFrame(tick);
   }
   requestAnimationFrame(tick);
@@ -1384,7 +1422,7 @@ function bonusFreeSpins(){
         S.balance+=credit; store('balance',S.balance); updateHud();
         var body=ov.querySelector('.bn-body');
         if(!body) return done();
-        body.innerHTML='<div class="fs-done">'+bonusName('freespins')+' PAID<br/><b>+'+fmt(credit)+' '+(S.remote?'CREDITS':'MORBIUS')+'</b></div>';
+        body.innerHTML='<div class="fs-done">'+bonusName('freespins')+' PAID<br/><b>+'+fmt(credit)+' '+(S.remote?S.remote.currency:'MORBIUS')+'</b></div>';
         playWinTier(credit>S.bet*4?'huge':credit>0?'big':'small');
         setTimeout(function(){ closeOverlay(); done(); }, 2000);
         return;
@@ -1459,7 +1497,7 @@ function bonusWheel(){
       if(k<1){ if(Math.floor(k*24)!==Math.floor((k-0.01)*24)) sfx('tick'); requestAnimationFrame(anim); }
       else{
         var whR=ov.querySelector('#whRead');
-        if(whR) whR.innerHTML='<b>'+mults[idx]+'&times;</b> BET &middot; +'+fmt(award)+' '+(S.remote?'CREDITS':'MORBIUS');
+        if(whR) whR.innerHTML='<b>'+mults[idx]+'&times;</b> BET &middot; +'+fmt(award)+' '+(S.remote?S.remote.currency:'MORBIUS');
         S.balance+=award; store('balance',S.balance); updateHud();
         playWinTier(mults[idx]>=10?'huge':'big');
         setTimeout(function(){ closeOverlay(); done(); },2200);

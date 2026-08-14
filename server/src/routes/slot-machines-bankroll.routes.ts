@@ -35,6 +35,7 @@ import type { DatabaseService, CommunitySlotMachine } from '../services/database
 import type { AuthService } from '../services/auth.service';
 import { requireAuth } from '../middleware/require-auth';
 import { realSlotBankrollChain, type SlotBankrollChain } from '../lib/community-slot-bankroll';
+import { defaultCreditValue, parseCreditValue } from '../lib/community-slot-real';
 import { sendJson } from '../http/json';
 import { logger } from '../utils/logger';
 
@@ -68,9 +69,11 @@ export function registerSlotMachineBankrollRoutes({
     validate: { xForwardedForHeader: false },
   });
 
-  async function ownedMachine(slug: string, wallet: string, res: Response): Promise<CommunitySlotMachine | null> {
+  /** allowDisabled: money must always be exitable — withdrawals work even on
+   *  a soft-deleted machine, while token config and new deposits do not. */
+  async function ownedMachine(slug: string, wallet: string, res: Response, allowDisabled = false): Promise<CommunitySlotMachine | null> {
     const m = await dbService.getSlotMachineBySlug(slug);
-    if (!m || m.status === 'disabled') { res.status(404).json({ ok: false, error: 'not found' }); return null; }
+    if (!m || (m.status === 'disabled' && !allowDisabled)) { res.status(404).json({ ok: false, error: 'not found' }); return null; }
     if (m.owner_address.toLowerCase() !== wallet.toLowerCase()) {
       res.status(403).json({ ok: false, error: 'not your machine', code: 'WRONG_WALLET' });
       return null;
@@ -109,15 +112,27 @@ export function registerSlotMachineBankrollRoutes({
         } catch (e) {
           return res.status(422).json({ ok: false, error: 'Could not read this token from the chain — is it a PRC-20? (' + String((e as Error)?.message ?? e) + ')' });
         }
+        // Credit value: how many base units one spin credit is worth.
+        // Default 0.001 token; creator-overridable until the first deposit
+        // (it locks with the token — re-pricing live balances would corrupt
+        // every session and the bankroll at once).
+        const creditValue = req.body?.creditValue != null
+          ? parseCreditValue(req.body.creditValue)
+          : defaultCreditValue(meta.decimals);
+        if (creditValue === null) {
+          return res.status(400).json({ ok: false, error: 'creditValue must be a positive base-unit integer string' });
+        }
         await pool.query(
           `UPDATE community_slot_machines
-           SET token_address = $2, token_decimals = $3, token_symbol = $4, token_name = $5, updated_at = NOW()
+           SET token_address = $2, token_decimals = $3, token_symbol = $4, token_name = $5,
+               credit_value = $6::numeric, updated_at = NOW()
            WHERE id = $1`,
-          [machine.id, tokenAddress, meta.decimals, meta.symbol, meta.name],
+          [machine.id, tokenAddress, meta.decimals, meta.symbol, meta.name, creditValue.toString()],
         );
         return sendJson(res, {
           ok: true,
           token: { address: tokenAddress, decimals: meta.decimals, symbol: meta.symbol, name: meta.name },
+          creditValue: creditValue.toString(),
           note: 'If this token charges a fee on transfers, deposits will credit the escrow\'s recorded amount while the vault receives less — the machine will carry a fee warning and payouts can fall short. Plain PRC-20s are strongly recommended.',
         });
       } catch (error) {
@@ -183,6 +198,14 @@ export function registerSlotMachineBankrollRoutes({
         }
 
         const result = await dbService.withTransaction(async (client) => {
+          // One tx credits exactly once — across BOTH ledgers. The same
+          // on-chain deposit must never be claimable as a bankroll top-up
+          // AND a player session deposit.
+          const dupPlayer = await client.query(
+            `SELECT 1 FROM community_slot_player_events WHERE tx_hash = $1 AND kind = 'deposit' LIMIT 1`,
+            [txHash.toLowerCase()],
+          );
+          if (dupPlayer.rows.length > 0) return null;
           // The partial unique index rejects a replayed tx hash — surface it cleanly.
           const ins = await client.query(
             `INSERT INTO community_slot_bankroll_events (machine_id, kind, actor_address, amount, tx_hash, fee_detected)
@@ -230,7 +253,7 @@ export function registerSlotMachineBankrollRoutes({
     async (req: Request, res: Response) => {
       try {
         const wallet = req.user!.address;
-        const machine = await ownedMachine(req.params.slug, wallet, res);
+        const machine = await ownedMachine(req.params.slug, wallet, res, true);
         if (!machine) return;
         const amount = parseBaseUnits(req.body?.amount);
         if (amount === null) {
