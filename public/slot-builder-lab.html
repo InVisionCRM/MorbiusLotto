@@ -1001,7 +1001,26 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
         <div class="json-msg" id="communityMsg"></div>
         <div id="communityEmbedWrap" style="display:none;margin:8px 0">
           <div class="ctl-lbl"><span>Embed code</span></div>
-          <textarea id="communityEmbedCode" class="json-ta" readonly style="height:64px;font-size:11px"></textarea>
+          <textarea id="communityEmbedCode" class="json-ta" readonly style="height:84px;font-size:11px"></textarea>
+        </div>
+
+        <!-- REAL MONEY (optional) — pick a PRC-20, fund the machine's escrow
+             bankroll, watch the solvency numbers. Appears once the machine is
+             saved to Community. -->
+        <div id="communityMoneyWrap" style="display:none;margin-top:14px">
+          <div class="ctl-lbl"><span>Real money (optional)</span></div>
+          <p class="hint" style="margin-top:0">Pick any PRC-20 as this machine's betting token, then fund its escrow bankroll — that's the house money that pays winners. Max bet floats with the bankroll (bankroll &divide; 10 &times; win cap) and the machine pauses itself when it runs thin. <b style="color:var(--am,#f59e0b)">Publishing a token machine requires 80&ndash;99% simulated RTP.</b> Fee-on-transfer tokens work but get a permanent warning badge.</p>
+          <div class="btn-row" style="gap:8px;margin:4px 0">
+            <input type="text" id="communityTokenAddr" class="txt-in" placeholder="0x… token address" style="flex:1;min-width:220px;font-family:var(--font-mono);font-size:11px" />
+            <button class="sm-btn" id="communitySetToken">Set token</button>
+          </div>
+          <div class="ctl-lbl" style="margin-top:8px"><span>Bankroll</span><span class="val" id="communityBankroll">&mdash;</span></div>
+          <div class="btn-row" style="gap:8px;margin:4px 0">
+            <input type="text" id="communityFundAmt" class="txt-in" placeholder="amount (tokens)" style="width:140px" />
+            <button class="sm-btn go" id="communityFund">Fund bankroll</button>
+            <button class="sm-btn" id="communityWithdraw">Withdraw</button>
+          </div>
+          <div class="json-msg" id="communityMoneyMsg"></div>
         </div>
       </div>
 
@@ -1158,6 +1177,9 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
   </div>
 </div>
 
+<!-- Shared wallet helpers for the Community panel (SIWE, ERC-20 approve,
+     escrow funding) — the same file the /embed money bar uses. -->
+<script src="/slots/cabinet-wallet.js"></script>
 <script>
 "use strict";
 (function(){
@@ -4057,21 +4079,10 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
   }
 
   function communityConnect(){
-    if(!window.ethereum){ communityMsg('No wallet found — install MetaMask or another EVM wallet extension.','err'); return; }
     communityMsg('Connecting…','');
-    window.ethereum.request({method:'eth_requestAccounts'}).then(function(accounts){
-      var address=accounts&&accounts[0];
-      if(!address) throw new Error('No account returned by wallet');
-      return communityApiFetch('/api/auth/nonce').then(function(n){
-        var issuedAt=new Date().toISOString();
-        var message=COMMUNITY_SIWE_DOMAIN+' wants you to sign in with your Ethereum account:\n'+address+
-          '\n\nSign in to MORBIUS to save and publish your slot machine. No funds will move.\n\n'+
-          'URI: '+location.origin+'\nVersion: 1\nChain ID: 369\nNonce: '+n.nonce+'\nIssued At: '+issuedAt;
-        return window.ethereum.request({method:'personal_sign',params:[utf8ToHex(message),address]}).then(function(signature){
-          return communityApiFetch('/api/auth/verify',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:message,signature:signature})});
-        });
-      });
-    }).then(function(){
+    CabinetWallet.siweSignIn(COMMUNITY_API, COMMUNITY_SIWE_DOMAIN,
+      'Sign in to MORBIUS to save and publish your slot machine. No funds will move.')
+    .then(function(){
       return communityRefreshWho();
     }).then(function(address){
       if(address) communityMsg('Signed in as '+address.slice(0,6)+'…'+address.slice(-4)+'.','ok');
@@ -4091,6 +4102,7 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
       if($('communityEmbed'))$('communityEmbed').disabled=(row.status!=='published');
       var rtpNote=(row.rtp_pct!=null)?(' · simulated RTP '+Math.round(row.rtp_pct)+'%'+(row.rtp_flagged?' (looks unusual — check your paytable)':'')):'';
       communityMsg('Saved "'+esc(row.name)+'" to Community'+rtpNote+'.','ok');
+      communityMoneyRefresh();
     }).catch(function(e){ communityMsg('Save failed: '+(e&&e.message||e),'err'); });
   }
 
@@ -4106,11 +4118,79 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
 
   function communityEmbed(){
     if(!Comm.machine||Comm.machine.status!=='published'){ communityMsg('Publish this machine first.','err'); return; }
-    var snippet='<iframe src="'+location.origin+'/embed/'+Comm.machine.slug+'" width="480" height="720" style="border:0;" allow="autoplay"></iframe>';
+    var base=location.origin+'/embed/'+Comm.machine.slug;
+    var snippet='<!-- free play (demo) -->\n'+
+      '<iframe src="'+base+'" width="480" height="720" style="border:0;" allow="autoplay"></iframe>';
+    if(Comm.bankroll&&Comm.bankroll.token){
+      snippet+='\n<!-- real money ('+(Comm.bankroll.token.symbol||'token')+') -->\n'+
+        '<iframe src="'+base+'?play=real" width="480" height="780" style="border:0;" allow="autoplay"></iframe>';
+    }
     if($('communityEmbedCode')){ $('communityEmbedCode').value=snippet; }
     if($('communityEmbedWrap')){ $('communityEmbedWrap').style.display='block'; }
     var copied=copyToClip(snippet);
     communityMsg((copied?'Embed code copied to clipboard.':'Embed code ready below.'),'ok');
+  }
+
+  /* ── real-money panel: token, bankroll, fund, withdraw ── */
+  function communityMoneyMsg(t,c){ var el=$('communityMoneyMsg'); if(el){ el.textContent=t; el.className='json-msg '+(c||''); } }
+  function communityMoneyRefresh(){
+    if(!Comm.machine) return;
+    CabinetWallet.apiFetch(COMMUNITY_API,'/api/slot-machines/'+Comm.machine.slug+'/bankroll').then(function(b){
+      Comm.bankroll=b;
+      var el=$('communityBankroll');
+      if(el) el.textContent=b.token
+        ? (CabinetWallet.fromBaseUnits(b.bankroll,b.token.decimals)+' '+(b.token.symbol||'')+(b.feeWarning?' ⚠ fee-on-transfer':''))
+        : 'no token set';
+      if($('communityMoneyWrap'))$('communityMoneyWrap').style.display='block';
+    }).catch(function(){});
+  }
+  function communitySetToken(){
+    if(!Comm.machine){ communityMoneyMsg('Save to Community first.','err'); return; }
+    var addr=(($('communityTokenAddr')&&$('communityTokenAddr').value)||'').trim();
+    communityMoneyMsg('Reading token from the chain…','');
+    CabinetWallet.apiFetch(COMMUNITY_API,'/api/slot-machines/'+Comm.machine.slug+'/token',
+      {method:'POST',body:JSON.stringify({tokenAddress:addr})})
+    .then(function(r){
+      communityMoneyMsg('Token set: '+(r.token.symbol||addr.slice(0,10))+' ('+r.token.decimals+' decimals) · 1 credit = '+
+        CabinetWallet.fromBaseUnits(r.creditValue,r.token.decimals)+' '+(r.token.symbol||'')+'. '+
+        'Heads up: publishing now requires 80–99% simulated RTP.','ok');
+      communityMoneyRefresh();
+    }).catch(function(e){ communityMoneyMsg('Could not set token: '+(e&&e.message||e),'err'); });
+  }
+  function communityFund(){
+    if(!Comm.machine||!Comm.bankroll||!Comm.bankroll.token){ communityMoneyMsg('Set a token first.','err'); return; }
+    var b=Comm.bankroll, human=(($('communityFundAmt')&&$('communityFundAmt').value)||'').trim();
+    var base;
+    try{ base=CabinetWallet.toBaseUnits(human,b.token.decimals); }catch(e){ communityMoneyMsg(String(e.message||e),'err'); return; }
+    CabinetWallet.connect().then(function(from){
+      communityMoneyMsg('1/3 approving '+human+' '+(b.token.symbol||'')+'…','');
+      return CabinetWallet.approve(from,b.token.address,b.escrowAddress,base).then(CabinetWallet.waitTx).then(function(){
+        communityMoneyMsg('2/3 funding the machine pool…','');
+        return CabinetWallet.fundPool(from,b.escrowAddress,b.poolId,b.token.address,base);
+      }).then(function(txHash){
+        return CabinetWallet.waitTx(txHash).then(function(){
+          communityMoneyMsg('3/3 crediting the bankroll…','');
+          return CabinetWallet.apiFetch(COMMUNITY_API,'/api/slot-machines/'+Comm.machine.slug+'/bankroll/deposit',
+            {method:'POST',body:JSON.stringify({txHash:txHash})});
+        });
+      });
+    }).then(function(r){
+      communityMoneyMsg('Bankroll funded'+(r.feeDetectedOnThisDeposit?' — fee-on-transfer detected on this token':'')+'.','ok');
+      communityMoneyRefresh();
+    }).catch(function(e){ communityMoneyMsg('Funding failed: '+(e&&e.message||e),'err'); communityMoneyRefresh(); });
+  }
+  function communityWithdraw(){
+    if(!Comm.machine||!Comm.bankroll||!Comm.bankroll.token){ communityMoneyMsg('Set a token first.','err'); return; }
+    var b=Comm.bankroll, human=(($('communityFundAmt')&&$('communityFundAmt').value)||'').trim();
+    var base;
+    try{ base=CabinetWallet.toBaseUnits(human,b.token.decimals); }catch(e){ communityMoneyMsg(String(e.message||e),'err'); return; }
+    communityMoneyMsg('Withdrawing…','');
+    CabinetWallet.apiFetch(COMMUNITY_API,'/api/slot-machines/'+Comm.machine.slug+'/bankroll/withdraw',
+      {method:'POST',body:JSON.stringify({amount:base})})
+    .then(function(r){
+      communityMoneyMsg('Withdrawn — tx '+(r.txHash?r.txHash.slice(0,12)+'…':'sent')+'.','ok');
+      communityMoneyRefresh();
+    }).catch(function(e){ communityMoneyMsg('Withdraw failed: '+(e&&e.message||e),'err'); });
   }
 
   /* ═══ SIMULATOR (Web Worker running identical evalSpin) ═══ */
@@ -4448,6 +4528,9 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
   on('communityPublish','click',communityPublish);
   on('communityEmbed','click',communityEmbed);
   on('communityEmbedCode','click',function(e){ e.target.select(); });
+  on('communitySetToken','click',communitySetToken);
+  on('communityFund','click',communityFund);
+  on('communityWithdraw','click',communityWithdraw);
   communityRefreshWho();
 
   // ── art picker ──

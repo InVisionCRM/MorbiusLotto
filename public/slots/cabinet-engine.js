@@ -197,6 +197,9 @@ function sfx(name){
 /* ── boot ───────────────────────────────────────────────────────────────── */
 window.CabinetEngine = {
   boot: boot, state: S,
+  /* For the embed money bar: set the (server-owned) balance after a deposit
+     or cashout without rebooting the cabinet mid-session. */
+  setBalance: function(n){ if(typeof n==='number'&&isFinite(n)&&!S.spinning){ S.balance=n; updateHud(); } },
   /* test seam — lets the harness exercise a bonus without waiting for 3+
      scatters to land naturally. Not wired to any UI. */
   _debugBonus: function(kind){ return runBonus(kind||S.def.bonus.round); }

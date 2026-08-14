@@ -36,6 +36,8 @@ import type { AuthService } from '../services/auth.service';
 import { requireAuth } from '../middleware/require-auth';
 import { realSlotBankrollChain, type SlotBankrollChain } from '../lib/community-slot-bankroll';
 import { defaultCreditValue, parseCreditValue } from '../lib/community-slot-real';
+import { getTournamentPrizeEscrowAddress } from '../utils/tournament-escrow-address';
+import { tournamentIdToBytes32 } from '../utils/tournament-id-bytes32';
 import { sendJson } from '../http/json';
 import { logger } from '../utils/logger';
 
@@ -162,6 +164,10 @@ export function registerSlotMachineBankrollRoutes({
           : null,
         bankroll: String(row.bankroll ?? '0'),
         feeWarning: !!row.token_fee_warning,
+        // Everything a wallet needs to build the funding tx client-side:
+        // approve(escrowAddress, amount) then addToPrizePool(poolId, token, amount).
+        escrowAddress: getTournamentPrizeEscrowAddress(),
+        poolId: tournamentIdToBytes32(m.id),
       });
     } catch (error) {
       logger.error('[SlotBankroll] status failed', error);
