@@ -369,6 +369,66 @@
 .home2 .mono-tile .cat{font-size:9px; letter-spacing:.12em; color:var(--muted); font-weight:700; margin-top:2px}
 
 /* ============================================================
+   REEL FORGE — build-your-own slot machine promo
+   ============================================================ */
+.home2 .forge-panel{
+  position:relative; display:grid; grid-template-columns:minmax(320px,1fr) 1.15fr; gap:34px;
+  border-radius:22px; border:1px solid rgba(167,139,250,.22); overflow:hidden;
+  background:
+    radial-gradient(ellipse at 88% 8%, rgba(124,92,255,.16), transparent 55%),
+    radial-gradient(ellipse at 8% 100%, rgba(34,211,238,.10), transparent 50%),
+    linear-gradient(165deg,#100c22,#080b14 72%);
+  padding:32px 34px;
+}
+.home2 .forge-panel::before{content:''; position:absolute; inset:0; pointer-events:none;
+  background:repeating-linear-gradient(115deg, rgba(255,255,255,.018) 0 2px, transparent 2px 9px)}
+.home2 .forge-copy{position:relative; z-index:1; display:flex; flex-direction:column; justify-content:center}
+.home2 .forge-kicker{display:inline-block; align-self:flex-start; font-size:9px; font-weight:800; letter-spacing:.22em;
+  color:#c4b5fd; border:1px solid rgba(167,139,250,.4); background:rgba(124,92,255,.12);
+  border-radius:99px; padding:5px 12px; margin-bottom:14px}
+.home2 .forge-copy h3{font-family:var(--display); font-weight:400; font-size:clamp(22px,2.8vw,34px);
+  letter-spacing:.02em; line-height:1.14; margin-bottom:12px}
+.home2 .forge-copy h3 em{font-style:normal; background:linear-gradient(100deg,#a78bfa,#22d3ee);
+  -webkit-background-clip:text; background-clip:text; color:transparent}
+.home2 .forge-copy>p{font-size:13px; line-height:1.65; color:var(--text2); max-width:46ch; margin-bottom:18px}
+.home2 .forge-copy>p b{color:var(--gold); font-weight:700}
+.home2 .forge-feats{list-style:none; display:grid; grid-template-columns:1fr 1fr; gap:9px 14px; margin:0 0 22px; padding:0}
+.home2 .forge-feats li{display:flex; align-items:center; gap:10px; border:1px solid var(--line);
+  border-radius:12px; padding:8px 11px; background:rgba(255,255,255,.02); transition:border-color .2s, transform .2s}
+.home2 .forge-feats li:hover{border-color:rgba(167,139,250,.45); transform:translateY(-2px)}
+.home2 .forge-feats .fi{font-size:16px; line-height:1; filter:drop-shadow(0 2px 6px rgba(0,0,0,.5))}
+.home2 .forge-feats .ft{display:flex; flex-direction:column; gap:1px; min-width:0}
+.home2 .forge-feats .ft b{font-size:11px; font-weight:700; color:var(--text)}
+.home2 .forge-feats .ft i{font-style:normal; font-size:9.5px; color:var(--muted)}
+.home2 .forge-cta-row{display:flex; align-items:center; gap:14px; flex-wrap:wrap}
+.home2 .forge-cta{
+  display:inline-flex; align-items:center; gap:9px;
+  font-family:var(--display); font-weight:400; font-size:14px; letter-spacing:.05em; color:#0b0716;
+  background:linear-gradient(100deg,#a78bfa,#22d3ee); border-radius:14px; padding:13px 22px;
+  box-shadow:0 10px 30px rgba(124,92,255,.35), 0 0 18px rgba(34,211,238,.18);
+  transition:transform .2s, box-shadow .2s;
+}
+.home2 .forge-cta:hover{transform:translateY(-2px); box-shadow:0 16px 40px rgba(124,92,255,.5), 0 0 26px rgba(34,211,238,.3)}
+.home2 .forge-cta .fc-ic{font-size:17px}
+.home2 .forge-cta-sub{font-size:10px; color:var(--muted); letter-spacing:.04em}
+.home2 .forge-shots{position:relative; z-index:1; min-height:340px}
+.home2 .fshot{position:absolute; border-radius:14px; overflow:hidden;
+  border:1px solid rgba(148,163,184,.25); background:#0b0716;
+  box-shadow:0 24px 60px rgba(0,0,0,.7)}
+.home2 .fshot img{display:block; width:100%; height:100%; object-fit:cover; object-position:top center}
+.home2 .fshot-tag{position:absolute; left:10px; bottom:10px; z-index:2; font-size:8.5px; font-weight:800;
+  letter-spacing:.16em; text-transform:uppercase; color:#67e8f9; background:rgba(4,10,18,.82);
+  border:1px solid rgba(34,211,238,.35); border-radius:99px; padding:4px 10px; backdrop-filter:blur(6px)}
+.home2 .fshot-tag.gold{color:var(--gold); border-color:rgba(251,191,36,.4)}
+.home2 .fshot-builder{left:0; top:6%; width:78%; height:78%; transform:rotate(-2deg);
+  border-color:rgba(167,139,250,.35)}
+.home2 .fshot-builder:hover{transform:rotate(-1deg) translateY(-4px)}
+.home2 .fshot-cab{right:-2%; bottom:0; width:44%; height:74%; transform:rotate(2.5deg);
+  border-color:rgba(34,211,238,.4); box-shadow:0 24px 60px rgba(0,0,0,.75), 0 0 34px rgba(34,211,238,.16)}
+.home2 .fshot-cab:hover{transform:rotate(1.5deg) translateY(-4px)}
+.home2 .fshot{transition:transform .25s}
+
+/* ============================================================
    JACKPOT MODULE — "lighting soon"
    ============================================================ */
 .home2 .jackpot{
@@ -640,6 +700,11 @@
   .home2 .hp-grid{grid-template-columns:1fr}
   .home2 .furnace{margin:0 18px; padding:16px 18px; gap:18px}
   .home2 section.zone{padding:36px 18px 8px}
+  .home2 .forge-panel{grid-template-columns:1fr; gap:22px; padding:22px 18px}
+  .home2 .forge-feats{grid-template-columns:1fr 1fr; gap:7px 8px}
+  .home2 .forge-shots{min-height:0; height:250px}
+  .home2 .fshot-builder{width:72%; height:82%; top:0}
+  .home2 .fshot-cab{width:40%; height:88%; bottom:auto; top:8%}
   .home2 .jackpot{margin:38px 18px 0}
   .home2 .spot-grid{grid-template-columns:1fr 1fr}
   .home2 .spot-grid .scene-card.big{grid-column:1/-1}

@@ -637,6 +637,71 @@ export function TheFloor() {
 }
 
 /* ────────────────────────────────────────────────────────────
+   6b. REEL FORGE — build-your-own slot machine promo
+   ──────────────────────────────────────────────────────────── */
+const FORGE_FEATS = [
+  { ic: '🎨', t: 'Design every reel', d: 'symbols, colors, sounds & border FX' },
+  { ic: '🎁', t: 'Real bonus rounds', d: 'free spins, wheels & pick games' },
+  { ic: '🛡️', t: 'Provably fair', d: 'every spin sealed & verifiable' },
+  { ic: '🌐', t: 'Embed anywhere', d: 'one iframe snippet, any website' },
+  { ic: '🪙', t: 'Your own token', d: 'run it on any PRC-20 you choose' },
+  { ic: '📈', t: 'Creator dashboard', d: 'live RTP, volume & bankroll stats' },
+];
+
+export function SlotForge() {
+  return (
+    <section className="zone forge-zone">
+      <div className="zone-head">
+        <h2>
+          REEL <em>FORGE</em>
+        </h2>
+        <span className="sub">the community slot studio</span>
+      </div>
+      <div className="forge-panel">
+        <div className="forge-copy">
+          <div className="forge-kicker">NEW &middot; CREATOR TOOL</div>
+          <h3>
+            Create your own <em>Slot&nbsp;Machine!</em>
+          </h3>
+          <p>
+            Forge a machine from scratch — pick the grid, draw the paytable, wire up a bonus
+            round — then publish it and drop it on any website with one embed code. Fund it
+            with your own token and the house edge is <b>yours</b>.
+          </p>
+          <ul className="forge-feats">
+            {FORGE_FEATS.map((f) => (
+              <li key={f.t}>
+                <span className="fi">{f.ic}</span>
+                <span className="ft">
+                  <b>{f.t}</b>
+                  <i>{f.d}</i>
+                </span>
+              </li>
+            ))}
+          </ul>
+          <div className="forge-cta-row">
+            <a className="forge-cta" href="/slot-builder-lab.html">
+              <span className="fc-ic">🎰</span> OPEN THE BUILDER
+            </a>
+            <span className="forge-cta-sub">free to build &middot; no code needed</span>
+          </div>
+        </div>
+        <div className="forge-shots">
+          <div className="fshot fshot-builder">
+            <img src="/home2/forge-builder.webp" alt="The Reel Forge slot builder studio" loading="lazy" />
+            <span className="fshot-tag">the studio</span>
+          </div>
+          <div className="fshot fshot-cab">
+            <img src="/home2/forge-cabinet.webp" alt="A community-built slot machine hitting a win" loading="lazy" />
+            <span className="fshot-tag gold">your machine, live</span>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/* ────────────────────────────────────────────────────────────
    7. THE WEEKLY DROP — raffle jackpot
    ──────────────────────────────────────────────────────────── */
 export interface WeeklyDropWinner {
