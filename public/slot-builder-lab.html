@@ -983,6 +983,52 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
         </div>
         <div class="ctl-lbl" style="margin-top:14px"><span>Saved machines</span><span class="val" id="machCount">0</span></div>
         <div id="machList" class="mach-list"></div>
+
+        <!-- COMMUNITY — save server-side under your wallet, then publish and
+             embed on any third-party site. Separate from the local library
+             above, which stays fully offline/private. -->
+        <div class="ctl-lbl" style="margin-top:18px"><span>Community &mdash; embed on any site</span></div>
+        <p class="hint" style="margin-top:0">Sign in with a wallet to save this machine to MORBIUS, publish it, and grab an <b style="color:var(--cyan)">embed code</b> for your own site. Play-money only &mdash; nothing here touches real funds.</p>
+        <div class="btn-row" id="communityAuthRow" style="margin:4px 0 10px">
+          <button class="sm-btn go" id="communityConnect">Connect wallet</button>
+          <span class="val" id="communityWho" style="align-self:center"></span>
+        </div>
+        <div class="btn-row" id="communityActionsRow" style="margin:4px 0 10px;display:none">
+          <button class="sm-btn go" id="communitySave">Save to Community</button>
+          <button class="sm-btn" id="communityPublish" disabled>Publish</button>
+          <button class="sm-btn" id="communityEmbed" disabled>Get embed code</button>
+        </div>
+        <div class="json-msg" id="communityMsg"></div>
+        <div id="communityEmbedWrap" style="display:none;margin:8px 0">
+          <div class="ctl-lbl"><span>Embed code</span></div>
+          <textarea id="communityEmbedCode" class="json-ta" readonly style="height:84px;font-size:11px"></textarea>
+        </div>
+
+        <!-- REAL MONEY (optional) — pick a PRC-20, fund the machine's escrow
+             bankroll, watch the solvency numbers. Appears once the machine is
+             saved to Community. -->
+        <div id="communityMoneyWrap" style="display:none;margin-top:14px">
+          <div class="ctl-lbl"><span>Real money (optional)</span></div>
+          <p class="hint" style="margin-top:0">Pick any PRC-20 as this machine's betting token, then fund its escrow bankroll — that's the house money that pays winners. Max bet floats with the bankroll (bankroll &divide; 10 &times; win cap) and the machine pauses itself when it runs thin. <b style="color:var(--am,#f59e0b)">Publishing a token machine requires 80&ndash;99% simulated RTP.</b> Fee-on-transfer tokens work but get a permanent warning badge.</p>
+          <div class="btn-row" style="gap:8px;margin:4px 0">
+            <input type="text" id="communityTokenAddr" class="txt-in" placeholder="0x… token address" style="flex:1;min-width:220px;font-family:var(--font-mono);font-size:11px" />
+            <button class="sm-btn" id="communitySetToken">Set token</button>
+          </div>
+          <div class="ctl-lbl" style="margin-top:8px"><span>Bankroll</span><span class="val" id="communityBankroll">&mdash;</span></div>
+          <div class="btn-row" style="gap:8px;margin:4px 0">
+            <input type="text" id="communityFundAmt" class="txt-in" placeholder="amount (tokens)" style="width:140px" />
+            <button class="sm-btn go" id="communityFund">Fund bankroll</button>
+            <button class="sm-btn" id="communityWithdraw">Withdraw</button>
+          </div>
+          <div class="json-msg" id="communityMoneyMsg"></div>
+        </div>
+
+        <!-- STATS — how this machine is actually doing, split free play vs
+             real money, from the server's spin ledger. -->
+        <div id="communityStatsWrap" style="display:none;margin-top:14px">
+          <div class="ctl-lbl"><span>Machine stats</span><button class="sm-btn" id="communityStatsRefresh" style="margin-left:auto">Refresh</button></div>
+          <div id="communityStatsBody" class="hint" style="margin-top:4px">&mdash;</div>
+        </div>
       </div>
 
       <div class="tab-panel" id="tab-json">
@@ -1138,6 +1184,9 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
   </div>
 </div>
 
+<!-- Shared wallet helpers for the Community panel (SIWE, ERC-20 approve,
+     escrow funding) — the same file the /embed money bar uses. -->
+<script src="/slots/cabinet-wallet.js"></script>
 <script>
 "use strict";
 (function(){
@@ -1169,7 +1218,7 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
     "function resolveSpin(def,strips,grid,rng,state){state=state||{};applyWild(def,grid,rng,state,strips);var flow=def.flow||{};var steps=[],totalUnits=0,maxScatter=0,chain=0;function ev0(){var e=evalSpin(def,grid);if(e.scatter>maxScatter)maxScatter=e.scatter;return e;}var first=ev0();if(flow.cascades){var e=first;while(true){if(!e.wins.length){steps.push({grid:cloneGrid(grid),ev:e,mult:1,winCells:{}});break;}var m=ladderMult(def,chain),wc=wcOf(e);steps.push({grid:cloneGrid(grid),ev:e,mult:m,winCells:wc});totalUnits+=e.lineUnits*m;collapse(def,strips,grid,wc,rng);chain++;if(chain>60)break;e=ev0();}}else if(flow.lockedRespin||flow.holdWin){var locked={},maxR=flow.holdWin?3:6;if(!first.wins.length){steps.push({grid:cloneGrid(grid),ev:first,mult:1,winCells:{}});}else{var wc=wcOf(first);steps.push({grid:cloneGrid(grid),ev:first,mult:1,winCells:wc});totalUnits+=first.lineUnits;for(var k in wc)locked[k]=1;while(chain<maxR){var respun=false;for(var r=0;r<def.cols;r++)for(var row=0;row<def.rows;row++){if(!locked[r+','+row]){var st=strips[r];grid[r][row]=st[Math.floor(rng()*st.length)];respun=true;}}chain++;if(!respun)break;var er=ev0(),nw=[];for(var i=0;i<er.wins.length;i++){var w=er.wins[i],fresh=false,cc=w.cells||[];for(var j=0;j<cc.length;j++){if(!locked[cc[j]]){fresh=true;break;}}if(fresh)nw.push(w);}if(!nw.length){steps.push({grid:cloneGrid(grid),ev:{wins:[],divisor:er.divisor,mode:er.mode},mult:1,winCells:{}});continue;}var wn={},un=0;nw.forEach(function(x){var cc=x.cells||[],fc=0;for(var q=0;q<cc.length;q++){if(!locked[cc[q]])fc++;wn[cc[q]]=1;}un+=x.units*(cc.length?fc/cc.length:0);});steps.push({grid:cloneGrid(grid),ev:{wins:nw,divisor:er.divisor,mode:er.mode},mult:1,winCells:wn});totalUnits+=un;for(var k2 in wn)locked[k2]=1;}}}else if(flow.respin&&!first.wins.length){var rr=Math.floor(rng()*def.cols);steps.push({grid:cloneGrid(grid),ev:first,mult:1,winCells:{},respin:rr});respinReel(def,strips,grid,rr,rng);var e2=ev0();steps.push({grid:cloneGrid(grid),ev:e2,mult:1,winCells:wcOf(e2)});totalUnits+=e2.lineUnits;}else{steps.push({grid:cloneGrid(grid),ev:first,mult:1,winCells:wcOf(first)});totalUnits+=first.lineUnits;}var slam=1;if(flow.winMult&&totalUnits>0){var o=[2,3,5,10];slam=o[Math.floor(rng()*o.length)];totalUnits*=slam;}return {steps:steps,totalUnits:totalUnits,scatter:maxScatter,divisor:steps[0].ev.divisor,chain:chain,slam:slam};}",
     "function payoutOf(def,bet,res){var p=res.totalUnits*bet/(res.divisor||1);var sp=def.scatterPay||{};if(res.scatter&&sp[res.scatter])p+=sp[res.scatter]*bet;return p;}",
     "function spinPayout(def,bet,ev){var div=(ev&&ev.divisor)||(def.lines.length||1);var units=(ev&&ev.lineUnits)||0,scatter=(ev&&ev.scatter)||0;var p=units*bet/div;var sp=def.scatterPay||{};if(scatter&&sp[scatter])p+=sp[scatter]*bet;return p;}",
-    "function simulate(def,spins,seedBase){indexSyms(def);var strips=buildStrips(def);var rng=makeRng(seedBase);var bet=def.lines.length||1;var wagered=0,returned=0,hits=0,best=0,fstate={};for(var n=0;n<spins;n++){var stops=drawStops(rng,strips);var g=windowAt(stops,strips,def.rows);var res=resolveSpin(def,strips,g,rng,fstate);var pay=payoutOf(def,bet,res);wagered+=bet;returned+=pay;if(pay>0)hits++;if(pay>best)best=pay;}return {rtp:wagered?returned/wagered*100:0,hit:spins?hits/spins*100:0,maxX:best/bet,spins:spins};}"
+    "function simulate(def,spins,seedBase){indexSyms(def);var strips=buildStrips(def);var rng=makeRng(seedBase);var mode=(def.win&&def.win.mode)||'lines';var bet=(mode==='lines')?(def.lines&&def.lines.length||1):1;var wagered=0,returned=0,hits=0,best=0,fstate={};for(var n=0;n<spins;n++){var stops=drawStops(rng,strips);var g=windowAt(stops,strips,def.rows);var res=resolveSpin(def,strips,g,rng,fstate);var pay=payoutOf(def,bet,res);wagered+=bet;returned+=pay;if(pay>0)hits++;if(pay>best)best=pay;}return {rtp:wagered?returned/wagered*100:0,hit:spins?hits/spins*100:0,maxX:best/bet,spins:spins};}"
   ].join("\n");
 
   var MC = (new Function(MATH_SRC + "\n;return {makeRng:makeRng,buildStrips:buildStrips,drawStops:drawStops,windowAt:windowAt,evalSpin:evalSpin,spinPayout:spinPayout,simulate:simulate,indexSyms:indexSyms,resolveSpin:resolveSpin,payoutOf:payoutOf,cloneGrid:cloneGrid};"))();
@@ -3991,6 +4040,209 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
   function shareSavedMachine(id){ var list=machLoadAll(),m=null; list.forEach(function(x){if(x.id===id)m=x;}); if(!m)return; var url=location.origin+location.pathname+'#m='+defToCode(m.def); if($('machShareUrl'))$('machShareUrl').value=url; if($('machShareWrap'))$('machShareWrap').style.display='block'; var copied=copyToClip(url); machMsg((copied?'Share link for "'+esc(m.name)+'" copied':'Share link ready below')+' ('+Math.round(url.length/1024*10)/10+' KB).','ok'); }
   function loadFromShareHash(){ var h=location.hash||''; var mm=/[#&]m=([^&]+)/.exec(h); if(!mm)return false; try{ var def=codeToDef(mm[1]); applyDef(def); status('Loaded shared machine — edit or Save it to your library.'); return true; }catch(e){ return false; } }
 
+  /* ═══ COMMUNITY — save/publish this machine server-side under a wallet,
+     then embed it on a third-party site via <iframe>. Separate from the
+     local-only library above. This file is a static HTML page (not a
+     bundled Next.js route), so SIWE is hand-rolled here rather than pulled
+     in via the app's wagmi/siwe stack — same EIP-4361 message shape and the
+     same /api/auth/* endpoints (server/src/routes/auth.routes.ts) either
+     way, so a session created here works everywhere else on the site. ═══ */
+  var COMMUNITY_API = (function(){
+    var h=location.hostname;
+    if(h==='localhost'||h==='127.0.0.1') return 'http://localhost:3001';
+    return 'https://morbiuslotto-production.up.railway.app';
+  })();
+  var COMMUNITY_SIWE_DOMAIN='morbius.io'; // must match server SIWE_EXPECTED_DOMAIN
+  var Comm={address:null,machine:null}; // machine: last saved/published row from the API
+
+  function communityMsg(t,c){ var el=$('communityMsg'); if(el){ el.textContent=t; el.className='json-msg '+(c||''); } }
+  function communityUrl(path){ return COMMUNITY_API+path; }
+  function utf8ToHex(str){ var b=new TextEncoder().encode(str),h='0x'; for(var i=0;i<b.length;i++)h+=b[i].toString(16).padStart(2,'0'); return h; }
+
+  function communityApiFetch(path,opts){
+    opts=opts||{};
+    opts.credentials='include';
+    opts.headers=Object.assign({},opts.headers||{});
+    return fetch(communityUrl(path),opts).then(function(r){
+      return r.json().catch(function(){return {};}).then(function(body){
+        if(!r.ok) throw new Error(body&&body.error||('request failed ('+r.status+')'));
+        return body;
+      });
+    });
+  }
+
+  function communityRefreshWho(){
+    return communityApiFetch('/api/auth/me').then(function(me){
+      Comm.address=me.address;
+      if($('communityWho'))$('communityWho').textContent=me.address.slice(0,6)+'…'+me.address.slice(-4);
+      if($('communityConnect'))$('communityConnect').textContent='Signed in';
+      if($('communityActionsRow'))$('communityActionsRow').style.display='';
+      return me.address;
+    }).catch(function(){
+      Comm.address=null;
+      if($('communityActionsRow'))$('communityActionsRow').style.display='none';
+      return null;
+    });
+  }
+
+  function communityConnect(){
+    communityMsg('Connecting…','');
+    CabinetWallet.siweSignIn(COMMUNITY_API, COMMUNITY_SIWE_DOMAIN,
+      'Sign in to MORBIUS to save and publish your slot machine. No funds will move.')
+    .then(function(){
+      return communityRefreshWho();
+    }).then(function(address){
+      if(address) communityMsg('Signed in as '+address.slice(0,6)+'…'+address.slice(-4)+'.','ok');
+    }).catch(function(e){
+      communityMsg('Sign-in failed: '+(e&&e.message||e),'err');
+    });
+  }
+
+  function communitySave(){
+    var name=(($('machName')&&$('machName').value)||'').trim() || (S.def.name||'Machine');
+    communityMsg('Saving…','');
+    var path=Comm.machine?('/api/slot-machines/'+Comm.machine.slug):'/api/slot-machines';
+    var method=Comm.machine?'PUT':'POST';
+    communityApiFetch(path,{method:method,headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name.slice(0,48),def:cleanDef()})}).then(function(row){
+      Comm.machine=row;
+      if($('communityPublish'))$('communityPublish').disabled=false;
+      if($('communityEmbed'))$('communityEmbed').disabled=(row.status!=='published');
+      var rtpNote=(row.rtp_pct!=null)?(' · simulated RTP '+Math.round(row.rtp_pct)+'%'+(row.rtp_flagged?' (looks unusual — check your paytable)':'')):'';
+      communityMsg('Saved "'+esc(row.name)+'" to Community'+rtpNote+'.','ok');
+      communityMoneyRefresh();
+      communityStatsRefresh();
+    }).catch(function(e){ communityMsg('Save failed: '+(e&&e.message||e),'err'); });
+  }
+
+  function communityPublish(){
+    if(!Comm.machine){ communityMsg('Save to Community first.','err'); return; }
+    communityMsg('Publishing…','');
+    communityApiFetch('/api/slot-machines/'+Comm.machine.slug+'/publish',{method:'POST'}).then(function(row){
+      Comm.machine=row;
+      if($('communityEmbed'))$('communityEmbed').disabled=false;
+      communityMsg('Published. "Get embed code" is ready.','ok');
+    }).catch(function(e){ communityMsg('Publish failed: '+(e&&e.message||e),'err'); });
+  }
+
+  function communityEmbed(){
+    if(!Comm.machine||Comm.machine.status!=='published'){ communityMsg('Publish this machine first.','err'); return; }
+    var base=location.origin+'/embed/'+Comm.machine.slug;
+    var snippet='<!-- free play (demo) -->\n'+
+      '<iframe src="'+base+'" width="480" height="720" style="border:0;" allow="autoplay"></iframe>';
+    if(Comm.bankroll&&Comm.bankroll.token){
+      snippet+='\n<!-- real money ('+(Comm.bankroll.token.symbol||'token')+') -->\n'+
+        '<iframe src="'+base+'?play=real" width="480" height="780" style="border:0;" allow="autoplay"></iframe>';
+    }
+    if($('communityEmbedCode')){ $('communityEmbedCode').value=snippet; }
+    if($('communityEmbedWrap')){ $('communityEmbedWrap').style.display='block'; }
+    var copied=copyToClip(snippet);
+    communityMsg((copied?'Embed code copied to clipboard.':'Embed code ready below.'),'ok');
+  }
+
+  /* ── real-money panel: token, bankroll, fund, withdraw ── */
+  function communityMoneyMsg(t,c){ var el=$('communityMoneyMsg'); if(el){ el.textContent=t; el.className='json-msg '+(c||''); } }
+  function communityMoneyRefresh(){
+    if(!Comm.machine) return;
+    CabinetWallet.apiFetch(COMMUNITY_API,'/api/slot-machines/'+Comm.machine.slug+'/bankroll').then(function(b){
+      Comm.bankroll=b;
+      var el=$('communityBankroll');
+      if(el) el.textContent=b.token
+        ? (CabinetWallet.fromBaseUnits(b.bankroll,b.token.decimals)+' '+(b.token.symbol||'')+(b.feeWarning?' ⚠ fee-on-transfer':''))
+        : 'no token set';
+      if($('communityMoneyWrap'))$('communityMoneyWrap').style.display='block';
+    }).catch(function(){});
+  }
+  function communitySetToken(){
+    if(!Comm.machine){ communityMoneyMsg('Save to Community first.','err'); return; }
+    var addr=(($('communityTokenAddr')&&$('communityTokenAddr').value)||'').trim();
+    communityMoneyMsg('Reading token from the chain…','');
+    CabinetWallet.apiFetch(COMMUNITY_API,'/api/slot-machines/'+Comm.machine.slug+'/token',
+      {method:'POST',body:JSON.stringify({tokenAddress:addr})})
+    .then(function(r){
+      communityMoneyMsg('Token set: '+(r.token.symbol||addr.slice(0,10))+' ('+r.token.decimals+' decimals) · 1 credit = '+
+        CabinetWallet.fromBaseUnits(r.creditValue,r.token.decimals)+' '+(r.token.symbol||'')+'. '+
+        'Heads up: publishing now requires 80–99% simulated RTP.','ok');
+      communityMoneyRefresh();
+    }).catch(function(e){ communityMoneyMsg('Could not set token: '+(e&&e.message||e),'err'); });
+  }
+  function communityFund(){
+    if(!Comm.machine||!Comm.bankroll||!Comm.bankroll.token){ communityMoneyMsg('Set a token first.','err'); return; }
+    var b=Comm.bankroll, human=(($('communityFundAmt')&&$('communityFundAmt').value)||'').trim();
+    var base;
+    try{ base=CabinetWallet.toBaseUnits(human,b.token.decimals); }catch(e){ communityMoneyMsg(String(e.message||e),'err'); return; }
+    CabinetWallet.connect().then(function(from){
+      communityMoneyMsg('1/3 approving '+human+' '+(b.token.symbol||'')+'…','');
+      return CabinetWallet.approve(from,b.token.address,b.escrowAddress,base).then(CabinetWallet.waitTx).then(function(){
+        communityMoneyMsg('2/3 funding the machine pool…','');
+        return CabinetWallet.fundPool(from,b.escrowAddress,b.poolId,b.token.address,base);
+      }).then(function(txHash){
+        return CabinetWallet.waitTx(txHash).then(function(){
+          communityMoneyMsg('3/3 crediting the bankroll…','');
+          return CabinetWallet.apiFetch(COMMUNITY_API,'/api/slot-machines/'+Comm.machine.slug+'/bankroll/deposit',
+            {method:'POST',body:JSON.stringify({txHash:txHash})});
+        });
+      });
+    }).then(function(r){
+      communityMoneyMsg('Bankroll funded'+(r.feeDetectedOnThisDeposit?' — fee-on-transfer detected on this token':'')+'.','ok');
+      communityMoneyRefresh();
+    }).catch(function(e){ communityMoneyMsg('Funding failed: '+(e&&e.message||e),'err'); communityMoneyRefresh(); });
+  }
+  /* ── machine stats: the creator's dashboard for this machine ── */
+  function communityStatsRefresh(){
+    if(!Comm.machine) return;
+    CabinetWallet.apiFetch(COMMUNITY_API,'/api/slot-machines/'+Comm.machine.slug+'/stats').then(function(st){
+      var body=$('communityStatsBody'); if(!body) return;
+      if($('communityStatsWrap'))$('communityStatsWrap').style.display='block';
+      function modeRow(label,m,unit){
+        if(!m||!m.spins) return '<tr><td>'+label+'</td><td colspan="6" style="opacity:.5">no spins yet</td></tr>';
+        return '<tr><td>'+label+'</td><td>'+m.spins.toLocaleString()+'</td><td>'+Number(m.wagered).toLocaleString()+'</td>'+
+          '<td>'+Number(m.paid).toLocaleString()+'</td><td>'+(m.rtpPct!=null?m.rtpPct+'%':'&mdash;')+'</td>'+
+          '<td>'+m.players+'</td><td>'+Number(m.bestWin).toLocaleString()+' '+unit+'</td></tr>';
+      }
+      var h='<table style="width:100%;border-collapse:collapse;font:600 11px var(--font-mono,monospace)">'+
+        '<tr style="opacity:.6;text-align:left"><th>mode</th><th>spins</th><th>wagered</th><th>paid out</th><th>live RTP</th><th>players</th><th>best win</th></tr>'+
+        modeRow('free play',st.modes.credits,'cr')+
+        modeRow('real money',st.modes.real,(st.token&&st.token.symbol?st.token.symbol+' cr':'cr'))+
+        '</table>';
+      if(st.token){
+        var d=st.token.decimals;
+        var f=function(v){ return CabinetWallet.fromBaseUnits(v,d); };
+        var bf=st.money.bankrollFlows||{}, pf=st.money.playerFlows||{};
+        h+='<div style="margin-top:8px">bankroll <b>'+f(st.money.bankroll)+' '+st.token.symbol+'</b>'+
+          ' &middot; player balances <b>'+Number(st.money.playerLiabilities).toLocaleString()+' cr</b>'+
+          ' &middot; funded '+f((bf.deposit||{}).total||'0')+' / withdrawn '+f((bf.withdrawal||{}).total||'0')+
+          ' &middot; player in '+f((pf.deposit||{}).total||'0')+' / out '+f((pf.cashout||{}).total||'0')+'</div>';
+      }
+      // last-14-day activity as inline bars (real+credits combined per day)
+      var byDay={};
+      (st.daily||[]).forEach(function(x){ byDay[x.day]=(byDay[x.day]||0)+x.spins; });
+      var days=Object.keys(byDay).sort().slice(-14);
+      if(days.length){
+        var max=Math.max.apply(null,days.map(function(k){return byDay[k];}));
+        h+='<div style="margin-top:8px;display:flex;gap:2px;align-items:flex-end;height:34px">'+
+          days.map(function(k){ return '<div title="'+k+': '+byDay[k]+' spins" style="width:12px;background:var(--cyan,#22d3ee);opacity:.75;height:'+Math.max(8,Math.round(byDay[k]/max*34))+'px"></div>'; }).join('')+
+          '</div><div style="opacity:.5">last '+days.length+' active day'+(days.length>1?'s':'')+'</div>';
+      }
+      body.innerHTML=h;
+    }).catch(function(e){
+      var body=$('communityStatsBody'); if(body) body.textContent='Could not load stats: '+(e&&e.message||e);
+    });
+  }
+
+  function communityWithdraw(){
+    if(!Comm.machine||!Comm.bankroll||!Comm.bankroll.token){ communityMoneyMsg('Set a token first.','err'); return; }
+    var b=Comm.bankroll, human=(($('communityFundAmt')&&$('communityFundAmt').value)||'').trim();
+    var base;
+    try{ base=CabinetWallet.toBaseUnits(human,b.token.decimals); }catch(e){ communityMoneyMsg(String(e.message||e),'err'); return; }
+    communityMoneyMsg('Withdrawing…','');
+    CabinetWallet.apiFetch(COMMUNITY_API,'/api/slot-machines/'+Comm.machine.slug+'/bankroll/withdraw',
+      {method:'POST',body:JSON.stringify({amount:base})})
+    .then(function(r){
+      communityMoneyMsg('Withdrawn — tx '+(r.txHash?r.txHash.slice(0,12)+'…':'sent')+'.','ok');
+      communityMoneyRefresh();
+    }).catch(function(e){ communityMoneyMsg('Withdraw failed: '+(e&&e.message||e),'err'); });
+  }
+
   /* ═══ SIMULATOR (Web Worker running identical evalSpin) ═══ */
   var simWorker=null;
   function runSim(spins){
@@ -4320,6 +4572,17 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
   on('machShareUrl','click',function(e){ e.target.select(); });
   on('machList','click',function(e){ var btn=e.target.closest&&e.target.closest('.mach-btn'); if(!btn)return; var row=btn.closest('.mach-row'); if(!row)return; var id=row.getAttribute('data-id'), act=btn.getAttribute('data-act');
     if(act==='open')openMachine(id); else if(act==='del')deleteMachine(id); else if(act==='rename')renameMachine(id); else if(act==='share')shareSavedMachine(id); });
+  /* community wiring */
+  on('communityConnect','click',communityConnect);
+  on('communitySave','click',communitySave);
+  on('communityPublish','click',communityPublish);
+  on('communityEmbed','click',communityEmbed);
+  on('communityEmbedCode','click',function(e){ e.target.select(); });
+  on('communitySetToken','click',communitySetToken);
+  on('communityFund','click',communityFund);
+  on('communityWithdraw','click',communityWithdraw);
+  on('communityStatsRefresh','click',communityStatsRefresh);
+  communityRefreshWho();
 
   // ── art picker ──
   function openArtPicker(i){
