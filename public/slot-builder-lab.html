@@ -1022,6 +1022,13 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
           </div>
           <div class="json-msg" id="communityMoneyMsg"></div>
         </div>
+
+        <!-- STATS — how this machine is actually doing, split free play vs
+             real money, from the server's spin ledger. -->
+        <div id="communityStatsWrap" style="display:none;margin-top:14px">
+          <div class="ctl-lbl"><span>Machine stats</span><button class="sm-btn" id="communityStatsRefresh" style="margin-left:auto">Refresh</button></div>
+          <div id="communityStatsBody" class="hint" style="margin-top:4px">&mdash;</div>
+        </div>
       </div>
 
       <div class="tab-panel" id="tab-json">
@@ -4103,6 +4110,7 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
       var rtpNote=(row.rtp_pct!=null)?(' · simulated RTP '+Math.round(row.rtp_pct)+'%'+(row.rtp_flagged?' (looks unusual — check your paytable)':'')):'';
       communityMsg('Saved "'+esc(row.name)+'" to Community'+rtpNote+'.','ok');
       communityMoneyRefresh();
+      communityStatsRefresh();
     }).catch(function(e){ communityMsg('Save failed: '+(e&&e.message||e),'err'); });
   }
 
@@ -4179,6 +4187,48 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
       communityMoneyRefresh();
     }).catch(function(e){ communityMoneyMsg('Funding failed: '+(e&&e.message||e),'err'); communityMoneyRefresh(); });
   }
+  /* ── machine stats: the creator's dashboard for this machine ── */
+  function communityStatsRefresh(){
+    if(!Comm.machine) return;
+    CabinetWallet.apiFetch(COMMUNITY_API,'/api/slot-machines/'+Comm.machine.slug+'/stats').then(function(st){
+      var body=$('communityStatsBody'); if(!body) return;
+      if($('communityStatsWrap'))$('communityStatsWrap').style.display='block';
+      function modeRow(label,m,unit){
+        if(!m||!m.spins) return '<tr><td>'+label+'</td><td colspan="6" style="opacity:.5">no spins yet</td></tr>';
+        return '<tr><td>'+label+'</td><td>'+m.spins.toLocaleString()+'</td><td>'+Number(m.wagered).toLocaleString()+'</td>'+
+          '<td>'+Number(m.paid).toLocaleString()+'</td><td>'+(m.rtpPct!=null?m.rtpPct+'%':'&mdash;')+'</td>'+
+          '<td>'+m.players+'</td><td>'+Number(m.bestWin).toLocaleString()+' '+unit+'</td></tr>';
+      }
+      var h='<table style="width:100%;border-collapse:collapse;font:600 11px var(--font-mono,monospace)">'+
+        '<tr style="opacity:.6;text-align:left"><th>mode</th><th>spins</th><th>wagered</th><th>paid out</th><th>live RTP</th><th>players</th><th>best win</th></tr>'+
+        modeRow('free play',st.modes.credits,'cr')+
+        modeRow('real money',st.modes.real,(st.token&&st.token.symbol?st.token.symbol+' cr':'cr'))+
+        '</table>';
+      if(st.token){
+        var d=st.token.decimals;
+        var f=function(v){ return CabinetWallet.fromBaseUnits(v,d); };
+        var bf=st.money.bankrollFlows||{}, pf=st.money.playerFlows||{};
+        h+='<div style="margin-top:8px">bankroll <b>'+f(st.money.bankroll)+' '+st.token.symbol+'</b>'+
+          ' &middot; player balances <b>'+Number(st.money.playerLiabilities).toLocaleString()+' cr</b>'+
+          ' &middot; funded '+f((bf.deposit||{}).total||'0')+' / withdrawn '+f((bf.withdrawal||{}).total||'0')+
+          ' &middot; player in '+f((pf.deposit||{}).total||'0')+' / out '+f((pf.cashout||{}).total||'0')+'</div>';
+      }
+      // last-14-day activity as inline bars (real+credits combined per day)
+      var byDay={};
+      (st.daily||[]).forEach(function(x){ byDay[x.day]=(byDay[x.day]||0)+x.spins; });
+      var days=Object.keys(byDay).sort().slice(-14);
+      if(days.length){
+        var max=Math.max.apply(null,days.map(function(k){return byDay[k];}));
+        h+='<div style="margin-top:8px;display:flex;gap:2px;align-items:flex-end;height:34px">'+
+          days.map(function(k){ return '<div title="'+k+': '+byDay[k]+' spins" style="width:12px;background:var(--cyan,#22d3ee);opacity:.75;height:'+Math.max(8,Math.round(byDay[k]/max*34))+'px"></div>'; }).join('')+
+          '</div><div style="opacity:.5">last '+days.length+' active day'+(days.length>1?'s':'')+'</div>';
+      }
+      body.innerHTML=h;
+    }).catch(function(e){
+      var body=$('communityStatsBody'); if(body) body.textContent='Could not load stats: '+(e&&e.message||e);
+    });
+  }
+
   function communityWithdraw(){
     if(!Comm.machine||!Comm.bankroll||!Comm.bankroll.token){ communityMoneyMsg('Set a token first.','err'); return; }
     var b=Comm.bankroll, human=(($('communityFundAmt')&&$('communityFundAmt').value)||'').trim();
@@ -4531,6 +4581,7 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
   on('communitySetToken','click',communitySetToken);
   on('communityFund','click',communityFund);
   on('communityWithdraw','click',communityWithdraw);
+  on('communityStatsRefresh','click',communityStatsRefresh);
   communityRefreshWho();
 
   // ── art picker ──
