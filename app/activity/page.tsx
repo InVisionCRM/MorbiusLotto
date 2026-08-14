@@ -16,6 +16,7 @@ import {
   Activity,
   ArrowDownToLine,
   ArrowUpFromLine,
+  Cherry,
   Crown,
   Gift,
   LayoutGrid,
@@ -31,6 +32,7 @@ import LiveTablesModal from '@/components/activity/LiveTablesModal'
 import ReferralAbuseControls from '@/components/activity/ReferralAbuseControls'
 import LiveBadge from '@/components/activity/LiveBadge'
 import TiersPanel from '@/components/activity/TiersPanel'
+import SlotsPanel from '@/components/activity/SlotsPanel'
 import {
   BigWinsTable,
   DepositsTable,
@@ -70,7 +72,7 @@ const WINDOWS: Array<{ key: DashWindow; label: string }> = [
   { key: 'all', label: 'All time' },
 ]
 
-type TabKey = 'players' | 'tiers' | 'deposits' | 'withdrawals' | 'bigwins' | 'referrals' | 'games' | 'live'
+type TabKey = 'players' | 'tiers' | 'deposits' | 'withdrawals' | 'bigwins' | 'referrals' | 'games' | 'slots' | 'live'
 
 const TABS: Array<{ key: TabKey; label: string; icon: React.ReactNode }> = [
   { key: 'players', label: 'Players', icon: <Users className="h-3.5 w-3.5" /> },
@@ -80,6 +82,7 @@ const TABS: Array<{ key: TabKey; label: string; icon: React.ReactNode }> = [
   { key: 'bigwins', label: 'Big wins', icon: <Trophy className="h-3.5 w-3.5" /> },
   { key: 'referrals', label: 'Referrals', icon: <Gift className="h-3.5 w-3.5" /> },
   { key: 'games', label: 'Games', icon: <Activity className="h-3.5 w-3.5" /> },
+  { key: 'slots', label: 'Slots', icon: <Cherry className="h-3.5 w-3.5" /> },
   { key: 'live', label: 'Live feed', icon: <Activity className="h-3.5 w-3.5" /> },
 ]
 
@@ -352,6 +355,7 @@ export default function AdminDashboardPage() {
                   />
                   </>
                 )}
+                {tab === 'slots' && <SlotsPanel />}
                 {tab === 'games' && (
                   <>
                     <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-cyan-500/25 bg-cyan-500/[0.06] px-4 py-3">
