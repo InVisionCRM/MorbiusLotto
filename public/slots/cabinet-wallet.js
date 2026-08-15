@@ -160,7 +160,11 @@ function toChecksumAddress(addr){
   return out;
 }
 
-/** Connect the wallet; returns the selected address, EIP-55 checksummed. */
+/** Connect the wallet; returns the selected address, EIP-55 checksummed.
+    Silent: wallets hand back the account already authorised for this origin
+    without prompting. Right for follow-up calls that must come FROM the
+    account already signed in (funding, deposits) — see connectWithPicker for
+    the sign-in case. */
 function connect(){
   return eth().request({method:'eth_requestAccounts'}).then(function(accounts){
     var a=accounts&&accounts[0];
@@ -169,15 +173,67 @@ function connect(){
   });
 }
 
+function isUserRejection(err){ return !!err && err.code===4001; }
+
+/* Errors that must stop the flow rather than be retried around: the user said
+   no (4001), or the wallet already has a prompt open (-32002) — retrying that
+   one just stacks a second request behind the first. Anything else is treated
+   as "this wallet cannot do it", since wallets vary in how they report an
+   unimplemented method. */
+function isFatalWalletError(err){ return !!err && (err.code===4001 || err.code===-32002); }
+
+/** The account list a wallet just granted, if it names exactly one. */
+function singleGrantedAccount(perms){
+  if(!Array.isArray(perms)) return null;
+  for(var i=0;i<perms.length;i++){
+    var caveats=perms[i]&&perms[i].caveats;
+    if(!Array.isArray(caveats)) continue;
+    for(var j=0;j<caveats.length;j++){
+      var v=caveats[j]&&caveats[j].value;
+      if(Array.isArray(v)&&v.length===1&&typeof v[0]==='string') return v[0];
+    }
+  }
+  return null;
+}
+
+/** Connect, making the wallet ask WHICH account first.
+    Whoever signs in owns the machines they save and is the address a
+    bankroll withdrawal pays out to, so silently reusing "whatever account
+    this origin was connected with once" is the wrong default here — an
+    owner's deployer wallet can end up owning a machine they never meant it
+    to. wallet_requestPermissions forces the account picker in MetaMask,
+    Rabby and Coinbase Wallet; anything that does not implement it falls
+    through to the plain connect rather than blocking sign-in. A rejection is
+    the user saying no, so that is passed on rather than worked around. */
+function connectWithPicker(){
+  return eth().request({method:'wallet_requestPermissions',params:[{eth_accounts:{}}]})
+    .then(function(perms){
+      var picked=singleGrantedAccount(perms);
+      return picked ? toChecksumAddress(picked) : connect();
+    }, function(err){
+      if(isFatalWalletError(err)) throw err;
+      return connect();
+    });
+}
+
+/** Wallet error → something a player can act on. */
+function walletError(err){
+  if(isUserRejection(err)) return new Error('Cancelled in your wallet.');
+  if(err&&err.code===-32002) return new Error('Your wallet already has a request open — finish it there first.');
+  return (err instanceof Error) ? err : new Error((err&&err.message)||String(err));
+}
+
 /** Already signed in? Resolves the session address or null. */
 function me(apiBase){
   return apiFetch(apiBase,'/api/auth/me').then(function(r){ return r.address; }).catch(function(){ return null; });
 }
 
-/** Full SIWE sign-in against the site's auth routes. Returns the address. */
+/** Full SIWE sign-in against the site's auth routes. Returns the address.
+    Asks which account to use rather than assuming — the signer becomes the
+    machine owner and the bankroll payout address. */
 function siweSignIn(apiBase, domain, statement){
   var address;
-  return connect().then(function(a){
+  return connectWithPicker().then(function(a){
     address=a;
     return apiFetch(apiBase,'/api/auth/nonce');
   }).then(function(n){
@@ -187,7 +243,8 @@ function siweSignIn(apiBase, domain, statement){
     return eth().request({method:'personal_sign',params:[utf8ToHex(message),address]}).then(function(signature){
       return apiFetch(apiBase,'/api/auth/verify',{method:'POST',body:JSON.stringify({message:message,signature:signature})});
     });
-  }).then(function(r){ return r.address||address; });
+  }).then(function(r){ return r.address||address; },
+          function(err){ throw walletError(err); });
 }
 
 /** Send a raw contract call from `from`; resolves the tx hash. */
@@ -219,7 +276,7 @@ function waitTx(hash, timeoutMs){
 }
 
 window.CabinetWallet={
-  connect:connect, me:me, siweSignIn:siweSignIn,
+  connect:connect, connectWithPicker:connectWithPicker, me:me, siweSignIn:siweSignIn,
   approve:approve, fundPool:fundPool, waitTx:waitTx,
   toBaseUnits:toBaseUnits, fromBaseUnits:fromBaseUnits,
   toChecksumAddress:toChecksumAddress, apiFetch:apiFetch,
