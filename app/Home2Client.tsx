@@ -12,6 +12,7 @@ import {
   HomeTicker,
   HeroPlayer,
   TheFloor,
+  SlotForge,
   WeeklyDrop,
   VipLadder,
   HomeFooter,
@@ -290,6 +291,7 @@ export default function Home2Client() {
             />
           ) : null}
           <TheFloor />
+          <SlotForge />
           {weeklyDrop ? (
             <WeeklyDrop
               pot={weeklyDrop.pot}
