@@ -26,6 +26,22 @@ var SEL_ADD_TO_PRIZE_POOL = '0x55aa3f69';
 var PULSECHAIN_ID_HEX = '0x171'; // 369
 
 function eth(){ if(!window.ethereum) throw new Error('No wallet found — install MetaMask or another EVM wallet.'); return window.ethereum; }
+
+/* The same thing as a promise. Callers attach .catch() to the value we return,
+   so a *synchronous* throw in here escapes their error handling completely and
+   leaves the page sitting on whatever "Connecting…" text it set beforehand. */
+function ethAsync(){
+  try { return Promise.resolve(eth()); } catch(err){ return Promise.reject(err); }
+}
+
+/* Run `hint` if the promise has not settled within ms. Advisory only: the
+   promise is left alone, so a wallet prompt the user simply had not noticed
+   still works when they get to it. */
+function withSlowHint(promise, ms, hint){
+  var timer=setTimeout(function(){ try{ hint(); }catch(e){} }, ms);
+  function clear(){ clearTimeout(timer); }
+  return promise.then(function(v){ clear(); return v; }, function(e){ clear(); throw e; });
+}
 function pad32(hexNo0x){ return hexNo0x.replace(/^0x/,'').padStart(64,'0'); }
 function encAddress(addr){ return pad32(addr.toLowerCase()); }
 function encUint(v){ return pad32(BigInt(v).toString(16)); }
@@ -50,10 +66,29 @@ function fromBaseUnits(base, decimals){
   return whole.toString()+(fs?'.'+fs:'');
 }
 
+/* A request that never answers must not read as "still working" forever. */
+var API_TIMEOUT_MS=25000;
+/* How long a wallet may stay silent before we tell the user to go look at it.
+   Wallet prompts can legitimately sit unanswered, so this only adds a hint. */
+var SLOW_WALLET_MS=12000;
+
 function apiFetch(base, path, opts){
   opts=opts||{}; opts.credentials='include';
   if(opts.body){ opts.headers=opts.headers||{}; opts.headers['Content-Type']='application/json'; }
+  var timer=null;
+  if(typeof AbortController==='function' && !opts.signal){
+    var ctl=new AbortController();
+    opts.signal=ctl.signal;
+    timer=setTimeout(function(){ ctl.abort(); }, API_TIMEOUT_MS);
+  }
   return fetch(base+path, opts).then(function(r){
+    if(timer) clearTimeout(timer);
+    return r;
+  }, function(err){
+    if(timer) clearTimeout(timer);
+    if(err&&err.name==='AbortError') throw new Error('The server did not respond — check your connection and try again.');
+    throw err;
+  }).then(function(r){
     return r.json().catch(function(){ return {}; }).then(function(body){
       if(!r.ok||body.ok===false) throw new Error((body&&body.error)||('request failed ('+r.status+')'));
       return body;
@@ -166,7 +201,8 @@ function toChecksumAddress(addr){
     account already signed in (funding, deposits) — see connectWithPicker for
     the sign-in case. */
 function connect(){
-  return eth().request({method:'eth_requestAccounts'}).then(function(accounts){
+  return ethAsync().then(function(e){ return e.request({method:'eth_requestAccounts'}); })
+  .then(function(accounts){
     var a=accounts&&accounts[0];
     if(!a) throw new Error('No account returned by wallet');
     return toChecksumAddress(a);
@@ -206,7 +242,8 @@ function singleGrantedAccount(perms){
     through to the plain connect rather than blocking sign-in. A rejection is
     the user saying no, so that is passed on rather than worked around. */
 function connectWithPicker(){
-  return eth().request({method:'wallet_requestPermissions',params:[{eth_accounts:{}}]})
+  return ethAsync()
+    .then(function(e){ return e.request({method:'wallet_requestPermissions',params:[{eth_accounts:{}}]}); })
     .then(function(perms){
       var picked=singleGrantedAccount(perms);
       return picked ? toChecksumAddress(picked) : connect();
@@ -231,16 +268,29 @@ function me(apiBase){
 /** Full SIWE sign-in against the site's auth routes. Returns the address.
     Asks which account to use rather than assuming — the signer becomes the
     machine owner and the bankroll payout address. */
-function siweSignIn(apiBase, domain, statement){
+function siweSignIn(apiBase, domain, statement, onStep){
+  var step=(typeof onStep==='function')?onStep:function(){};
   var address;
-  return connectWithPicker().then(function(a){
+  /* Everything runs inside the chain so a synchronous throw (no wallet
+     installed, say) surfaces through the caller's .catch() instead of
+     escaping it and stranding the page mid-"Connecting…". */
+  return Promise.resolve().then(function(){
+    step('wallet');
+    return withSlowHint(connectWithPicker(), SLOW_WALLET_MS, function(){ step('wallet-slow'); });
+  }).then(function(a){
     address=a;
+    step('nonce');
     return apiFetch(apiBase,'/api/auth/nonce');
   }).then(function(n){
     var message=domain+' wants you to sign in with your Ethereum account:\n'+address+
       '\n\n'+statement+'\n\n'+
       'URI: '+location.origin+'\nVersion: 1\nChain ID: 369\nNonce: '+n.nonce+'\nIssued At: '+new Date().toISOString();
-    return eth().request({method:'personal_sign',params:[utf8ToHex(message),address]}).then(function(signature){
+    step('sign');
+    var signing=ethAsync().then(function(e){
+      return e.request({method:'personal_sign',params:[utf8ToHex(message),address]});
+    });
+    return withSlowHint(signing, SLOW_WALLET_MS, function(){ step('sign-slow'); }).then(function(signature){
+      step('verify');
       return apiFetch(apiBase,'/api/auth/verify',{method:'POST',body:JSON.stringify({message:message,signature:signature})});
     });
   }).then(function(r){ return r.address||address; },

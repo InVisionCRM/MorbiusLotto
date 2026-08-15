@@ -4085,10 +4085,23 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
     });
   }
 
+  /* Sign-in waits on a wallet the page cannot see into, so every stage says
+     what it is waiting for — a silent "Connecting…" that never changes is
+     indistinguishable from a hang. */
+  var SIGNIN_STEPS={
+    wallet:'Connecting — pick an account in your wallet.',
+    'wallet-slow':'Still waiting on your wallet. Open the extension: a request may be sitting there unanswered.',
+    nonce:'Wallet connected. Preparing sign-in…',
+    sign:'Sign the message in your wallet to finish (this moves no funds).',
+    'sign-slow':'Still waiting for the signature — check your wallet for a pending request.',
+    verify:'Verifying your signature…'
+  };
+
   function communityConnect(){
-    communityMsg('Connecting…','');
+    communityMsg(SIGNIN_STEPS.wallet,'');
     CabinetWallet.siweSignIn(COMMUNITY_API, COMMUNITY_SIWE_DOMAIN,
-      'Sign in to MORBIUS to save and publish your slot machine. No funds will move.')
+      'Sign in to MORBIUS to save and publish your slot machine. No funds will move.',
+      function(stage){ if(SIGNIN_STEPS[stage]) communityMsg(SIGNIN_STEPS[stage],''); })
     .then(function(){
       return communityRefreshWho();
     }).then(function(address){
