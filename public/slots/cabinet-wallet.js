@@ -61,12 +61,111 @@ function apiFetch(base, path, opts){
   });
 }
 
-/** Connect the wallet; returns the selected address. */
+/* ── EIP-55 checksumming ──────────────────────────────────────────────────
+   SIWE (EIP-4361) requires line 2 of the message to carry an EIP-55
+   *checksummed* address. Wallets hand back a lowercase string from
+   eth_requestAccounts, and the server parses with the `siwe` package, which
+   rejects anything else outright ("line 2: invalid EIP-55 address"). The app's
+   bundled routes get this for free from viem; these static pages have no
+   bundler, and SubtleCrypto has no keccak, so the hash lives here.
+
+   Keccak-256 (original padding 0x01, NOT SHA3's 0x06) over 64-bit lanes held
+   as (lo, hi) 32-bit pairs, since JS bitwise ops are 32-bit. Called once per
+   sign-in, so clarity beats speed. */
+var KECCAK_RC = [
+  [0x00000000,0x00000001],[0x00000000,0x00008082],[0x80000000,0x0000808a],[0x80000000,0x80008000],
+  [0x00000000,0x0000808b],[0x00000000,0x80000001],[0x80000000,0x80008081],[0x80000000,0x00008009],
+  [0x00000000,0x0000008a],[0x00000000,0x00000088],[0x00000000,0x80008009],[0x00000000,0x8000000a],
+  [0x00000000,0x8000808b],[0x80000000,0x0000008b],[0x80000000,0x00008089],[0x80000000,0x00008003],
+  [0x80000000,0x00008002],[0x80000000,0x00000080],[0x00000000,0x0000800a],[0x80000000,0x8000000a],
+  [0x80000000,0x80008081],[0x80000000,0x00008080],[0x00000000,0x80000001],[0x80000000,0x80008008]
+];
+/* ρ offsets in lane order i = x + 5y. */
+var KECCAK_ROT = [0,1,62,28,27,36,44,6,55,20,3,10,43,25,39,41,45,15,21,8,18,2,61,56,14];
+
+function keccakF(lo, hi){
+  var cLo=new Array(5), cHi=new Array(5), dLo=new Array(5), dHi=new Array(5);
+  var bLo=new Array(25), bHi=new Array(25);
+  var r,x,y,i;
+  for(r=0;r<24;r++){
+    /* θ */
+    for(x=0;x<5;x++){
+      cLo[x]=lo[x]^lo[x+5]^lo[x+10]^lo[x+15]^lo[x+20];
+      cHi[x]=hi[x]^hi[x+5]^hi[x+10]^hi[x+15]^hi[x+20];
+    }
+    for(x=0;x<5;x++){
+      var x1=(x+1)%5, x4=(x+4)%5;
+      var rl=((cLo[x1]<<1)|(cHi[x1]>>>31))|0, rh=((cHi[x1]<<1)|(cLo[x1]>>>31))|0;
+      dLo[x]=cLo[x4]^rl; dHi[x]=cHi[x4]^rh;
+    }
+    for(i=0;i<25;i++){ lo[i]^=dLo[i%5]; hi[i]^=dHi[i%5]; }
+    /* ρ + π : B[y, 2x+3y] = rot(A[x, y], ROT[x + 5y]) */
+    for(y=0;y<5;y++) for(x=0;x<5;x++){
+      var src=x+5*y, n=KECCAK_ROT[src], dst=y+5*((2*x+3*y)%5);
+      var al=lo[src], ah=hi[src], nl, nh, m;
+      if(n===0){ nl=al; nh=ah; }
+      else if(n<32){ nl=((al<<n)|(ah>>>(32-n)))|0; nh=((ah<<n)|(al>>>(32-n)))|0; }
+      else if(n===32){ nl=ah; nh=al; }
+      else { m=n-32; nl=((ah<<m)|(al>>>(32-m)))|0; nh=((al<<m)|(ah>>>(32-m)))|0; }
+      bLo[dst]=nl; bHi[dst]=nh;
+    }
+    /* χ */
+    for(y=0;y<5;y++) for(x=0;x<5;x++){
+      var k=x+5*y, k1=(x+1)%5+5*y, k2=(x+2)%5+5*y;
+      lo[k]=bLo[k]^((~bLo[k1])&bLo[k2]);
+      hi[k]=bHi[k]^((~bHi[k1])&bHi[k2]);
+    }
+    /* ι */
+    hi[0]^=KECCAK_RC[r][0]; lo[0]^=KECCAK_RC[r][1];
+  }
+}
+
+/** Keccak-256 over a byte array; returns 32 bytes. */
+function keccak256(bytes){
+  var lo=new Array(25), hi=new Array(25), i;
+  for(i=0;i<25;i++){ lo[i]=0; hi[i]=0; }
+  var RATE=136, len=bytes.length;                 // 1088-bit rate = 17 lanes
+  var padded=Math.ceil((len+1)/RATE)*RATE;
+  var buf=new Uint8Array(padded);
+  buf.set(bytes);
+  buf[len]^=0x01;                                 // Keccak padding, not SHA3
+  buf[padded-1]^=0x80;
+  for(var off=0; off<padded; off+=RATE){
+    for(var l=0;l<17;l++){
+      var b=off+l*8;
+      lo[l]^=(buf[b]|(buf[b+1]<<8)|(buf[b+2]<<16)|(buf[b+3]<<24));
+      hi[l]^=(buf[b+4]|(buf[b+5]<<8)|(buf[b+6]<<16)|(buf[b+7]<<24));
+    }
+    keccakF(lo,hi);
+  }
+  var out=new Uint8Array(32);
+  for(var j=0;j<4;j++){
+    out[j*8]=lo[j]&0xff;        out[j*8+1]=(lo[j]>>>8)&0xff;
+    out[j*8+2]=(lo[j]>>>16)&0xff; out[j*8+3]=(lo[j]>>>24)&0xff;
+    out[j*8+4]=hi[j]&0xff;      out[j*8+5]=(hi[j]>>>8)&0xff;
+    out[j*8+6]=(hi[j]>>>16)&0xff; out[j*8+7]=(hi[j]>>>24)&0xff;
+  }
+  return out;
+}
+
+/** Lowercase (or any-case) address → EIP-55 checksummed form. */
+function toChecksumAddress(addr){
+  var raw=String(addr==null?'':addr).trim().replace(/^0x/i,'').toLowerCase();
+  if(!/^[0-9a-f]{40}$/.test(raw)) throw new Error('Not a valid wallet address: '+addr);
+  var hash=keccak256(new TextEncoder().encode(raw)), out='0x';
+  for(var i=0;i<40;i++){
+    var nibble=(i%2===0)?(hash[i>>1]>>4):(hash[i>>1]&0x0f);
+    out+=(nibble>=8)?raw.charAt(i).toUpperCase():raw.charAt(i);
+  }
+  return out;
+}
+
+/** Connect the wallet; returns the selected address, EIP-55 checksummed. */
 function connect(){
   return eth().request({method:'eth_requestAccounts'}).then(function(accounts){
     var a=accounts&&accounts[0];
     if(!a) throw new Error('No account returned by wallet');
-    return a;
+    return toChecksumAddress(a);
   });
 }
 
@@ -123,6 +222,6 @@ window.CabinetWallet={
   connect:connect, me:me, siweSignIn:siweSignIn,
   approve:approve, fundPool:fundPool, waitTx:waitTx,
   toBaseUnits:toBaseUnits, fromBaseUnits:fromBaseUnits,
-  apiFetch:apiFetch,
+  toChecksumAddress:toChecksumAddress, apiFetch:apiFetch,
 };
 })();
