@@ -25,7 +25,11 @@ var SEL_APPROVE = '0x095ea7b3';
 var SEL_ADD_TO_PRIZE_POOL = '0x55aa3f69';
 var PULSECHAIN_ID_HEX = '0x171'; // 369
 
-function eth(){ if(!window.ethereum) throw new Error('No wallet found — install MetaMask or another EVM wallet.'); return window.ethereum; }
+/* Injected EIP-1193 provider only. Worth being clear about the limit: unlike
+   the app's bundled routes, which go through wagmi and therefore reach
+   WalletConnect and mobile wallets too, these static pages can only see a
+   wallet that injects window.ethereum. */
+function eth(){ if(!window.ethereum) throw new Error('No wallet detected in this browser. Open this page in your wallet’s browser, or install an EVM wallet extension.'); return window.ethereum; }
 
 /* The same thing as a promise. Callers attach .catch() to the value we return,
    so a *synchronous* throw in here escapes their error handling completely and
@@ -237,10 +241,11 @@ function singleGrantedAccount(perms){
     bankroll withdrawal pays out to, so silently reusing "whatever account
     this origin was connected with once" is the wrong default here — an
     owner's deployer wallet can end up owning a machine they never meant it
-    to. wallet_requestPermissions forces the account picker in MetaMask,
-    Rabby and Coinbase Wallet; anything that does not implement it falls
-    through to the plain connect rather than blocking sign-in. A rejection is
-    the user saying no, so that is passed on rather than worked around. */
+    to. wallet_requestPermissions (EIP-2255) is the standard way to ask for a
+    fresh account grant; wallets that implement it show their account picker.
+    It is optional, so anything that does not implement it falls through to the
+    plain connect rather than blocking sign-in — no wallet is assumed here. A
+    rejection is the user saying no, so that is passed on, not worked around. */
 function connectWithPicker(){
   return ethAsync()
     .then(function(e){ return e.request({method:'wallet_requestPermissions',params:[{eth_accounts:{}}]}); })
