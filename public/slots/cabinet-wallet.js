@@ -258,6 +258,28 @@ function connectWithPicker(){
     });
 }
 
+/** Accounts already authorised for this origin. eth_accounts never prompts,
+    so this cannot hang waiting on a human. Returns [] if the wallet objects. */
+function authorizedAccounts(){
+  return ethAsync()
+    .then(function(e){ return e.request({method:'eth_accounts'}); })
+    .catch(function(){ return []; });
+}
+
+/** The connect used by sign-in: fewest prompts that still lands the right
+    account. If the wallet already has one authorised for this origin, take it
+    and show no prompt at all — that is the overwhelmingly common case and it
+    makes signing in a single click. Only when nothing is authorised yet (a
+    prompt is unavoidable then anyway), or the caller explicitly wants to
+    switch, do we ask for a fresh grant and get the account picker. */
+function connectForSignIn(forcePicker){
+  if(forcePicker) return connectWithPicker();
+  return authorizedAccounts().then(function(list){
+    var a=list&&list[0];
+    return a ? toChecksumAddress(a) : connectWithPicker();
+  });
+}
+
 /** Wallet error → something a player can act on. */
 function walletError(err){
   if(isUserRejection(err)) return new Error('Cancelled in your wallet.');
@@ -273,7 +295,7 @@ function me(apiBase){
 /** Full SIWE sign-in against the site's auth routes. Returns the address.
     Asks which account to use rather than assuming — the signer becomes the
     machine owner and the bankroll payout address. */
-function siweSignIn(apiBase, domain, statement, onStep){
+function siweSignIn(apiBase, domain, statement, onStep, forcePicker){
   var step=(typeof onStep==='function')?onStep:function(){};
   var address;
   /* Everything runs inside the chain so a synchronous throw (no wallet
@@ -281,7 +303,7 @@ function siweSignIn(apiBase, domain, statement, onStep){
      escaping it and stranding the page mid-"Connecting…". */
   return Promise.resolve().then(function(){
     step('wallet');
-    return withSlowHint(connectWithPicker(), SLOW_WALLET_MS, function(){ step('wallet-slow'); });
+    return withSlowHint(connectForSignIn(forcePicker), SLOW_WALLET_MS, function(){ step('wallet-slow'); });
   }).then(function(a){
     address=a;
     step('nonce');
@@ -331,7 +353,8 @@ function waitTx(hash, timeoutMs){
 }
 
 window.CabinetWallet={
-  connect:connect, connectWithPicker:connectWithPicker, me:me, siweSignIn:siweSignIn,
+  connect:connect, connectWithPicker:connectWithPicker, authorizedAccounts:authorizedAccounts,
+  me:me, siweSignIn:siweSignIn,
   approve:approve, fundPool:fundPool, waitTx:waitTx,
   toBaseUnits:toBaseUnits, fromBaseUnits:fromBaseUnits,
   toChecksumAddress:toChecksumAddress, apiFetch:apiFetch,
