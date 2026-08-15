@@ -1,0 +1,636 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Reel Forge — the complete creator guide</title>
+<meta name="description" content="Build a slot machine, publish it, embed it on your own site, fund it with any PRC-20 and watch the stats. The full walkthrough, with screenshots of every panel." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@600;700&family=Poppins:wght@400;600;700&display=swap" rel="stylesheet" />
+<style>
+:root{
+  --bg0:#04070e; --bg1:#080d18; --panel:#0b1220; --panel2:#0e1626;
+  --line:rgba(148,163,184,.14); --line2:rgba(148,163,184,.22);
+  --text:#e6edf6; --text2:#9fb0c6; --muted:#64748b;
+  --cyan:#22d3ee; --violet:#a78bfa; --gold:#fbbf24; --emerald:#34d399; --rose:#fb7185;
+  --mono:'Share Tech Mono',ui-monospace,monospace; --disp:'Rajdhani',sans-serif; --font:'Poppins',system-ui,sans-serif;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth; scroll-padding-top:76px}
+body{margin:0;background:var(--bg0);color:var(--text);font-family:var(--font);line-height:1.62;-webkit-font-smoothing:antialiased}
+img{max-width:100%;height:auto;display:block}
+a{color:var(--cyan);text-decoration:none}
+a:hover{text-decoration:underline}
+
+/* ── top bar ─────────────────────────────────────────────── */
+.topbar{position:sticky;top:0;z-index:50;display:flex;align-items:center;gap:14px;
+  padding:11px 20px;background:rgba(4,7,14,.86);backdrop-filter:blur(14px);
+  border-bottom:1px solid var(--line)}
+.topbar .brand{font-family:var(--disp);font-weight:700;letter-spacing:.06em;font-size:15px}
+.topbar .brand i{color:var(--cyan);font-style:normal}
+.topbar .spacer{margin-left:auto}
+.topbar .cta{font-family:var(--disp);font-weight:700;letter-spacing:.05em;font-size:12.5px;color:#06121a;
+  background:linear-gradient(100deg,var(--violet),var(--cyan));padding:8px 15px;border-radius:10px}
+.topbar .cta:hover{text-decoration:none;filter:brightness(1.08)}
+
+/* ── hero ────────────────────────────────────────────────── */
+.hero{padding:54px 20px 30px;max-width:1120px;margin:0 auto;text-align:center}
+.kicker{display:inline-block;font-size:9.5px;font-weight:800;letter-spacing:.24em;color:#c4b5fd;
+  border:1px solid rgba(167,139,250,.4);background:rgba(124,92,255,.12);border-radius:99px;padding:5px 13px}
+.hero h1{font-family:var(--disp);font-weight:700;font-size:clamp(30px,6vw,52px);line-height:1.05;margin:16px 0 10px;letter-spacing:.01em}
+.hero h1 em{font-style:normal;background:linear-gradient(100deg,var(--violet),var(--cyan));
+  -webkit-background-clip:text;background-clip:text;color:transparent}
+.hero p{color:var(--text2);max-width:70ch;margin:0 auto;font-size:15px}
+
+/* ── layout ──────────────────────────────────────────────── */
+.wrap{max-width:1120px;margin:0 auto;padding:0 20px 90px;display:grid;grid-template-columns:224px 1fr;gap:36px;align-items:start}
+nav.toc{position:sticky;top:70px;font-size:12.5px;border-left:1px solid var(--line);padding-left:14px}
+nav.toc b{display:block;font-size:9.5px;letter-spacing:.18em;color:var(--muted);margin:14px 0 6px;font-weight:800}
+nav.toc b:first-child{margin-top:0}
+nav.toc a{display:block;color:var(--text2);padding:3px 0}
+nav.toc a:hover{color:var(--cyan);text-decoration:none}
+
+section{margin-bottom:52px;scroll-margin-top:76px}
+section > h2{font-family:var(--disp);font-weight:700;font-size:clamp(21px,3vw,29px);letter-spacing:.02em;margin:0 0 6px}
+section > h2 .num{color:var(--violet);margin-right:9px}
+section > .lede{color:var(--text2);margin:0 0 20px;font-size:14.5px}
+h3{font-family:var(--disp);font-weight:700;font-size:17px;letter-spacing:.02em;margin:26px 0 6px}
+h4{font-size:13px;font-weight:700;margin:18px 0 4px;letter-spacing:.02em}
+p{margin:0 0 12px}
+ul,ol{margin:0 0 12px;padding-left:20px}
+li{margin:5px 0}
+code{font-family:var(--mono);font-size:12.5px;background:rgba(34,211,238,.09);
+  border:1px solid rgba(34,211,238,.18);border-radius:5px;padding:1px 5px;color:#a5f3fc}
+pre{background:#060b14;border:1px solid var(--line2);border-radius:12px;padding:14px 16px;overflow-x:auto;margin:0 0 14px}
+pre code{background:none;border:0;padding:0;color:#cbd5e1;font-size:12px;line-height:1.65}
+
+/* ── figures ─────────────────────────────────────────────── */
+figure{margin:0 0 18px;border:1px solid var(--line2);border-radius:14px;overflow:hidden;background:var(--panel)}
+figure img{width:100%}
+figcaption{font-size:11.5px;color:var(--text2);padding:9px 13px;border-top:1px solid var(--line);background:rgba(0,0,0,.25)}
+figcaption b{color:var(--cyan);font-weight:700}
+.figrow{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.tall{max-height:520px;overflow-y:auto}
+
+/* ── callouts ────────────────────────────────────────────── */
+.note{border-left:3px solid var(--cyan);background:rgba(34,211,238,.06);padding:11px 14px;border-radius:0 10px 10px 0;margin:0 0 14px;font-size:13.5px}
+.warn{border-left:3px solid var(--gold);background:rgba(251,191,36,.07);padding:11px 14px;border-radius:0 10px 10px 0;margin:0 0 14px;font-size:13.5px}
+.danger{border-left:3px solid var(--rose);background:rgba(251,113,133,.07);padding:11px 14px;border-radius:0 10px 10px 0;margin:0 0 14px;font-size:13.5px}
+.note b,.warn b,.danger b{font-weight:700}
+
+/* ── steps ───────────────────────────────────────────────── */
+ol.steps{list-style:none;padding:0;counter-reset:s}
+ol.steps > li{counter-increment:s;position:relative;padding-left:42px;margin:0 0 16px}
+ol.steps > li::before{content:counter(s);position:absolute;left:0;top:0;width:27px;height:27px;border-radius:50%;
+  display:grid;place-items:center;font-family:var(--disp);font-weight:700;font-size:13px;color:#06121a;
+  background:linear-gradient(140deg,var(--violet),var(--cyan))}
+ol.steps > li b{display:block;font-size:14.5px;margin-bottom:2px}
+
+/* ── tables ──────────────────────────────────────────────── */
+table{width:100%;border-collapse:collapse;font-size:13px;margin:0 0 14px}
+th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line)}
+th{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);font-weight:800}
+td code{white-space:nowrap}
+
+/* ── tab cards ───────────────────────────────────────────── */
+.tabcard{border:1px solid var(--line2);border-radius:14px;background:linear-gradient(165deg,var(--panel2),transparent 70%);padding:16px 18px;margin:0 0 18px}
+.tabcard h3{margin-top:0;display:flex;align-items:center;gap:9px}
+.tabcard h3 .pill{font-family:var(--mono);font-size:9.5px;letter-spacing:.1em;color:var(--cyan);
+  border:1px solid rgba(34,211,238,.3);background:rgba(34,211,238,.08);border-radius:99px;padding:2px 8px}
+
+.footer{border-top:1px solid var(--line);padding:26px 20px 60px;text-align:center;color:var(--muted);font-size:12px}
+.footer a{margin:0 8px}
+
+@media (max-width:900px){
+  .wrap{grid-template-columns:1fr;gap:0}
+  nav.toc{position:static;border-left:0;border-bottom:1px solid var(--line);padding:0 0 16px;margin-bottom:26px;
+    display:grid;grid-template-columns:1fr 1fr;gap:0 14px}
+  nav.toc b{grid-column:1/-1}
+  .figrow{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <span class="brand">MORBIUS<i>.IO</i></span>
+  <span style="color:var(--muted);font-size:12px">Reel Forge guide</span>
+  <span class="spacer"></span>
+  <a class="cta" href="/slot-builder-lab.html">OPEN THE BUILDER</a>
+</div>
+
+<div class="hero">
+  <span class="kicker">CREATOR GUIDE</span>
+  <h1>Build a slot machine.<br />Put it <em>on your own site</em>.</h1>
+  <p>Everything from your first spin in the studio to a published machine running on your own token,
+     embedded on your website, paying real winners — and how to read the numbers afterwards.
+     Every screenshot below is the actual tool.</p>
+</div>
+
+<div class="wrap">
+
+<nav class="toc">
+  <b>START</b>
+  <a href="#overview">What you get</a>
+  <a href="#quickstart">Quick start</a>
+  <a href="#studio">The studio</a>
+  <b>BUILD IT</b>
+  <a href="#layout">Layout &amp; grid</a>
+  <a href="#winflow">Win flow</a>
+  <a href="#symbols">Symbols &amp; paytable</a>
+  <a href="#bonus">Bonus &amp; meta</a>
+  <a href="#look">Theme, FX, sound</a>
+  <a href="#math">Math &amp; RTP</a>
+  <b>SHIP IT</b>
+  <a href="#wallet">Wallet sign-in</a>
+  <a href="#publish">Save &amp; publish</a>
+  <a href="#embed">Embed on your site</a>
+  <b>MONEY</b>
+  <a href="#token">Pick your token</a>
+  <a href="#bankroll">Fund the bankroll</a>
+  <a href="#betting">How betting works</a>
+  <a href="#fair">Provably fair</a>
+  <b>RUN IT</b>
+  <a href="#stats">Read your stats</a>
+  <a href="#changes">Make changes</a>
+  <a href="#trouble">Troubleshooting</a>
+</nav>
+
+<main>
+
+<!-- ══════════════════════════════════════════════════════ -->
+<section id="overview">
+  <h2><span class="num">01</span>What you get</h2>
+  <p class="lede">Reel Forge is a slot studio in your browser. You design the machine; MORBIUS hosts it, runs the maths, and hands you an <code>&lt;iframe&gt;</code> to paste anywhere.</p>
+
+  <figure>
+    <img src="/guide/studio-full.webp" alt="The Reel Forge builder: control deck on the left, live machine preview on the right" loading="lazy" />
+    <figcaption><b>The studio.</b> Controls on the left, a live machine on the right. Change anything and the preview updates immediately — no save/reload cycle.</figcaption>
+  </figure>
+
+  <p>There are two tiers, and you choose per machine:</p>
+  <table>
+    <tr><th>Tier</th><th>What players use</th><th>What you need</th></tr>
+    <tr><td><b>Free play</b></td><td>Demo credits, no wallet needed</td><td>Nothing — build and publish</td></tr>
+    <tr><td><b>Real money</b></td><td>Any PRC-20 token you choose</td><td>A funded bankroll and 80–99% RTP</td></tr>
+  </table>
+
+  <div class="note"><b>No rake.</b> MORBIUS takes no cut of your machine. The house edge you build into the paytable is yours, and it accrues to your bankroll.</div>
+</section>
+
+<!-- ══════════════════════════════════════════════════════ -->
+<section id="quickstart">
+  <h2><span class="num">02</span>Quick start</h2>
+  <p class="lede">The whole path, in the order you'll actually do it.</p>
+  <ol class="steps">
+    <li><b>Open the builder</b> — <a href="/slot-builder-lab.html">Reel Forge</a>. Pick a preset from the top-right dropdown so you start from a working machine rather than a blank grid.</li>
+    <li><b>Make it yours</b> — grid size, symbols, paytable, bonus round, colours and sound, all in the Control Deck.</li>
+    <li><b>Spin it</b> — hit <em>Spin Preview</em> until it feels right, then check <em>Math</em> for the simulated RTP.</li>
+    <li><b>Sign in</b> — one click with your wallet, on the <em>Save &amp; Share</em> tab.</li>
+    <li><b>Save, then Publish</b> — publishing is what makes the machine reachable outside the builder.</li>
+    <li><b>Copy the embed code</b> and paste it into your site.</li>
+    <li><b>Optional: go real money</b> — set a token, fund the bankroll, and re-publish with the real-money iframe.</li>
+  </ol>
+</section>
+
+<!-- ══════════════════════════════════════════════════════ -->
+<section id="studio">
+  <h2><span class="num">03</span>The studio</h2>
+  <p class="lede">Two halves. Everything on the left changes the thing on the right.</p>
+
+  <div class="figrow">
+    <figure>
+      <img src="/guide/studio-preview.webp" alt="The live machine preview column with HUD, board and spin button" loading="lazy" />
+      <figcaption><b>The preview.</b> A real, playable machine — the same engine your players get.</figcaption>
+    </figure>
+    <figure>
+      <img src="/guide/deck-layout.webp" alt="The control deck layout tab" loading="lazy" />
+      <figcaption><b>The control deck.</b> Three groups of tabs: build, style, and ship.</figcaption>
+    </figure>
+  </div>
+
+  <p>Two shortcuts worth knowing straight away:</p>
+  <ul>
+    <li><b>Click the machine itself.</b> Click a symbol, the reels, the frame, the HUD or the background in the preview and the matching editor opens where you clicked.</li>
+    <li><b>Quick Edit</b> (the row above the deck) jumps straight to the five things people change most: symbols, reels, frame, background, spin button.</li>
+  </ul>
+
+  <figure>
+    <img src="/guide/studio-hud.webp" alt="The preview HUD showing lines, bet, win and grid" loading="lazy" />
+    <figcaption>The HUD reads out <b>lines</b>, <b>bet</b>, <b>win</b> and <b>grid</b> — a fast sanity check that your maths changes did what you meant.</figcaption>
+  </figure>
+</section>
+
+<!-- ══════════════════════════════════════════════════════ -->
+<section id="layout">
+  <h2><span class="num">04</span>Layout &amp; grid</h2>
+  <p class="lede">The shape of the board, and how paylines are drawn on it.</p>
+
+  <div class="tabcard">
+    <h3><span class="pill">BUILD</span> Layout</h3>
+    <p>Reels (columns) and rows, the win-evaluation mode, and the physical look of the cells — frame style, corner radius, gap, symbol scale, cell background.</p>
+    <p><b>Paylines are generated for you</b> from the grid: every row, plus V, inverted-V and zig-zag patterns. Change the grid and the lines regenerate.</p>
+  </div>
+  <figure>
+    <img src="/guide/deck-layout.webp" alt="Layout tab: reels, rows, win evaluation, reel frame style" loading="lazy" />
+    <figcaption>A 5×3 board with 7 auto-generated paylines. The <b>Paylines / Ways-to-Win</b> toggle is the single biggest maths decision on this tab.</figcaption>
+  </figure>
+
+  <div class="tabcard">
+    <h3><span class="pill">BUILD</span> Grid</h3>
+    <p>Grid <em>systems</em> — presets that restructure the board rather than just resize it: classic, scatter-pays grids, megaways, split reels, expanding rows.</p>
+  </div>
+  <figure>
+    <img src="/guide/deck-grid.webp" alt="Grid tab: grid systems" loading="lazy" />
+    <figcaption>Picking a system stamps the matching columns, rows and win mode in one go — a fast way to change the entire feel of a machine.</figcaption>
+  </figure>
+</section>
+
+<!-- ══════════════════════════════════════════════════════ -->
+<section id="winflow">
+  <h2><span class="num">05</span>Win flow</h2>
+  <p class="lede">What happens <em>after</em> a winning combination lands. This is where a machine stops feeling like a spreadsheet.</p>
+
+  <figure>
+    <img src="/guide/deck-winflow.webp" alt="Win flow tab: cascades, multiplier ladder, respins, hold and win" loading="lazy" />
+    <figcaption>Cascades, multiplier ladders, respins and hold-and-win all live here.</figcaption>
+  </figure>
+
+  <ul>
+    <li><b>Cascades (tumbles).</b> Winning symbols shatter, survivors fall, new symbols drop in — and any new win pays again on the same bet.</li>
+    <li><b>Multiplier ladder.</b> Each cascade in a chain steps the multiplier up, e.g. <code>×1 → ×2 → ×3 → ×5 → ×8</code>. <b>Endless</b> keeps the chain going as long as wins keep landing.</li>
+    <li><b>Respin / locked respin.</b> Winners hold their position and everything else re-spins.</li>
+    <li><b>Hold &amp; win.</b> Landing symbols lock and grant respins — the classic "collect the board" mechanic.</li>
+  </ul>
+
+  <div class="warn"><b>These multiply your RTP.</b> A ladder that tops out at ×8 on an endless cascade can move a machine from sane to unpayable. After any change here, go to <a href="#math">Math</a> and re-run the simulation.</div>
+
+  <figure>
+    <img src="/guide/studio-board-win.webp" alt="A winning line drawn across the board, paying 100 MORBIUS" loading="lazy" />
+    <figcaption>A win as players see it: the line drawn across the board, winning cells highlighted, and the payout counting up in the HUD.</figcaption>
+  </figure>
+</section>
+
+<!-- ══════════════════════════════════════════════════════ -->
+<section id="symbols">
+  <h2><span class="num">06</span>Symbols &amp; paytable</h2>
+  <p class="lede">The symbols are the art <em>and</em> the maths. Every one has a role, a weight and a pay row.</p>
+
+  <figure class="tall">
+    <img src="/guide/deck-symbols.webp" alt="Symbols tab: per-symbol art, role, weight and pays" loading="lazy" />
+    <figcaption>One block per symbol. Upload your own art, or keep the supplied set.</figcaption>
+  </figure>
+
+  <table>
+    <tr><th>Field</th><th>What it does</th></tr>
+    <tr><td><b>Role</b></td><td><code>normal</code>, <code>wild</code> (substitutes) or <code>scatter</code> (pays anywhere / triggers the bonus)</td></tr>
+    <tr><td><b>Weight</b></td><td>How often it appears. Higher = more common. This is your main frequency dial.</td></tr>
+    <tr><td><b>Pays</b></td><td>Payout per match count, as a multiple of the bet unit — the paytable row for that symbol</td></tr>
+    <tr><td><b>Art</b></td><td>Your uploaded image (embedded straight into the machine — no image hosting needed)</td></tr>
+    <tr><td><b>Size / fit</b></td><td>How the art sits inside its cell</td></tr>
+  </table>
+
+  <div class="note"><b>The rule of thumb:</b> high pays need low weights. If you raise a symbol's payout, lower its weight — or you have just raised the RTP of the whole machine.</div>
+
+  <div class="tabcard">
+    <h3><span class="pill">BUILD</span> Symbol FX</h3>
+    <p>The per-symbol border treatment — neon, shimmer, ember, electric, frost, pulse-ring — with its own colour and speed. Purely cosmetic, and the cheapest way to make premium symbols <em>feel</em> premium.</p>
+  </div>
+  <figure>
+    <img src="/guide/deck-symbolfx.webp" alt="Symbol FX tab: per-symbol border effects" loading="lazy" />
+    <figcaption>Give the top-paying symbols a louder frame than the low pays; players learn the hierarchy without reading the paytable.</figcaption>
+  </figure>
+</section>
+
+<!-- ══════════════════════════════════════════════════════ -->
+<section id="bonus">
+  <h2><span class="num">07</span>Bonus round &amp; meta</h2>
+  <p class="lede">The bonus is the thing players chase. The meta is what keeps them on the machine between bonuses.</p>
+
+  <figure>
+    <img src="/guide/deck-bonus.webp" alt="Bonus tab: free spins, wheel, pick game" loading="lazy" />
+    <figcaption>Three bonus kinds, each a real playable round rather than a number appearing on screen.</figcaption>
+  </figure>
+
+  <ul>
+    <li><b>Free spins</b> — a run of spins on the house, usually with a multiplier or extra wilds.</li>
+    <li><b>Wheel</b> — one spin of a weighted multiplier wheel.</li>
+    <li><b>Pick game</b> — the player picks boxes to reveal prizes until they hit a collect.</li>
+  </ul>
+  <p>The trigger is your scatter symbol: land enough of them anywhere and the round fires.</p>
+
+  <figure>
+    <img src="/guide/deck-meta.webp" alt="Meta tab: jackpot tiers, levels, collection meters" loading="lazy" />
+    <figcaption>Meta layers: tiered jackpots (mini / minor / major / grand), XP levels, or collection meters.</figcaption>
+  </figure>
+
+  <div class="note">Both the bonus and the meta are included in the RTP simulation, so the number on the Math tab already accounts for them.</div>
+</section>
+
+<!-- ══════════════════════════════════════════════════════ -->
+<section id="look">
+  <h2><span class="num">08</span>Theme, FX, animation &amp; sound</h2>
+  <p class="lede">None of this changes the maths. All of it changes whether anyone plays.</p>
+
+  <div class="figrow">
+    <figure>
+      <img src="/guide/deck-theme.webp" alt="Theme tab: colours, background, fonts, buttons" loading="lazy" />
+      <figcaption><b>Theme</b> — palette, background, fonts, win-line colour, button style.</figcaption>
+    </figure>
+    <figure>
+      <img src="/guide/deck-fx.webp" alt="FX tab: ambient particles and screen effects" loading="lazy" />
+      <figcaption><b>FX</b> — ambient particles and screen effects behind the board.</figcaption>
+    </figure>
+    <figure>
+      <img src="/guide/deck-animations.webp" alt="Animations tab: landing style, celebration, big win threshold" loading="lazy" />
+      <figcaption><b>Animations</b> — how symbols land, how wins celebrate, and what counts as a big win.</figcaption>
+    </figure>
+    <figure>
+      <img src="/guide/deck-sound.webp" alt="Sound tab: synth sound packs" loading="lazy" />
+      <figcaption><b>Sound</b> — pick a pack; reel stops, wins and bonuses are generated to match.</figcaption>
+    </figure>
+  </div>
+
+  <div class="note"><b>Set a big-win threshold you'll actually hit.</b> If the celebration only fires above ×50, most sessions never see it. Around ×8–×15 of the bet keeps the machine feeling alive.</div>
+</section>
+
+<!-- ══════════════════════════════════════════════════════ -->
+<section id="math">
+  <h2><span class="num">09</span>Math &amp; RTP</h2>
+  <p class="lede">Before you publish anything, find out what you actually built.</p>
+
+  <figure>
+    <img src="/guide/deck-math.webp" alt="Math tab: Monte-Carlo RTP simulation" loading="lazy" />
+    <figcaption>The Math tab runs a Monte-Carlo simulation of your exact machine — the same maths the server uses to settle real spins.</figcaption>
+  </figure>
+
+  <p>You get back:</p>
+  <table>
+    <tr><th>Figure</th><th>Means</th><th>Healthy range</th></tr>
+    <tr><td><b>RTP</b></td><td>Share of wagers returned to players over the long run</td><td>92–97% is typical; <b>80–99% is required</b> to publish a token machine</td></tr>
+    <tr><td><b>Hit rate</b></td><td>Share of spins that win anything</td><td>20–35% feels lively without being noisy</td></tr>
+    <tr><td><b>Max win</b></td><td>Biggest single win seen in the run, as a multiple of bet</td><td>Compare against your win cap</td></tr>
+  </table>
+
+  <div class="warn"><b>RTP is the house edge, inverted.</b> 94% RTP means the machine keeps 6% of everything wagered, over a long run. Short runs swing wildly in both directions — a funded bankroll is what lets you survive the swings.</div>
+  <div class="note">Re-run the simulation after <em>any</em> change to symbols, pays, weights, win mode, cascades or the bonus. Art and sound changes can't move it.</div>
+</section>
+
+<!-- ══════════════════════════════════════════════════════ -->
+<section id="wallet">
+  <h2><span class="num">10</span>Wallet sign-in</h2>
+  <p class="lede">Saving to the community needs an identity. That identity is your wallet — and it matters more than it looks.</p>
+
+  <figure>
+    <img src="/guide/panel-signedin.webp" alt="Signed in, showing the connected address and the use-a-different-account button" loading="lazy" />
+    <figcaption>Signed in. The address shown is the one that will own this machine.</figcaption>
+  </figure>
+
+  <h3>What actually happens</h3>
+  <ol class="steps">
+    <li><b>Your wallet is asked which account to use.</b> If it has already connected to MORBIUS, it reuses that account and skips straight to the next step.</li>
+    <li><b>You sign a message.</b> Plain text, no transaction, no gas, and it cannot move funds — it only proves you hold the key.</li>
+    <li><b>The server checks the signature</b> and gives you a session. That's the sign-in.</li>
+  </ol>
+
+  <div class="danger"><b>The account you sign in with owns the machine.</b> It is also the only address a bankroll withdrawal can pay out to. If your wallet auto-connected with the wrong account, click <b>Use a different account</b> before you save anything.</div>
+
+  <div class="note"><b>No wallet in this browser?</b> The builder talks to a wallet that injects itself into the page — a browser extension, or your wallet app's built-in browser. Open the builder inside that browser and sign in there.</div>
+</section>
+
+<!-- ══════════════════════════════════════════════════════ -->
+<section id="publish">
+  <h2><span class="num">11</span>Save &amp; publish</h2>
+  <p class="lede">Two different buttons that do two different things. Both live on <em>Save &amp; Share</em>.</p>
+
+  <figure>
+    <img src="/guide/panel-community-full.webp" alt="The full Save and Share tab: local saves, community save/publish/embed, and the real money panel" loading="lazy" />
+    <figcaption>The whole tab: local browser saves at the top, <b>Community</b> in the middle, <b>Real money</b> below.</figcaption>
+  </figure>
+
+  <table>
+    <tr><th>Button</th><th>What it does</th></tr>
+    <tr><td><b>Save Machine</b></td><td>Saves to <em>this browser only</em>. Private, offline, good for drafts.</td></tr>
+    <tr><td><b>Publish — copy share link</b></td><td>Packs the whole machine into a URL. Anyone with the link can open it <em>in the builder</em>.</td></tr>
+    <tr><td><b>Save to Community</b></td><td>Uploads the machine to MORBIUS under your wallet. Status: <code>draft</code>.</td></tr>
+    <tr><td><b>Publish</b></td><td>Flips it to <code>published</code> — now it can be embedded and played.</td></tr>
+    <tr><td><b>Get embed code</b></td><td>Enabled once published. Builds your iframe snippet and copies it.</td></tr>
+  </table>
+
+  <div class="note">Saving to Community also reports your simulated RTP back to you, and warns you if the paytable looks unusual.</div>
+</section>
+
+<!-- ══════════════════════════════════════════════════════ -->
+<section id="embed">
+  <h2><span class="num">12</span>Embed it on your site</h2>
+  <p class="lede">One tag. No SDK, no build step, no account for your visitors.</p>
+
+  <figure>
+    <img src="/guide/panel-embedcode.webp" alt="The embed code panel with the generated iframe snippet" loading="lazy" />
+    <figcaption>Hit <b>Get embed code</b> and the snippet is copied to your clipboard.</figcaption>
+  </figure>
+
+  <p>Free play — anyone can play instantly, no wallet:</p>
+<pre><code>&lt;iframe src="https://morbius.io/embed/YOUR-SLUG"
+        width="480" height="720"
+        style="border:0;" allow="autoplay"&gt;&lt;/iframe&gt;</code></pre>
+
+  <p>Real money — the same machine, playing for your token:</p>
+<pre><code>&lt;iframe src="https://morbius.io/embed/YOUR-SLUG?play=real"
+        width="480" height="780"
+        style="border:0;" allow="autoplay"&gt;&lt;/iframe&gt;</code></pre>
+
+  <h3>Sizing it</h3>
+  <p>The cabinet is built tall and narrow. <b>480×720</b> suits free play; the real-money version needs roughly <b>60px more height</b> for the wallet bar. To make it fluid, wrap it:</p>
+<pre><code>&lt;div style="max-width:480px;margin:0 auto"&gt;
+  &lt;iframe src="https://morbius.io/embed/YOUR-SLUG"
+          width="100%" height="720"
+          style="border:0;display:block" allow="autoplay"&gt;&lt;/iframe&gt;
+&lt;/div&gt;</code></pre>
+
+  <div class="note"><b>It works on any domain.</b> The embed page sets its framing policy to allow all sites, so you don't need to register your domain with anyone.</div>
+  <div class="warn"><b>A note on browser storage.</b> In a third-party iframe some browsers isolate storage per-site, so a free-play demo balance may not persist between visits the way it does on morbius.io itself. Real-money balances are held server-side against your wallet, so they are unaffected.</div>
+</section>
+
+<!-- ══════════════════════════════════════════════════════ -->
+<section id="token">
+  <h2><span class="num">13</span>Pick your betting token</h2>
+  <p class="lede">Optional, and only worth doing once the machine plays well. Any PRC-20 on PulseChain can be the currency.</p>
+
+  <figure>
+    <img src="/guide/panel-bankroll.webp" alt="The real money panel: token address, set token, bankroll, fund and withdraw" loading="lazy" />
+    <figcaption>Paste a token address, hit <b>Set token</b>, and the details are read straight off the chain.</figcaption>
+  </figure>
+
+  <h3>Credits vs tokens</h3>
+  <p>Spins are always counted in whole <b>credits</b> — that's what keeps the maths exact. The credit value is the bridge to your token:</p>
+  <ul>
+    <li>Default: <b>1 credit = 0.001 token</b>.</li>
+    <li>Deposits convert token → credits, rounding down.</li>
+    <li>Cash-outs convert credits → token at the same rate.</li>
+  </ul>
+  <p>Pick a credit value that makes your bet ladder feel sane. If a token is worth a lot, make each credit smaller.</p>
+
+  <div class="danger"><b>The token locks on the first deposit.</b> Once real value is in the pool, the machine's token cannot be swapped — the escrow pool is bound to it. Choose deliberately.</div>
+  <div class="warn"><b>Fee-on-transfer tokens work, with a caveat.</b> They're allowed, but the machine detects the shortfall and carries a permanent warning badge, because less arrives than you sent.</div>
+</section>
+
+<!-- ══════════════════════════════════════════════════════ -->
+<section id="bankroll">
+  <h2><span class="num">14</span>Fund the bankroll</h2>
+  <p class="lede">The bankroll is the house money. It pays your winners, and it collects your edge.</p>
+
+  <h3>Funding, step by step</h3>
+  <ol class="steps">
+    <li><b>Type an amount</b> in the bankroll box and hit <em>Fund bankroll</em>.</li>
+    <li><b>Approve</b> — your wallet asks permission for the escrow to move that much of your token. (Transaction 1.)</li>
+    <li><b>Fund</b> — the tokens move into this machine's escrow pool. (Transaction 2.)</li>
+    <li><b>Credit</b> — the server verifies the deposit <em>on-chain</em> before crediting your bankroll. The panel walks you through all three stages.</li>
+  </ol>
+
+  <div class="note"><b>Where the money sits.</b> In the Tournament Prize Escrow contract, in a pool keyed to your machine — the same escrow the poker tournaments use. Not in a hot wallet, and not mixed with other machines.</div>
+
+  <h3>Getting it back out</h3>
+  <p><b>Withdraw</b> sends bankroll back to the owner address. Two things worth knowing:</p>
+  <ul>
+    <li>Withdrawals still work on a <b>disabled</b> machine — turning a machine off never traps your funds.</li>
+    <li>Player balances are a liability against the bankroll. Leave enough to cover what players are holding, or they can't cash out.</li>
+  </ul>
+
+  <div class="warn"><b>Fund it properly or it won't run.</b> Max bet is derived from the bankroll (see below), so a thin bankroll means a machine that pauses itself constantly.</div>
+</section>
+
+<!-- ══════════════════════════════════════════════════════ -->
+<section id="betting">
+  <h2><span class="num">15</span>How betting works</h2>
+  <p class="lede">You don't set bet limits by hand. They're derived, so a machine can never promise more than it can pay.</p>
+
+  <figure>
+    <img src="/guide/embed-full.webp" alt="The embedded machine in real-money mode: wallet bar on top, cabinet below" loading="lazy" />
+    <figcaption>Real-money mode as a player sees it: the wallet bar (token, deposit, cash out) above the machine.</figcaption>
+  </figure>
+
+  <h3>The player's journey</h3>
+  <ol class="steps">
+    <li><b>Connect &amp; sign in</b> — same one-click flow you used.</li>
+    <li><b>Deposit</b> — tokens go to the machine's escrow and become credits.</li>
+    <li><b>Play</b> — every spin is settled server-side against their credit balance.</li>
+    <li><b>Cash out</b> — credits convert back to tokens and are sent to their wallet.</li>
+  </ol>
+
+  <div class="note">Bets never leave the player's wallet spin by spin. They deposit once, play from a balance, and cash out when they're done — one signature, not one per spin.</div>
+
+  <h3>The limits, and where they come from</h3>
+  <table>
+    <tr><th>Limit</th><th>How it's set</th></tr>
+    <tr><td><b>Min bet</b></td><td>Derived from your paytable so the smallest bet still pays whole credits</td></tr>
+    <tr><td><b>Max bet</b></td><td><code>bankroll ÷ (10 × win cap)</code> — it floats with your bankroll</td></tr>
+    <tr><td><b>Win cap</b></td><td>Biggest payout as a multiple of bet. Default <b>5000×</b>. Every round is clamped to it.</td></tr>
+    <tr><td><b>Auto-pause</b></td><td>If the bankroll can't cover the minimum bet, the machine pauses itself</td></tr>
+  </table>
+
+  <p>So: fund more, and players can bet bigger. Let it run down, and the machine protects itself before it can promise a payout it can't make.</p>
+
+  <div class="warn"><b>The 80–99% RTP gate.</b> A machine with a token configured will not publish outside that band. Below 80% is a machine nobody should play; above 99% is one that will drain your bankroll. Free-play machines are only warned, not blocked.</div>
+</section>
+
+<!-- ══════════════════════════════════════════════════════ -->
+<section id="fair">
+  <h2><span class="num">16</span>Provably fair</h2>
+  <p class="lede">Every real spin is settled on the server, and every spin can be checked afterwards.</p>
+  <ul>
+    <li>Each spin draws from a <b>server seed</b> (committed in advance as a hash), your player's <b>client seed</b>, and an incrementing <b>nonce</b>.</li>
+    <li>The server seed is <b>published when it rotates</b> — so nobody, including you, can change a result after the fact.</li>
+    <li>Anyone can replay a spin from the revealed seed and confirm the cards fell as claimed.</li>
+    <li>Spins record the machine version they ran on, so a later edit can't rewrite history.</li>
+  </ul>
+  <div class="note">This is also your protection as an operator: a player claiming a rigged result can be answered with maths rather than an argument.</div>
+</section>
+
+<!-- ══════════════════════════════════════════════════════ -->
+<section id="stats">
+  <h2><span class="num">17</span>Read your stats</h2>
+  <p class="lede">Once a machine is saved, the stats panel appears under the community controls.</p>
+
+  <figure>
+    <img src="/guide/panel-stats.webp" alt="Machine stats: free play and real money rows, live RTP, bankroll and daily activity bars" loading="lazy" />
+    <figcaption>Free play and real money are tracked separately — mixing them would make both numbers meaningless.</figcaption>
+  </figure>
+
+  <table>
+    <tr><th>Figure</th><th>What to do with it</th></tr>
+    <tr><td><b>Spins / players</b></td><td>Is anyone actually playing? Traffic problems look nothing like maths problems.</td></tr>
+    <tr><td><b>Wagered vs paid out</b></td><td>The gap is your gross edge over that period</td></tr>
+    <tr><td><b>Live RTP</b></td><td>What players <em>really</em> got. Compare with the simulated RTP.</td></tr>
+    <tr><td><b>Best win</b></td><td>Your worst day so far, from the bankroll's point of view</td></tr>
+    <tr><td><b>Bankroll vs player balances</b></td><td>What you hold vs what you owe. Bankroll should comfortably exceed it.</td></tr>
+    <tr><td><b>Daily bars</b></td><td>14 days of activity — did that change help or hurt?</td></tr>
+  </table>
+
+  <div class="note"><b>Live RTP only means something with volume.</b> Over a few hundred spins it swings wildly. Over tens of thousands it should converge toward your simulated figure — and if it doesn't, something is wrong with the machine, not with luck.</div>
+</section>
+
+<!-- ══════════════════════════════════════════════════════ -->
+<section id="changes">
+  <h2><span class="num">18</span>Make changes to a live machine</h2>
+  <p class="lede">Machines are versioned, so editing a published one is safe and reversible in the ways that matter.</p>
+
+  <ol class="steps">
+    <li><b>Edit as normal</b> in the builder.</li>
+    <li><b>Save to Community</b> — this writes a <em>new version</em> and returns the machine to <code>draft</code>. Your embed keeps serving the last published version in the meantime.</li>
+    <li><b>Re-check Math</b> if you touched anything that moves the RTP.</li>
+    <li><b>Publish</b> again to push it live.</li>
+  </ol>
+
+  <div class="note"><b>Old spins keep their old maths.</b> Each spin records the version it ran on, so history stays verifiable after you change the machine.</div>
+  <div class="warn"><b>Token machines re-face the RTP gate on every publish.</b> If an edit pushes RTP outside 80–99%, publish is refused until you bring it back — the old version stays live, so players are never left on a broken machine.</div>
+
+  <h3>Turning a machine off</h3>
+  <p>Disabling stops new play. Players can still cash out their balances, and you can still withdraw your bankroll — nothing gets stranded.</p>
+</section>
+
+<!-- ══════════════════════════════════════════════════════ -->
+<section id="trouble">
+  <h2><span class="num">19</span>Troubleshooting</h2>
+
+  <h4>Sign-in doesn't finish</h4>
+  <p>The status line names the step it's waiting on. If it says it's waiting on your wallet, open the wallet — a request is usually sitting there unanswered. If a wallet request is already open from an earlier click, finish or dismiss that one first.</p>
+
+  <h4>"No wallet detected in this browser"</h4>
+  <p>The builder needs a wallet that injects itself into the page. Use a browser extension wallet, or open the page in your wallet app's own browser.</p>
+
+  <h4>Publish is refused on RTP</h4>
+  <p>Your simulated RTP is outside 80–99%. Adjust pays or weights — usually the top-paying symbol's weight — and re-run the Math tab.</p>
+
+  <h4>"Get embed code" is greyed out</h4>
+  <p>The machine isn't published yet. Save to Community, then Publish.</p>
+
+  <h4>The machine says it's paused</h4>
+  <p>The bankroll can no longer cover the minimum bet. Fund it and play resumes automatically.</p>
+
+  <h4>Max bet is lower than I set</h4>
+  <p>Max bet is derived from the bankroll, not chosen. Fund more and it rises on its own.</p>
+
+  <h4>Players can't cash out</h4>
+  <p>Player balances are paid from the bankroll. If you withdrew too much, top it back up.</p>
+</section>
+
+<section>
+  <h2>Ready?</h2>
+  <p class="lede">Start from a preset, change one thing at a time, and spin after every change.</p>
+  <p><a class="cta" style="display:inline-block" href="/slot-builder-lab.html">OPEN THE BUILDER</a></p>
+</section>
+
+</main>
+</div>
+
+<div class="footer">
+  <a href="/">MORBIUS.IO</a> ·
+  <a href="/slot-builder-lab.html">Reel Forge</a> ·
+  <a href="#overview">Back to top</a>
+  <div style="margin-top:8px">Play responsibly. Community machines are built by their creators, not by MORBIUS.</div>
+</div>
+
+</body>
+</html>

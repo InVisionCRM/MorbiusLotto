@@ -410,6 +410,10 @@
 }
 .home2 .forge-cta:hover{transform:translateY(-2px); box-shadow:0 16px 40px rgba(124,92,255,.5), 0 0 26px rgba(34,211,238,.3)}
 .home2 .forge-cta .fc-ic{font-size:17px}
+.home2 .forge-guide{display:inline-flex; align-items:center; gap:6px; font-size:11.5px; font-weight:700;
+  letter-spacing:.03em; color:var(--cyan); border:1px solid rgba(34,211,238,.35); border-radius:12px;
+  padding:11px 16px; transition:background .2s, border-color .2s}
+.home2 .forge-guide:hover{background:rgba(34,211,238,.1); border-color:rgba(34,211,238,.6)}
 .home2 .forge-cta-sub{font-size:10px; color:var(--muted); letter-spacing:.04em}
 .home2 .forge-shots{position:relative; z-index:1; min-height:340px}
 .home2 .fshot{position:absolute; border-radius:14px; overflow:hidden;

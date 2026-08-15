@@ -676,6 +676,7 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
   <header>
     <h1 class="title">Reel Forge<span class="glyph">&#9670;</span></h1>
     <p class="tagline">Config-driven slot studio &middot; upload symbols &middot; animated border FX &middot; synth sound packs &middot; provably fair &middot; honest Monte-Carlo RTP &middot; played in MORBIUS</p>
+    <p class="tagline" style="margin-top:6px"><a href="/slot-guide.html" style="color:var(--cyan);font-weight:700">📖 Read the creator guide</a> &mdash; building, publishing, embedding on your site, funding a token bankroll and reading your stats.</p>
   </header>
 
   <div class="topbar">
@@ -991,6 +992,7 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
         <p class="hint" style="margin-top:0">Sign in with a wallet to save this machine to MORBIUS, publish it, and grab an <b style="color:var(--cyan)">embed code</b> for your own site. Play-money only &mdash; nothing here touches real funds.</p>
         <div class="btn-row" id="communityAuthRow" style="margin:4px 0 10px">
           <button class="sm-btn go" id="communityConnect">Connect wallet</button>
+          <button class="sm-btn" id="communitySwitch" title="Sign in with a different wallet account">Use a different account</button>
           <span class="val" id="communityWho" style="align-self:center"></span>
         </div>
         <div class="btn-row" id="communityActionsRow" style="margin:4px 0 10px;display:none">
@@ -4085,10 +4087,28 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
     });
   }
 
-  function communityConnect(){
-    communityMsg('Connecting…','');
+  /* Sign-in waits on a wallet the page cannot see into, so every stage says
+     what it is waiting for — a silent "Connecting…" that never changes is
+     indistinguishable from a hang. */
+  var SIGNIN_STEPS={
+    wallet:'Connecting — pick an account in your wallet.',
+    'wallet-slow':'Still waiting on your wallet — open it; a request may be sitting there unanswered.',
+    nonce:'Wallet connected. Preparing sign-in…',
+    sign:'Sign the message in your wallet to finish (this moves no funds).',
+    'sign-slow':'Still waiting for the signature — check your wallet for a pending request.',
+    verify:'Verifying your signature…'
+  };
+
+  /* forcePicker: normal sign-in reuses the account the wallet has already
+     authorised (one click, no prompt); "Use a different account" asks the
+     wallet for a fresh choice. The signer owns the machine and receives
+     bankroll withdrawals, so switching has to stay available. */
+  function communityConnect(forcePicker){
+    communityMsg(forcePicker?'Choose an account in your wallet.':SIGNIN_STEPS.wallet,'');
     CabinetWallet.siweSignIn(COMMUNITY_API, COMMUNITY_SIWE_DOMAIN,
-      'Sign in to MORBIUS to save and publish your slot machine. No funds will move.')
+      'Sign in to MORBIUS to save and publish your slot machine. No funds will move.',
+      function(stage){ if(SIGNIN_STEPS[stage]) communityMsg(SIGNIN_STEPS[stage],''); },
+      forcePicker===true)
     .then(function(){
       return communityRefreshWho();
     }).then(function(address){
@@ -4573,7 +4593,8 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
   on('machList','click',function(e){ var btn=e.target.closest&&e.target.closest('.mach-btn'); if(!btn)return; var row=btn.closest('.mach-row'); if(!row)return; var id=row.getAttribute('data-id'), act=btn.getAttribute('data-act');
     if(act==='open')openMachine(id); else if(act==='del')deleteMachine(id); else if(act==='rename')renameMachine(id); else if(act==='share')shareSavedMachine(id); });
   /* community wiring */
-  on('communityConnect','click',communityConnect);
+  on('communityConnect','click',function(){ communityConnect(false); });
+  on('communitySwitch','click',function(){ communityConnect(true); });
   on('communitySave','click',communitySave);
   on('communityPublish','click',communityPublish);
   on('communityEmbed','click',communityEmbed);

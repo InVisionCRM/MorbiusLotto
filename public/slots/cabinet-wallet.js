@@ -25,7 +25,27 @@ var SEL_APPROVE = '0x095ea7b3';
 var SEL_ADD_TO_PRIZE_POOL = '0x55aa3f69';
 var PULSECHAIN_ID_HEX = '0x171'; // 369
 
-function eth(){ if(!window.ethereum) throw new Error('No wallet found — install MetaMask or another EVM wallet.'); return window.ethereum; }
+/* Injected EIP-1193 provider only. Worth being clear about the limit: unlike
+   the app's bundled routes, which go through wagmi and therefore reach
+   WalletConnect and mobile wallets too, these static pages can only see a
+   wallet that injects window.ethereum. */
+function eth(){ if(!window.ethereum) throw new Error('No wallet detected in this browser. Open this page in your wallet’s browser, or install an EVM wallet extension.'); return window.ethereum; }
+
+/* The same thing as a promise. Callers attach .catch() to the value we return,
+   so a *synchronous* throw in here escapes their error handling completely and
+   leaves the page sitting on whatever "Connecting…" text it set beforehand. */
+function ethAsync(){
+  try { return Promise.resolve(eth()); } catch(err){ return Promise.reject(err); }
+}
+
+/* Run `hint` if the promise has not settled within ms. Advisory only: the
+   promise is left alone, so a wallet prompt the user simply had not noticed
+   still works when they get to it. */
+function withSlowHint(promise, ms, hint){
+  var timer=setTimeout(function(){ try{ hint(); }catch(e){} }, ms);
+  function clear(){ clearTimeout(timer); }
+  return promise.then(function(v){ clear(); return v; }, function(e){ clear(); throw e; });
+}
 function pad32(hexNo0x){ return hexNo0x.replace(/^0x/,'').padStart(64,'0'); }
 function encAddress(addr){ return pad32(addr.toLowerCase()); }
 function encUint(v){ return pad32(BigInt(v).toString(16)); }
@@ -50,10 +70,29 @@ function fromBaseUnits(base, decimals){
   return whole.toString()+(fs?'.'+fs:'');
 }
 
+/* A request that never answers must not read as "still working" forever. */
+var API_TIMEOUT_MS=25000;
+/* How long a wallet may stay silent before we tell the user to go look at it.
+   Wallet prompts can legitimately sit unanswered, so this only adds a hint. */
+var SLOW_WALLET_MS=12000;
+
 function apiFetch(base, path, opts){
   opts=opts||{}; opts.credentials='include';
   if(opts.body){ opts.headers=opts.headers||{}; opts.headers['Content-Type']='application/json'; }
+  var timer=null;
+  if(typeof AbortController==='function' && !opts.signal){
+    var ctl=new AbortController();
+    opts.signal=ctl.signal;
+    timer=setTimeout(function(){ ctl.abort(); }, API_TIMEOUT_MS);
+  }
   return fetch(base+path, opts).then(function(r){
+    if(timer) clearTimeout(timer);
+    return r;
+  }, function(err){
+    if(timer) clearTimeout(timer);
+    if(err&&err.name==='AbortError') throw new Error('The server did not respond — check your connection and try again.');
+    throw err;
+  }).then(function(r){
     return r.json().catch(function(){ return {}; }).then(function(body){
       if(!r.ok||body.ok===false) throw new Error((body&&body.error)||('request failed ('+r.status+')'));
       return body;
@@ -166,7 +205,8 @@ function toChecksumAddress(addr){
     account already signed in (funding, deposits) — see connectWithPicker for
     the sign-in case. */
 function connect(){
-  return eth().request({method:'eth_requestAccounts'}).then(function(accounts){
+  return ethAsync().then(function(e){ return e.request({method:'eth_requestAccounts'}); })
+  .then(function(accounts){
     var a=accounts&&accounts[0];
     if(!a) throw new Error('No account returned by wallet');
     return toChecksumAddress(a);
@@ -201,12 +241,14 @@ function singleGrantedAccount(perms){
     bankroll withdrawal pays out to, so silently reusing "whatever account
     this origin was connected with once" is the wrong default here — an
     owner's deployer wallet can end up owning a machine they never meant it
-    to. wallet_requestPermissions forces the account picker in MetaMask,
-    Rabby and Coinbase Wallet; anything that does not implement it falls
-    through to the plain connect rather than blocking sign-in. A rejection is
-    the user saying no, so that is passed on rather than worked around. */
+    to. wallet_requestPermissions (EIP-2255) is the standard way to ask for a
+    fresh account grant; wallets that implement it show their account picker.
+    It is optional, so anything that does not implement it falls through to the
+    plain connect rather than blocking sign-in — no wallet is assumed here. A
+    rejection is the user saying no, so that is passed on, not worked around. */
 function connectWithPicker(){
-  return eth().request({method:'wallet_requestPermissions',params:[{eth_accounts:{}}]})
+  return ethAsync()
+    .then(function(e){ return e.request({method:'wallet_requestPermissions',params:[{eth_accounts:{}}]}); })
     .then(function(perms){
       var picked=singleGrantedAccount(perms);
       return picked ? toChecksumAddress(picked) : connect();
@@ -214,6 +256,28 @@ function connectWithPicker(){
       if(isFatalWalletError(err)) throw err;
       return connect();
     });
+}
+
+/** Accounts already authorised for this origin. eth_accounts never prompts,
+    so this cannot hang waiting on a human. Returns [] if the wallet objects. */
+function authorizedAccounts(){
+  return ethAsync()
+    .then(function(e){ return e.request({method:'eth_accounts'}); })
+    .catch(function(){ return []; });
+}
+
+/** The connect used by sign-in: fewest prompts that still lands the right
+    account. If the wallet already has one authorised for this origin, take it
+    and show no prompt at all — that is the overwhelmingly common case and it
+    makes signing in a single click. Only when nothing is authorised yet (a
+    prompt is unavoidable then anyway), or the caller explicitly wants to
+    switch, do we ask for a fresh grant and get the account picker. */
+function connectForSignIn(forcePicker){
+  if(forcePicker) return connectWithPicker();
+  return authorizedAccounts().then(function(list){
+    var a=list&&list[0];
+    return a ? toChecksumAddress(a) : connectWithPicker();
+  });
 }
 
 /** Wallet error → something a player can act on. */
@@ -231,16 +295,29 @@ function me(apiBase){
 /** Full SIWE sign-in against the site's auth routes. Returns the address.
     Asks which account to use rather than assuming — the signer becomes the
     machine owner and the bankroll payout address. */
-function siweSignIn(apiBase, domain, statement){
+function siweSignIn(apiBase, domain, statement, onStep, forcePicker){
+  var step=(typeof onStep==='function')?onStep:function(){};
   var address;
-  return connectWithPicker().then(function(a){
+  /* Everything runs inside the chain so a synchronous throw (no wallet
+     installed, say) surfaces through the caller's .catch() instead of
+     escaping it and stranding the page mid-"Connecting…". */
+  return Promise.resolve().then(function(){
+    step('wallet');
+    return withSlowHint(connectForSignIn(forcePicker), SLOW_WALLET_MS, function(){ step('wallet-slow'); });
+  }).then(function(a){
     address=a;
+    step('nonce');
     return apiFetch(apiBase,'/api/auth/nonce');
   }).then(function(n){
     var message=domain+' wants you to sign in with your Ethereum account:\n'+address+
       '\n\n'+statement+'\n\n'+
       'URI: '+location.origin+'\nVersion: 1\nChain ID: 369\nNonce: '+n.nonce+'\nIssued At: '+new Date().toISOString();
-    return eth().request({method:'personal_sign',params:[utf8ToHex(message),address]}).then(function(signature){
+    step('sign');
+    var signing=ethAsync().then(function(e){
+      return e.request({method:'personal_sign',params:[utf8ToHex(message),address]});
+    });
+    return withSlowHint(signing, SLOW_WALLET_MS, function(){ step('sign-slow'); }).then(function(signature){
+      step('verify');
       return apiFetch(apiBase,'/api/auth/verify',{method:'POST',body:JSON.stringify({message:message,signature:signature})});
     });
   }).then(function(r){ return r.address||address; },
@@ -276,7 +353,8 @@ function waitTx(hash, timeoutMs){
 }
 
 window.CabinetWallet={
-  connect:connect, connectWithPicker:connectWithPicker, me:me, siweSignIn:siweSignIn,
+  connect:connect, connectWithPicker:connectWithPicker, authorizedAccounts:authorizedAccounts,
+  me:me, siweSignIn:siweSignIn,
   approve:approve, fundPool:fundPool, waitTx:waitTx,
   toBaseUnits:toBaseUnits, fromBaseUnits:fromBaseUnits,
   toChecksumAddress:toChecksumAddress, apiFetch:apiFetch,

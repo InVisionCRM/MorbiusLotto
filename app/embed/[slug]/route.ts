@@ -99,8 +99,13 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ slug
       else{
         $('mbConnect').style.display='inline-block';
         $('mbConnect').addEventListener('click',function(){
-          msg('Connecting…');
-          W.siweSignIn(API, DOMAIN, 'Sign in to MORBIUS to play this machine for real. Bets leave your session balance, never your wallet directly.')
+          msg('Connecting — pick an account in your wallet.');
+          W.siweSignIn(API, DOMAIN, 'Sign in to MORBIUS to play this machine for real. Bets leave your session balance, never your wallet directly.',
+            function(stage){
+              if(stage==='wallet-slow'||stage==='sign-slow') msg('Still waiting on your wallet — check it for a pending request.');
+              else if(stage==='sign') msg('Sign the message in your wallet to finish.');
+              else if(stage==='verify') msg('Verifying your signature…');
+            })
             .then(function(a){ boot(); msg('Signed in as '+a.slice(0,6)+'…'+a.slice(-4)); })
             .catch(function(e){ msg('Sign-in failed: '+(e&&e.message||e)); });
         });

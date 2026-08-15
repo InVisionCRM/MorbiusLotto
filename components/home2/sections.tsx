@@ -683,6 +683,9 @@ export function SlotForge() {
             <a className="forge-cta" href="/slot-builder-lab.html">
               <span className="fc-ic">🎰</span> OPEN THE BUILDER
             </a>
+            <a className="forge-guide" href="/slot-guide.html">
+              Read the guide <span aria-hidden="true">→</span>
+            </a>
             <span className="forge-cta-sub">free to build &middot; no code needed</span>
           </div>
         </div>
