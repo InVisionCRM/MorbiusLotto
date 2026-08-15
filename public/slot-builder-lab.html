@@ -990,6 +990,7 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
              above, which stays fully offline/private. -->
         <div class="ctl-lbl" style="margin-top:18px"><span>Community &mdash; embed on any site</span></div>
         <p class="hint" style="margin-top:0">Sign in with a wallet to save this machine to MORBIUS, publish it, and grab an <b style="color:var(--cyan)">embed code</b> for your own site. Play-money only &mdash; nothing here touches real funds.</p>
+        <p class="hint" style="margin-top:4px"><b style="color:var(--cyan)">Why am I signing?</b> Your wallet is your login here &mdash; the signature just proves you hold the key, so machines you save stay yours. It is a plain text message, <b>not a transaction</b>: no gas, no approval, and it cannot move funds. The account you sign with owns the machine and is where bankroll withdrawals are paid.</p>
         <div class="btn-row" id="communityAuthRow" style="margin:4px 0 10px">
           <button class="sm-btn go" id="communityConnect">Connect wallet</button>
           <button class="sm-btn" id="communitySwitch" title="Sign in with a different wallet account">Use a different account</button>
@@ -4049,10 +4050,17 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
      in via the app's wagmi/siwe stack — same EIP-4361 message shape and the
      same /api/auth/* endpoints (server/src/routes/auth.routes.ts) either
      way, so a session created here works everywhere else on the site. ═══ */
+  /* Same origin on purpose. The session cookie MUST be first-party: calling the
+     backend host directly makes morb_session a third-party cookie, which
+     browsers now drop by default — sign-in looks like it worked and then every
+     authenticated call 401s. app/api/auth/[...path] and
+     app/api/slot-machines/[...path] proxy through to Express for exactly this
+     reason. Only a local dev page with no Next server in front talks to Express
+     directly. */
   var COMMUNITY_API = (function(){
     var h=location.hostname;
-    if(h==='localhost'||h==='127.0.0.1') return 'http://localhost:3001';
-    return 'https://morbiuslotto-production.up.railway.app';
+    if((h==='localhost'||h==='127.0.0.1') && location.port && location.port!=='3000') return 'http://localhost:3001';
+    return '';
   })();
   var COMMUNITY_SIWE_DOMAIN='morbius.io'; // must match server SIWE_EXPECTED_DOMAIN
   var Comm={address:null,machine:null}; // machine: last saved/published row from the API
@@ -4065,7 +4073,22 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
     opts=opts||{};
     opts.credentials='include';
     opts.headers=Object.assign({},opts.headers||{});
+    /* No request may hang forever — a silent pending fetch leaves whatever
+       status text was last written on screen, which reads as a frozen UI. */
+    var timer=null;
+    if(typeof AbortController==='function' && !opts.signal){
+      var ctl=new AbortController();
+      opts.signal=ctl.signal;
+      timer=setTimeout(function(){ ctl.abort(); },25000);
+    }
     return fetch(communityUrl(path),opts).then(function(r){
+      if(timer) clearTimeout(timer);
+      return r;
+    },function(e){
+      if(timer) clearTimeout(timer);
+      if(e&&e.name==='AbortError') throw new Error('The server did not respond — check your connection and try again.');
+      throw e;
+    }).then(function(r){
       return r.json().catch(function(){return {};}).then(function(body){
         if(!r.ok) throw new Error(body&&body.error||('request failed ('+r.status+')'));
         return body;
@@ -4112,7 +4135,16 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
     .then(function(){
       return communityRefreshWho();
     }).then(function(address){
-      if(address) communityMsg('Signed in as '+address.slice(0,6)+'…'+address.slice(-4)+'.','ok');
+      if(address){
+        communityMsg('Signed in as '+address.slice(0,6)+'…'+address.slice(-4)+'.','ok');
+        return;
+      }
+      /* The signature verified but the session did not come back. Almost always
+         a cookie that never got stored. Saying nothing here is what used to
+         leave the panel frozen on "Verifying your signature…". */
+      communityMsg('Your signature was accepted, but the session did not stick — '+
+        'usually blocked cookies. Allow cookies for this site (and turn off any '+
+        'third-party-cookie blocker for it), then try again.','err');
     }).catch(function(e){
       communityMsg('Sign-in failed: '+(e&&e.message||e),'err');
     });
