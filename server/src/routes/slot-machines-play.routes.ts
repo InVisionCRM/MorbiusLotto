@@ -403,7 +403,7 @@ export function registerSlotMachinePlayRoutes({ app, dbService, authService, cha
 
   // ---------------------------------------------------------------------
   // POST /api/slot-machines/:slug/session/deposit { txHash }
-  // Claim a verified addToPrizePool deposit into the caller's REAL session.
+  // Claim a verified fundBankroll deposit into the caller's REAL session.
   // ---------------------------------------------------------------------
   app.post(
     '/api/slot-machines/:slug/session/deposit',

@@ -4219,6 +4219,9 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
   }
   function communityFund(){
     if(!Comm.machine||!Comm.bankroll||!Comm.bankroll.token){ communityMoneyMsg('Set a token first.','err'); return; }
+    /* Null until SlotBankrollEscrow is deployed. Without this the approve would
+       target a null address and the wallet would throw something unreadable. */
+    if(!Comm.bankroll.escrowAddress){ communityMoneyMsg('Real-money bankrolls are not live yet — the slot escrow contract has not been deployed. Free play is unaffected.','err'); return; }
     var b=Comm.bankroll, human=(($('communityFundAmt')&&$('communityFundAmt').value)||'').trim();
     var base;
     try{ base=CabinetWallet.toBaseUnits(human,b.token.decimals); }catch(e){ communityMoneyMsg(String(e.message||e),'err'); return; }
@@ -4226,7 +4229,7 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
       communityMoneyMsg('1/3 approving '+human+' '+(b.token.symbol||'')+'…','');
       return CabinetWallet.approve(from,b.token.address,b.escrowAddress,base).then(CabinetWallet.waitTx).then(function(){
         communityMoneyMsg('2/3 funding the machine pool…','');
-        return CabinetWallet.fundPool(from,b.escrowAddress,b.poolId,b.token.address,base);
+        return CabinetWallet.fundBankroll(from,b.escrowAddress,b.poolId,b.token.address,base);
       }).then(function(txHash){
         return CabinetWallet.waitTx(txHash).then(function(){
           communityMoneyMsg('3/3 crediting the bankroll…','');
@@ -4283,6 +4286,10 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
 
   function communityWithdraw(){
     if(!Comm.machine||!Comm.bankroll||!Comm.bankroll.token){ communityMoneyMsg('Set a token first.','err'); return; }
+    /* Withdrawals are paid by the server's escrow key, so they need the contract
+       just as much as funding does — fail here with something readable rather
+       than letting the server report a missing deployment. */
+    if(!Comm.bankroll.escrowAddress){ communityMoneyMsg('Real-money bankrolls are not live yet — the slot escrow contract has not been deployed. Free play is unaffected.','err'); return; }
     var b=Comm.bankroll, human=(($('communityFundAmt')&&$('communityFundAmt').value)||'').trim();
     var base;
     try{ base=CabinetWallet.toBaseUnits(human,b.token.decimals); }catch(e){ communityMoneyMsg(String(e.message||e),'err'); return; }
