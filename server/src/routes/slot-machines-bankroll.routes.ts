@@ -10,13 +10,14 @@
  * How funding works (documented here for the Phase 4 builder UI):
  *   1. Owner picks a token (POST /token — server reads decimals/symbol/name
  *      from the chain; changeable only before the first deposit, because the
- *      escrow pool's token is fixed forever by its first addToPrizePool).
+ *      bankroll's token is fixed forever by its first funding).
  *   2. Owner approves the escrow and calls
- *      addToPrizePool(keccak256(machineUUID), token, amount) on the
- *      Tournament Prize Escrow — the same call poker buy-ins use.
+ *      fundBankroll(keccak256(machineUUID), token, amount) on
+ *      SlotBankrollEscrow — the slots-only vault, deliberately NOT the
+ *      tournament prize escrow, so the two piles of money stay separate.
  *   3. Owner POSTs the tx hash to /bankroll/deposit; the server verifies the
- *      PrizePoolAdded event on-chain and credits the EVENT amount (what the
- *      escrow's own books say). One tx credits exactly once (unique index).
+ *      BankrollFunded event on-chain and credits the EVENT amount — which the
+ *      contract measured as actually received. One tx credits exactly once.
  *
  * Withdrawals debit the DB ledger first, then send the authorized-key escrow
  * payout, refunding the ledger if the send fails — the failure mode is an
@@ -36,7 +37,7 @@ import type { AuthService } from '../services/auth.service';
 import { requireAuth } from '../middleware/require-auth';
 import { realSlotBankrollChain, type SlotBankrollChain } from '../lib/community-slot-bankroll';
 import { defaultCreditValue, parseCreditValue } from '../lib/community-slot-real';
-import { getTournamentPrizeEscrowAddress } from '../utils/tournament-escrow-address';
+import { getSlotBankrollEscrowAddress } from '../utils/slot-escrow-address';
 import { tournamentIdToBytes32 } from '../utils/tournament-id-bytes32';
 import { sendJson } from '../http/json';
 import { logger } from '../utils/logger';
@@ -98,7 +99,7 @@ export function registerSlotMachineBankrollRoutes({
         if (!/^0x[a-f0-9]{40}$/.test(tokenAddress)) {
           return res.status(400).json({ ok: false, error: 'tokenAddress must be a 0x-prefixed 20-byte address' });
         }
-        // The escrow pool's token is fixed forever by its first deposit — a
+        // The bankroll's token is fixed forever by its first deposit — a
         // later "change" would leave the pool unfundable. Block once funded.
         const dep = await pool.query(
           `SELECT 1 FROM community_slot_bankroll_events WHERE machine_id = $1 AND kind = 'deposit' LIMIT 1`,
@@ -135,7 +136,7 @@ export function registerSlotMachineBankrollRoutes({
           ok: true,
           token: { address: tokenAddress, decimals: meta.decimals, symbol: meta.symbol, name: meta.name },
           creditValue: creditValue.toString(),
-          note: 'If this token charges a fee on transfers, deposits will credit the escrow\'s recorded amount while the vault receives less — the machine will carry a fee warning and payouts can fall short. Plain PRC-20s are strongly recommended.',
+          note: 'If this token charges a fee on transfers, the bankroll is credited with what actually arrives (the escrow measures it on-chain), so payouts stay fully covered — but each deposit lands smaller than you sent and the machine carries a fee warning. Plain PRC-20s are still recommended.',
         });
       } catch (error) {
         logger.error('[SlotBankroll] set token failed', error);
@@ -165,8 +166,9 @@ export function registerSlotMachineBankrollRoutes({
         bankroll: String(row.bankroll ?? '0'),
         feeWarning: !!row.token_fee_warning,
         // Everything a wallet needs to build the funding tx client-side:
-        // approve(escrowAddress, amount) then addToPrizePool(poolId, token, amount).
-        escrowAddress: getTournamentPrizeEscrowAddress(),
+        // approve(escrowAddress, amount) then fundBankroll(poolId, token, amount).
+        // Null until SlotBankrollEscrow is deployed — the client gates funding on it.
+        escrowAddress: getSlotBankrollEscrowAddress(),
         poolId: tournamentIdToBytes32(m.id),
       });
     } catch (error) {

@@ -1,29 +1,33 @@
 /**
  * community-slot-bankroll.ts — the on-chain side of a community machine's
- * PRC-20 bankroll, built on the poker tournament escrow machinery:
+ * PRC-20 bankroll, held in SlotBankrollEscrow:
  *
  *   pool id    = keccak256(machine UUID)          (tournament-id-bytes32.ts)
- *   funding    = addToPrizePool(poolId, token, amount) by the creator,
- *                verified via the PrizePoolAdded event — never client claims
- *   withdrawal = authorized-key escrow payout      (utils/escrow-payout.ts)
+ *   funding    = fundBankroll(poolId, token, amount) by the creator,
+ *                verified via the BankrollFunded event — never client claims
+ *   withdrawal = authorized-key payout             (utils/slot-escrow-payout.ts)
+ *
+ * This used to run on the tournament prize escrow. It no longer does: creator
+ * bankrolls and tournament prize money are separate concerns and now live in
+ * separate contracts with separate server keys, so neither can reach the other.
  *
  * Everything here is exported behind the SlotBankrollChain interface so the
  * routes can be tested against a mock chain — the real implementations talk
  * to PulseChain through the shared viem client.
  *
- * Fee-on-transfer detection (product decision: warn, never block): after a
- * deposit verifies, we compare the escrow's token balance across the tx's
- * block with the event amount. A shortfall means the token skims transfers —
- * the machine gets a persistent warning badge, but keeps working. Detection
- * is best-effort: if the RPC can't serve historical state, we skip it.
+ * Fee-on-transfer is handled ON-CHAIN now: the contract credits the balance it
+ * actually received, so the event amount is already net of any skim and the
+ * pool can never claim more than it holds. We still compare against the naive
+ * expectation to raise the warning badge, but it is now cosmetic rather than
+ * load-bearing — a skimming token cannot leave the books overstated.
  */
 
-import { decodeEventLog, type Hex } from 'viem';
+import { decodeEventLog, decodeFunctionData, type Hex } from 'viem';
 import { getPublicClient } from '../utils/chain-client';
-import { tournamentPrizeEscrowV6Abi } from '../abi/tournament-prize-escrow-v6';
+import { slotBankrollEscrowAbi } from '../abi/slot-bankroll-escrow';
 import { tournamentIdToBytes32 } from '../utils/tournament-id-bytes32';
-import { getTournamentPrizeEscrowAddress } from '../utils/tournament-escrow-address';
-import { sendEscrowPayout } from '../utils/escrow-payout';
+import { getSlotBankrollEscrowAddress } from '../utils/slot-escrow-address';
+import { sendSlotBankrollPayout } from '../utils/slot-escrow-payout';
 import { logger } from '../utils/logger';
 
 const ERC20_META_ABI = [
@@ -42,9 +46,9 @@ export interface TokenMetadata {
 export interface BankrollDepositVerification {
   ok: boolean;
   error?: string;
-  /** The PrizePoolAdded amount — what the escrow's own books credited. */
+  /** The BankrollFunded amount — what the contract actually received and credited. */
   amount?: bigint;
-  /** Best-effort fee-on-transfer detection; false when detection was impossible. */
+  /** The token skims transfers. Cosmetic warning only — the credit is already net. */
   feeDetected?: boolean;
 }
 
@@ -93,7 +97,10 @@ async function verifyBankrollDeposit(params: {
   if (!/^0x[a-fA-F0-9]{64}$/.test(txHash)) {
     return { ok: false, error: 'Invalid tx hash' };
   }
-  const escrowAddr = getTournamentPrizeEscrowAddress();
+  const escrowAddr = getSlotBankrollEscrowAddress();
+  if (!escrowAddr) {
+    return { ok: false, error: 'Slot bankroll escrow is not deployed yet — real-money machines are unavailable' };
+  }
   const wantPool = tournamentIdToBytes32(machineId).toLowerCase();
   const wantToken = tokenAddress.toLowerCase();
   const wantContributor = contributor.toLowerCase();
@@ -126,18 +133,18 @@ async function verifyBankrollDeposit(params: {
       if (!rawLog.topics?.length) continue;
       try {
         const decoded = decodeEventLog({
-          abi: tournamentPrizeEscrowV6Abi,
+          abi: slotBankrollEscrowAbi,
           data: (rawLog.data ?? '0x') as Hex,
           topics: rawLog.topics as [Hex, ...Hex[]],
           strict: false,
         });
-        if (decoded.eventName !== 'PrizePoolAdded') continue;
+        if (decoded.eventName !== 'BankrollFunded') continue;
         const a = decoded.args as Record<string, unknown>;
         if (
           String(rawLog.address).toLowerCase() === escrowAddr.toLowerCase() &&
-          String(a.tournamentId ?? '').toLowerCase() === wantPool &&
+          String(a.machineId ?? '').toLowerCase() === wantPool &&
           String(a.token ?? '').toLowerCase() === wantToken &&
-          String(a.contributor ?? '').toLowerCase() === wantContributor &&
+          String(a.funder ?? '').toLowerCase() === wantContributor &&
           typeof a.amount === 'bigint' && a.amount > 0n
         ) {
           amount = a.amount;
@@ -146,29 +153,27 @@ async function verifyBankrollDeposit(params: {
       } catch { /* not this contract's event */ }
     }
     if (amount === undefined) {
-      return { ok: false, error: 'No matching PrizePoolAdded event for this machine, token, and sender on the escrow contract' };
+      return { ok: false, error: 'No matching BankrollFunded event for this machine, token, and sender on the slot bankroll escrow' };
     }
 
-    // Best-effort fee-on-transfer detection: did the escrow's balance actually
-    // grow by the event amount across this block? Same-block unrelated
-    // transfers can inflate the delta (never deflate it below this tx's real
-    // contribution), so only a SHORTFALL is meaningful — exactly the signal
-    // we want. Skipped silently when the RPC has no historical state.
+    // Cosmetic fee-on-transfer flag. The contract already credited the true
+    // received amount, so this cannot affect solvency — it only decides whether
+    // the creator sees a "this token skims transfers" badge.
+    //
+    // Note this can NOT be a balance-delta check any more: the contract credits
+    // exactly what arrived, so the delta always equals the event amount and the
+    // check would never fire. The honest comparison is the amount the funder's
+    // own call asked to move versus the amount that survived the transfer, both
+    // of which are in the transaction itself — no historical state needed.
     let feeDetected = false;
     try {
-      const [before, after] = await Promise.all([
-        client.readContract({
-          address: tokenAddress as `0x${string}`, abi: ERC20_META_ABI, functionName: 'balanceOf',
-          args: [escrowAddr], blockNumber: receipt.blockNumber - 1n,
-        }) as Promise<bigint>,
-        client.readContract({
-          address: tokenAddress as `0x${string}`, abi: ERC20_META_ABI, functionName: 'balanceOf',
-          args: [escrowAddr], blockNumber: receipt.blockNumber,
-        }) as Promise<bigint>,
-      ]);
-      if (after - before < amount) feeDetected = true;
+      const decodedCall = decodeFunctionData({ abi: slotBankrollEscrowAbi, data: tx.input });
+      if (decodedCall.functionName === 'fundBankroll') {
+        const requested = decodedCall.args?.[2];
+        if (typeof requested === 'bigint' && requested > amount) feeDetected = true;
+      }
     } catch {
-      logger.info('[SlotBankroll] fee-on-transfer check skipped (no historical state on RPC)');
+      logger.info('[SlotBankroll] fee-on-transfer check skipped (could not decode funding call)');
     }
 
     return { ok: true, amount, feeDetected };
@@ -178,9 +183,9 @@ async function verifyBankrollDeposit(params: {
   }
 }
 
-/** The escrow payout helper keys pools by UUID exactly like we do. */
+/** The slots payout helper keys pools by UUID exactly like we do. */
 function sendBankrollWithdrawal(machineId: string, to: string, amount: bigint) {
-  return sendEscrowPayout(machineId, to, amount);
+  return sendSlotBankrollPayout(machineId, to, amount);
 }
 
 export const realSlotBankrollChain: SlotBankrollChain = {

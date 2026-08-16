@@ -92,7 +92,8 @@ export default function ThemeSelectionModal({
   imageOptions: imageOptionsProp,
   videoOptions: videoOptionsProp,
 }: ThemeSelectionModalProps) {
-  const [activeTab, setActiveTab] = useState<'images'>('images')
+  // Open on whichever kind the player currently has applied.
+  const [activeTab, setActiveTab] = useState<'images' | 'video'>(theme === 'video' ? 'video' : 'images')
   const [expandSrc, setExpandSrc] = useState<string | null>(null)
   const [expandVideo, setExpandVideo] = useState<boolean>(false)
   const [mounted, setMounted] = useState(false)
@@ -193,6 +194,17 @@ export default function ThemeSelectionModal({
             >
               Images
             </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('video')}
+              className={`px-4 py-3 text-sm font-medium transition-colors ${
+                activeTab === 'video'
+                  ? 'text-cyan-300 border-b-2 border-cyan-400 bg-cyan-500/10'
+                  : 'text-white/60 hover:text-white'
+              }`}
+            >
+              Videos
+            </button>
           </div>
 
           {/* Search & Filter */}
@@ -280,6 +292,78 @@ export default function ThemeSelectionModal({
                       </button>
                       <span className="absolute bottom-0 left-0 right-0 py-1 px-2 text-[10px] font-medium text-white bg-black/70 truncate pointer-events-none">
                         {img.label}
+                      </span>
+                    </div>
+                  )
+                })
+                )}
+              </div>
+            )}
+
+            {activeTab === 'video' && (
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-0">
+                {filteredVideos.length === 0 ? (
+                  <div className="col-span-full py-12 text-center text-white/50 text-sm">
+                    No themes match &quot;{search}&quot;
+                  </div>
+                ) : (
+                filteredVideos.map((vid) => {
+                  const isSelected = theme === 'video' && videoSource === vid.id
+                  return (
+                    <div
+                      key={vid.id}
+                      className="relative aspect-[4/3] overflow-hidden bg-black/40 border-2 border-transparent transition-all group"
+                      style={isSelected ? { borderColor: 'rgba(34, 211, 238, 0.6)' } : undefined}
+                    >
+                      {/* Muted, looping preview — the tile is a thumbnail, so it
+                          plays normally here rather than following the clock the
+                          way the real table does. */}
+                      <video
+                        src={vid.src}
+                        className="absolute inset-0 w-full h-full object-cover pointer-events-none"
+                        muted
+                        loop
+                        autoPlay
+                        playsInline
+                        preload="metadata"
+                        aria-hidden
+                      />
+                      <button
+                        type="button"
+                        onClick={() => handleSelectVideo(vid.id)}
+                        className="absolute inset-0 z-[5] cursor-pointer"
+                        aria-label={`Select ${vid.label}`}
+                        title="Select and apply"
+                      />
+                      <div
+                        className="absolute top-1.5 left-1.5 z-10 flex items-center justify-center w-5 h-5 rounded-full bg-white border border-black border-2 pointer-events-none"
+                        aria-hidden
+                      >
+                        {isSelected ? (
+                          <svg className="w-4 h-4 text-cyan-600" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                          </svg>
+                        ) : (
+                          <span className="w-4 h-4 border border-slate-400 rounded" />
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setExpandVideo(true)
+                          setExpandSrc(vid.src)
+                        }}
+                        className="absolute top-1.5 right-1.5 z-10 w-6 h-6 bg-white border border-slate-300 flex items-center justify-center text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
+                        title="Expand"
+                        aria-label={`Expand ${vid.label}`}
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1v4m0 0h-4m4 0l-5-5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+                        </svg>
+                      </button>
+                      <span className="absolute bottom-0 left-0 right-0 py-1 px-2 text-[10px] font-medium text-white bg-black/70 truncate pointer-events-none">
+                        {vid.label}
                       </span>
                     </div>
                   )

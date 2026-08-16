@@ -54,7 +54,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ slug
   const siweDomain = (process.env.NEXT_PUBLIC_SIWE_DOMAIN ?? 'morbius.io').trim() || 'morbius.io';
 
   // Real mode carries a money bar above the cabinet: SIWE sign-in gates the
-  // boot, then deposit (approve → addToPrizePool → claim) and cashout run
+  // boot, then deposit (approve → fundBankroll → claim) and cashout run
   // through CabinetWallet against the same APIs the builder uses. Demo and
   // play-credit modes ship the exact shell they always did.
   const bootCall = `CabinetEngine.boot({
@@ -115,6 +115,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ slug
 
   $('mbDeposit').addEventListener('click',function(){
     if(!info||!info.token) return;
+    // Null until SlotBankrollEscrow is deployed — never build a tx against it.
+    if(!info.escrowAddress){ msg('Real-money play is not live yet.'); return; }
     var human=$('mbAmount').value;
     var base;
     try{ base=W.toBaseUnits(human, info.token.decimals); }catch(e){ msg(String(e.message||e)); return; }
@@ -122,7 +124,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ slug
       msg('1/3 approving…');
       return W.approve(from, info.token.address, info.escrowAddress, base).then(W.waitTx).then(function(){
         msg('2/3 funding the machine pool…');
-        return W.fundPool(from, info.escrowAddress, info.poolId, info.token.address, base);
+        return W.fundBankroll(from, info.escrowAddress, info.poolId, info.token.address, base);
       }).then(function(txHash){
         return W.waitTx(txHash).then(function(){
           msg('3/3 crediting…');

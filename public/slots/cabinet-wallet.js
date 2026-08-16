@@ -8,21 +8,22 @@
    of the site uses (server/src/routes/auth.routes.ts). A session created
    here is the same morb_session cookie the app uses everywhere.
 
-   Funding mirrors the poker escrow buy-in exactly
-   (components/poker/tournament/EscrowBuyInJoinPanel.tsx):
+   Funding is a two-step approve-then-call, the same shape as the poker escrow
+   buy-in but against the slots-only vault:
      1. approve(escrow, amount) on the token
-     2. addToPrizePool(poolId, token, amount) on the Tournament Prize Escrow
+     2. fundBankroll(poolId, token, amount) on SlotBankrollEscrow
    The pool id and escrow address come from the machine's public
-   /bankroll endpoint — clients never derive them locally.
+   /bankroll endpoint — clients never derive them locally. That address is
+   null until the contract is deployed, and callers must gate on it.
    ───────────────────────────────────────────────────────────────────────── */
 (function(){
 'use strict';
 
 /* Function selectors — keccak-derived once, fixed by the ABI:
      approve(address,uint256)                 = 0x095ea7b3  (ERC-20 standard)
-     addToPrizePool(bytes32,address,uint256)  = 0x55aa3f69  (escrow V5/V6)   */
+     fundBankroll(bytes32,address,uint256)    = 0x50427000  (SlotBankrollEscrow) */
 var SEL_APPROVE = '0x095ea7b3';
-var SEL_ADD_TO_PRIZE_POOL = '0x55aa3f69';
+var SEL_FUND_BANKROLL = '0x50427000'; // fundBankroll(bytes32,address,uint256) on SlotBankrollEscrow
 var PULSECHAIN_ID_HEX = '0x171'; // 369
 
 /* Injected EIP-1193 provider only. Worth being clear about the limit: unlike
@@ -333,8 +334,11 @@ function approve(from, token, spender, amountBaseUnits){
   return sendTx(from, token, SEL_APPROVE+encAddress(spender)+encUint(amountBaseUnits));
 }
 
-function fundPool(from, escrow, poolIdBytes32, token, amountBaseUnits){
-  return sendTx(from, escrow, SEL_ADD_TO_PRIZE_POOL+pad32(poolIdBytes32)+encAddress(token)+encUint(amountBaseUnits));
+/* Funds a machine's bankroll in SlotBankrollEscrow. The contract credits what it
+   actually receives, so a fee-on-transfer token cannot leave the pool's books
+   claiming more than it holds. */
+function fundBankroll(from, escrow, poolIdBytes32, token, amountBaseUnits){
+  return sendTx(from, escrow, SEL_FUND_BANKROLL+pad32(poolIdBytes32)+encAddress(token)+encUint(amountBaseUnits));
 }
 
 /** Poll for the receipt; resolves on success, rejects on revert/timeout. */
@@ -355,7 +359,7 @@ function waitTx(hash, timeoutMs){
 window.CabinetWallet={
   connect:connect, connectWithPicker:connectWithPicker, authorizedAccounts:authorizedAccounts,
   me:me, siweSignIn:siweSignIn,
-  approve:approve, fundPool:fundPool, waitTx:waitTx,
+  approve:approve, fundBankroll:fundBankroll, fundPool:fundBankroll, /* fundPool: legacy alias */ waitTx:waitTx,
   toBaseUnits:toBaseUnits, fromBaseUnits:fromBaseUnits,
   toChecksumAddress:toChecksumAddress, apiFetch:apiFetch,
 };
