@@ -9,7 +9,7 @@ import PlayingCard from './PlayingCard';
 import DealerSection from './DealerSection';
 import BettingPanel from './BettingPanel';
 import { useBlackjackRevealCompletion } from '@/hooks/use-blackjack-reveal-completion';
-import { BLACKJACK_IMAGE_BACKGROUNDS, DEFAULT_BLACKJACK_IMAGE_ID, ANIMATION_TIMINGS } from '@/app/BLACKJACK/constants';
+import { BLACKJACK_IMAGE_BACKGROUNDS, BLACKJACK_VIDEO_BACKGROUNDS, DEFAULT_BLACKJACK_IMAGE_ID, ANIMATION_TIMINGS } from '@/app/BLACKJACK/constants';
 import { BetChip, formatChipLabel } from '@/components/ui/BetChip';
 import { EncryptedText } from '@/components/ui/encrypted-text';
 import { useAccount } from 'wagmi';
@@ -168,13 +168,13 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
   onBetAmountChange,
   currentBetAmount = '0',
   lastBetAmount = '0',
-  useVideoBackground: _useVideoBackground = true,
+  useVideoBackground = false,
   imageSource = DEFAULT_BLACKJACK_IMAGE_ID,
-  videoSource: _videoSource = 'glowingTable',
+  videoSource = 'glowingTable',
   imageSrc: imageSrcProp,
-  videoSrc: _videoSrcProp,
-  videoSyncToClock: _videoSyncToClock = true,
-  videoPosition: _videoPosition = 50,
+  videoSrc: videoSrcProp,
+  videoSyncToClock = true,
+  videoPosition = 50,
   onOpenDepositModal,
   onOpenTableThemeSelector,
   soundEnabled = true,
@@ -255,6 +255,62 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
 
   const imageSrc = imageSrcProp ?? BLACKJACK_IMAGE_BACKGROUNDS.find((img) => img.id === imageSource)?.src ?? BLACKJACK_IMAGE_BACKGROUNDS.find((img) => img.id === DEFAULT_BLACKJACK_IMAGE_ID)?.src ?? BLACKJACK_IMAGE_BACKGROUNDS[0].src;
   const isExternalImage = /^https?:\/\//.test(imageSrc);
+
+  const videoSrc = videoSrcProp ?? BLACKJACK_VIDEO_BACKGROUNDS.find((v) => v.id === videoSource)?.src ?? BLACKJACK_VIDEO_BACKGROUNDS[0].src;
+  const tableVideoRef = useRef<HTMLVideoElement | null>(null);
+
+  /**
+   * Clock-synced table video.
+   *
+   * The whole clip is spread across one day of the viewer's LOCAL time: at
+   * midnight it sits on the first frame, at noon it is halfway through, and it
+   * arrives at the last frame just before midnight. Two players in different
+   * timezones therefore see their own time of day, which is the point — the
+   * table drifts with your evening rather than everyone's.
+   *
+   * The clip is seeked, never played. A few seconds of footage stretched over
+   * 86,400s needs a playback rate around 0.0001, which browsers clamp (and
+   * treat 0 as invalid), so "playing" it is not an option — we park the video
+   * on the right frame and nudge it forward on a timer instead. The tick is
+   * deliberately coarse: at this ratio a frame lasts minutes of wall clock, so
+   * polling faster would burn wakeups to seek to the same frame.
+   *
+   * With sync off, videoPosition (0-100) parks it at a fixed percentage.
+   */
+  useEffect(() => {
+    if (!useVideoBackground) return;
+    const el = tableVideoRef.current;
+    if (!el) return;
+
+    const seek = () => {
+      const duration = el.duration;
+      if (!Number.isFinite(duration) || duration <= 0) return; // metadata not in yet
+      let fraction: number;
+      if (videoSyncToClock) {
+        const now = new Date();
+        const secondsIntoDay =
+          now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds() + now.getMilliseconds() / 1000;
+        fraction = secondsIntoDay / 86400;
+      } else {
+        fraction = Math.min(Math.max(videoPosition, 0), 100) / 100;
+      }
+      // Stay a hair inside the end: seeking exactly to duration can park some
+      // browsers on a blank frame or fire `ended`.
+      const target = Math.min(fraction * duration, Math.max(duration - 0.05, 0));
+      if (Math.abs(el.currentTime - target) > 0.02) el.currentTime = target;
+    };
+
+    el.pause();
+    if (el.readyState >= 1) seek();
+    el.addEventListener('loadedmetadata', seek);
+
+    // Only keep a timer running for clock sync; a fixed position never moves.
+    const timer = videoSyncToClock ? window.setInterval(seek, 15000) : null;
+    return () => {
+      el.removeEventListener('loadedmetadata', seek);
+      if (timer !== null) window.clearInterval(timer);
+    };
+  }, [useVideoBackground, videoSrc, videoSyncToClock, videoPosition]);
   // State for progressive dealer card reveal
   // Industry standard: Show only first card during play, reveal all when game completes
   const [visibleDealerCards, setVisibleDealerCards] = useState(() => {
@@ -871,15 +927,29 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
     >
       {/* Table surface: flex-1 with min height so table stays a good size */}
       <div className="flex-1 min-h-[420px] sm:min-h-[680px] relative">
-      <Image
-        src={imageSrc}
-        alt="Table Background"
-        fill
-        className="absolute inset-0 w-full h-full object-cover object-center pointer-events-none"
-        style={{ zIndex: 0 }}
-        priority
-        unoptimized={isExternalImage}
-      />
+      {useVideoBackground ? (
+        <video
+          ref={tableVideoRef}
+          key={videoSrc}
+          src={videoSrc}
+          className="absolute inset-0 w-full h-full object-cover object-center pointer-events-none"
+          style={{ zIndex: 0 }}
+          muted
+          playsInline
+          preload="auto"
+          aria-hidden
+        />
+      ) : (
+        <Image
+          src={imageSrc}
+          alt="Table Background"
+          fill
+          className="absolute inset-0 w-full h-full object-cover object-center pointer-events-none"
+          style={{ zIndex: 0 }}
+          priority
+          unoptimized={isExternalImage}
+        />
+      )}
 
       {/* Subtle dark overlay to keep text readable */}
       <div

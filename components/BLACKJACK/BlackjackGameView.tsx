@@ -351,7 +351,7 @@ export function BlackjackGameView(props: BlackjackGameViewProps) {
               onBetAmountChange={tournament.tournamentState.inTournament ? () => {} : manageChipStack}
               currentBetAmount={tournament.tournamentState.inTournament ? String(TOURNAMENT_CONFIG.MIN_BET) : displayBetAmount}
               lastBetAmount={lastBetAmount}
-              useVideoBackground={false}
+              useVideoBackground={theme === 'video'}
               imageSource={imageSource}
               videoSource={videoSource}
               imageSrc={getThemeInfo({ kind: 'image', id: imageSource }).src}
