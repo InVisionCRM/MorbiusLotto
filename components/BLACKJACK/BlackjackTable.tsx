@@ -85,6 +85,8 @@ interface BlackjackTableProps {
   videoSrc?: string;
   videoSyncToClock?: boolean;
   videoPosition?: number;
+  /** Per-table card lean in degrees; null/absent = flat against the screen. */
+  cardPitch?: { dealer: number; player: number } | null;
   onOpenDepositModal?: () => void;
   onOpenTableThemeSelector?: () => void;
   soundEnabled?: boolean;
@@ -170,6 +172,7 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
   videoSrc: videoSrcProp,
   videoSyncToClock = true,
   videoPosition = 50,
+  cardPitch = null,
   onOpenDepositModal,
   onOpenTableThemeSelector,
   soundEnabled = true,
@@ -834,7 +837,15 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
       style={{
         boxShadow: 'inset 0 4px 12px rgba(0, 0, 0, 0.9), inset 0 -2px 8px rgba(0, 0, 0, 0.5), inset 0 0 0 1px rgba(0, 0, 0, 0.3)',
         border: '1px inset rgba(60, 60, 60, 0.5)',
-      }}
+        // Per-table card lean — consumed by .bj-hand-dealer/.bj-hand-player in
+        // blackjack-cards.css, exactly as the multiplayer felt sets them.
+        ...(cardPitch
+          ? {
+              '--bj-card-pitch-dealer': `${cardPitch.dealer}deg`,
+              '--bj-card-pitch-player': `${cardPitch.player}deg`,
+            }
+          : {}),
+      } as React.CSSProperties}
     >
       {/* Table surface: flex-1 with min height so table stays a good size */}
       <div className="flex-1 min-h-[420px] sm:min-h-[680px] relative">
@@ -1169,7 +1180,7 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
                             {hand.isBlackjack && <span className="text-yellow-400 font-black text-base sm:text-xl">BJ!</span>}
                             {hand.isBust && <span className="text-red-400 font-black text-base sm:text-xl">BUST</span>}
                           </div>}
-                          <div className="relative flex gap-0">
+                          <div className="relative flex gap-0 bj-hand-player">
                             {hand.cards.map((card, cardIndex) => {
                               let isNewCard = false;
                               if (Array.isArray(newCardIndices.player)) {

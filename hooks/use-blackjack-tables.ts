@@ -11,6 +11,8 @@ export interface TableOption {
   id: string;
   label: string;
   src: string;
+  /** Card hand lean in degrees ({dealer, player}, 0-75); absent = flat. */
+  card_pitch?: { dealer: number; player: number } | null;
   description?: string | null;
   token_contract_address?: string | null;
   logo_url?: string | null;
@@ -34,6 +36,8 @@ export interface TableThemeInfo {
   label: string;
   src: string;
   kind: 'image' | 'video';
+  /** Per-table card lean, matching cards to art drawn in perspective. */
+  cardPitch?: { dealer: number; player: number } | null;
 }
 
 function normalizeSrc(src: string): string {
@@ -105,7 +109,7 @@ export function useBlackjackTables(options?: UseBlackjackTablesOptions) {
     // Same-origin proxy (app/api/blackjack/tables) → Express + DB. Works when only BLACKJACK_SERVER_URL is set on the server.
     fetch(`/api/blackjack/tables?${q}`)
       .then((res) => (res.ok ? res.json() : Promise.reject(new Error('Failed to fetch'))))
-      .then((rows: Array<{ id: string; kind: string; name: string; src: string; description?: string; token_contract_address?: string; logo_url?: string; ticker?: string; iframe_url?: string; website_url?: string }>) => {
+      .then((rows: Array<{ id: string; kind: string; name: string; src: string; description?: string; token_contract_address?: string; logo_url?: string; ticker?: string; iframe_url?: string; website_url?: string; card_pitch?: { dealer: number; player: number } | null }>) => {
         if (cancelled || !Array.isArray(rows)) return;
         const mapRow = (r: (typeof rows)[0]) => ({
           id: r.id,
@@ -117,6 +121,7 @@ export function useBlackjackTables(options?: UseBlackjackTablesOptions) {
           ticker: r.ticker ?? null,
           iframe_url: r.iframe_url ?? null,
           website_url: r.website_url ?? null,
+          card_pitch: r.card_pitch ?? null,
         });
         const images = rows.filter((r) => r.kind === 'image').map(mapRow);
         const videos = rows.filter((r) => r.kind === 'video').map(mapRow);
@@ -162,7 +167,7 @@ export function useBlackjackTables(options?: UseBlackjackTablesOptions) {
       }
       const options = theme.kind === 'video' ? videoOptions : imageOptions;
       const byId = options.find((x) => x.id === theme.id);
-      if (byId) return { label: byId.label, src: byId.src, kind: theme.kind };
+      if (byId) return { label: byId.label, src: byId.src, kind: theme.kind, cardPitch: byId.card_pitch ?? null };
 
       const resolvedSrc = resolveThemeSource(theme.kind, theme.id);
       if (resolvedSrc) {

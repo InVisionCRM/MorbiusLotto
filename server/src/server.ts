@@ -2054,6 +2054,7 @@ async function initializeServices() {
           ticker: r.ticker,
           iframe_url: r.iframe_url,
           website_url: r.website_url,
+          card_pitch: r.card_pitch,
           sort_order: r.sort_order,
           enabled: r.enabled,
         })));
@@ -2170,6 +2171,22 @@ async function initializeServices() {
     });
 
     // Admin: Blackjack tables CRUD (requires x-admin-wallet in allowed list)
+    /**
+     * Card lean for solo tables: {dealer, player} in degrees, clamped to the
+     * same 0-75 range Table Forge allows. null clears it (flat). Returns
+     * undefined for "not provided" so PUT can distinguish clear from omit.
+     */
+    const parseCardPitch = (raw: unknown): { dealer: number; player: number } | null | undefined => {
+      if (raw === undefined) return undefined;
+      if (raw === null) return null;
+      if (typeof raw !== 'object' || Array.isArray(raw)) return undefined;
+      const o = raw as Record<string, unknown>;
+      const clamp = (v: unknown) => {
+        const n = Number(v);
+        return Number.isFinite(n) ? Math.min(75, Math.max(0, Math.round(n))) : 0;
+      };
+      return { dealer: clamp(o.dealer), player: clamp(o.player) };
+    };
     const dbSchemaError = (err: unknown): string | null => {
       const msg = err && typeof (err as any).message === 'string' ? (err as any).message : '';
       const code = (err as any)?.code;
@@ -2271,6 +2288,7 @@ async function initializeServices() {
             ticker: null,
             iframe_url: null,
             website_url: null,
+            card_pitch: null,
             sort_order: inserted,
             enabled: true,
           });
@@ -2286,7 +2304,7 @@ async function initializeServices() {
 
     app.post('/api/admin/tables', async (req, res) => {
       try {
-        const { kind, name, src, description, token_contract_address, logo_url, ticker, iframe_url, website_url, sort_order, enabled } = req.body;
+        const { kind, name, src, description, token_contract_address, logo_url, ticker, iframe_url, website_url, card_pitch, sort_order, enabled } = req.body;
         if (!kind || !name || !src) {
           res.status(400).json({ error: 'Missing required fields: kind, name, src' });
           return;
@@ -2305,6 +2323,7 @@ async function initializeServices() {
           ticker: ticker ?? null,
           iframe_url: iframe_url ?? null,
           website_url: website_url ?? null,
+          card_pitch: parseCardPitch(card_pitch) ?? null,
           sort_order: typeof sort_order === 'number' ? sort_order : 0,
           enabled: enabled !== false,
         });
@@ -2329,6 +2348,7 @@ async function initializeServices() {
           ticker: updates.ticker,
           iframe_url: updates.iframe_url,
           website_url: updates.website_url,
+          card_pitch: parseCardPitch(updates.card_pitch),
           sort_order: updates.sort_order,
           enabled: updates.enabled,
         });

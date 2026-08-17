@@ -356,6 +356,7 @@ export function BlackjackGameView(props: BlackjackGameViewProps) {
               videoSource={videoSource}
               imageSrc={getThemeInfo({ kind: 'image', id: imageSource }).src}
               videoSrc={getThemeInfo({ kind: 'video', id: videoSource }).src}
+              cardPitch={getThemeInfo({ kind: theme, id: theme === 'video' ? videoSource : imageSource }).cardPitch ?? null}
               videoSyncToClock={videoSyncToClock}
               videoPosition={videoPosition}
               onOpenDepositModal={handleOpenDepositModal}
