@@ -32,8 +32,10 @@ import {
 } from '@/lib/blackjack-sound-fx';
 import {
   BlackjackMultiRoundOverlays,
-  BLACKJACK_COLOR_PALETTES,
+  type MultiRoundCelebration,
 } from '@/components/BLACKJACK/multi/BlackjackMultiRoundOverlays';
+import { TableWinFxStyles, celebrateWin, winTierFor } from '@/components/shared/TableWinFx';
+import { TableWinTextStyles } from '@/components/shared/TableWinText';
 import {
   BlackjackMultiInfoPanel,
   type BlackjackMultiSystemChatMessage,
@@ -565,12 +567,9 @@ export default function BlackjackMultiTablePage() {
   // Track completed rounds for History tab
   const [roundHistory, setRoundHistory] = useState<BlackjackMultiRoundHistoryItem[]>([]);
 
-  // Win notification — reuses WinNotification from single player
-  const [showWin, setShowWin] = useState<{ amount: bigint; isBlackjack: boolean } | null>(null);
-  // Blackjack celebration animation (EncryptedText + glass panel)
-  const [showBlackjackText, setShowBlackjackText] = useState(false);
-  const [blackjackColorIndex, setBlackjackColorIndex] = useState(0);
-  const [blackjackAnimKey, setBlackjackAnimKey] = useState(0); // key to force EncryptedText remount for replay
+  // Round settlement celebration — the shared 3D win word + tiered fx,
+  // same system as the arcade felts. Randomized per round via `seed`.
+  const [celebration, setCelebration] = useState<MultiRoundCelebration | null>(null);
   const prevPhaseRef = useRef<string>('');
   const chartRef = useRef<BlackjackMultiRealTimeBetChartRef>(null);
   const chartSessionStartTime = useRef<number>(Date.now());
@@ -580,6 +579,10 @@ export default function BlackjackMultiTablePage() {
   type PendingDealerOutcome = {
     kind: 'player_blackjack' | 'player_win' | 'push' | 'dealer_blackjack' | 'dealer_win' | 'silent';
     payout: bigint;
+    /** Everything the seat put at risk this round — grades the win tier. */
+    committed: bigint;
+    /** Names the celebration word and replays the animation per round. */
+    roundNumber: number;
   };
   const pendingDealerOutcomeRef = useRef<PendingDealerOutcome | null>(null);
   const lastOutcomeAnnouncementAtRef = useRef(0);
@@ -642,10 +645,20 @@ export default function BlackjackMultiTablePage() {
           break;
       }
     }
-    if (pending.kind === 'player_blackjack' || pending.kind === 'player_win') {
-      setShowWin({
-        amount: pending.payout,
-        isBlackjack: pending.kind === 'player_blackjack',
+    if (pending.kind !== 'silent') {
+      const committed = Number(pending.committed) / 1e18;
+      const payout = Number(pending.payout) / 1e18;
+      const tier = winTierFor(committed, payout);
+      // Tiered audio + confetti, shared with every other felt. The dealer's
+      // voice line above stays — that is this table's character; the jingle
+      // and burst are the app-wide settlement language.
+      celebrateWin(tier);
+      setCelebration({
+        tier,
+        blackjack: pending.kind === 'player_blackjack',
+        dealerBlackjack: pending.kind === 'dealer_blackjack',
+        payoutWei: pending.payout,
+        seed: pending.roundNumber,
       });
     }
     fetchBalance();
@@ -663,8 +676,8 @@ export default function BlackjackMultiTablePage() {
     if (phaseState.phase !== 'completed' && showSeatOutcomeLabels) {
       setShowSeatOutcomeLabels(false);
     }
-    if (phaseState.phase !== 'completed' && showBlackjackText) {
-      setShowBlackjackText(false);
+    if (phaseState.phase !== 'completed' && celebration) {
+      setCelebration(null);
     }
     const prevPhase = prevPhaseRef.current;
     prevPhaseRef.current = phaseState.phase;
@@ -710,16 +723,6 @@ export default function BlackjackMultiTablePage() {
 
     // ── Round completes: outcome voice + win toast — deferred until dealer reveal finishes (flushPendingDealerOutcome) ──
     if (prevPhase !== 'completed' && phaseState.phase === 'completed') {
-      // Blackjack animation — show if ANY seat at the table got blackjack
-      const anyBlackjack = phaseState.seats.some(s =>
-        s.playerAddress && s.hands.some(h => h.result === 'blackjack')
-      );
-      if (anyBlackjack) {
-        setBlackjackColorIndex(Math.floor(Math.random() * BLACKJACK_COLOR_PALETTES.length));
-        setBlackjackAnimKey(k => k + 1);
-        setShowBlackjackText(true);
-      }
-
       const seat = phaseState.seats.find(s =>
         s.playerAddress && address && s.playerAddress.toLowerCase() === address.toLowerCase()
       );
@@ -1332,12 +1335,11 @@ export default function BlackjackMultiTablePage() {
           />
 
           <BlackjackMultiRoundOverlays
-            showWin={showWin}
-            onWinComplete={() => setShowWin(null)}
-            showBlackjackText={showBlackjackText}
-            blackjackAnimKey={blackjackAnimKey}
-            blackjackColorIndex={blackjackColorIndex}
+            celebration={celebration}
+            onDone={() => setCelebration(null)}
           />
+          <TableWinFxStyles />
+          <TableWinTextStyles />
 
           {/* ── Play area ── */}
           {/* DEALER — placement comes from the table layout (lib/blackjack-table-layout.ts);
