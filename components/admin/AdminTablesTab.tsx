@@ -143,19 +143,109 @@ export interface BlackjackTableRow {
   updated_at?: string;
 }
 
+/** Object URL for a pending upload, revoked on change/unmount. */
+function useFileObjectUrl(file: File | null): string | null {
+  const [url, setUrl] = useState<string | null>(null);
+  useEffect(() => {
+    if (!file) { setUrl(null); return; }
+    const u = URL.createObjectURL(file);
+    setUrl(u);
+    return () => URL.revokeObjectURL(u);
+  }, [file]);
+  return url;
+}
+
 /**
- * Card lean editor — the same presets Table Forge uses, plus two fine-tune
- * inputs. null = flat (the default for top-down art). The live felt applies
- * this as perspective(700px) rotateX(deg) per hand.
+ * The angle preview stage: the table's own art with real cards floating over
+ * it at the chosen leans — dealer hand upper, player hand lower, exactly the
+ * production transform (perspective(700px) rotateX(deg), origin bottom). This
+ * is judged against the ART, which is the whole point: a lean only looks right
+ * or wrong relative to the perspective the table was drawn in.
+ */
+function AngleStage({
+  artUrl,
+  artIsVideo,
+  dealer,
+  player,
+}: {
+  artUrl: string;
+  artIsVideo: boolean;
+  dealer: number;
+  player: number;
+}) {
+  const card = (face: string, w: string) => (
+    // Native img: art and faces may be blob: or cross-host uploads.
+     
+    <img
+      key={face}
+      src={`/BlackJack/Cards/PNG/${face}.png`}
+      alt=""
+      style={{ width: w, borderRadius: '6%', boxShadow: '0 4px 10px rgba(0,0,0,0.55)' }}
+    />
+  );
+  const hand = (faces: string[], deg: number, label: string, top: string, cardW: string) => (
+    <div
+      className="absolute left-1/2 flex flex-col items-center"
+      style={{ top, transform: 'translateX(-50%)' }}
+    >
+      <div
+        className="flex gap-[2%]"
+        style={{ transform: `perspective(700px) rotateX(${deg}deg)`, transformOrigin: 'center bottom' }}
+      >
+        {faces.map((f) => card(f, cardW))}
+      </div>
+      <span className="mt-1 px-1.5 py-0.5 rounded bg-black/70 text-[10px] font-semibold tracking-wide text-cyan-200">
+        {label} {deg}&deg;
+      </span>
+    </div>
+  );
+  return (
+    <div className="absolute inset-0">
+      {artIsVideo ? (
+        <video src={artUrl} className="absolute inset-0 w-full h-full object-cover" muted playsInline autoPlay loop />
+      ) : (
+         
+        <img src={artUrl} alt="" className="absolute inset-0 w-full h-full object-cover" />
+      )}
+      {/* The hands read better against a slightly settled image. */}
+      <div className="absolute inset-0" style={{ background: 'linear-gradient(180deg, rgba(0,0,0,0.18), rgba(0,0,0,0.05) 40%, rgba(0,0,0,0.22))' }} />
+      {hand(['KS', 'AD'], dealer, 'DEALER', '16%', 'clamp(28px, 9%, 64px)')}
+      {hand(['AS', 'KH', 'QD'], player, 'PLAYER', '55%', 'clamp(34px, 11%, 80px)')}
+    </div>
+  );
+}
+
+/**
+ * Card lean editor — the same presets Table Forge uses, plus fine-tune inputs
+ * and a live preview of both hands OVER the table's own art (the uploaded file
+ * before save, the stored art when editing). Expands to near-fullscreen,
+ * because a lean can only be judged against the drawn perspective and a
+ * thumbnail hides exactly that. null = flat (the default for top-down art).
+ * The live felt applies this as perspective(700px) rotateX(deg) per hand.
  */
 function CardAngleField({
   value,
   onChange,
+  artFile = null,
+  artSrc = null,
+  artIsVideo = false,
 }: {
   value: { dealer: number; player: number } | null;
   onChange: (v: { dealer: number; player: number } | null) => void;
+  /** Pending upload — wins over artSrc so the preview matches what will save. */
+  artFile?: File | null;
+  /** Already-saved art (edit dialog). */
+  artSrc?: string | null;
+  artIsVideo?: boolean;
 }) {
   const clampDeg = (n: number) => Math.min(75, Math.max(0, Math.round(n)));
+  const fileUrl = useFileObjectUrl(artFile);
+  const artUrl = fileUrl ?? (artSrc || null);
+  const artFromFile = fileUrl != null;
+  const isVideo = artFromFile ? (artFile?.type.startsWith('video/') ?? false) : artIsVideo;
+  const [expanded, setExpanded] = useState(false);
+  const dealer = value?.dealer ?? 0;
+  const player = value?.player ?? 0;
   return (
     <div className="space-y-1.5">
       <Label className="text-[11px] text-slate-400">
@@ -210,12 +300,36 @@ function CardAngleField({
             />
             &deg;
           </label>
-          {/* Live mini preview at the player lean, same transform as the felt. */}
-          <span
-            aria-hidden
-            className="inline-block w-7 h-10 rounded-sm bg-white border border-slate-400"
-            style={{ transform: `perspective(110px) rotateX(${value.player}deg)`, transformOrigin: 'center bottom' }}
-          />
+        </div>
+      )}
+      {artUrl ? (
+        <button
+          type="button"
+          onClick={() => setExpanded(true)}
+          title="Click to expand"
+          className="relative block w-full aspect-video overflow-hidden rounded-lg border border-slate-600 hover:border-cyan-500/60 transition-colors cursor-zoom-in"
+        >
+          <AngleStage artUrl={artUrl} artIsVideo={isVideo} dealer={dealer} player={player} />
+          <span className="absolute top-1.5 right-1.5 px-1.5 py-0.5 rounded bg-black/70 text-[10px] text-slate-200">
+            Click to expand
+          </span>
+        </button>
+      ) : (
+        <p className="text-[10px] text-slate-500">
+          Pick a table image or video above to preview the card angle over your art.
+        </p>
+      )}
+      {expanded && artUrl && (
+        <div
+          className="fixed inset-0 z-[200] flex items-center justify-center bg-black/90 p-6 cursor-zoom-out"
+          onClick={() => setExpanded(false)}
+          role="dialog"
+          aria-label="Card angle preview"
+        >
+          <div className="relative w-[min(94vw,1200px)] aspect-video overflow-hidden rounded-xl border border-slate-500 shadow-2xl">
+            <AngleStage artUrl={artUrl} artIsVideo={isVideo} dealer={dealer} player={player} />
+          </div>
+          <span className="absolute top-4 right-6 text-slate-300 text-sm">Click anywhere to close</span>
         </div>
       )}
     </div>
@@ -663,7 +777,7 @@ function AddTableDialog({
                 />
               </div>
             </div>
-            <CardAngleField value={cardPitch} onChange={setCardPitch} />
+            <CardAngleField value={cardPitch} onChange={setCardPitch} artFile={files[0] ?? null} />
             <div className="rounded border border-slate-600 bg-slate-800/50 p-2">
               <p className="text-[10px] text-slate-500 mb-1.5">In-game preview — updates as you type</p>
               <TokenProfilePreviewCard
@@ -926,7 +1040,7 @@ function EditTableDialog({
                 />
               </div>
             </div>
-            <CardAngleField value={cardPitch} onChange={setCardPitch} />
+            <CardAngleField value={cardPitch} onChange={setCardPitch} artFile={replacementFile[0] ?? null} artSrc={row.src} artIsVideo={row.kind === 'video'} />
             <div className="rounded border border-slate-600 bg-slate-800/50 p-2">
               <p className="text-[10px] text-slate-500 mb-1.5">In-game preview — updates as you type</p>
               <TokenProfilePreviewCard
