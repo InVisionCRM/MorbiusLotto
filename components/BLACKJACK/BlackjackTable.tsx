@@ -87,6 +87,9 @@ interface BlackjackTableProps {
   videoPosition?: number;
   /** Per-table card lean in degrees; null/absent = flat against the screen. */
   cardPitch?: { dealer: number; player: number } | null;
+  /** Tip the dealer from the table menu; absent hides the item. */
+  onTipDealer?: () => void;
+  tipDisabled?: boolean;
   onOpenDepositModal?: () => void;
   onOpenTableThemeSelector?: () => void;
   soundEnabled?: boolean;
@@ -173,6 +176,8 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
   videoSyncToClock = true,
   videoPosition = 50,
   cardPitch = null,
+  onTipDealer,
+  tipDisabled = false,
   onOpenDepositModal,
   onOpenTableThemeSelector,
   soundEnabled = true,
@@ -288,6 +293,7 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
   const prevGameResult = useRef<string | null>(null);
 
   const tableContainerRef = useRef<HTMLDivElement>(null);
+  const [tableMenuOpen, setTableMenuOpen] = useState(false);
   const [showBlackjackText, setShowBlackjackText] = useState(false);
   const [blackjackColorIndex, setBlackjackColorIndex] = useState(0);
 
@@ -1373,16 +1379,16 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
                 );
                 const gameGroup = (
                   <div className={gameGroupClass} style={groupStyle}>
-                    <button onClick={(e) => { e.stopPropagation(); if (canHit) { if (soundEnabled) { if (onPlaySfx) onPlaySfx('/BlackJack/sounds/knock.wav'); else new Audio('/BlackJack/sounds/knock.wav').play().catch(() => {}); } onAction(Action.HIT); } }} disabled={!canHit} className={`relative w-16 h-16 flex items-center justify-center rounded-lg bg-gradient-to-br from-red-500 to-red-700 border-2 border-red-400/50 shadow-lg transition-all hover:scale-105 active:scale-95 ${!canHit ? 'pointer-events-none cursor-not-allowed' : 'cursor-pointer'}`} style={{ opacity: canHit ? 1 : 0.3 }} onMouseDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()}>
+                    <button onClick={(e) => { e.stopPropagation(); if (canHit) { if (soundEnabled) { if (onPlaySfx) onPlaySfx('/BlackJack/sounds/knock.wav'); else new Audio('/BlackJack/sounds/knock.wav').play().catch(() => {}); } onAction(Action.HIT); } }} disabled={!canHit} className={`bj-action-btn relative w-16 h-16 flex items-center justify-center rounded-lg bg-gradient-to-br from-red-500 to-red-700 border-2 border-red-400/50 shadow-lg ${!canHit ? 'pointer-events-none cursor-not-allowed' : 'cursor-pointer'}`} style={{ opacity: canHit ? 1 : 0.3, '--abi': 0 } as React.CSSProperties} onMouseDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()}>
                       <span className="text-white font-black text-sm tracking-wider">HIT</span>
                     </button>
-                    <button onClick={(e) => { e.stopPropagation(); if (canStand) onAction(Action.STAND); }} disabled={!canStand} className={`relative w-16 h-16 flex items-center justify-center rounded-lg bg-gradient-to-br from-blue-500/50 to-blue-700/50 border-2 border-blue-400/50 shadow-lg transition-all hover:scale-105 active:scale-95 ${!canStand ? 'pointer-events-none cursor-not-allowed' : 'cursor-pointer'}`} style={{ opacity: canStand ? 1 : 0.3 }} onMouseDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()}>
+                    <button onClick={(e) => { e.stopPropagation(); if (canStand) onAction(Action.STAND); }} disabled={!canStand} className={`bj-action-btn relative w-16 h-16 flex items-center justify-center rounded-lg bg-gradient-to-br from-blue-500/50 to-blue-700/50 border-2 border-blue-400/50 shadow-lg ${!canStand ? 'pointer-events-none cursor-not-allowed' : 'cursor-pointer'}`} style={{ opacity: canStand ? 1 : 0.3, '--abi': 1 } as React.CSSProperties} onMouseDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()}>
                       <span className="text-white font-black text-sm tracking-wider">STAND</span>
                     </button>
-                    <button onClick={(e) => { e.stopPropagation(); if (canDoubleDown) { onDoubleDownChips?.(); onAction(Action.DOUBLE_DOWN); } }} disabled={!canDoubleDown} className={`relative w-16 h-16 flex items-center justify-center rounded-lg bg-gradient-to-br from-amber-500 to-amber-700 border-2 border-amber-400/50 shadow-lg transition-all hover:scale-105 active:scale-95 ${!canDoubleDown ? 'pointer-events-none cursor-not-allowed' : 'cursor-pointer'}`} style={{ opacity: canDoubleDown ? 1 : 0.3 }} onMouseDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()}>
+                    <button onClick={(e) => { e.stopPropagation(); if (canDoubleDown) { onDoubleDownChips?.(); onAction(Action.DOUBLE_DOWN); } }} disabled={!canDoubleDown} className={`bj-action-btn relative w-16 h-16 flex items-center justify-center rounded-lg bg-gradient-to-br from-amber-500 to-amber-700 border-2 border-amber-400/50 shadow-lg ${!canDoubleDown ? 'pointer-events-none cursor-not-allowed' : 'cursor-pointer'}`} style={{ opacity: canDoubleDown ? 1 : 0.3, '--abi': 2 } as React.CSSProperties} onMouseDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()}>
                       <span className="text-white font-black text-xs tracking-wider">DOUBLE</span>
                     </button>
-                    <button onClick={(e) => { e.stopPropagation(); if (canSplit) { onSplitChips?.(); onAction(Action.SPLIT); } }} disabled={!canSplit} className={`relative w-16 h-16 flex items-center justify-center rounded-lg bg-gradient-to-br from-emerald-500 to-emerald-700 border-2 border-emerald-400/50 shadow-lg transition-all hover:scale-105 active:scale-95 ${!canSplit ? 'pointer-events-none cursor-not-allowed' : 'cursor-pointer'}`} style={{ opacity: canSplit ? 1 : 0.3 }} onMouseDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()}>
+                    <button onClick={(e) => { e.stopPropagation(); if (canSplit) { onSplitChips?.(); onAction(Action.SPLIT); } }} disabled={!canSplit} className={`bj-action-btn relative w-16 h-16 flex items-center justify-center rounded-lg bg-gradient-to-br from-emerald-500 to-emerald-700 border-2 border-emerald-400/50 shadow-lg ${!canSplit ? 'pointer-events-none cursor-not-allowed' : 'cursor-pointer'}`} style={{ opacity: canSplit ? 1 : 0.3, '--abi': 3 } as React.CSSProperties} onMouseDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()}>
                       <span className="text-white font-black text-sm tracking-wider">SPLIT</span>
                     </button>
                   </div>
@@ -1545,109 +1551,133 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
         </div>
       )}
 
-        {/* Reserve - top left of table (desktop and mobile) */}
-        <div className="absolute top-2 left-2 z-50 pointer-events-auto flex">
-          <button
-            type="button"
-            onClick={onOpenDepositModal}
-            aria-label={`Reserve balance: ${Math.floor(Number(reserveBalance) / 1e18)} MORBIUS. Open deposit and withdraw.`}
-            className="flex relative items-center justify-start rounded-md py-1 px-2.5 pr-6 gap-1 text-sm flex-shrink min-w-0 hover:brightness-110 transition-all cursor-pointer"
-            style={{
-              background: 'linear-gradient(145deg, rgb(0, 0, 0), rgb(1, 2, 3))',
-              boxShadow: 'inset 2px 2px 4px rgb(0, 0, 0), inset -2px -2px 4px rgba(255, 255, 255, 0.05), 0 2px 8px rgba(0, 0, 0, 0.3)',
-              border: '1px solid rgb(16, 137, 217)',
-            }}
-          >
-            <div className="flex items-center gap-1">
-              <span className="text-white/80 font-bold whitespace-nowrap text-sm tabular-nums">
-                {Math.floor(Number(reserveBalance) / 1e18).toLocaleString()}
-              </span>
-              <Image
-                src="/morbius/MorbiusLogo (3).png"
-                alt="Morbius Logo"
-                width={36}
-                height={36}
-                className="object-contain"
-              />
-            </div>
-            <IconChevronDown size={10} className="text-white/60 absolute right-1.5 top-1/2 transform -translate-y-1/2" />
-          </button>
-        </div>
-
-        {/* Change Table - top right of table */}
+        {/* ── Table menu — one clean button instead of chrome scattered on the felt.
+            Change Table, Tip, Voice, and Deposit/Withdraw all live in here; the
+            voice status readouts still float beneath while voice is on. ── */}
         {onOpenTableThemeSelector && (
-          <div className="absolute top-2 right-2 z-50 pointer-events-auto flex gap-1.5 items-center">
-            {speechToggle && (
-              <div className="relative flex flex-col items-end gap-1">
+          <div className="absolute top-2 right-2 z-50 pointer-events-auto flex flex-col items-end gap-1">
+            <button
+              type="button"
+              onClick={() => setTableMenuOpen((o) => !o)}
+              aria-label="Table menu"
+              aria-expanded={tableMenuOpen}
+              className="bj-menu-btn"
+            >
+              <span className={`bj-menu-icon${tableMenuOpen ? ' open' : ''}`} aria-hidden>
+                <span /><span /><span />
+              </span>
+              {speechToggle?.listening && !tableMenuOpen && (
+                <span className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-red-500 animate-pulse" aria-hidden />
+              )}
+            </button>
+
+            {tableMenuOpen && (
+              <div className="bj-menu-panel" role="menu">
                 <button
                   type="button"
-                  onClick={speechToggle.onToggle}
-                  className="flex items-center gap-1.5 rounded-md border px-2 py-1 text-[10px] font-medium transition-colors bg-slate-900/80 hover:bg-slate-800/80"
-                  style={{
-                    borderColor: speechToggle.listening ? 'rgba(239,68,68,0.5)' : 'rgba(255,255,255,0.15)',
-                    color: speechToggle.listening ? '#fca5a5' : '#9ca3af',
-                  }}
+                  role="menuitem"
+                  className="bj-menu-item"
+                  style={{ '--mi': 0 } as React.CSSProperties}
+                  onClick={() => { setTableMenuOpen(false); onOpenDepositModal?.(); }}
                 >
-                  <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${speechToggle.listening ? 'bg-red-500 animate-pulse' : 'bg-neutral-500'}`} />
-                  {speechToggle.listening ? 'Voice ON' : 'Voice OFF'}
-                  <svg className="h-3 w-3" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M12 1a4 4 0 0 1 4 4v6a4 4 0 0 1-8 0V5a4 4 0 0 1 4-4zm0 2a2 2 0 0 0-2 2v6a2 2 0 0 0 4 0V5a2 2 0 0 0-2-2zm7 8a1 1 0 0 1 1 1 8 8 0 0 1-7 7.938V21h2a1 1 0 0 1 0 2H9a1 1 0 0 1 0-2h2v-1.062A8 8 0 0 1 4 12a1 1 0 0 1 2 0 6 6 0 0 0 12 0 1 1 0 0 1 1-1z" />
-                  </svg>
+                  <span className="bj-menu-item-label">Deposit / Withdraw</span>
+                  <span className="bj-menu-item-hint">wallet</span>
                 </button>
-                {voiceTutorialVideoUrl ? (
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="bj-menu-item"
+                  style={{ '--mi': 1 } as React.CSSProperties}
+                  onClick={() => { setTableMenuOpen(false); onOpenTableThemeSelector(); }}
+                >
+                  <span className="bj-menu-item-label">Change Table</span>
+                  <span className="bj-menu-item-hint">themes</span>
+                </button>
+                {onTipDealer && (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="bj-menu-item"
+                    style={{ '--mi': 2 } as React.CSSProperties}
+                    disabled={tipDisabled}
+                    onClick={() => { setTableMenuOpen(false); onTipDealer(); }}
+                  >
+                    <span className="bj-menu-item-label">Tip Dealer</span>
+                    <span className="bj-menu-item-hint gold">2,000</span>
+                  </button>
+                )}
+                {speechToggle && (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="bj-menu-item"
+                    style={{ '--mi': 3 } as React.CSSProperties}
+                    onClick={() => speechToggle.onToggle()}
+                  >
+                    <span className="bj-menu-item-label">Voice Commands</span>
+                    <span className={`bj-menu-item-hint${speechToggle.listening ? ' live' : ''}`}>
+                      <span className={`inline-block h-1.5 w-1.5 rounded-full mr-1 align-middle ${speechToggle.listening ? 'bg-red-500 animate-pulse' : 'bg-neutral-500'}`} />
+                      {speechToggle.listening ? 'ON' : 'OFF'}
+                    </span>
+                  </button>
+                )}
+                {speechToggle && voiceTutorialVideoUrl && (
                   <a
                     href={voiceTutorialVideoUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-[10px] font-medium text-cyan-400/90 underline underline-offset-2 hover:text-cyan-300"
+                    role="menuitem"
+                    className="bj-menu-item"
+                    style={{ '--mi': 4 } as React.CSSProperties}
+                    onClick={() => setTableMenuOpen(false)}
                   >
-                    How it works
+                    <span className="bj-menu-item-label">How voice works</span>
+                    <span className="bj-menu-item-hint">video</span>
                   </a>
-                ) : null}
-                {speechToggle.listening && (
-                  <div className="flex items-center gap-2 rounded-md border border-white/10 bg-black/70 px-2 py-1 backdrop-blur-md max-w-[180px] pointer-events-none">
-                    <span className="text-[10px] text-white/40 shrink-0">Hearing:</span>
-                    <span className="text-[10px] text-white truncate">
-                      {truncateTranscriptWords(speechToggle.transcript, SPEECH_LIVE_TRANSCRIPT_MAX_WORDS) || (
-                        <span className="text-white/25 italic">listening…</span>
-                      )}
+                )}
+                {isAdmin && (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="bj-menu-item"
+                    style={{ '--mi': 5 } as React.CSSProperties}
+                    onClick={() => setTestHandIndex(prev => {
+                      if (prev === null) return 0;
+                      if (prev >= TEST_SCENARIOS.length - 1) return null;
+                      return prev + 1;
+                    })}
+                  >
+                    <span className="bj-menu-item-label" style={{ color: '#fde047' }}>
+                      {testHandIndex === null ? 'Test scenarios' : TEST_SCENARIOS[testHandIndex].label}
                     </span>
-                  </div>
-                )}
-                {speechToggle.pendingLabel && (
-                  <div className="flex items-center gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-2 py-1 backdrop-blur-md max-w-[180px] pointer-events-none">
-                    <span className="text-[10px] text-amber-300 font-semibold shrink-0">Confirm:</span>
-                    <span className="text-[10px] text-amber-200 truncate">{speechToggle.pendingLabel}</span>
-                  </div>
-                )}
-                {speechToggle.lastAction && !speechToggle.pendingLabel && (
-                  <div className="flex items-center gap-2 rounded-md border border-cyan-500/30 bg-cyan-500/10 px-2 py-1 backdrop-blur-md max-w-[180px] pointer-events-none">
-                    <span className="text-[10px] text-cyan-400 font-semibold">▶</span>
-                    <span className="text-[10px] text-cyan-300 truncate">{speechToggle.lastAction}</span>
-                  </div>
+                    <span className="bj-menu-item-hint">admin</span>
+                  </button>
                 )}
               </div>
             )}
-            {isAdmin && (
-              <button
-                type="button"
-                onClick={() => setTestHandIndex(prev => {
-                  if (prev === null) return 0;
-                  if (prev >= TEST_SCENARIOS.length - 1) return null;
-                  return prev + 1;
-                })}
-                className="text-yellow-300/90 hover:text-yellow-200 text-[10px] font-medium py-1 px-2 rounded-md border border-yellow-500/40 hover:border-yellow-400/60 bg-slate-900/80 hover:bg-slate-800/80 transition-colors"
-              >
-                {testHandIndex === null ? 'Test' : `${TEST_SCENARIOS[testHandIndex].label} ▸`}
-              </button>
+
+            {speechToggle?.listening && (
+              <div className="flex items-center gap-2 rounded-md border border-white/10 bg-black/70 px-2 py-1 backdrop-blur-md max-w-[180px] pointer-events-none">
+                <span className="text-[10px] text-white/40 shrink-0">Hearing:</span>
+                <span className="text-[10px] text-white truncate">
+                  {truncateTranscriptWords(speechToggle.transcript, SPEECH_LIVE_TRANSCRIPT_MAX_WORDS) || (
+                    <span className="text-white/25 italic">listening…</span>
+                  )}
+                </span>
+              </div>
             )}
-            <button
-              type="button"
-              onClick={onOpenTableThemeSelector}
-              className="text-cyan-300/90 hover:text-cyan-200 text-xs font-medium py-1.5 px-2.5 rounded-md border border-cyan-500/40 hover:border-cyan-400/60 bg-slate-900/80 hover:bg-slate-800/80 transition-colors"
-            >
-              Change Table
-            </button>
+            {speechToggle?.pendingLabel && (
+              <div className="flex items-center gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-2 py-1 backdrop-blur-md max-w-[180px] pointer-events-none">
+                <span className="text-[10px] text-amber-300 font-semibold shrink-0">Confirm:</span>
+                <span className="text-[10px] text-amber-200 truncate">{speechToggle.pendingLabel}</span>
+              </div>
+            )}
+            {speechToggle?.lastAction && !speechToggle.pendingLabel && (
+              <div className="flex items-center gap-2 rounded-md border border-cyan-500/30 bg-cyan-500/10 px-2 py-1 backdrop-blur-md max-w-[180px] pointer-events-none">
+                <span className="text-[10px] text-cyan-400 font-semibold">▶</span>
+                <span className="text-[10px] text-cyan-300 truncate">{speechToggle.lastAction}</span>
+              </div>
+            )}
           </div>
         )}
 
@@ -1655,6 +1685,113 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
       {/* End table surface */}
 
       <style jsx global>{`
+        /* ── Table menu ─────────────────────────────────────────────── */
+        .bj-menu-btn {
+          position: relative;
+          display: flex; align-items: center; justify-content: center;
+          width: 34px; height: 34px; border-radius: 10px;
+          background: rgba(10, 16, 28, 0.82);
+          border: 1px solid rgba(34, 211, 238, 0.35);
+          backdrop-filter: blur(8px);
+          box-shadow: 0 2px 10px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+          transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.12s ease;
+          cursor: pointer;
+        }
+        .bj-menu-btn:hover { border-color: rgba(34, 211, 238, 0.7); box-shadow: 0 2px 14px rgba(34, 211, 238, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.08); }
+        .bj-menu-btn:active { transform: scale(0.92); }
+        .bj-menu-icon { display: flex; flex-direction: column; gap: 3.5px; width: 15px; }
+        .bj-menu-icon span {
+          display: block; height: 1.5px; border-radius: 1px; width: 100%;
+          background: rgba(165, 243, 252, 0.9);
+          transition: transform 0.22s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.16s ease;
+          transform-origin: center;
+        }
+        .bj-menu-icon.open span:nth-child(1) { transform: translateY(5px) rotate(45deg); }
+        .bj-menu-icon.open span:nth-child(2) { opacity: 0; transform: scaleX(0.4); }
+        .bj-menu-icon.open span:nth-child(3) { transform: translateY(-5px) rotate(-45deg); }
+        .bj-menu-panel {
+          min-width: 190px; padding: 5px; border-radius: 12px;
+          background: linear-gradient(160deg, rgba(12, 19, 33, 0.96), rgba(6, 10, 18, 0.96));
+          border: 1px solid rgba(34, 211, 238, 0.25);
+          backdrop-filter: blur(10px);
+          box-shadow: 0 10px 30px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+          animation: bjMenuIn 0.18s cubic-bezier(0.34, 1.3, 0.64, 1) both;
+        }
+        @keyframes bjMenuIn { from { opacity: 0; transform: translateY(-6px) scale(0.96); } to { opacity: 1; transform: none; } }
+        .bj-menu-item {
+          display: flex; align-items: center; justify-content: space-between; gap: 12px;
+          width: 100%; padding: 8px 10px; border-radius: 8px; border: 0; background: transparent;
+          cursor: pointer; text-align: left; text-decoration: none;
+          animation: bjMenuItemIn 0.22s ease both;
+          animation-delay: calc(var(--mi, 0) * 0.035s);
+          transition: background 0.14s ease, transform 0.12s ease;
+        }
+        @keyframes bjMenuItemIn { from { opacity: 0; transform: translateX(8px); } to { opacity: 1; transform: none; } }
+        .bj-menu-item:hover { background: rgba(34, 211, 238, 0.1); }
+        .bj-menu-item:active { transform: scale(0.97); }
+        .bj-menu-item:disabled { opacity: 0.45; cursor: default; }
+        .bj-menu-item-label { font-size: 12px; font-weight: 600; color: rgba(226, 232, 240, 0.92); white-space: nowrap; }
+        .bj-menu-item-hint { font-size: 10px; color: rgba(148, 163, 184, 0.75); white-space: nowrap; }
+        .bj-menu-item-hint.gold { color: #fbbf24; font-weight: 700; }
+        .bj-menu-item-hint.live { color: #fca5a5; font-weight: 700; }
+
+        /* ── Control polish ─────────────────────────────────────────────
+           One motion language for every table control: buttons arrive with a
+           staggered pop, lift with a glow on hover, squish on press, and a
+           gloss sweep crosses on hover. Opacity/transform transitions replace
+           the old hard enable/disable snap. Honors reduced motion. */
+        .bj-action-btn {
+          animation: bjCtlIn 0.32s cubic-bezier(0.34, 1.4, 0.64, 1) both;
+          animation-delay: calc(var(--abi, 0) * 0.05s);
+          transition: transform 0.16s cubic-bezier(0.34, 1.3, 0.64, 1),
+                      box-shadow 0.16s ease, opacity 0.28s ease, filter 0.16s ease;
+          overflow: hidden;
+        }
+        @keyframes bjCtlIn {
+          from { opacity: 0; transform: translateY(14px) scale(0.85); }
+          to   { transform: none; }
+        }
+        .bj-action-btn:not(:disabled):hover {
+          transform: translateY(-3px) scale(1.06);
+          filter: brightness(1.12);
+          box-shadow: 0 8px 22px rgba(0, 0, 0, 0.45), 0 0 18px rgba(255, 255, 255, 0.12);
+        }
+        .bj-action-btn:not(:disabled):active {
+          transform: translateY(1px) scale(0.94);
+          transition-duration: 0.07s;
+        }
+        .bj-action-btn::after {
+          content: '';
+          position: absolute; inset: 0;
+          background: linear-gradient(105deg, transparent 38%, rgba(255, 255, 255, 0.32) 50%, transparent 62%);
+          transform: translateX(-120%);
+          pointer-events: none;
+        }
+        .bj-action-btn:not(:disabled):hover::after { animation: bjCtlSheen 0.55s ease; }
+        @keyframes bjCtlSheen { to { transform: translateX(120%); } }
+        .bj-action-btn:focus-visible {
+          outline: 2px solid rgba(34, 211, 238, 0.9);
+          outline-offset: 2px;
+        }
+
+        .bj-chip-btn {
+          transition: transform 0.16s cubic-bezier(0.34, 1.4, 0.64, 1), filter 0.16s ease, opacity 0.25s ease;
+        }
+        .bj-chip-btn:not(:disabled):hover {
+          transform: translateY(-3px) scale(1.12) rotate(-4deg);
+          filter: brightness(1.15) drop-shadow(0 6px 10px rgba(0, 0, 0, 0.5));
+        }
+        .bj-chip-btn:not(:disabled):active {
+          transform: scale(0.9) rotate(3deg);
+          transition-duration: 0.07s;
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+          .bj-action-btn, .bj-menu-panel, .bj-menu-item { animation: none; }
+          .bj-action-btn:not(:disabled):hover { transform: none; }
+          .bj-chip-btn:not(:disabled):hover { transform: none; }
+        }
+
         /* Result banner animation */
         @keyframes resultBannerIn {
           0% {
