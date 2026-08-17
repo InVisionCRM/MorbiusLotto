@@ -365,9 +365,6 @@ export function BlackjackGameView(props: BlackjackGameViewProps) {
               hideBettingPanel={true}
               completedGameId={currentGame?.state === GameState.COMPLETE ? currentGame?.id : undefined}
               onCardsClearComplete={handleCardsClearComplete}
-              perfectPairsBet={tournament.tournamentState.inTournament ? 0 : perfectPairsBet}
-              onPerfectPairsBetChange={tournament.tournamentState.inTournament ? undefined : setPerfectPairsBet}
-              perfectPairsResult={tournament.tournamentState.inTournament ? undefined : currentGame?.perfectPairsResult}
               tournamentHandSummary={tournament.tournamentState.inTournament ? tournament.lastHandSummary : null}
               onDismissTournamentSummary={tournament.clearLastHandSummary}
               onOpenTournamentHistory={() => {

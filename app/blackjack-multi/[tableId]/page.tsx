@@ -22,6 +22,7 @@ import { BlackjackMultiDealerArea } from '@/components/BLACKJACK/multi/Blackjack
 import { BlackjackTableLayoutProvider } from '@/components/BLACKJACK/BlackjackTableLayoutContext';
 import { DEFAULT_BLACKJACK_TABLE_LAYOUT, mergeTableLayout } from '@/lib/blackjack-table-layout';
 import { sanitizeThemeConfig } from '@/lib/blackjack-table-theme';
+import { useClockSyncedVideo } from '@/hooks/use-clock-synced-video';
 import {
   fxFor,
   isFxCustomised,
@@ -1190,11 +1191,16 @@ export default function BlackjackMultiTablePage() {
     () => mergeTableLayout(DEFAULT_BLACKJACK_TABLE_LAYOUT, themeConfig?.layout),
     [themeConfig],
   );
-  // The theme's own table art wins; otherwise the table's configured branded
-  // background, same as before themes existed.
+  // The theme's own table art wins; otherwise the table's configured theme.
+  // A video theme paints a clock-synced <video> (the clips are compressed
+  // day/night cycles spread across the viewer's real 24 hours — same behaviour
+  // as the solo felt, via the same hook); designer layout art still beats it.
+  const useVideoTable = !tableLayout.table.image && theme.kind === 'video';
   const tableImageSrc =
     tableLayout.table.image ||
     (theme.kind === 'image' ? theme.src : BLACKJACK_IMAGE_BACKGROUNDS[0].src);
+  const tableVideoRef = useRef<HTMLVideoElement | null>(null);
+  useClockSyncedVideo(tableVideoRef, { enabled: useVideoTable, src: theme.src });
 
   if (!tableId) return null;
 
@@ -1281,7 +1287,21 @@ export default function BlackjackMultiTablePage() {
           border: '1px inset rgba(60,60,60,0.5)',
         }}
       >
-        <Image src={tableImageSrc} alt="Table" fill className="absolute inset-0 object-cover object-center pointer-events-none" style={{ zIndex: 0 }} priority unoptimized />
+        {useVideoTable ? (
+          <video
+            ref={tableVideoRef}
+            key={theme.src}
+            src={theme.src}
+            className="absolute inset-0 w-full h-full object-cover object-center pointer-events-none"
+            style={{ zIndex: 0 }}
+            muted
+            playsInline
+            preload="auto"
+            aria-hidden
+          />
+        ) : (
+          <Image src={tableImageSrc} alt="Table" fill className="absolute inset-0 object-cover object-center pointer-events-none" style={{ zIndex: 0 }} priority unoptimized />
+        )}
 
         {/* Dark overlay */}
         <div className="absolute inset-0" style={{ zIndex: 1, background: 'linear-gradient(145deg, rgba(0,0,0,0.22), rgba(0,0,0,0.12))' }} />
