@@ -710,6 +710,23 @@ export default function TableDesigner() {
     if (saved) applyLoadedTheme(saved);
   }, [publishTableId, publish, currentThemeConfig, applyLoadedTheme]);
 
+  /* Deep link from the admin page: /blackjack-multi/design?table=<id> opens
+     the designer already pointed at that table, and pulls its saved theme as
+     soon as the admin wallet is known. One-shot — after the initial load the
+     designer behaves exactly as if the table had been picked by hand. */
+  const deepLinkLoadedRef = useRef(false);
+  useEffect(() => {
+    if (deepLinkLoadedRef.current) return;
+    const id = new URLSearchParams(window.location.search).get('table')?.trim();
+    if (!id) { deepLinkLoadedRef.current = true; return; }
+    setPublishTableId(id);
+    if (!publish.address) return; // effect re-runs once the wallet arrives
+    deepLinkLoadedRef.current = true;
+    void publish.loadTheme(id).then((result) => {
+      if (result.ok) applyLoadedTheme(result.theme);
+    });
+  }, [publish, applyLoadedTheme]);
+
   const copyJson = useCallback(async () => {
     try {
       await navigator.clipboard.writeText(JSON.stringify(diff, null, 2));
@@ -1143,7 +1160,7 @@ export default function TableDesigner() {
                         label="Dealer hand lean"
                         value={layout.cards.pitch.dealer}
                         min={0}
-                        max={60}
+                        max={75}
                         suffix="&deg;"
                         onGestureStart={beginGesture}
                         onChange={(v) =>
@@ -1157,7 +1174,7 @@ export default function TableDesigner() {
                         label="Player hands lean"
                         value={layout.cards.pitch.player}
                         min={0}
-                        max={60}
+                        max={75}
                         suffix="&deg;"
                         onGestureStart={beginGesture}
                         onChange={(v) =>

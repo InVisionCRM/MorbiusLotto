@@ -26,6 +26,7 @@ import {
 import { FileUpload } from '@/components/ui/file-upload';
 import { Plus, Pencil, Trash2, ExternalLink, ImageIcon, Database } from 'lucide-react';
 import { CopyButton } from '@/components/ui/copy-button';
+import { CARD_ANGLE_PRESETS } from '@/lib/blackjack-card-presets';
 import {
   BLACKJACK_IMAGE_BACKGROUNDS,
   BLACKJACK_VIDEO_BACKGROUNDS,
@@ -135,10 +136,90 @@ export interface BlackjackTableRow {
   ticker: string | null;
   iframe_url: string | null;
   website_url: string | null;
+  card_pitch: { dealer: number; player: number } | null;
   sort_order: number;
   enabled: boolean;
   created_at?: string;
   updated_at?: string;
+}
+
+/**
+ * Card lean editor — the same presets Table Forge uses, plus two fine-tune
+ * inputs. null = flat (the default for top-down art). The live felt applies
+ * this as perspective(700px) rotateX(deg) per hand.
+ */
+function CardAngleField({
+  value,
+  onChange,
+}: {
+  value: { dealer: number; player: number } | null;
+  onChange: (v: { dealer: number; player: number } | null) => void;
+}) {
+  const clampDeg = (n: number) => Math.min(75, Math.max(0, Math.round(n)));
+  return (
+    <div className="space-y-1.5">
+      <Label className="text-[11px] text-slate-400">
+        Card angle <span className="text-slate-500">(match cards to table art drawn in perspective)</span>
+      </Label>
+      <div className="flex flex-wrap gap-1.5">
+        <button
+          type="button"
+          onClick={() => onChange(null)}
+          className={`px-2 py-1 rounded text-[11px] border ${value == null ? 'border-cyan-500 bg-cyan-900/40 text-white' : 'border-slate-600 bg-slate-800 text-slate-300 hover:border-slate-500'}`}
+        >
+          Flat (stock)
+        </button>
+        {CARD_ANGLE_PRESETS.filter((p) => p.pitch.dealer !== 0 || p.pitch.player !== 0).map((p) => {
+          const active = value != null && value.dealer === p.pitch.dealer && value.player === p.pitch.player;
+          return (
+            <button
+              key={p.id}
+              type="button"
+              title={p.hint}
+              onClick={() => onChange({ ...p.pitch })}
+              className={`px-2 py-1 rounded text-[11px] border ${active ? 'border-cyan-500 bg-cyan-900/40 text-white' : 'border-slate-600 bg-slate-800 text-slate-300 hover:border-slate-500'}`}
+            >
+              {p.label}
+            </button>
+          );
+        })}
+      </div>
+      {value != null && (
+        <div className="flex items-center gap-3 pt-1">
+          <label className="flex items-center gap-1.5 text-[11px] text-slate-400">
+            Dealer
+            <input
+              type="number"
+              min={0}
+              max={75}
+              value={value.dealer}
+              onChange={(e) => onChange({ ...value, dealer: clampDeg(Number(e.target.value)) })}
+              className="w-16 px-1.5 py-0.5 rounded bg-slate-800 border border-slate-600 text-slate-200 text-[11px]"
+            />
+            &deg;
+          </label>
+          <label className="flex items-center gap-1.5 text-[11px] text-slate-400">
+            Players
+            <input
+              type="number"
+              min={0}
+              max={75}
+              value={value.player}
+              onChange={(e) => onChange({ ...value, player: clampDeg(Number(e.target.value)) })}
+              className="w-16 px-1.5 py-0.5 rounded bg-slate-800 border border-slate-600 text-slate-200 text-[11px]"
+            />
+            &deg;
+          </label>
+          {/* Live mini preview at the player lean, same transform as the felt. */}
+          <span
+            aria-hidden
+            className="inline-block w-7 h-10 rounded-sm bg-white border border-slate-400"
+            style={{ transform: `perspective(110px) rotateX(${value.player}deg)`, transformOrigin: 'center bottom' }}
+          />
+        </div>
+      )}
+    </div>
+  );
 }
 
 export default function AdminTablesTab() {
@@ -395,6 +476,7 @@ function AddTableDialog({
 }) {
   const [name, setName] = useState('');
   const [kind, setKind] = useState<'image' | 'video'>('image');
+  const [cardPitch, setCardPitch] = useState<{ dealer: number; player: number } | null>(null);
   const [description, setDescription] = useState('');
   const [tokenContract, setTokenContract] = useState('');
   const [logoUrl, setLogoUrl] = useState('');
@@ -446,6 +528,7 @@ function AddTableDialog({
           ticker: ticker.trim() || null,
           iframe_url: iframeUrl.trim() || null,
           website_url: websiteUrl.trim() || null,
+          card_pitch: cardPitch,
           enabled: true,
         }),
       });
@@ -580,6 +663,7 @@ function AddTableDialog({
                 />
               </div>
             </div>
+            <CardAngleField value={cardPitch} onChange={setCardPitch} />
             <div className="rounded border border-slate-600 bg-slate-800/50 p-2">
               <p className="text-[10px] text-slate-500 mb-1.5">In-game preview — updates as you type</p>
               <TokenProfilePreviewCard
@@ -651,6 +735,7 @@ function EditTableDialog({
   const [ticker, setTicker] = useState(row.ticker ?? '');
   const [iframeUrl, setIframeUrl] = useState(row.iframe_url ?? '');
   const [websiteUrl, setWebsiteUrl] = useState(row.website_url ?? '');
+  const [cardPitch, setCardPitch] = useState<{ dealer: number; player: number } | null>(row.card_pitch ?? null);
   const [enabled, setEnabled] = useState(row.enabled);
   const [replacementFile, setReplacementFile] = useState<File[]>([]);
 
@@ -673,6 +758,7 @@ function EditTableDialog({
     setTicker(row.ticker ?? '');
     setIframeUrl(row.iframe_url ?? '');
     setWebsiteUrl(row.website_url ?? '');
+    setCardPitch(row.card_pitch ?? null);
     setEnabled(row.enabled);
     setReplacementFile([]);
     setLogoFile([]);
@@ -707,6 +793,7 @@ function EditTableDialog({
         ticker: ticker.trim() || null,
         iframe_url: iframeUrl.trim() || null,
         website_url: websiteUrl.trim() || null,
+        card_pitch: cardPitch,
         enabled,
       };
       if (newSrc !== undefined) body.src = newSrc;
@@ -839,6 +926,7 @@ function EditTableDialog({
                 />
               </div>
             </div>
+            <CardAngleField value={cardPitch} onChange={setCardPitch} />
             <div className="rounded border border-slate-600 bg-slate-800/50 p-2">
               <p className="text-[10px] text-slate-500 mb-1.5">In-game preview — updates as you type</p>
               <TokenProfilePreviewCard

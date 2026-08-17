@@ -205,6 +205,8 @@ export interface BlackjackTableRow {
   ticker: string | null;
   iframe_url: string | null;
   website_url: string | null;
+  /** Card hand lean in degrees ({dealer, player}, 0-75); null = flat. */
+  card_pitch: { dealer: number; player: number } | null;
   sort_order: number;
   enabled: boolean;
   created_at: Date;
@@ -3207,7 +3209,7 @@ export class DatabaseService implements MoneyDatabaseQueries {
   }
 
   async getBlackjackTables(enabledOnly: boolean = false): Promise<BlackjackTableRow[]> {
-    const colsExtended = 'id, kind, name, src, description, token_contract_address, logo_url, ticker, iframe_url, website_url, sort_order, enabled, created_at, updated_at';
+    const colsExtended = 'id, kind, name, src, description, token_contract_address, logo_url, ticker, iframe_url, website_url, card_pitch, sort_order, enabled, created_at, updated_at';
     const colsBase = 'id, kind, name, src, description, token_contract_address, sort_order, enabled, created_at, updated_at';
     const whereOrder = enabledOnly
       ? ' WHERE enabled = true ORDER BY sort_order ASC, created_at ASC'
@@ -3224,6 +3226,7 @@ export class DatabaseService implements MoneyDatabaseQueries {
       ticker: withExtended ? (r.ticker ?? null) : null,
       iframe_url: withExtended ? (r.iframe_url ?? null) : null,
       website_url: withExtended ? (r.website_url ?? null) : null,
+      card_pitch: withExtended ? (r.card_pitch ?? null) : null,
       sort_order: r.sort_order,
       enabled: r.enabled,
       created_at: new Date(r.created_at),
@@ -3258,10 +3261,10 @@ export class DatabaseService implements MoneyDatabaseQueries {
   async createBlackjackTable(row: Omit<BlackjackTableRow, 'id' | 'created_at' | 'updated_at'>): Promise<BlackjackTableRow> {
     const withExtended = async () => {
       const r = await this.pool.query(
-        `INSERT INTO blackjack_tables (kind, name, src, description, token_contract_address, logo_url, ticker, iframe_url, website_url, sort_order, enabled)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-         RETURNING id, kind, name, src, description, token_contract_address, logo_url, ticker, iframe_url, website_url, sort_order, enabled, created_at, updated_at`,
-        [row.kind, row.name, row.src, row.description ?? null, row.token_contract_address ?? null, row.logo_url ?? null, row.ticker ?? null, row.iframe_url ?? null, row.website_url ?? null, row.sort_order, row.enabled]
+        `INSERT INTO blackjack_tables (kind, name, src, description, token_contract_address, logo_url, ticker, iframe_url, website_url, card_pitch, sort_order, enabled)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+         RETURNING id, kind, name, src, description, token_contract_address, logo_url, ticker, iframe_url, website_url, card_pitch, sort_order, enabled, created_at, updated_at`,
+        [row.kind, row.name, row.src, row.description ?? null, row.token_contract_address ?? null, row.logo_url ?? null, row.ticker ?? null, row.iframe_url ?? null, row.website_url ?? null, row.card_pitch != null ? JSON.stringify(row.card_pitch) : null, row.sort_order, row.enabled]
       );
       const x = r.rows[0];
       return { x, extended: true };
@@ -3289,6 +3292,7 @@ export class DatabaseService implements MoneyDatabaseQueries {
         ticker: extended ? (x.ticker ?? null) : null,
         iframe_url: extended ? (x.iframe_url ?? null) : null,
         website_url: extended ? (x.website_url ?? null) : null,
+        card_pitch: extended ? (x.card_pitch ?? null) : null,
         sort_order: x.sort_order,
         enabled: x.enabled,
         created_at: new Date(x.created_at),
@@ -3309,6 +3313,7 @@ export class DatabaseService implements MoneyDatabaseQueries {
         ticker: extended ? (x.ticker ?? null) : null,
         iframe_url: extended ? (x.iframe_url ?? null) : null,
         website_url: extended ? (x.website_url ?? null) : null,
+        card_pitch: extended ? (x.card_pitch ?? null) : null,
         sort_order: x.sort_order,
         enabled: x.enabled,
         created_at: new Date(x.created_at),
@@ -3319,7 +3324,7 @@ export class DatabaseService implements MoneyDatabaseQueries {
 
   async updateBlackjackTable(
     id: string,
-    updates: Partial<Pick<BlackjackTableRow, 'name' | 'src' | 'description' | 'token_contract_address' | 'logo_url' | 'ticker' | 'iframe_url' | 'website_url' | 'sort_order' | 'enabled'>>
+    updates: Partial<Pick<BlackjackTableRow, 'name' | 'src' | 'description' | 'token_contract_address' | 'logo_url' | 'ticker' | 'iframe_url' | 'website_url' | 'card_pitch' | 'sort_order' | 'enabled'>>
   ): Promise<BlackjackTableRow | null> {
     const buildUpdate = (includeExtended: boolean) => {
       const fields: string[] = [];
@@ -3333,6 +3338,7 @@ export class DatabaseService implements MoneyDatabaseQueries {
       if (includeExtended && updates.ticker !== undefined) { fields.push(`ticker = $${i++}`); values.push(updates.ticker); }
       if (includeExtended && updates.iframe_url !== undefined) { fields.push(`iframe_url = $${i++}`); values.push(updates.iframe_url); }
       if (includeExtended && updates.website_url !== undefined) { fields.push(`website_url = $${i++}`); values.push(updates.website_url); }
+      if (includeExtended && updates.card_pitch !== undefined) { fields.push(`card_pitch = $${i++}`); values.push(updates.card_pitch != null ? JSON.stringify(updates.card_pitch) : null); }
       if (updates.sort_order !== undefined) { fields.push(`sort_order = $${i++}`); values.push(updates.sort_order); }
       if (updates.enabled !== undefined) { fields.push(`enabled = $${i++}`); values.push(updates.enabled); }
       return { fields, values, i };
@@ -3345,7 +3351,7 @@ export class DatabaseService implements MoneyDatabaseQueries {
     }
     const fields = [...f, 'updated_at = NOW()'];
     const values = [...v, id];
-    const colsExtended = 'id, kind, name, src, description, token_contract_address, logo_url, ticker, iframe_url, website_url, sort_order, enabled, created_at, updated_at';
+    const colsExtended = 'id, kind, name, src, description, token_contract_address, logo_url, ticker, iframe_url, website_url, card_pitch, sort_order, enabled, created_at, updated_at';
     const colsBase = 'id, kind, name, src, description, token_contract_address, sort_order, enabled, created_at, updated_at';
 
     const mapReturn = (x: any, extended: boolean): BlackjackTableRow => ({
@@ -3359,6 +3365,7 @@ export class DatabaseService implements MoneyDatabaseQueries {
       ticker: extended ? (x.ticker ?? null) : null,
       iframe_url: extended ? (x.iframe_url ?? null) : null,
       website_url: extended ? (x.website_url ?? null) : null,
+      card_pitch: extended ? (x.card_pitch ?? null) : null,
       sort_order: x.sort_order,
       enabled: x.enabled,
       created_at: new Date(x.created_at),

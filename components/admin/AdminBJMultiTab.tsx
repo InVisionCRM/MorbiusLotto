@@ -14,7 +14,7 @@ import {
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
-import { Plus, Trash2, RefreshCw } from 'lucide-react';
+import { Paintbrush, Plus, Trash2, RefreshCw } from 'lucide-react';
 
 interface BJMultiTableSummary {
   id: string;
@@ -179,15 +179,28 @@ export default function AdminBJMultiTab() {
                       {t.seatedCount}/3
                     </TableCell>
                     <TableCell>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleDelete(t.id)}
-                        disabled={deletingId === t.id}
-                        className="text-red-400 hover:text-red-300 hover:bg-red-900/20 h-6 w-6 p-0"
-                      >
-                        <Trash2 className="w-3 h-3" />
-                      </Button>
+                      <div className="flex items-center gap-1">
+                        {/* Table Forge: the per-table theme designer (art, seats,
+                            card angle, sounds). Deep-links straight to this table. */}
+                        <a
+                          href={`/blackjack-multi/design?table=${encodeURIComponent(t.id)}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          title="Open in Table Forge (theme designer)"
+                          className="inline-flex items-center justify-center h-6 w-6 rounded text-cyan-400 hover:text-cyan-300 hover:bg-cyan-900/20"
+                        >
+                          <Paintbrush className="w-3 h-3" />
+                        </a>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleDelete(t.id)}
+                          disabled={deletingId === t.id}
+                          className="text-red-400 hover:text-red-300 hover:bg-red-900/20 h-6 w-6 p-0"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}

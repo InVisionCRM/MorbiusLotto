@@ -22,6 +22,7 @@ import { BlackjackMultiDealerArea } from '@/components/BLACKJACK/multi/Blackjack
 import { BlackjackTableLayoutProvider } from '@/components/BLACKJACK/BlackjackTableLayoutContext';
 import { DEFAULT_BLACKJACK_TABLE_LAYOUT, mergeTableLayout } from '@/lib/blackjack-table-layout';
 import { sanitizeThemeConfig } from '@/lib/blackjack-table-theme';
+import { useClockSyncedVideo } from '@/hooks/use-clock-synced-video';
 import {
   fxFor,
   isFxCustomised,
@@ -31,8 +32,10 @@ import {
 } from '@/lib/blackjack-sound-fx';
 import {
   BlackjackMultiRoundOverlays,
-  BLACKJACK_COLOR_PALETTES,
+  type MultiRoundCelebration,
 } from '@/components/BLACKJACK/multi/BlackjackMultiRoundOverlays';
+import { TableWinFxStyles, celebrateWin, winTierFor } from '@/components/shared/TableWinFx';
+import { TableWinTextStyles } from '@/components/shared/TableWinText';
 import {
   BlackjackMultiInfoPanel,
   type BlackjackMultiSystemChatMessage,
@@ -564,12 +567,9 @@ export default function BlackjackMultiTablePage() {
   // Track completed rounds for History tab
   const [roundHistory, setRoundHistory] = useState<BlackjackMultiRoundHistoryItem[]>([]);
 
-  // Win notification — reuses WinNotification from single player
-  const [showWin, setShowWin] = useState<{ amount: bigint; isBlackjack: boolean } | null>(null);
-  // Blackjack celebration animation (EncryptedText + glass panel)
-  const [showBlackjackText, setShowBlackjackText] = useState(false);
-  const [blackjackColorIndex, setBlackjackColorIndex] = useState(0);
-  const [blackjackAnimKey, setBlackjackAnimKey] = useState(0); // key to force EncryptedText remount for replay
+  // Round settlement celebration — the shared 3D win word + tiered fx,
+  // same system as the arcade felts. Randomized per round via `seed`.
+  const [celebration, setCelebration] = useState<MultiRoundCelebration | null>(null);
   const prevPhaseRef = useRef<string>('');
   const chartRef = useRef<BlackjackMultiRealTimeBetChartRef>(null);
   const chartSessionStartTime = useRef<number>(Date.now());
@@ -579,6 +579,10 @@ export default function BlackjackMultiTablePage() {
   type PendingDealerOutcome = {
     kind: 'player_blackjack' | 'player_win' | 'push' | 'dealer_blackjack' | 'dealer_win' | 'silent';
     payout: bigint;
+    /** Everything the seat put at risk this round — grades the win tier. */
+    committed: bigint;
+    /** Names the celebration word and replays the animation per round. */
+    roundNumber: number;
   };
   const pendingDealerOutcomeRef = useRef<PendingDealerOutcome | null>(null);
   const lastOutcomeAnnouncementAtRef = useRef(0);
@@ -641,10 +645,20 @@ export default function BlackjackMultiTablePage() {
           break;
       }
     }
-    if (pending.kind === 'player_blackjack' || pending.kind === 'player_win') {
-      setShowWin({
-        amount: pending.payout,
-        isBlackjack: pending.kind === 'player_blackjack',
+    if (pending.kind !== 'silent') {
+      const committed = Number(pending.committed) / 1e18;
+      const payout = Number(pending.payout) / 1e18;
+      const tier = winTierFor(committed, payout);
+      // Tiered audio + confetti, shared with every other felt. The dealer's
+      // voice line above stays — that is this table's character; the jingle
+      // and burst are the app-wide settlement language.
+      celebrateWin(tier);
+      setCelebration({
+        tier,
+        blackjack: pending.kind === 'player_blackjack',
+        dealerBlackjack: pending.kind === 'dealer_blackjack',
+        payoutWei: pending.payout,
+        seed: pending.roundNumber,
       });
     }
     fetchBalance();
@@ -662,8 +676,8 @@ export default function BlackjackMultiTablePage() {
     if (phaseState.phase !== 'completed' && showSeatOutcomeLabels) {
       setShowSeatOutcomeLabels(false);
     }
-    if (phaseState.phase !== 'completed' && showBlackjackText) {
-      setShowBlackjackText(false);
+    if (phaseState.phase !== 'completed' && celebration) {
+      setCelebration(null);
     }
     const prevPhase = prevPhaseRef.current;
     prevPhaseRef.current = phaseState.phase;
@@ -709,16 +723,6 @@ export default function BlackjackMultiTablePage() {
 
     // ── Round completes: outcome voice + win toast — deferred until dealer reveal finishes (flushPendingDealerOutcome) ──
     if (prevPhase !== 'completed' && phaseState.phase === 'completed') {
-      // Blackjack animation — show if ANY seat at the table got blackjack
-      const anyBlackjack = phaseState.seats.some(s =>
-        s.playerAddress && s.hands.some(h => h.result === 'blackjack')
-      );
-      if (anyBlackjack) {
-        setBlackjackColorIndex(Math.floor(Math.random() * BLACKJACK_COLOR_PALETTES.length));
-        setBlackjackAnimKey(k => k + 1);
-        setShowBlackjackText(true);
-      }
-
       const seat = phaseState.seats.find(s =>
         s.playerAddress && address && s.playerAddress.toLowerCase() === address.toLowerCase()
       );
@@ -1190,11 +1194,16 @@ export default function BlackjackMultiTablePage() {
     () => mergeTableLayout(DEFAULT_BLACKJACK_TABLE_LAYOUT, themeConfig?.layout),
     [themeConfig],
   );
-  // The theme's own table art wins; otherwise the table's configured branded
-  // background, same as before themes existed.
+  // The theme's own table art wins; otherwise the table's configured theme.
+  // A video theme paints a clock-synced <video> (the clips are compressed
+  // day/night cycles spread across the viewer's real 24 hours — same behaviour
+  // as the solo felt, via the same hook); designer layout art still beats it.
+  const useVideoTable = !tableLayout.table.image && theme.kind === 'video';
   const tableImageSrc =
     tableLayout.table.image ||
     (theme.kind === 'image' ? theme.src : BLACKJACK_IMAGE_BACKGROUNDS[0].src);
+  const tableVideoRef = useRef<HTMLVideoElement | null>(null);
+  useClockSyncedVideo(tableVideoRef, { enabled: useVideoTable, src: theme.src });
 
   if (!tableId) return null;
 
@@ -1281,7 +1290,21 @@ export default function BlackjackMultiTablePage() {
           border: '1px inset rgba(60,60,60,0.5)',
         }}
       >
-        <Image src={tableImageSrc} alt="Table" fill className="absolute inset-0 object-cover object-center pointer-events-none" style={{ zIndex: 0 }} priority unoptimized />
+        {useVideoTable ? (
+          <video
+            ref={tableVideoRef}
+            key={theme.src}
+            src={theme.src}
+            className="absolute inset-0 w-full h-full object-cover object-center pointer-events-none"
+            style={{ zIndex: 0 }}
+            muted
+            playsInline
+            preload="auto"
+            aria-hidden
+          />
+        ) : (
+          <Image src={tableImageSrc} alt="Table" fill className="absolute inset-0 object-cover object-center pointer-events-none" style={{ zIndex: 0 }} priority unoptimized />
+        )}
 
         {/* Dark overlay */}
         <div className="absolute inset-0" style={{ zIndex: 1, background: 'linear-gradient(145deg, rgba(0,0,0,0.22), rgba(0,0,0,0.12))' }} />
@@ -1312,12 +1335,11 @@ export default function BlackjackMultiTablePage() {
           />
 
           <BlackjackMultiRoundOverlays
-            showWin={showWin}
-            onWinComplete={() => setShowWin(null)}
-            showBlackjackText={showBlackjackText}
-            blackjackAnimKey={blackjackAnimKey}
-            blackjackColorIndex={blackjackColorIndex}
+            celebration={celebration}
+            onDone={() => setCelebration(null)}
           />
+          <TableWinFxStyles />
+          <TableWinTextStyles />
 
           {/* ── Play area ── */}
           {/* DEALER — placement comes from the table layout (lib/blackjack-table-layout.ts);

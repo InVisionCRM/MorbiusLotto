@@ -10,6 +10,7 @@ import DealerSection from './DealerSection';
 import BettingPanel from './BettingPanel';
 import { useBlackjackRevealCompletion } from '@/hooks/use-blackjack-reveal-completion';
 import { BLACKJACK_IMAGE_BACKGROUNDS, BLACKJACK_VIDEO_BACKGROUNDS, DEFAULT_BLACKJACK_IMAGE_ID, ANIMATION_TIMINGS } from '@/app/BLACKJACK/constants';
+import { useClockSyncedVideo } from '@/hooks/use-clock-synced-video';
 import { BetChip, formatChipLabel } from '@/components/ui/BetChip';
 import { EncryptedText } from '@/components/ui/encrypted-text';
 import { useAccount } from 'wagmi';
@@ -84,6 +85,8 @@ interface BlackjackTableProps {
   videoSrc?: string;
   videoSyncToClock?: boolean;
   videoPosition?: number;
+  /** Per-table card lean in degrees; null/absent = flat against the screen. */
+  cardPitch?: { dealer: number; player: number } | null;
   onOpenDepositModal?: () => void;
   onOpenTableThemeSelector?: () => void;
   soundEnabled?: boolean;
@@ -95,12 +98,6 @@ interface BlackjackTableProps {
   completedGameId?: string;
   /** Called after cards clear animation (2s hold + exit animation). Parent should clear currentGame so table resets. */
   onCardsClearComplete?: () => void;
-  /** Perfect Pairs side bet amount in whole MORBIUS (0-10000). */
-  perfectPairsBet?: number;
-  /** Callback when PP bet changes (cycles 0→1k→2k→...→10k→0). */
-  onPerfectPairsBetChange?: (amount: number) => void;
-  /** Perfect Pairs result from the completed game — drives PP chip animation. */
-  perfectPairsResult?: 'perfect' | 'colored' | 'mixed';
   /** Music player controls (passed from parent to avoid duplicate audio instances) */
   musicTrackName?: string;
   isMusicPlaying?: boolean;
@@ -175,6 +172,7 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
   videoSrc: videoSrcProp,
   videoSyncToClock = true,
   videoPosition = 50,
+  cardPitch = null,
   onOpenDepositModal,
   onOpenTableThemeSelector,
   soundEnabled = true,
@@ -182,9 +180,6 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
   hideBettingPanel = false,
   completedGameId,
   onCardsClearComplete,
-  perfectPairsBet = 0,
-  onPerfectPairsBetChange,
-  perfectPairsResult,
   tournamentHandSummary,
   onDismissTournamentSummary,
   onOpenTournamentHistory,
@@ -259,58 +254,12 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
   const videoSrc = videoSrcProp ?? BLACKJACK_VIDEO_BACKGROUNDS.find((v) => v.id === videoSource)?.src ?? BLACKJACK_VIDEO_BACKGROUNDS[0].src;
   const tableVideoRef = useRef<HTMLVideoElement | null>(null);
 
-  /**
-   * Clock-synced table video.
-   *
-   * The whole clip is spread across one day of the viewer's LOCAL time: at
-   * midnight it sits on the first frame, at noon it is halfway through, and it
-   * arrives at the last frame just before midnight. Two players in different
-   * timezones therefore see their own time of day, which is the point — the
-   * table drifts with your evening rather than everyone's.
-   *
-   * The clip is seeked, never played. A few seconds of footage stretched over
-   * 86,400s needs a playback rate around 0.0001, which browsers clamp (and
-   * treat 0 as invalid), so "playing" it is not an option — we park the video
-   * on the right frame and nudge it forward on a timer instead. The tick is
-   * deliberately coarse: at this ratio a frame lasts minutes of wall clock, so
-   * polling faster would burn wakeups to seek to the same frame.
-   *
-   * With sync off, videoPosition (0-100) parks it at a fixed percentage.
-   */
-  useEffect(() => {
-    if (!useVideoBackground) return;
-    const el = tableVideoRef.current;
-    if (!el) return;
-
-    const seek = () => {
-      const duration = el.duration;
-      if (!Number.isFinite(duration) || duration <= 0) return; // metadata not in yet
-      let fraction: number;
-      if (videoSyncToClock) {
-        const now = new Date();
-        const secondsIntoDay =
-          now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds() + now.getMilliseconds() / 1000;
-        fraction = secondsIntoDay / 86400;
-      } else {
-        fraction = Math.min(Math.max(videoPosition, 0), 100) / 100;
-      }
-      // Stay a hair inside the end: seeking exactly to duration can park some
-      // browsers on a blank frame or fire `ended`.
-      const target = Math.min(fraction * duration, Math.max(duration - 0.05, 0));
-      if (Math.abs(el.currentTime - target) > 0.02) el.currentTime = target;
-    };
-
-    el.pause();
-    if (el.readyState >= 1) seek();
-    el.addEventListener('loadedmetadata', seek);
-
-    // Only keep a timer running for clock sync; a fixed position never moves.
-    const timer = videoSyncToClock ? window.setInterval(seek, 15000) : null;
-    return () => {
-      el.removeEventListener('loadedmetadata', seek);
-      if (timer !== null) window.clearInterval(timer);
-    };
-  }, [useVideoBackground, videoSrc, videoSyncToClock, videoPosition]);
+  useClockSyncedVideo(tableVideoRef, {
+    enabled: useVideoBackground,
+    src: videoSrc,
+    syncToClock: videoSyncToClock,
+    position: videoPosition,
+  });
   // State for progressive dealer card reveal
   // Industry standard: Show only first card during play, reveal all when game completes
   const [visibleDealerCards, setVisibleDealerCards] = useState(() => {
@@ -338,22 +287,6 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
   const [chipAnimationState, setChipAnimationState] = useState<'none' | 'win' | 'loss'>('none');
   const prevGameResult = useRef<string | null>(null);
 
-  // PP chip animation state — resolves on initial deal (fires when game completes)
-  const [ppChipAnimationState, setPpChipAnimationState] = useState<'none' | 'win' | 'loss'>('none');
-  const prevPpResult = useRef<string | undefined>(undefined);
-
-  // Convert PP bet amount into chip denominations for the stack
-  const ppChipStack: number[] = [];
-  if (perfectPairsBet > 0) {
-    let remaining = perfectPairsBet;
-    const ppChipValues = [10000, 2500, 1000];
-    for (const cv of ppChipValues) {
-      while (remaining >= cv) {
-        ppChipStack.push(cv);
-        remaining -= cv;
-      }
-    }
-  }
   const tableContainerRef = useRef<HTMLDivElement>(null);
   const [showBlackjackText, setShowBlackjackText] = useState(false);
   const [blackjackColorIndex, setBlackjackColorIndex] = useState(0);
@@ -620,25 +553,6 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
       setShowBlackjackText(false);
     }
   }, [gameResult]);
-
-  // PP chip animation — triggers alongside main gameResult when there's a PP bet
-  useEffect(() => {
-    if (gameResult && gameResult !== prevPpResult.current && ppChipStack.length > 0) {
-      if (perfectPairsResult === 'perfect' || perfectPairsResult === 'colored' || perfectPairsResult === 'mixed') {
-        setPpChipAnimationState('win');
-        const totalDuration = (ppChipStack.length - 1) * 200 + 3200;
-        const timer = setTimeout(() => setPpChipAnimationState('none'), totalDuration);
-        prevPpResult.current = gameResult;
-        return () => clearTimeout(timer);
-      } else {
-        setPpChipAnimationState('loss');
-        const timer = setTimeout(() => setPpChipAnimationState('none'), 800);
-        prevPpResult.current = gameResult;
-        return () => clearTimeout(timer);
-      }
-    }
-    prevPpResult.current = gameResult ?? undefined;
-  }, [gameResult, perfectPairsResult, ppChipStack.length]);
 
   const { revealComplete, scheduleRevealComplete, resetRevealComplete } = useBlackjackRevealCompletion(onDealerRevealComplete);
 
@@ -923,7 +837,15 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
       style={{
         boxShadow: 'inset 0 4px 12px rgba(0, 0, 0, 0.9), inset 0 -2px 8px rgba(0, 0, 0, 0.5), inset 0 0 0 1px rgba(0, 0, 0, 0.3)',
         border: '1px inset rgba(60, 60, 60, 0.5)',
-      }}
+        // Per-table card lean — consumed by .bj-hand-dealer/.bj-hand-player in
+        // blackjack-cards.css, exactly as the multiplayer felt sets them.
+        ...(cardPitch
+          ? {
+              '--bj-card-pitch-dealer': `${cardPitch.dealer}deg`,
+              '--bj-card-pitch-player': `${cardPitch.player}deg`,
+            }
+          : {}),
+      } as React.CSSProperties}
     >
       {/* Table surface: flex-1 with min height so table stays a good size */}
       <div className="flex-1 min-h-[420px] sm:min-h-[680px] relative">
@@ -1258,7 +1180,7 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
                             {hand.isBlackjack && <span className="text-yellow-400 font-black text-base sm:text-xl">BJ!</span>}
                             {hand.isBust && <span className="text-red-400 font-black text-base sm:text-xl">BUST</span>}
                           </div>}
-                          <div className="relative flex gap-0">
+                          <div className="relative flex gap-0 bj-hand-player">
                             {hand.cards.map((card, cardIndex) => {
                               let isNewCard = false;
                               if (Array.isArray(newCardIndices.player)) {
@@ -1297,7 +1219,7 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
                               </div>
                             )}
                           </div>
-                          {/* Bet chip moved to absolute position at bottom: 80px (same as Perfect Pairs) */}
+                          {/* Bet chip moved to absolute position at bottom: 80px */}
                         </div>
                       );
                     })()}
@@ -1602,100 +1524,6 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
         </div>
         </div>
       {/* End Play Area */}
-
-      {/* Perfect Pairs chip stack + bet circle — left of main chip stack */}
-      {onPerfectPairsBetChange && (
-        <div
-          className="absolute z-[5] pointer-events-auto flex flex-col items-center"
-          style={{
-            left: 'calc(50% - 80px)',
-            bottom: '80px',
-            transform: 'translateX(-100%)',
-          }}
-        >
-          {/* Red X button to remove PP bet - shown above PP bet circle when bet is placed */}
-          {perfectPairsBet > 0 && !isPlaying && ppChipAnimationState === 'none' && (
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                onPerfectPairsBetChange(0);
-              }}
-              className="mb-2 w-6 h-6 rounded-full flex items-center justify-center transition-all hover:scale-110 active:scale-95"
-              style={{
-                background: 'linear-gradient(145deg, #ef4444, #dc2626)',
-                border: '2px solid rgba(239, 68, 68, 0.8)',
-                boxShadow: '0 2px 8px rgba(239, 68, 68, 0.5), inset 0 1px 2px rgba(255, 255, 255, 0.2)',
-                cursor: 'pointer',
-              }}
-              title="Remove Perfect Pairs bet"
-            >
-              <span className="text-white font-black text-xs leading-none" style={{ textShadow: '0 1px 2px rgba(0,0,0,0.6)' }}>×</span>
-            </button>
-          )}
-          {/* PP bet chip (visible when bet is placed and game is active or animation is running) */}
-          {ppChipStack.length > 0 && (isPlaying || ppChipAnimationState !== 'none') && (
-            <div className="flex flex-col items-center" style={{ marginBottom: '4px' }}>
-              <div
-                className={`${
-                  ppChipAnimationState === 'loss' ? 'chip-stack-lose' :
-                  ppChipAnimationState === 'win' ? 'chip-stack-win' : ''
-                }`}
-              >
-                <BetChip
-                  label={ppChipAnimationState !== 'none' ? '' : `PP ${formatChipLabel(perfectPairsBet)}`}
-                  amount={perfectPairsBet}
-                  size="clamp(44px, 7vw, 56px)"
-                  chipSrc={getChipImage(0)}
-                />
-              </div>
-              {ppChipAnimationState === 'win' && perfectPairsResult && (
-                <span className="font-black text-xs text-green-300 animate-pulse mt-1" style={{ textShadow: '0 0 8px rgba(74, 222, 128, 0.6), 2px 2px 6px rgba(0, 0, 0, 0.9)' }}>
-                  {perfectPairsResult === 'colored' ? 'COLORED 12:1' : perfectPairsResult === 'mixed' ? 'MIXED 5:1' : 'PERFECT 10:1'}
-                </span>
-              )}
-            </div>
-          )}
-          {/* PP bet circle button (visible when not playing and no animation running) */}
-          {!isPlaying && ppChipAnimationState === 'none' && (
-            <button
-              type="button"
-              onClick={() => {
-                const next = perfectPairsBet >= 10000 ? 0 : perfectPairsBet + 1000;
-                onPerfectPairsBetChange(next);
-              }}
-              style={{
-                width: '56px',
-                height: '56px',
-                borderRadius: '50%',
-                background: perfectPairsBet > 0
-                  ? 'linear-gradient(145deg,rgb(24, 124, 177),rgb(24, 148, 190))'
-                  : 'linear-gradient(145deg, rgba(40, 8, 43, 0.9), rgba(141, 42, 207, 0.9))',
-                border: perfectPairsBet > 0 ? '2px solid rgba(66, 42, 161, 0.7)' : '2px dashed rgba(100,116,139,0.5)',
-                boxShadow: perfectPairsBet > 0
-                  ? '0 0 12px rgba(11, 46, 245, 0.4), inset 0 1px 2px rgba(255,255,255,0.2)'
-                  : 'inset 0 2px 4px rgba(0,0,0,0.5)',
-                cursor: 'pointer',
-                transition: 'all 0.15s ease',
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              <span style={{ fontSize: '8px', fontWeight: 700, letterSpacing: '0.05em', color: perfectPairsBet > 0 ? '#fff' : 'rgb(255, 255, 255)', textShadow: '0 1px 2px rgba(0,0,0,0.5)' }}>
-                PERFECT
-              </span>
-              <span style={{ fontSize: perfectPairsBet >= 10000 ? '11px' : '13px', fontWeight: 900, color: '#fff', textShadow: '0 1px 2px rgb(16, 103, 197)', lineHeight: 1 }}>
-                {perfectPairsBet > 0 ? `${(perfectPairsBet / 1000).toFixed(0)}K` : '—'}
-              </span>
-              <span style={{ fontSize: '8px', fontWeight: 700, letterSpacing: '0.05em', color: perfectPairsBet > 0 ? 'rgb(255, 255, 255)' : 'rgb(255, 255, 255)', marginTop: '1px' }}>
-                PAIRS
-              </span>
-            </button>
-          )}
-        </div>
-      )}
 
       {/* Result Text Overlay removed — the Game Result Banner above handles all result display */}
 
