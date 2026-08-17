@@ -47,6 +47,12 @@ export const CARD_ANGLE_PRESETS: CardAnglePreset[] = [
     hint: 'Steep, dramatic lean for low-angle art',
     pitch: { dealer: 30, player: 44 },
   },
+  {
+    id: 'flat-on-table',
+    label: 'Flat on the table',
+    hint: 'Cards lie down — for art viewed nearly edge-on',
+    pitch: { dealer: 48, player: 64 },
+  },
 ];
 
 export function activeCardAnglePresetId(pitch: { dealer: number; player: number }): string | null {
