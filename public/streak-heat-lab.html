@@ -1,0 +1,436 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Streak Heat Lab — hot &amp; cold table borders</title>
+<style>
+  :root {
+    --bg: #070b14;
+    --panel: #0d1424;
+    --line: rgba(148, 163, 184, 0.18);
+    --text: #cfd8e3;
+    --dim: #7c8aa0;
+    --cyan: #22d3ee;
+    --gold: #fbbf24;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 14px/1.5 system-ui, -apple-system, sans-serif;
+    min-height: 100vh;
+  }
+  header { padding: 18px 22px 6px; }
+  header h1 { margin: 0; font-size: 19px; letter-spacing: 0.02em; }
+  header p { margin: 4px 0 0; color: var(--dim); font-size: 12.5px; max-width: 720px; }
+  .wrap { display: grid; grid-template-columns: 1fr 292px; gap: 18px; padding: 14px 22px 30px; align-items: start; }
+  @media (max-width: 900px) { .wrap { grid-template-columns: 1fr; } }
+
+  /* ── The stage: a real felt with the heat border wrapped around it ── */
+  .stage-outer { position: relative; }
+  .heat-frame {
+    position: relative;
+    border-radius: 18px;
+    padding: 10px;                 /* ring thickness lives in this padding */
+    isolation: isolate;
+    transition: background 0.9s ease;
+  }
+  .table-mock {
+    position: relative; border-radius: 10px; overflow: hidden;
+    aspect-ratio: 16 / 10; background: #0a3325 center/cover no-repeat;
+    border: 1px solid rgba(0, 0, 0, 0.55);
+    z-index: 3;
+  }
+  .table-mock img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+  .table-mock .scrim { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0,0,0,0.25), rgba(0,0,0,0.05) 45%, rgba(0,0,0,0.3)); }
+  .hud {
+    position: absolute; left: 50%; top: 44%; transform: translate(-50%, -50%);
+    text-align: center; z-index: 4; pointer-events: none;
+  }
+  .hud .stage-name {
+    font-size: clamp(22px, 4.4vw, 40px); font-weight: 900; letter-spacing: 0.12em;
+    transition: color 0.6s ease, text-shadow 0.6s ease;
+  }
+  .hud .streak-line { font-size: 12px; color: rgba(255,255,255,0.75); margin-top: 2px; text-shadow: 0 1px 3px rgba(0,0,0,0.8); }
+
+  /* particle canvas rides above the ring but below nothing that matters */
+  #fx { position: absolute; inset: -34px; width: calc(100% + 68px); height: calc(100% + 68px); pointer-events: none; z-index: 2; }
+
+  /* ── Treatment A: Ember Aura (glow ring via box-shadow + gradient pad) ── */
+  .t-aura .heat-frame {
+    background: var(--ring, rgba(148,163,184,0.12));
+    box-shadow: 0 0 var(--glow-r, 0px) var(--glow-s, 0px) var(--glow-c, transparent),
+                0 0 calc(var(--glow-r, 0px) * 2.2) calc(var(--glow-s, 0px) * 0.5) var(--glow-c2, transparent),
+                inset 0 0 18px rgba(0, 0, 0, 0.55);
+    animation: auraBreathe var(--pulse-s, 0s) ease-in-out infinite;
+  }
+  @keyframes auraBreathe {
+    50% { box-shadow: 0 0 calc(var(--glow-r, 0px) * 1.45) calc(var(--glow-s, 0px) * 1.35) var(--glow-c, transparent),
+                      0 0 calc(var(--glow-r, 0px) * 2.8) calc(var(--glow-s, 0px) * 0.8) var(--glow-c2, transparent),
+                      inset 0 0 18px rgba(0, 0, 0, 0.55); }
+  }
+
+  /* ── Treatment B: Living Flame (animated conic rim) ── */
+  .t-flame .heat-frame { background: transparent; }
+  .t-flame .heat-frame::before {
+    content: ''; position: absolute; inset: 0; border-radius: 18px; z-index: 1;
+    background: conic-gradient(from var(--spin, 0deg),
+      var(--fl-a, #223) 0%, var(--fl-b, #334) 18%, var(--fl-a, #223) 37%,
+      var(--fl-c, #445) 52%, var(--fl-a, #223) 71%, var(--fl-b, #334) 86%, var(--fl-a, #223) 100%);
+    filter: blur(var(--fl-blur, 1px)) saturate(var(--fl-sat, 1));
+    animation: flameSpin var(--fl-speed, 14s) linear infinite;
+  }
+  @property --spin { syntax: '<angle>'; initial-value: 0deg; inherits: false; }
+  @keyframes flameSpin { to { --spin: 360deg; } }
+  .t-flame .heat-frame::after {
+    content: ''; position: absolute; inset: 6px; border-radius: 13px; z-index: 2;
+    background: var(--bg);
+  }
+  .t-flame .table-mock { z-index: 3; }
+
+  /* ── Treatment C: Neon Pulse (clean ring, heartbeat scales with heat) ── */
+  .t-neon .heat-frame {
+    background: transparent;
+    border: 2px solid var(--neon-c, rgba(148,163,184,0.35));
+    box-shadow: 0 0 var(--neon-r, 6px) var(--neon-c, rgba(148,163,184,0.25)),
+                inset 0 0 var(--neon-r, 6px) var(--neon-c2, transparent);
+    animation: neonBeat var(--beat-s, 2.6s) ease-in-out infinite;
+  }
+  @keyframes neonBeat {
+    0%, 100% { filter: brightness(1); }
+    12% { filter: brightness(var(--beat-hi, 1.15)); }
+    24% { filter: brightness(1); }
+    36% { filter: brightness(var(--beat-hi2, 1.05)); }
+    48% { filter: brightness(1); }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .heat-frame, .heat-frame::before { animation: none !important; }
+  }
+
+  /* ── Right rail ── */
+  .rail { display: flex; flex-direction: column; gap: 12px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px; }
+  .card h2 { margin: 0 0 8px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--dim); }
+  .treatments { display: flex; flex-direction: column; gap: 6px; }
+  .treatments button {
+    text-align: left; padding: 8px 10px; border-radius: 8px; cursor: pointer;
+    background: rgba(148,163,184,0.06); border: 1px solid var(--line); color: var(--text);
+    transition: border-color 0.15s, background 0.15s;
+  }
+  .treatments button.on { border-color: var(--cyan); background: rgba(34,211,238,0.08); }
+  .treatments b { display: block; font-size: 13px; }
+  .treatments span { font-size: 11px; color: var(--dim); }
+
+  .playrow { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; }
+  .playrow button {
+    padding: 12px 0; border-radius: 9px; border: 0; cursor: pointer;
+    font-weight: 900; font-size: 14px; letter-spacing: 0.06em; color: #fff;
+    transition: transform 0.1s ease, filter 0.15s ease;
+  }
+  .playrow button:hover { filter: brightness(1.15); }
+  .playrow button:active { transform: scale(0.94); }
+  #btnWin  { background: linear-gradient(145deg, #059669, #047857); }
+  #btnPush { background: linear-gradient(145deg, #475569, #334155); }
+  #btnLose { background: linear-gradient(145deg, #dc2626, #b91c1c); }
+  .simrow { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; margin-top: 6px; }
+  .simrow button {
+    padding: 7px 0; border-radius: 8px; cursor: pointer; font-size: 11px; font-weight: 600;
+    background: rgba(148,163,184,0.08); border: 1px solid var(--line); color: var(--text);
+  }
+  .simrow button.on { border-color: var(--gold); color: var(--gold); }
+
+  input[type="range"] { width: 100%; accent-color: var(--cyan); }
+  .meter-label { display: flex; justify-content: space-between; font-size: 11px; color: var(--dim); }
+
+  /* stage ladder */
+  .ladder { display: flex; flex-direction: column-reverse; gap: 3px; }
+  .rung {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 4px 9px; border-radius: 6px; font-size: 11.5px; font-weight: 600;
+    border: 1px solid transparent; color: var(--dim);
+    transition: all 0.35s ease;
+  }
+  .rung .dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; opacity: 0.5; }
+  .rung.now { color: #fff; border-color: var(--rung-c, var(--cyan)); background: color-mix(in srgb, var(--rung-c, var(--cyan)) 16%, transparent); }
+  .rung.now .dot { opacity: 1; box-shadow: 0 0 8px var(--rung-c, var(--cyan)); }
+  .note { font-size: 11px; color: var(--dim); }
+</style>
+</head>
+<body>
+<header>
+  <h1>🔥 Streak Heat Lab ❄️</h1>
+  <p>The table border reacts to how the player is running — eleven stages from DEEP FREEZE to INFERNO.
+     Hit WIN / LOSE to feel the momentum (streaks accelerate it), or scrub the meter directly.
+     Pick the treatment you want on the real felt.</p>
+</header>
+
+<div class="wrap">
+  <div class="stage-outer t-aura" id="stageOuter">
+    <canvas id="fx"></canvas>
+    <div class="heat-frame" id="frame">
+      <div class="table-mock">
+        <img src="/BlackJack/BrandedTable/High-Roller.png" alt="">
+        <div class="scrim"></div>
+      </div>
+      <div class="hud">
+        <div class="stage-name" id="stageName">NEUTRAL</div>
+        <div class="streak-line" id="streakLine">no streak</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="rail">
+    <div class="card">
+      <h2>Treatment</h2>
+      <div class="treatments" id="treatments">
+        <button data-t="t-aura" class="on"><b>Ember Aura</b><span>soft glow ring that breathes — embers rise when hot, frost falls when cold</span></button>
+        <button data-t="t-flame"><b>Living Flame</b><span>animated rim of moving color — licks like fire, crawls like ice</span></button>
+        <button data-t="t-neon"><b>Neon Pulse</b><span>clean neon ring whose heartbeat races as you heat up</span></button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Play</h2>
+      <div class="playrow">
+        <button id="btnWin">WIN</button>
+        <button id="btnPush">PUSH</button>
+        <button id="btnLose">LOSE</button>
+      </div>
+      <div class="simrow">
+        <button id="simAuto">Auto-play</button>
+        <button id="simHot">Hot run</button>
+        <button id="simCold">Cold run</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Heat meter</h2>
+      <div class="meter-label"><span>❄️ −100</span><span id="heatVal">0</span><span>+100 🔥</span></div>
+      <input type="range" id="heat" min="-100" max="100" value="0" step="1">
+      <p class="note">Wins add ~14 heat (+streak bonus), losses remove it the same way, pushes drift toward neutral. Every threshold crossed is a visible stage change.</p>
+    </div>
+
+    <div class="card">
+      <h2>Stages</h2>
+      <div class="ladder" id="ladder"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+  'use strict';
+
+  /* ── Stage table: name, threshold (lower bound), colors ──
+     Eleven rungs so nearly every result moves the player somewhere visible. */
+  const STAGES = [
+    { min: -100, name: 'DEEP FREEZE', c: '#7dd3fc', c2: '#e0f2fe', kind: 'cold', k: 5 },
+    { min: -84,  name: 'FROZEN',      c: '#67e8f9', c2: '#cffafe', kind: 'cold', k: 4 },
+    { min: -66,  name: 'ICE COLD',    c: '#38bdf8', c2: '#bae6fd', kind: 'cold', k: 3 },
+    { min: -48,  name: 'CHILLED',     c: '#60a5fa', c2: '#93c5fd', kind: 'cold', k: 2 },
+    { min: -30,  name: 'COOLING',     c: '#818cf8', c2: '#a5b4fc', kind: 'cold', k: 1 },
+    { min: -14,  name: 'NEUTRAL',     c: '#94a3b8', c2: '#cbd5e1', kind: 'mid',  k: 0 },
+    { min: 14,   name: 'WARMING',     c: '#fbbf24', c2: '#fde68a', kind: 'hot',  k: 1 },
+    { min: 30,   name: 'HEATING UP',  c: '#f59e0b', c2: '#fcd34d', kind: 'hot',  k: 2 },
+    { min: 48,   name: 'HOT',         c: '#f97316', c2: '#fdba74', kind: 'hot',  k: 3 },
+    { min: 66,   name: 'ON FIRE',     c: '#ef4444', c2: '#fb923c', kind: 'hot',  k: 4 },
+    { min: 84,   name: 'INFERNO',     c: '#fff7ed', c2: '#fbbf24', kind: 'hot',  k: 5 },
+  ];
+  const stageFor = (h) => { let s = STAGES[0]; for (const st of STAGES) if (h >= st.min) s = st; return s; };
+
+  const $ = (id) => document.getElementById(id);
+  const outer = $('stageOuter'), frame = $('frame');
+
+  let heat = 0;          // -100 .. 100
+  let streak = 0;        // +wins / -losses in a row
+  let auto = null;
+
+  /* ── Heat model: streaks compound, so runs FEEL like runs ── */
+  function applyResult(r) {
+    if (r === 'win') {
+      streak = streak > 0 ? streak + 1 : 1;
+      heat += 14 + Math.min(10, (streak - 1) * 3);
+    } else if (r === 'lose') {
+      streak = streak < 0 ? streak - 1 : -1;
+      heat -= 14 + Math.min(10, (-streak - 1) * 3);
+    } else {
+      heat += heat > 0 ? -4 : heat < 0 ? 4 : 0;   // pushes cool the story toward neutral
+    }
+    heat = Math.max(-100, Math.min(100, heat));
+    render(true);
+  }
+
+  /* ── Stage ladder ── */
+  const ladder = $('ladder');
+  for (const st of STAGES) {
+    const el = document.createElement('div');
+    el.className = 'rung'; el.dataset.name = st.name;
+    el.style.setProperty('--rung-c', st.c);
+    el.innerHTML = `<span>${st.name}</span><span class="dot"></span>`;
+    ladder.appendChild(el);
+  }
+
+  /* ── Render: push stage + intensity into CSS variables ── */
+  function render(fromPlay) {
+    const st = stageFor(heat);
+    const t = Math.min(1, Math.abs(heat) / 100);          // 0..1 intensity
+    const k = st.k;                                        // 0..5 rung strength
+
+    $('heatVal').textContent = (heat > 0 ? '+' : '') + Math.round(heat);
+    if (!fromPlay) { /* slider scrub resets the streak story */ streak = 0; }
+    $('heat').value = heat;
+
+    const nameEl = $('stageName');
+    nameEl.textContent = st.name;
+    nameEl.style.color = st.c;
+    nameEl.style.textShadow = `0 0 ${8 + k * 5}px ${st.c}, 0 2px 8px rgba(0,0,0,0.9)`;
+    $('streakLine').textContent =
+      streak > 1 ? `${streak} wins in a row` :
+      streak < -1 ? `${-streak} losses in a row` :
+      streak === 1 ? 'won the last hand' :
+      streak === -1 ? 'lost the last hand' : 'no streak';
+
+    for (const el of ladder.children) el.classList.toggle('now', el.dataset.name === st.name);
+
+    const S = frame.style;
+    /* Aura */
+    S.setProperty('--ring', k === 0 ? 'rgba(148,163,184,0.12)' : `color-mix(in srgb, ${st.c} ${20 + k * 12}%, rgba(0,0,0,0.35))`);
+    S.setProperty('--glow-c', `color-mix(in srgb, ${st.c} ${30 + k * 14}%, transparent)`);
+    S.setProperty('--glow-c2', `color-mix(in srgb, ${st.c2} ${10 + k * 10}%, transparent)`);
+    S.setProperty('--glow-r', `${k * 12}px`);
+    S.setProperty('--glow-s', `${k * 2.5}px`);
+    S.setProperty('--pulse-s', k >= 2 ? `${3.6 - k * 0.5}s` : '0s');
+    /* Flame */
+    const dim = 'rgba(30,41,59,0.9)';
+    S.setProperty('--fl-a', k === 0 ? dim : `color-mix(in srgb, ${st.c} ${25 + k * 13}%, ${dim})`);
+    S.setProperty('--fl-b', k === 0 ? dim : st.c);
+    S.setProperty('--fl-c', k === 0 ? dim : st.c2);
+    S.setProperty('--fl-speed', `${st.kind === 'cold' ? 26 - k * 2 : 15 - k * 2.4}s`);
+    S.setProperty('--fl-blur', `${1 + k * 1.2}px`);
+    S.setProperty('--fl-sat', `${1 + k * 0.14}`);
+    /* Neon */
+    S.setProperty('--neon-c', k === 0 ? 'rgba(148,163,184,0.35)' : st.c);
+    S.setProperty('--neon-c2', `color-mix(in srgb, ${st.c} ${k * 9}%, transparent)`);
+    S.setProperty('--neon-r', `${4 + k * 7}px`);
+    S.setProperty('--beat-s', st.kind === 'cold' ? `${3 + k * 0.7}s` : `${2.6 - k * 0.38}s`);
+    S.setProperty('--beat-hi', `${1.1 + k * 0.09}`);
+    S.setProperty('--beat-hi2', `${1.03 + k * 0.05}`);
+
+    fxState.kind = st.kind; fxState.k = k; fxState.c = st.c; fxState.c2 = st.c2;
+  }
+
+  /* ── Particles: embers rise around the ring when hot, frost falls when cold ── */
+  const cv = $('fx'), ctx = cv.getContext('2d');
+  const fxState = { kind: 'mid', k: 0, c: '#94a3b8', c2: '#cbd5e1' };
+  let parts = [];
+  function resize() {
+    const r = cv.getBoundingClientRect();
+    cv.width = Math.round(r.width * devicePixelRatio);
+    cv.height = Math.round(r.height * devicePixelRatio);
+    ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
+  }
+  addEventListener('resize', resize);
+
+  function spawn(w, h) {
+    const { kind, k } = fxState;
+    if (kind === 'mid' || k < 2) return;
+    const rate = (k - 1) * (kind === 'hot' ? 2.2 : 1.5);
+    for (let i = 0; i < rate; i++) {
+      if (Math.random() > 0.5) continue;
+      /* birth on the ring band: pick an edge position just inside the canvas */
+      const edge = Math.random();
+      let x, y;
+      if (edge < 0.4) { x = 34 + Math.random() * (w - 68); y = h - 34 + Math.random() * 10; }        /* bottom */
+      else if (edge < 0.6) { x = 34 + Math.random() * (w - 68); y = 24 + Math.random() * 10; }        /* top */
+      else if (edge < 0.8) { x = 24 + Math.random() * 12; y = 34 + Math.random() * (h - 68); }        /* left */
+      else { x = w - 36 + Math.random() * 12; y = 34 + Math.random() * (h - 68); }                    /* right */
+      parts.push({
+        x, y,
+        vx: (Math.random() - 0.5) * 0.35,
+        vy: kind === 'hot' ? -(0.5 + Math.random() * 0.9 + k * 0.18) : (0.25 + Math.random() * 0.5),
+        life: 1,
+        decay: 0.008 + Math.random() * 0.012,
+        r: kind === 'hot' ? 1 + Math.random() * 2.2 : 1 + Math.random() * 1.6,
+        cold: kind !== 'hot',
+        drift: Math.random() * Math.PI * 2,
+      });
+    }
+    if (parts.length > 320) parts.splice(0, parts.length - 320);
+  }
+
+  function tick() {
+    const r = cv.getBoundingClientRect();
+    const w = r.width, h = r.height;
+    ctx.clearRect(0, 0, w, h);
+    spawn(w, h);
+    for (const p of parts) {
+      p.drift += 0.03;
+      p.x += p.vx + (p.cold ? Math.sin(p.drift) * 0.35 : Math.sin(p.drift) * 0.15);
+      p.y += p.vy;
+      p.life -= p.decay;
+    }
+    parts = parts.filter((p) => p.life > 0);
+    for (const p of parts) {
+      ctx.globalAlpha = Math.max(0, p.life) * 0.85;
+      if (p.cold) {
+        ctx.strokeStyle = fxState.c2;
+        ctx.lineWidth = 0.8;
+        const s = p.r * 2.2;
+        ctx.beginPath();
+        for (let a = 0; a < 6; a++) {
+          const th = (a / 6) * Math.PI * 2 + p.drift * 0.25;
+          ctx.moveTo(p.x, p.y);
+          ctx.lineTo(p.x + Math.cos(th) * s, p.y + Math.sin(th) * s);
+        }
+        ctx.stroke();
+      } else {
+        const g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.r * 3);
+        g.addColorStop(0, fxState.c2);
+        g.addColorStop(0.4, fxState.c);
+        g.addColorStop(1, 'transparent');
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.r * 3, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    ctx.globalAlpha = 1;
+    requestAnimationFrame(tick);
+  }
+
+  /* ── Wiring ── */
+  $('btnWin').addEventListener('click', () => applyResult('win'));
+  $('btnLose').addEventListener('click', () => applyResult('lose'));
+  $('btnPush').addEventListener('click', () => applyResult('push'));
+  $('heat').addEventListener('input', (e) => { heat = Number(e.target.value); render(false); });
+
+  for (const b of $('treatments').querySelectorAll('button')) {
+    b.addEventListener('click', () => {
+      for (const x of $('treatments').querySelectorAll('button')) x.classList.remove('on');
+      b.classList.add('on');
+      outer.className = 'stage-outer ' + b.dataset.t;
+      render(true);
+    });
+  }
+
+  function stopAuto() { if (auto) { clearInterval(auto); auto = null; } for (const id of ['simAuto','simHot','simCold']) $(id).classList.remove('on'); }
+  function startAuto(id, winP) {
+    const was = $(id).classList.contains('on');
+    stopAuto();
+    if (was) return;
+    $(id).classList.add('on');
+    auto = setInterval(() => applyResult(Math.random() < 0.06 ? 'push' : Math.random() < winP ? 'win' : 'lose'), 650);
+  }
+  $('simAuto').addEventListener('click', () => startAuto('simAuto', 0.5));
+  $('simHot').addEventListener('click', () => startAuto('simHot', 0.82));
+  $('simCold').addEventListener('click', () => startAuto('simCold', 0.18));
+
+  resize();
+  render(true);
+  tick();
+})();
+</script>
+</body>
+</html>

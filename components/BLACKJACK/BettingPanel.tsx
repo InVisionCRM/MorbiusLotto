@@ -99,7 +99,7 @@ const BettingPanel: React.FC<BettingPanelProps> = ({
                 onBetAmountChange?.(newAmount, amount);
               }}
               disabled={isPlaying || !affordable}
-              className={`relative w-8 h-8 sm:w-12 sm:h-12 md:w-12 md:h-12 rounded-full flex items-center justify-center font-bold text-[10px] sm:text-xs transition-all hover:scale-110 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed shadow-md overflow-hidden ${
+              className={`bj-chip-btn relative w-8 h-8 sm:w-12 sm:h-12 md:w-12 md:h-12 rounded-full flex items-center justify-center font-bold text-[10px] sm:text-xs disabled:opacity-50 disabled:cursor-not-allowed shadow-md overflow-hidden ${
                 !affordable ? 'opacity-50' : ''
               }`}
               style={{
@@ -131,7 +131,7 @@ const BettingPanel: React.FC<BettingPanelProps> = ({
             onBetAmountChange?.('', undefined, true);
           }}
           disabled={isPlaying}
-          className="w-full min-h-[1.75rem] sm:min-h-[2.5rem] px-1 sm:px-2 py-0.5 sm:py-1.5 rounded-md sm:rounded-lg font-bold text-[10px] sm:text-xs md:text-sm uppercase tracking-wider transition-all hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed text-cyan-300/80"
+          className="bj-chip-btn w-full min-h-[1.75rem] sm:min-h-[2.5rem] px-1 sm:px-2 py-0.5 sm:py-1.5 rounded-md sm:rounded-lg font-bold text-[10px] sm:text-xs md:text-sm uppercase tracking-wider disabled:opacity-50 disabled:cursor-not-allowed text-cyan-300/80"
           style={{
             background: 'linear-gradient(145deg, rgba(35, 45, 55, 0), rgba(25, 35, 45, 0.01))',
             boxShadow: 'inset 2px 2px 4px rgba(0, 0, 0, 0), inset -2px -2px 4px rgba(255, 255, 255, 0)',

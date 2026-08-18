@@ -11,7 +11,6 @@ import BlackjackMobileActionBar from '@/components/BLACKJACK/BlackjackMobileActi
 import BlackjackSidebar from '@/components/BLACKJACK/BlackjackSidebar';
 import WinNotification from '@/components/BLACKJACK/WinNotification';
 import { TournamentBetPanel } from '@/components/BLACKJACK/Tournament';
-import { IconButton } from '@/components/animate-ui/components/buttons/icon';
 import { BlackjackGameSecondaryPanels } from '@/components/BLACKJACK/BlackjackGameSecondaryPanels';
 import type { TableThemeInfo } from '@/hooks/use-blackjack-tables';
 import { SpeechIndicator } from '@/components/shared/SpeechIndicator';
@@ -200,6 +199,26 @@ export function BlackjackGameView(props: BlackjackGameViewProps) {
   } = props;
 
   const [provablyFairOpen, setProvablyFairOpen] = useState(false);
+
+  /* Tip lives in the table menu now; the handler stays here because it owns
+     the websocket, sounds, and balance refresh. */
+  const handleTipDealer = async () => {
+    if (tipAnimating || !address || !wsConnected || !wsClient) return;
+    playSfx('/POKER/PokerSounds/PlayerClickConfirmation.mp3');
+    setTipAnimating(true);
+    try {
+      await wsClient.sendRequest('tip_dealer', {
+        amount: (BigInt(2000) * BigInt('1000000000000000000')).toString(),
+      });
+      playDealerVoice(pickRandom(SOUNDS_TIP));
+      fetchBalance();
+      const base = getApiUrlOptional();
+      if (base) fetch(`${base}/api/tips/stats`).then(r => r.json()).then(d => setTipStats(d)).catch(() => {});
+    } catch {
+      setTipAnimating(false);
+    }
+    setTimeout(() => setTipAnimating(false), 900);
+  };
   /** Desktop places the bet panel in the right column; mobile keeps it directly under the table (above token profile). */
   const [isMdUp, setIsMdUp] = useState(false);
   useLayoutEffect(() => {
@@ -361,6 +380,8 @@ export function BlackjackGameView(props: BlackjackGameViewProps) {
               videoPosition={videoPosition}
               onOpenDepositModal={handleOpenDepositModal}
               onOpenTableThemeSelector={() => setThemeModalOpen(true)}
+              onTipDealer={address && wsConnected && wsClient ? handleTipDealer : undefined}
+              tipDisabled={tipAnimating}
               soundEnabled={soundEnabled}
               onPlaySfx={playSfx}
               hideBettingPanel={true}
@@ -377,44 +398,16 @@ export function BlackjackGameView(props: BlackjackGameViewProps) {
               voiceTutorialVideoUrl={voiceTutorialVideoUrl}
             />
 
-            {address && wsConnected && wsClient && (
-              <div className="absolute bottom-3 right-3 z-10 flex flex-col items-end">
-                <IconButton
-                  variant="tip"
-                  size="tip"
-                  onClick={async () => {
-                    if (tipAnimating) return;
-                    playSfx('/POKER/PokerSounds/PlayerClickConfirmation.mp3');
-                    setTipAnimating(true);
-                    try {
-                      await wsClient.sendRequest('tip_dealer', {
-                        amount: (BigInt(2000) * BigInt('1000000000000000000')).toString(),
-                      });
-                      playDealerVoice(pickRandom(SOUNDS_TIP));
-                      fetchBalance();
-                      const base = getApiUrlOptional();
-                      if (base) fetch(`${base}/api/tips/stats`).then(r => r.json()).then(d => setTipStats(d)).catch(() => {});
-                    } catch {
-                      setTipAnimating(false);
-                    }
-                    setTimeout(() => setTipAnimating(false), 900);
-                  }}
-                  disabled={tipAnimating}
-                >
-                  Tip 2,000
-                </IconButton>
-                {tipAnimating && (
-                  <div
-                    className="absolute pointer-events-none bottom-full right-0 mb-0.5"
-                    onAnimationEnd={() => setTipAnimating(false)}
-                  >
-                    <div className="tip-chip-fly">
-                      <div className="w-6 h-6 rounded-full border-2 border-amber-400 bg-amber-600 flex items-center justify-center shadow-lg shadow-amber-500/40">
-                        <span className="text-white text-[8px] font-bold">$</span>
-                      </div>
-                    </div>
+            {tipAnimating && (
+              <div
+                className="absolute bottom-3 right-3 z-10 pointer-events-none"
+                onAnimationEnd={() => setTipAnimating(false)}
+              >
+                <div className="tip-chip-fly">
+                  <div className="w-6 h-6 rounded-full border-2 border-amber-400 bg-amber-600 flex items-center justify-center shadow-lg shadow-amber-500/40">
+                    <span className="text-white text-[8px] font-bold">$</span>
                   </div>
-                )}
+                </div>
               </div>
             )}
 
