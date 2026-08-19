@@ -1,0 +1,352 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Player Hero Lab — 5 options</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800;900&family=Bowlby+One+SC&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg0:#04050a; --bg1:#090c14; --bg2:#0d1120;
+  --panel:rgba(255,255,255,.028); --panel2:rgba(255,255,255,.05);
+  --line:rgba(148,163,184,.10); --line2:rgba(148,163,184,.18);
+  --cyan:#22d3ee; --cyan-dim:rgba(34,211,238,.14);
+  --gold:#fbbf24; --gold-hot:#f59e0b; --gold-dim:rgba(251,191,36,.12);
+  --emerald:#34d399; --rose:#fb7185; --violet:#a78bfa;
+  --text:#e6edf6; --text2:#94a3b8; --muted:#5b6b82;
+  --font:'Poppins',sans-serif; --display:'Bowlby One SC',cursive;
+}
+*,*::before,*::after{box-sizing:border-box}
+body{margin:0; background:var(--bg0); color:var(--text); font-family:var(--font); -webkit-font-smoothing:antialiased}
+a{color:inherit; text-decoration:none}
+button{font-family:inherit; cursor:pointer; border:none; background:none; color:inherit}
+
+.wrap{max-width:1120px; margin:0 auto; padding:26px 20px 90px}
+.labhead{display:flex; align-items:baseline; gap:14px; flex-wrap:wrap; margin-bottom:6px}
+.labhead h1{font-family:var(--display); font-weight:400; font-size:22px; letter-spacing:.03em; margin:0}
+.labhead h1 em{font-style:normal; color:var(--cyan)}
+.labhead p{margin:0; font-size:12px; color:var(--text2)}
+.note{font-size:12px; color:var(--muted); margin:10px 0 26px; line-height:1.6; max-width:76ch}
+.note b{color:var(--text2); font-weight:600}
+
+.opt{margin:0 0 40px}
+.opt-head{display:flex; align-items:baseline; gap:10px; flex-wrap:wrap; margin-bottom:4px}
+.opt-num{font-family:var(--display); font-size:15px; color:var(--gold)}
+.opt-head h2{font-size:15px; font-weight:700; margin:0; letter-spacing:.01em}
+.opt-head .tag{font-size:9.5px; font-weight:800; letter-spacing:.1em; text-transform:uppercase;
+  color:var(--cyan); border:1px solid rgba(34,211,238,.35); border-radius:99px; padding:2px 9px}
+.opt-why{font-size:11.5px; color:var(--muted); margin:0 0 12px; line-height:1.55; max-width:80ch}
+.opt-why b{color:var(--text2); font-weight:600}
+
+.stage{background:linear-gradient(180deg,var(--bg1),var(--bg0)); border:1px solid var(--line);
+  border-radius:18px; padding:22px; overflow:hidden}
+
+/* ── shared bits ───────────────────────────────────────────── */
+.mono{font-variant-numeric:tabular-nums}
+.tierchip{display:inline-flex; align-items:center; gap:5px; font-size:9.5px; font-weight:800;
+  letter-spacing:.1em; padding:3px 9px; border-radius:99px;
+  background:linear-gradient(90deg,rgba(192,192,192,.22),rgba(192,192,192,.06));
+  border:1px solid rgba(192,192,192,.35); color:#dfe6f0}
+.btn-gold{background:linear-gradient(180deg,var(--gold),var(--gold-hot)); color:#241a02;
+  font-weight:800; font-size:12px; padding:9px 16px; border-radius:10px; letter-spacing:.02em}
+.btn-ghost{border:1px solid var(--line2); color:var(--text2); font-weight:700; font-size:12px;
+  padding:9px 16px; border-radius:10px}
+.btn-gold:active,.btn-ghost:active{transform:translateY(1px)}
+
+/* Avatar treatments (the "random face" replacements) */
+.av{position:relative; flex-shrink:0; display:grid; place-items:center}
+.av-mono{width:64px; height:64px; border-radius:16px; font-family:var(--display); font-size:24px;
+  background:linear-gradient(145deg,#12203a,#0a0f1c); border:1px solid var(--line2); color:var(--cyan)}
+.av-medal{width:74px; height:74px; border-radius:50%; font-size:26px;
+  background:radial-gradient(circle at 34% 28%,#f8fafc,#94a3b8 60%,#4b5563);
+  box-shadow:0 8px 22px rgba(0,0,0,.5), inset 0 -6px 14px rgba(0,0,0,.35)}
+.av-chip{width:66px; height:66px; border-radius:50%; font-family:var(--display); font-size:19px; color:#0b1220;
+  background:radial-gradient(circle at 34% 28%,#fde68a,var(--gold-hot));
+  box-shadow:0 8px 20px rgba(245,158,11,.28), inset 0 -5px 12px rgba(120,53,15,.45);
+  border:3px dashed rgba(255,255,255,.55)}
+.av-ident{width:62px; height:62px; border-radius:14px; overflow:hidden; border:1px solid var(--line2)}
+.av-ring{position:absolute; inset:-6px; border-radius:50%;
+  background:conic-gradient(var(--cyan) calc(var(--p,62) * 1%), rgba(148,163,184,.16) 0);
+  -webkit-mask:radial-gradient(farthest-side,transparent calc(100% - 4px),#000 calc(100% - 3px));
+  mask:radial-gradient(farthest-side,transparent calc(100% - 4px),#000 calc(100% - 3px))}
+
+/* ── 1. PLAYER CARD ────────────────────────────────────────── */
+.pc{display:grid; grid-template-columns:1.15fr .85fr; gap:20px; align-items:center}
+.pc-card{position:relative; border-radius:18px; padding:20px 22px; overflow:hidden;
+  background:linear-gradient(135deg,#132038 0%,#0a1120 55%,#151a2e 100%);
+  border:1px solid rgba(148,163,184,.22);
+  box-shadow:0 24px 60px rgba(0,0,0,.6), inset 0 1px 0 rgba(255,255,255,.07)}
+.pc-card::after{content:''; position:absolute; inset:0; pointer-events:none;
+  background:linear-gradient(105deg,transparent 42%,rgba(255,255,255,.07) 50%,transparent 58%)}
+.pc-top{display:flex; align-items:center; justify-content:space-between; gap:12px}
+.pc-brand{font-family:var(--display); font-size:12px; letter-spacing:.06em; color:var(--text2)}
+.pc-body{display:flex; align-items:center; gap:16px; margin:18px 0 16px}
+.pc-name{font-size:20px; font-weight:800; letter-spacing:.01em}
+.pc-sub{font-size:10.5px; color:var(--muted); letter-spacing:.14em; margin-top:3px}
+.pc-bal{margin-top:2px}
+.pc-bal .k{font-size:9px; letter-spacing:.16em; color:var(--muted); font-weight:800}
+.pc-bal .v{font-size:26px; font-weight:800; color:var(--gold); line-height:1.1}
+.pc-bal .v span{font-size:11px; color:var(--text2); font-weight:700; margin-left:4px}
+.pc-meter{margin-top:14px}
+.pc-meter .bar{height:5px; border-radius:99px; background:rgba(148,163,184,.16); overflow:hidden}
+.pc-meter .bar i{display:block; height:100%; width:62%; border-radius:99px;
+  background:linear-gradient(90deg,var(--cyan),#7dd3fc)}
+.pc-meter .lbl{display:flex; justify-content:space-between; font-size:10px; color:var(--text2); margin-top:6px}
+.pc-side{display:flex; flex-direction:column; gap:10px}
+.pc-act{display:flex; align-items:center; gap:12px; padding:13px 15px; border-radius:14px;
+  background:var(--panel); border:1px solid var(--line); transition:border-color .18s, transform .1s}
+.pc-act:hover{border-color:rgba(34,211,238,.4)}
+.pc-act:active{transform:translateY(1px)}
+.pc-act .ic{width:34px; height:34px; border-radius:10px; display:grid; place-items:center; font-size:16px;
+  background:var(--cyan-dim)}
+.pc-act .tt{font-size:12.5px; font-weight:700}
+.pc-act .ss{font-size:10.5px; color:var(--muted)}
+.pc-act .go{margin-left:auto; color:var(--muted)}
+
+/* ── 2. STAT BAR ───────────────────────────────────────────── */
+.sb{display:flex; align-items:center; gap:16px; flex-wrap:wrap;
+  padding:15px 18px; border-radius:16px; background:var(--panel); border:1px solid var(--line)}
+.sb-id{display:flex; align-items:center; gap:12px; min-width:190px}
+.sb-id .nm{font-size:16px; font-weight:800; line-height:1.15}
+.sb-tiles{display:flex; gap:9px; flex-wrap:wrap; margin-left:auto}
+.sb-t{min-width:104px; padding:9px 13px; border-radius:12px; background:rgba(255,255,255,.03);
+  border:1px solid var(--line)}
+.sb-t .k{font-size:8.5px; letter-spacing:.14em; font-weight:800; color:var(--muted)}
+.sb-t .v{font-size:16px; font-weight:800; margin-top:2px}
+.sb-t.gold .v{color:var(--gold)}
+.sb-t.cyan .v{color:var(--cyan)}
+.sb-t.em .v{color:var(--emerald)}
+.sb-cta{display:flex; gap:8px}
+
+/* ── 3. MARQUEE ────────────────────────────────────────────── */
+.mq{position:relative; border-radius:18px; overflow:hidden; padding:34px 30px;
+  background:radial-gradient(1100px 300px at 22% -10%,rgba(34,211,238,.16),transparent 62%),
+             linear-gradient(180deg,#0c1424,#070a12)}
+.mq::before{content:''; position:absolute; inset:0;
+  background:repeating-linear-gradient(115deg,transparent 0 28px,rgba(255,255,255,.014) 28px 56px)}
+.mq-in{position:relative; display:flex; align-items:center; gap:24px; flex-wrap:wrap}
+.mq h1{margin:0; font-family:var(--display); font-weight:400; font-size:clamp(24px,4vw,40px); letter-spacing:.02em}
+.mq h1 em{font-style:normal; color:var(--gold)}
+.mq .line{font-size:13px; color:var(--text2); margin-top:8px}
+.mq .line b{color:var(--text); font-weight:700}
+.mq-cta{margin-left:auto; display:flex; flex-direction:column; gap:9px; align-items:stretch; min-width:210px}
+.mq-bal{padding:11px 15px; border-radius:12px; background:rgba(0,0,0,.34); border:1px solid var(--line2)}
+.mq-bal .k{font-size:8.5px; letter-spacing:.15em; color:var(--muted); font-weight:800}
+.mq-bal .v{font-size:20px; font-weight:800; color:var(--gold)}
+
+/* ── 4. TIER LOCKER ────────────────────────────────────────── */
+.tl{display:grid; grid-template-columns:auto 1fr; gap:22px; align-items:center}
+.tl-badge{display:grid; place-items:center; gap:9px; text-align:center}
+.tl-badge .pct{font-size:10.5px; color:var(--text2); font-weight:700}
+.tl-right{display:grid; gap:11px}
+.tl-name{font-size:19px; font-weight:800}
+.tl-name .sub{display:block; font-size:11.5px; color:var(--muted); font-weight:500; margin-top:3px}
+.tl-tiles{display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px}
+.tl-tile{padding:12px 14px; border-radius:13px; background:var(--panel); border:1px solid var(--line)}
+.tl-tile .k{font-size:8.5px; letter-spacing:.14em; font-weight:800; color:var(--muted)}
+.tl-tile .v{font-size:17px; font-weight:800; margin-top:3px}
+.tl-tile.gold .v{color:var(--gold)}
+.tl-tile .go{font-size:11px; color:var(--cyan); font-weight:700; margin-top:3px}
+
+/* ── 5. TABLE PLACARD ──────────────────────────────────────── */
+.tp{position:relative; border-radius:18px; padding:26px 24px; overflow:hidden;
+  background:radial-gradient(720px 260px at 50% 0%,#14532d,#052e16 74%);
+  border:1px solid rgba(20,83,45,.9);
+  box-shadow:inset 0 4px 26px rgba(0,0,0,.65)}
+.tp-in{display:flex; align-items:center; gap:22px; flex-wrap:wrap}
+.tp-plate{position:relative; padding:14px 22px; border-radius:10px; text-align:center;
+  background:linear-gradient(180deg,#2a2f3a,#12161f);
+  border:1px solid rgba(203,213,225,.35);
+  box-shadow:0 12px 30px rgba(0,0,0,.55), inset 0 1px 0 rgba(255,255,255,.14)}
+.tp-plate .nm{font-family:var(--display); font-size:22px; letter-spacing:.05em;
+  background:linear-gradient(180deg,#fde68a,#b45309); -webkit-background-clip:text; background-clip:text; color:transparent}
+.tp-plate .sub{font-size:9px; letter-spacing:.22em; color:var(--text2); margin-top:4px; font-weight:700}
+.tp-stack{display:flex; align-items:flex-end; gap:5px; height:62px}
+.tp-stack i{display:block; width:34px; border-radius:4px 4px 2px 2px;
+  background:linear-gradient(180deg,#fde68a,var(--gold-hot));
+  box-shadow:0 5px 12px rgba(0,0,0,.45), inset 0 -3px 6px rgba(120,53,15,.5)}
+.tp-copy{margin-left:auto; text-align:right}
+.tp-copy .k{font-size:8.5px; letter-spacing:.16em; color:rgba(226,232,240,.6); font-weight:800}
+.tp-copy .v{font-size:24px; font-weight:800; color:#fde68a}
+.tp-copy .ln{font-size:11.5px; color:rgba(226,232,240,.72); margin-top:5px}
+.tp-acts{display:flex; gap:8px; margin-top:11px; justify-content:flex-end}
+
+@media (max-width:760px){
+  .pc{grid-template-columns:1fr}
+  .tl{grid-template-columns:1fr; justify-items:start}
+  .sb-tiles{margin-left:0; width:100%}
+  .sb-t{flex:1 1 45%}
+  .mq-cta{margin-left:0; width:100%}
+  .tp-copy{margin-left:0; text-align:left; width:100%}
+  .tp-acts{justify-content:flex-start}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="labhead">
+    <h1>PLAYER <em>HERO</em> LAB</h1>
+    <p>five replacements for the connected-player block</p>
+  </div>
+  <p class="note">
+    The block on the live homepage carries a greeting, a VIP sentence, a
+    “while you were away” digest, a resume card and a balance panel — five
+    messages stacked, plus a <b>generic drawn face</b> for an avatar. Each option
+    below cuts the prose down and swaps that face for something that means
+    something: a <b>monogram</b>, a <b>tier medallion</b>, a <b>chip</b>, or a
+    <b>wallet-derived identicon</b> (deterministic — the same wallet always draws
+    the same mark, so it reads as identity, not randomness). Same data in every
+    option, so you're comparing shape, not content. Pick one, or mix — e.g.
+    “option 2 with the medallion from 4”.
+  </p>
+
+  <!-- 1 -->
+  <section class="opt">
+    <div class="opt-head"><span class="opt-num">01</span><h2>Player Card</h2><span class="tag">most premium</span></div>
+    <p class="opt-why">A membership card: identity, tier and balance embossed on one object, with the two things you'd actually click beside it. <b>Text drops from five messages to zero prose</b> — the card states, it doesn't narrate. Avatar becomes a monogram tile.</p>
+    <div class="stage">
+      <div class="pc">
+        <div class="pc-card">
+          <div class="pc-top">
+            <span class="pc-brand">MORBIUS · MEMBER</span>
+            <span class="tierchip">🥈 SILVER</span>
+          </div>
+          <div class="pc-body">
+            <div class="av av-mono">DT</div>
+            <div>
+              <div class="pc-name">Det</div>
+              <div class="pc-sub mono">MEMBER SINCE 2026 · 0x7f…3a91</div>
+            </div>
+          </div>
+          <div class="pc-bal">
+            <div class="k">PLAY BALANCE</div>
+            <div class="v mono">128,400 <span>MORBIUS</span></div>
+          </div>
+          <div class="pc-meter">
+            <div class="bar"><i></i></div>
+            <div class="lbl"><span>2,450 to GOLD</span><span>12% rakeback at GOLD</span></div>
+          </div>
+        </div>
+        <div class="pc-side">
+          <a class="pc-act"><span class="ic">🂡</span><span><span class="tt">Back to Blackjack</span><br><span class="ss">Table #4 · up 3,200 here</span></span><span class="go">→</span></a>
+          <a class="pc-act"><span class="ic">💰</span><span><span class="tt">Deposit</span><br><span class="ss">top up your play balance</span></span><span class="go">→</span></a>
+          <a class="pc-act"><span class="ic">📊</span><span><span class="tt">Dashboard</span><br><span class="ss">history, stats & verify</span></span><span class="go">→</span></a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 2 -->
+  <section class="opt">
+    <div class="opt-head"><span class="opt-num">02</span><h2>Stat Bar</h2><span class="tag">smallest footprint</span></div>
+    <p class="opt-why">One row, no prose at all — identity, four live numbers, two buttons. <b>Gets the player out of the hero and onto a game fastest</b>, and leaves the most room for the Just Landed rail above the fold. Avatar becomes a wallet-derived identicon.</p>
+    <div class="stage">
+      <div class="sb">
+        <div class="sb-id">
+          <div class="av av-ident">
+            <svg viewBox="0 0 62 62" width="62" height="62" aria-hidden>
+              <rect width="62" height="62" fill="#0a1120"/>
+              <g fill="#22d3ee" opacity=".9">
+                <rect x="8" y="8" width="15" height="15"/><rect x="39" y="8" width="15" height="15"/>
+                <rect x="23.5" y="23.5" width="15" height="15"/>
+                <rect x="8" y="39" width="15" height="15"/><rect x="39" y="39" width="15" height="15"/>
+              </g>
+              <g fill="#fbbf24" opacity=".75">
+                <rect x="23.5" y="8" width="15" height="7"/><rect x="23.5" y="47" width="15" height="7"/>
+              </g>
+            </svg>
+          </div>
+          <div>
+            <div class="nm">Det</div>
+            <span class="tierchip" style="margin-top:5px">🥈 SILVER</span>
+          </div>
+        </div>
+        <div class="sb-tiles">
+          <div class="sb-t gold"><div class="k">BALANCE</div><div class="v mono">128,400</div></div>
+          <div class="sb-t cyan"><div class="k">TO GOLD</div><div class="v mono">2,450</div></div>
+          <div class="sb-t em"><div class="k">WIN STREAK</div><div class="v mono">×3</div></div>
+          <div class="sb-t"><div class="k">DROP TICKETS</div><div class="v mono">18</div></div>
+        </div>
+        <div class="sb-cta">
+          <button class="btn-gold">Deposit</button>
+          <button class="btn-ghost">Resume</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 3 -->
+  <section class="opt">
+    <div class="opt-head"><span class="opt-num">03</span><h2>Marquee</h2><span class="tag">most cinematic</span></div>
+    <p class="opt-why">Big room-sign energy: the name is the art, <b>one sentence carries the only message worth reading</b>, and the balance plus a single button sit to the right. Closest in spirit to the current hero, minus four of its five messages. Avatar becomes a tier medallion.</p>
+    <div class="stage" style="padding:0; border:0">
+      <div class="mq">
+        <div class="mq-in">
+          <div class="av av-medal">🥈</div>
+          <div>
+            <h1>WELCOME BACK, <em>DET</em></h1>
+            <div class="line">You're <b>2,450 MORBIUS</b> from <b>GOLD</b> — and your Blackjack seat at Table #4 is still open.</div>
+          </div>
+          <div class="mq-cta">
+            <div class="mq-bal"><div class="k">PLAY BALANCE</div><div class="v mono">128,400</div></div>
+            <button class="btn-gold">Take your seat</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 4 -->
+  <section class="opt">
+    <div class="opt-head"><span class="opt-num">04</span><h2>Tier Locker</h2><span class="tag">most game-y</span></div>
+    <p class="opt-why">The VIP climb becomes the hero: the ring around the badge <b>is</b> the progress bar, so the tier story needs no sentence at all. Everything else is three compact tiles. Best option if you want players chasing the next tier.</p>
+    <div class="stage">
+      <div class="tl">
+        <div class="tl-badge">
+          <div class="av av-medal" style="--p:62"><span class="av-ring" style="--p:62"></span>🥈</div>
+          <div class="pct">62% to GOLD</div>
+        </div>
+        <div class="tl-right">
+          <div class="tl-name">Det <span class="sub">Silver member · 8% rakeback on losses</span></div>
+          <div class="tl-tiles">
+            <div class="tl-tile gold"><div class="k">PLAY BALANCE</div><div class="v mono">128,400</div><div class="go">Deposit →</div></div>
+            <div class="tl-tile"><div class="k">NEXT TIER IN</div><div class="v mono">2,450</div><div class="go">See the ladder →</div></div>
+            <div class="tl-tile"><div class="k">YOUR SEAT</div><div class="v" style="font-size:14px">Blackjack #4</div><div class="go">Sit back down →</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 5 -->
+  <section class="opt">
+    <div class="opt-head"><span class="opt-num">05</span><h2>Table Placard</h2><span class="tag">most on-theme</span></div>
+    <p class="opt-why">You're not a “user”, you're a seat at a table: an engraved placard on the felt with your chips beside it. <b>The chip stack is the balance</b> — it grows and shrinks — so the number needs no label. The most distinctive of the five, and the least conventional.</p>
+    <div class="stage" style="padding:0; border:0">
+      <div class="tp">
+        <div class="tp-in">
+          <div class="tp-plate">
+            <div class="nm">DET</div>
+            <div class="sub">SEAT 4 · SILVER</div>
+          </div>
+          <div class="tp-stack">
+            <i style="height:26px"></i><i style="height:38px"></i><i style="height:52px"></i><i style="height:44px"></i><i style="height:30px"></i>
+          </div>
+          <div class="tp-copy">
+            <div class="k">YOUR CHIPS</div>
+            <div class="v mono">128,400</div>
+            <div class="ln">2,450 more played and you're GOLD.</div>
+            <div class="tp-acts">
+              <button class="btn-gold">Buy chips</button>
+              <button class="btn-ghost">Back to your seat</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+</body>
+</html>
