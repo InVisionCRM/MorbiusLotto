@@ -1,51 +1,59 @@
 'use client';
 
 /**
- * StreakFlameBorder — the Living Flame treatment from the Streak Heat Lab
- * (public/streak-heat-lab.html), ported faithfully onto the real felt. The lab
- * is the spec: this keeps its heat model, its continuous color engine, and its
- * calmed particles exactly.
+ * StreakFlameBorder — the solo-blackjack win-streak chain, on the felt.
  *
- * HOW IT READS: an animated conic rim hugs the table edge. Its color, speed,
- * blur and saturation all derive from a temperature that DRIFTS — a displayed
- * value eases toward the target with an exponential glide (tau 1.1s, a win
- * lands over 3-4s), and colors are sampled per-frame from one continuous ramp
- * spanning -100..+100 (glacial cyan through neutral slate to white-hot). No
- * visual ever steps; stage thresholds exist only in the lab's ladder.
+ * V2 (owner feedback 2026-08-19): HOT ONLY. The cold/ice side is gone — a
+ * player on a losing run sees a clean table, not a blue lecture. The rim now
+ * tracks the SERVER's consecutive-win counter (the same one that pays the
+ * chain bonus ladder: 2 wins → 5%, 3 → 7%, 4 → 15%, 5 → 25%, 6 → 37%,
+ * 7+ → 50% of the bet), so what glows is exactly what pays.
  *
- * HOW IT MOVES: wins add ~14 heat plus a compounding streak bonus, losses
- * mirror it, pushes drift toward neutral. Heat and streak persist in
- * localStorage so a player's run survives a reload — closing the app cold
- * and coming back hot would break the story the border is telling.
+ * Rendering keeps the lab's continuous engine: the shown temperature eases
+ * toward the target with a 1.1s exponential glide, colors are sampled
+ * per-frame from one continuous 0..100 ramp (neutral slate → ember amber →
+ * open-flame orange → white-hot), and a loss doesn't snap — the flame
+ * gutters out over a couple of seconds. A handful of embers (cap 26) rise
+ * from the frame at high streaks. First win = a faint warm hint; the rim
+ * only really lives once the chain is paying.
  *
- * HOW IT'S DRAWN: unlike the lab (which pads a frame), this renders as a
- * zero-layout overlay: an absolutely-positioned rim over the table's outer
- * 10px, kept to a ring by the standard mask-composite gradient-border
- * technique, so the felt's own layout never shifts and nothing pokes outside
- * the panel's overflow-hidden. A canvas rides with it for the handful of
- * embers / frost crystals at the extremes (cap 26, spawn only above ~60%
- * intensity, smooth fade in and out) — like the lab, they live just inside
- * the frame edge. Near neutral the rim fades out entirely — a player running
- * even sees a clean table.
+ * Drawn as a zero-layout overlay: a mask-composited 10px ring over the
+ * table's outer edge, invisible near zero heat.
  */
 
 import { useEffect, useRef } from 'react';
 
-export interface StreakHeatEvent {
-  result: 'win' | 'lose' | 'push';
-  /** New key = new settled hand; the same key never applies twice. */
-  key: string;
+/** streak → target heat 0..100. 1 win whispers; 7+ is white-hot. */
+export function heatForStreak(streak: number): number {
+  if (streak <= 0) return 0;
+  return Math.min(100, streak * 15);
 }
 
-/* ── The lab's continuous color ramp, verbatim. ── */
+/** Chain ladder — mirror of the server's STREAK_BONUS_LADDER. */
+export const STREAK_CHAIN_LADDER: ReadonlyArray<{ wins: number; pct: number }> = [
+  { wins: 2, pct: 5 },
+  { wins: 3, pct: 7 },
+  { wins: 4, pct: 15 },
+  { wins: 5, pct: 25 },
+  { wins: 6, pct: 37 },
+  { wins: 7, pct: 50 },
+];
+
+export function chainPctForStreak(
+  streak: number,
+  ladder: ReadonlyArray<{ wins: number; pct: number }> = STREAK_CHAIN_LADDER,
+): number {
+  if (streak < ladder[0]?.wins) return 0;
+  const capped = Math.min(streak, ladder[ladder.length - 1].wins);
+  return ladder.find((r) => r.wins === capped)?.pct ?? 0;
+}
+
+/* ── Hot half of the lab's ramp (the cold stops are retired with V2). ── */
 const RAMP: Array<{ at: number; c: [number, number, number]; c2: [number, number, number] }> = [
-  { at: -100, c: [125, 211, 252], c2: [224, 242, 254] },
-  { at: -60,  c: [ 96, 165, 250], c2: [147, 197, 253] },
-  { at: -25,  c: [129, 140, 248], c2: [165, 180, 252] },
-  { at: 0,    c: [148, 163, 184], c2: [203, 213, 225] },
-  { at: 25,   c: [251, 191,  36], c2: [253, 230, 138] },
-  { at: 60,   c: [249, 115,  22], c2: [253, 186, 116] },
-  { at: 100,  c: [255, 247, 237], c2: [251, 191,  36] },
+  { at: 0,   c: [148, 163, 184], c2: [203, 213, 225] },
+  { at: 25,  c: [251, 191,  36], c2: [253, 230, 138] },
+  { at: 60,  c: [249, 115,  22], c2: [253, 186, 116] },
+  { at: 100, c: [255, 247, 237], c2: [251, 191,  36] },
 ];
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 function rampAt(h: number): { c: number[]; c2: number[] } {
@@ -64,65 +72,17 @@ const MAX_PARTS = 26;
 
 interface Particle {
   x: number; y: number; vx: number; vy: number;
-  life: number; speed: number; r: number; cold: boolean; drift: number;
+  life: number; speed: number; r: number; drift: number;
 }
 
-/** The lab's heat model, verbatim. */
-export function applyHeatResult(
-  state: { heat: number; streak: number },
-  r: StreakHeatEvent['result'],
-): void {
-  if (r === 'win') {
-    state.streak = state.streak > 0 ? state.streak + 1 : 1;
-    state.heat += 14 + Math.min(10, (state.streak - 1) * 3);
-  } else if (r === 'lose') {
-    state.streak = state.streak < 0 ? state.streak - 1 : -1;
-    state.heat -= 14 + Math.min(10, (-state.streak - 1) * 3);
-  } else {
-    state.heat += state.heat > 0 ? -4 : state.heat < 0 ? 4 : 0;
-  }
-  state.heat = Math.max(-100, Math.min(100, state.heat));
-}
-
-export function StreakFlameBorder({
-  event,
-  storageKey = 'bj-streak-heat',
-}: {
-  event: StreakHeatEvent | null;
-  storageKey?: string;
-}) {
+export function StreakFlameBorder({ streak }: { streak: number }) {
   const rimRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const stateRef = useRef({ heat: 0, streak: 0, shown: 0 });
-  const lastKeyRef = useRef<string | null>(null);
+  const targetRef = useRef(heatForStreak(streak));
+  const shownRef = useRef(heatForStreak(streak)); // first paint arrives settled
+  targetRef.current = heatForStreak(streak);
 
-  /* Restore the run once — the border keeps telling yesterday's story. */
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem(storageKey);
-      if (raw) {
-        const s = JSON.parse(raw);
-        if (Number.isFinite(s.heat)) stateRef.current.heat = Math.max(-100, Math.min(100, s.heat));
-        if (Number.isFinite(s.streak)) stateRef.current.streak = s.streak;
-        stateRef.current.shown = stateRef.current.heat; // arrive already settled
-      }
-    } catch { /* fresh run */ }
-  }, [storageKey]);
-
-  /* Apply each settled hand exactly once. */
-  useEffect(() => {
-    if (!event || event.key === lastKeyRef.current) return;
-    lastKeyRef.current = event.key;
-    applyHeatResult(stateRef.current, event.result);
-    try {
-      localStorage.setItem(storageKey, JSON.stringify({
-        heat: stateRef.current.heat,
-        streak: stateRef.current.streak,
-      }));
-    } catch { /* storage full/blocked — cosmetic only */ }
-  }, [event, storageKey]);
-
-  /* The drift + paint loop, straight from the lab. */
+  /* The drift + paint loop, straight from the lab (hot branch only). */
   useEffect(() => {
     const rim = rimRef.current;
     const cv = canvasRef.current;
@@ -144,7 +104,7 @@ export function StreakFlameBorder({
     resize();
     window.addEventListener('resize', resize);
 
-    const spawn = (w: number, h: number, k: number, hot: boolean) => {
+    const spawn = (w: number, h: number, k: number) => {
       if (reduced || k < 3 || parts.length >= MAX_PARTS) return;
       if (Math.random() > 0.05 * (k - 2.6)) return;
       const edge = Math.random();
@@ -156,44 +116,44 @@ export function StreakFlameBorder({
       parts.push({
         x, y,
         vx: (Math.random() - 0.5) * 0.25,
-        vy: hot ? -(0.35 + Math.random() * 0.55) : (0.2 + Math.random() * 0.35),
+        vy: -(0.35 + Math.random() * 0.55),
         life: 0,
         speed: 0.006 + Math.random() * 0.006,
         r: 1 + Math.random() * 1.6,
-        cold: !hot,
         drift: Math.random() * Math.PI * 2,
       });
     };
 
     const loop = (ts: number) => {
-      const st = stateRef.current;
       const dt = Math.min(100, ts - lastTs);
       lastTs = ts;
-      st.shown += (st.heat - st.shown) * (1 - Math.exp(-dt / TAU_MS));
-      if (Math.abs(st.heat - st.shown) < 0.05) st.shown = st.heat;
+      let shown = shownRef.current;
+      const target = targetRef.current;
+      shown += (target - shown) * (1 - Math.exp(-dt / TAU_MS));
+      if (Math.abs(target - shown) < 0.05) shown = target;
+      shownRef.current = shown;
 
-      const { c, c2 } = rampAt(st.shown);
-      const t = Math.min(1, Math.abs(st.shown) / 100);
+      const { c, c2 } = rampAt(shown);
+      const t = Math.min(1, shown / 100);
       const k = t * 5;
-      const hot = st.shown > 0;
 
       const S = rim.style;
-      /* Below ~14% intensity the rim dissolves — an even table stays clean. */
+      /* Below ~14% intensity the rim dissolves — no streak, clean table. */
       S.setProperty('--fl-alpha', String(Math.max(0, Math.min(1, (t - 0.14) / 0.1))));
       S.setProperty('--fl-a', rgba(c.map((v) => Math.round(v * 0.4)), 0.9));
       S.setProperty('--fl-b', rgba(c, 0.25 + t * 0.75));
       S.setProperty('--fl-c', rgba(c2, 0.2 + t * 0.7));
-      S.setProperty('--fl-speed', `${hot ? 15 - k * 2.4 : 26 - k * 2}s`);
+      S.setProperty('--fl-speed', `${15 - k * 2.4}s`);
       S.setProperty('--fl-blur', `${1 + k * 1.2}px`);
       S.setProperty('--fl-sat', `${1 + k * 0.14}`);
 
       const r = cv.getBoundingClientRect();
       const w = r.width, h = r.height;
       ctx.clearRect(0, 0, w, h);
-      spawn(w, h, k, hot);
+      spawn(w, h, k);
       for (const p of parts) {
         p.drift += 0.025;
-        p.x += p.vx + Math.sin(p.drift) * (p.cold ? 0.3 : 0.12);
+        p.x += p.vx + Math.sin(p.drift) * 0.12;
         p.y += p.vy;
         p.life += p.speed;
       }
@@ -201,27 +161,14 @@ export function StreakFlameBorder({
       for (const p of parts) {
         const env = Math.min(1, p.life * 4, (1 - p.life) * 2.2);
         ctx.globalAlpha = Math.max(0, env) * 0.6;
-        if (p.cold) {
-          ctx.strokeStyle = rgba(c2, 1);
-          ctx.lineWidth = 0.8;
-          const s = p.r * 2;
-          ctx.beginPath();
-          for (let a = 0; a < 6; a++) {
-            const th = (a / 6) * Math.PI * 2 + p.drift * 0.2;
-            ctx.moveTo(p.x, p.y);
-            ctx.lineTo(p.x + Math.cos(th) * s, p.y + Math.sin(th) * s);
-          }
-          ctx.stroke();
-        } else {
-          const g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.r * 2.6);
-          g.addColorStop(0, rgba(c2, 1));
-          g.addColorStop(0.4, rgba(c, 0.85));
-          g.addColorStop(1, 'rgba(0,0,0,0)');
-          ctx.fillStyle = g;
-          ctx.beginPath();
-          ctx.arc(p.x, p.y, p.r * 2.6, 0, Math.PI * 2);
-          ctx.fill();
-        }
+        const g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.r * 2.6);
+        g.addColorStop(0, rgba(c2, 1));
+        g.addColorStop(0.4, rgba(c, 0.85));
+        g.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.r * 2.6, 0, Math.PI * 2);
+        ctx.fill();
       }
       ctx.globalAlpha = 1;
       raf = requestAnimationFrame(loop);
@@ -286,5 +233,91 @@ export function StreakFlameBorder({
         }
       `}</style>
     </>
+  );
+}
+
+/**
+ * StreakChainMeter — the pill that names the chain. Hidden until the first
+ * win; from the second win it shows the active bonus and what the next win
+ * pays; when a bonus lands it flashes the amount for a few seconds.
+ */
+export function StreakChainMeter({
+  streak,
+  ladder = STREAK_CHAIN_LADDER,
+  bonusFx,
+}: {
+  streak: number;
+  ladder?: ReadonlyArray<{ wins: number; pct: number }>;
+  /** Set when a chain bonus just paid — flashes then yields to the meter line. */
+  bonusFx?: { pct: number; amountMorbius: number; key: string } | null;
+}) {
+  const activePct = chainPctForStreak(streak, ladder);
+  const nextPct = chainPctForStreak(streak + 1, ladder);
+  if (streak < 1) return null;
+
+  const heat = heatForStreak(streak);
+  const { c } = rampAt(heat);
+  const showBonus = !!bonusFx && bonusFx.amountMorbius > 0;
+
+  return (
+    <div className="bj-chain-meter" style={{ ['--chain-c' as string]: rgba(c, 1) }}>
+      <span className="bj-chain-flame" aria-hidden>🔥</span>
+      <span className="bj-chain-text">
+        {showBonus ? (
+          <span key={bonusFx!.key} className="bj-chain-bonus">
+            CHAIN +{bonusFx!.pct}% · +{bonusFx!.amountMorbius.toLocaleString()} MORBIUS
+          </span>
+        ) : (
+          <>
+            <b>×{streak} STREAK</b>
+            {activePct > 0 && <span className="bj-chain-sub"> · chain +{activePct}%</span>}
+            {nextPct > 0 && <span className="bj-chain-sub"> · next win +{nextPct}%</span>}
+          </>
+        )}
+      </span>
+      <style jsx global>{`
+        .bj-chain-meter {
+          position: absolute;
+          top: 8px;
+          left: 50%;
+          transform: translateX(-50%);
+          z-index: 40;
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          padding: 4px 12px;
+          border-radius: 999px;
+          background: linear-gradient(145deg, rgba(12, 14, 18, 0.88), rgba(28, 24, 16, 0.82));
+          border: 1px solid color-mix(in srgb, var(--chain-c, #f59e0b) 45%, transparent);
+          box-shadow:
+            0 2px 10px rgba(0, 0, 0, 0.55),
+            0 0 14px color-mix(in srgb, var(--chain-c, #f59e0b) 30%, transparent);
+          pointer-events: none;
+          animation: bjChainIn 0.45s cubic-bezier(0.2, 1.4, 0.4, 1);
+        }
+        @keyframes bjChainIn {
+          from { transform: translateX(-50%) translateY(-8px) scale(0.85); opacity: 0; }
+          to   { transform: translateX(-50%) translateY(0) scale(1); opacity: 1; }
+        }
+        .bj-chain-flame { font-size: 13px; line-height: 1; filter: drop-shadow(0 0 4px rgba(249, 115, 22, 0.6)); }
+        .bj-chain-text {
+          font-size: 11px;
+          font-weight: 700;
+          letter-spacing: 0.06em;
+          color: #fde68a;
+          text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
+          white-space: nowrap;
+        }
+        .bj-chain-sub { color: #d6d3d1; font-weight: 600; }
+        .bj-chain-bonus {
+          color: #fbbf24;
+          animation: bjChainBonusPulse 0.9s ease-in-out infinite alternate;
+        }
+        @keyframes bjChainBonusPulse {
+          from { text-shadow: 0 0 6px rgba(251, 191, 36, 0.4); }
+          to   { text-shadow: 0 0 14px rgba(251, 191, 36, 0.9); }
+        }
+      `}</style>
+    </div>
   );
 }

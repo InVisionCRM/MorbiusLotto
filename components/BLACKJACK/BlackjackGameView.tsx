@@ -1,6 +1,6 @@
 'use client';
 
-import { useLayoutEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react';
+import { useLayoutEffect, useState, type CSSProperties, type ReactNode } from 'react';
 import { getApiUrlOptional, getWebSocketUrlOptional } from '@/lib/api-urls';
 import { GameState, Action } from '@/app/BLACKJACK/types';
 import { TOURNAMENT_CONFIG } from '@/hooks/use-tournament';
@@ -111,6 +111,10 @@ interface BlackjackGameViewProps {
   };
   /** Voice tutorial MP4 — "How it works" on table when speech UI is shown */
   voiceTutorialVideoUrl?: string;
+  /** Win-streak chain (server-authoritative, real-money solo only). */
+  winStreak?: number;
+  streakLadder?: ReadonlyArray<{ wins: number; pct: number }>;
+  streakBonusFx?: { pct: number; amountMorbius: number; key: string } | null;
 }
 
 export function BlackjackGameView(props: BlackjackGameViewProps) {
@@ -196,6 +200,9 @@ export function BlackjackGameView(props: BlackjackGameViewProps) {
     betLimits,
     speech,
     voiceTutorialVideoUrl,
+    winStreak = 0,
+    streakLadder,
+    streakBonusFx = null,
   } = props;
 
   const [provablyFairOpen, setProvablyFairOpen] = useState(false);
@@ -228,19 +235,6 @@ export function BlackjackGameView(props: BlackjackGameViewProps) {
     mq.addEventListener('change', sync);
     return () => mq.removeEventListener('change', sync);
   }, []);
-
-  /* Living Flame streak rim: fold each settled hand into the persistent heat
-     model. Keyed by game id so re-renders never double-count a result. */
-  const heatEvent = useMemo(() => {
-    if (!currentGameResult || !currentGame?.id) return null;
-    const result =
-      currentGameResult === 'win' || currentGameResult === 'blackjack'
-        ? ('win' as const)
-        : currentGameResult === 'push'
-          ? ('push' as const)
-          : ('lose' as const);
-    return { result, key: String(currentGame.id) };
-  }, [currentGameResult, currentGame?.id]);
 
   const panelShell: CSSProperties = {
     background: 'linear-gradient(145deg, rgb(16, 26, 35), rgb(35, 36, 41))',
@@ -409,7 +403,9 @@ export function BlackjackGameView(props: BlackjackGameViewProps) {
               inTournament={tournament.tournamentState.inTournament}
               speechToggle={speech ? { listening: speech.listening, onToggle: speech.onToggle, transcript: speech.transcript, lastAction: speech.lastAction, pendingLabel: speech.pendingLabel } : undefined}
               voiceTutorialVideoUrl={voiceTutorialVideoUrl}
-              heatEvent={heatEvent}
+              winStreak={tournament.tournamentState.inTournament ? 0 : winStreak}
+              streakLadder={streakLadder}
+              streakBonusFx={tournament.tournamentState.inTournament ? null : streakBonusFx}
             />
 
             {tipAnimating && (

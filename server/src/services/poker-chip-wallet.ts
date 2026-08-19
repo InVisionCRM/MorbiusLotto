@@ -95,6 +95,10 @@ export type PokerChipLedgerReason =
   | 'blackjack_payout'     // blackjack win / push credit
   | 'blackjack_refund'     // blackjack bet returned (cancel / leave / AFK kick)
   | 'blackjack_tip'        // MP blackjack: tip routed to dealer/deployer
+  // Solo blackjack win-streak chain bonus (5/7/15/25/37/50% of bet at 2..7+
+  // consecutive wins). Deliberately NOT `*_payout`/`*_bet` suffixed: the gift
+  // must not offset VIP net-loss rakeback nor count as wager turnover.
+  | 'blackjack_streak_bonus'
   | 'deposit'              // on-chain MORBIUS deposit auto-converted to chips
   | 'withdrawal'           // chips auto-converted back to on-chain MORBIUS
   | 'migration'            // one-time players.balance (wei) → chip ledger move

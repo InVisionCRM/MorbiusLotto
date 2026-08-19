@@ -9,6 +9,7 @@ import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import cookieParser from 'cookie-parser';
 import { AuthService } from './services/auth.service';
+import { getBlackjackStreak, STREAK_BONUS_LADDER } from './services/blackjack-streak.service';
 import { registerAuthRoutes } from './routes/auth.routes';
 import { registerTelegramRoutes } from './routes/telegram.routes';
 import { registerVideoPokerRoutes } from './routes/video-poker.routes';
@@ -2061,6 +2062,23 @@ async function initializeServices() {
       } catch (error) {
         logger.error('Error fetching blackjack tables:', error);
         res.status(500).json({ error: 'Internal server error' });
+      }
+    });
+
+    // Public: current solo-blackjack win-streak chain for a wallet + the bonus
+    // ladder (page-load hydration for the felt's chain meter / flame border).
+    app.get('/api/blackjack/streak/:address', async (req, res) => {
+      try {
+        const streak = await getBlackjackStreak(dbService.getPool(), req.params.address);
+        sendJson(res, { streak, ladder: STREAK_BONUS_LADDER });
+      } catch (error) {
+        if (error instanceof Error && /Invalid wallet address/.test(error.message)) {
+          res.status(400).json({ error: 'Invalid wallet address' });
+          return;
+        }
+        // Pre-migration (table missing) or transient DB error: a cold meter
+        // is the right degradation for a cosmetic hydration read.
+        sendJson(res, { streak: 0, ladder: STREAK_BONUS_LADDER });
       }
     });
 

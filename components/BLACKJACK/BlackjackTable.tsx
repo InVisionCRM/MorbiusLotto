@@ -16,7 +16,7 @@ import { EncryptedText } from '@/components/ui/encrypted-text';
 import { useAccount } from 'wagmi';
 import { isAdminWallet } from '@/lib/admin';
 import { truncateTranscriptWords } from '@/lib/speech-display';
-import { StreakFlameBorder, type StreakHeatEvent } from './StreakFlameBorder';
+import { StreakFlameBorder, StreakChainMeter } from './StreakFlameBorder';
 import './bet-tier-animations.css';
 
 /**
@@ -130,8 +130,12 @@ interface BlackjackTableProps {
   speechToggle?: { listening: boolean; onToggle: () => void; transcript: string; lastAction: string | null; pendingLabel: string | null };
   /** Opens in new tab — "How it works" next to voice when speech is shown */
   voiceTutorialVideoUrl?: string;
-  /** Settled result of the latest hand — drives the Living Flame streak rim. */
-  heatEvent?: StreakHeatEvent | null;
+  /** Server-authoritative consecutive-win count — drives the flame rim + chain meter. */
+  winStreak?: number;
+  /** Chain ladder from the server (falls back to the built-in mirror). */
+  streakLadder?: ReadonlyArray<{ wins: number; pct: number }>;
+  /** Set when a chain bonus just paid — the meter flashes the amount. */
+  streakBonusFx?: { pct: number; amountMorbius: number; key: string } | null;
 }
 
 const BlackjackTable: React.FC<BlackjackTableProps> = ({
@@ -195,7 +199,9 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
   betLimits,
   speechToggle,
   voiceTutorialVideoUrl,
-  heatEvent = null,
+  winStreak = 0,
+  streakLadder,
+  streakBonusFx = null,
 }) => {
   // ── Admin layout test: cycle through preset hands ───────────────────────────
   const { address: adminCheckAddress } = useAccount();
@@ -857,8 +863,10 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
           : {}),
       } as React.CSSProperties}
     >
-      {/* Living Flame streak rim — hugs the table edge, heats up with wins, ices over on losses */}
-      <StreakFlameBorder event={heatEvent} />
+      {/* Win-streak chain: the flame rim heats with consecutive wins (hot only —
+          losses just gutter it out) and the meter names the active bonus %. */}
+      <StreakFlameBorder streak={winStreak} />
+      <StreakChainMeter streak={winStreak} ladder={streakLadder} bonusFx={streakBonusFx} />
 
       {/* Table surface: flex-1 with min height so table stays a good size */}
       <div className="flex-1 min-h-[420px] sm:min-h-[680px] relative">
