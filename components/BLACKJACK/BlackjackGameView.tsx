@@ -1,6 +1,6 @@
 'use client';
 
-import { useLayoutEffect, useState, type CSSProperties, type ReactNode } from 'react';
+import { useLayoutEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react';
 import { getApiUrlOptional, getWebSocketUrlOptional } from '@/lib/api-urls';
 import { GameState, Action } from '@/app/BLACKJACK/types';
 import { TOURNAMENT_CONFIG } from '@/hooks/use-tournament';
@@ -229,6 +229,19 @@ export function BlackjackGameView(props: BlackjackGameViewProps) {
     return () => mq.removeEventListener('change', sync);
   }, []);
 
+  /* Living Flame streak rim: fold each settled hand into the persistent heat
+     model. Keyed by game id so re-renders never double-count a result. */
+  const heatEvent = useMemo(() => {
+    if (!currentGameResult || !currentGame?.id) return null;
+    const result =
+      currentGameResult === 'win' || currentGameResult === 'blackjack'
+        ? ('win' as const)
+        : currentGameResult === 'push'
+          ? ('push' as const)
+          : ('lose' as const);
+    return { result, key: String(currentGame.id) };
+  }, [currentGameResult, currentGame?.id]);
+
   const panelShell: CSSProperties = {
     background: 'linear-gradient(145deg, rgb(16, 26, 35), rgb(35, 36, 41))',
     boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
@@ -396,6 +409,7 @@ export function BlackjackGameView(props: BlackjackGameViewProps) {
               inTournament={tournament.tournamentState.inTournament}
               speechToggle={speech ? { listening: speech.listening, onToggle: speech.onToggle, transcript: speech.transcript, lastAction: speech.lastAction, pendingLabel: speech.pendingLabel } : undefined}
               voiceTutorialVideoUrl={voiceTutorialVideoUrl}
+              heatEvent={heatEvent}
             />
 
             {tipAnimating && (
