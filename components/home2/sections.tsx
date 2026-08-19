@@ -562,10 +562,14 @@ export function TonightsTable({ cards }: { cards?: React.ReactNode }) {
 /* ────────────────────────────────────────────────────────────
    6. THE FLOOR — unified 3D scene cards + filter pills
    ──────────────────────────────────────────────────────────── */
+type FloorFamily = 'blackjack' | 'poker' | 'table' | 'arcade';
+
 interface FloorGameEntry {
   key: string;
   name: string;
   cat: string;
+  family: FloorFamily;
+  addedAt: string;
   fontClass: string;
   nameSize: number;
   blurb: string;
@@ -576,16 +580,50 @@ interface FloorGameEntry {
   href: string;
 }
 
-const FLOOR_FILTERS = [
-  { f: 'all', label: 'All' },
-  { f: 'orig', label: 'Originals' },
-  { f: 'cards', label: 'Cards' },
-  { f: 'table', label: 'Table' },
+/* The floor is grouped by game family so it reads as a menu instead of a
+   34-card wall. 'all' shows every shelf with its heading; picking a family
+   shows just that shelf. Order runs card games first, then table, then the
+   originals — biggest draw to deepest cut. */
+const FLOOR_FAMILIES: { f: FloorFamily; label: string; sub: string }[] = [
+  { f: 'blackjack', label: 'Blackjack', sub: 'six ways to make 21' },
+  { f: 'poker', label: 'Poker', sub: "hold'em, stud & the dealer duels" },
+  { f: 'table', label: 'Casino Table', sub: 'the classics, one chip' },
+  { f: 'arcade', label: 'Arcade', sub: 'fast originals, instant settle' },
 ];
+
+const FLOOR_FILTERS: { f: string; label: string }[] = [
+  { f: 'all', label: 'All' },
+  ...FLOOR_FAMILIES.map((x) => ({ f: x.f as string, label: x.label })),
+];
+
+function FloorCard({ g }: { g: FloorGameEntry }) {
+  const style = (g.glow ? ({ '--glow': g.glow } as React.CSSProperties) : undefined);
+  return (
+    <Link href={g.href} className="scene-card" data-cat={g.cat} style={style}>
+      {g.badge && <span className={`badge ${g.badgeClass ?? 'new'}`}>{g.badge}</span>}
+      <div className="stage">
+        <g.Scene />
+      </div>
+      <div className="meta">
+        <div className={`name ${g.fontClass}`} style={{ fontSize: g.nameSize }}>
+          {g.name}
+        </div>
+        <div className="row">
+          <span className="st">{g.blurb}</span>
+        </div>
+      </div>
+    </Link>
+  );
+}
 
 export function TheFloor() {
   const [filter, setFilter] = useState('all');
   const games = FLOOR_GAMES as unknown as FloorGameEntry[];
+
+  const shelves = FLOOR_FAMILIES
+    .filter((fam) => filter === 'all' || filter === fam.f)
+    .map((fam) => ({ ...fam, games: games.filter((g) => g.family === fam.f) }))
+    .filter((shelf) => shelf.games.length > 0);
 
   return (
     <section className="zone">
@@ -607,31 +645,20 @@ export function TheFloor() {
           ))}
         </div>
       </div>
-      <div className="floor-grid" id="floorGrid">
-        {games.map((g) => {
-          const visible = filter === 'all' || g.cat === filter;
-          const style: React.CSSProperties = {
-            ...(g.glow ? ({ '--glow': g.glow } as React.CSSProperties) : {}),
-            ...(visible ? {} : { display: 'none' }),
-          };
-          return (
-            <Link key={g.key} href={g.href} className="scene-card" data-cat={g.cat} style={style}>
-              {g.badge && <span className={`badge ${g.badgeClass ?? 'new'}`}>{g.badge}</span>}
-              <div className="stage">
-                <g.Scene />
-              </div>
-              <div className="meta">
-                <div className={`name ${g.fontClass}`} style={{ fontSize: g.nameSize }}>
-                  {g.name}
-                </div>
-                <div className="row">
-                  <span className="st">{g.blurb}</span>
-                </div>
-              </div>
-            </Link>
-          );
-        })}
-      </div>
+      {shelves.map((shelf) => (
+        <div key={shelf.f} className="floor-shelf">
+          <div className="shelf-head">
+            <h3>{shelf.label}</h3>
+            <span className="shelf-sub">{shelf.sub}</span>
+            <span className="shelf-count">{shelf.games.length}</span>
+          </div>
+          <div className="floor-grid">
+            {shelf.games.map((g) => (
+              <FloorCard key={g.key} g={g} />
+            ))}
+          </div>
+        </div>
+      ))}
     </section>
   );
 }

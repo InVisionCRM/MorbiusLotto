@@ -20,6 +20,7 @@ import {
   type WeeklyDropWinner,
 } from '@/components/home2/sections'
 import { HeroCarousel } from '@/components/home2/hero-carousel'
+import { NewGames } from '@/components/home2/new-games'
 import { HomeSidebar, ChipDock, MobileTopBar } from '@/components/home2/nav'
 import { GameLauncherSheet } from '@/components/home2/game-launcher-sheet'
 import { WhatsNewSplash } from '@/components/DevLog/WhatsNewSplash'
@@ -290,6 +291,8 @@ export default function Home2Client() {
               onDashboard={onDashboard}
             />
           ) : null}
+          {/* Newest tables ride above the floor so returning players see what changed. */}
+          <NewGames />
           <TheFloor />
           <SlotForge />
           {weeklyDrop ? (

@@ -1091,6 +1091,10 @@ export type FloorGame = {
   blurb: string;
   Scene: () => React.ReactElement;
   glow: string;
+  /** Which shelf the card sits on when the floor is grouped by family. */
+  family: "blackjack" | "poker" | "table" | "arcade";
+  /** Date the game first shipped (git add-date of its route) — orders "just landed". */
+  addedAt: string;
   /** Route the card links to (real app game route). */
   href: string;
   badge?: string;
@@ -1098,37 +1102,37 @@ export type FloorGame = {
 };
 
 export const FLOOR_GAMES: FloorGame[] = [
-  { key: "blackjack", name: "BLACKJACK", cat: "cards", fontClass: "f-titan", nameSize: "14px", blurb: "Single + multiplayer", Scene: BlackjackScene, glow: "rgba(251,191,36,.18)", href: "/BLACKJACK", badge: "3 SEATS LIVE", badgeClass: "new" },
-  { key: "poker", name: "POKER", cat: "cards", fontClass: "f-bowlby", nameSize: "13px", blurb: "Hold'em cash tables", Scene: PokerScene, glow: "rgba(167,139,250,.2)", href: "/poker", badge: "2 TABLES", badgeClass: "new" },
-  { key: "keno", name: "KENO", cat: "orig", fontClass: "f-lilita", nameSize: "15px", blurb: "Pick 10 · ×100 top hit", Scene: KenoScene, glow: "rgba(34,211,238,.2)", href: "/keno2" },
-  { key: "dice", name: "DICE", cat: "orig", fontClass: "f-titan", nameSize: "14px", blurb: "98% RTP · instant", Scene: DiceScene, glow: "rgba(251,191,36,.18)", href: "/dice2" },
-  { key: "roulette", name: "ROULETTE", cat: "table", fontClass: "f-bowlby", nameSize: "12px", blurb: "European single-zero", Scene: RouletteScene, glow: "rgba(251,113,133,.18)", href: "/roulette2" },
-  { key: "dicex2", name: "DICE X2", cat: "orig", fontClass: "f-titan", nameSize: "13px", blurb: "Double dice, double roll", Scene: DiceX2Scene, glow: "rgba(167,139,250,.22)", href: "/dicex2" },
-  { key: "towers", name: "TOWERS", cat: "orig", fontClass: "f-lilita", nameSize: "15px", blurb: "Climb · cash out any floor", Scene: TowersScene, glow: "rgba(167,139,250,.2)", href: "/towers" },
-  { key: "limbo", name: "LIMBO", cat: "orig", fontClass: "f-bungee", nameSize: "13px", blurb: "Target any multiplier", Scene: LimboScene, glow: "rgba(52,211,153,.2)", href: "/limbo2" },
-  { key: "baccarat", name: "BACCARAT", cat: "table", fontClass: "f-bowlby", nameSize: "12px", blurb: "Player · Banker · Tie", Scene: BaccaratScene, glow: "rgba(251,191,36,.16)", href: "/baccarat" },
-  { key: "videopoker", name: "VIDEO POKER", cat: "cards", fontClass: "f-bungee", nameSize: "11px", blurb: "Jacks or better", Scene: VideoPokerScene, glow: "rgba(34,211,238,.18)", href: "/video-poker" },
-  { key: "craps", name: "CRAPS", cat: "table", fontClass: "f-titan", nameSize: "14px", blurb: "Roll the bones", Scene: CrapsScene, glow: "rgba(251,113,133,.18)", href: "/craps" },
-  { key: "crapsmulti", name: "CRAPS TABLE", cat: "table", fontClass: "f-titan", nameSize: "12px", blurb: "One shooter, whole rail", Scene: CrapsMultiScene, glow: "rgba(134,239,172,.2)", href: "/craps/multi", badge: "MULTIPLAYER", badgeClass: "new" },
-  { key: "ultimateholdem", name: "ULTIMATE", cat: "cards", fontClass: "f-bowlby", nameSize: "12px", blurb: "Hold'em vs the dealer", Scene: UltimateHoldemScene, glow: "rgba(167,139,250,.2)", href: "/ultimate-holdem", badge: "NEW", badgeClass: "new" },
-  { key: "uthmulti", name: "HOLD'EM TABLE", cat: "cards", fontClass: "f-bowlby", nameSize: "10px", blurb: "One board, every seat", Scene: UltimateHoldemScene, glow: "rgba(167,139,250,.22)", href: "/ultimate-holdem/multi", badge: "MULTIPLAYER", badgeClass: "new" },
-  { key: "roulettemulti", name: "ROULETTE TABLE", cat: "table", fontClass: "f-bowlby", nameSize: "10px", blurb: "One wheel, every seat", Scene: RouletteMultiScene, glow: "rgba(34,211,238,.22)", href: "/roulette/multi", badge: "MULTIPLAYER", badgeClass: "new" },
-  { key: "caribbeanstud", name: "CARIB STUD", cat: "cards", fontClass: "f-lilita", nameSize: "12px", blurb: "Five cards, one call", Scene: CaribbeanStudScene, glow: "rgba(56,189,248,.2)", href: "/caribbean-stud", badge: "NEW", badgeClass: "new" },
-  { key: "spanish21", name: "SPANISH 21", cat: "cards", fontClass: "f-titan", nameSize: "12px", blurb: "No tens, your 21 wins", Scene: Spanish21Scene, glow: "rgba(251,113,133,.2)", href: "/spanish-21", badge: "NEW", badgeClass: "new" },
-  { key: "doubleexposure", name: "DBL EXPOSURE", cat: "cards", fontClass: "f-bungee", nameSize: "10px", blurb: "Both dealer cards up", Scene: DoubleExposureScene, glow: "rgba(251,191,36,.2)", href: "/double-exposure", badge: "NEW", badgeClass: "new" },
-  { key: "pontoon", name: "PONTOON", cat: "cards", fontClass: "f-lilita", nameSize: "13px", blurb: "Twist, stick, five-card trick", Scene: PontoonScene, glow: "rgba(56,189,248,.2)", href: "/pontoon", badge: "NEW", badgeClass: "new" },
-  { key: "freebet", name: "FREE BET", cat: "cards", fontClass: "f-titan", nameSize: "13px", blurb: "House buys your double", Scene: FreeBetScene, glow: "rgba(134,239,172,.2)", href: "/free-bet-blackjack", badge: "NEW", badgeClass: "new" },
-  { key: "bjswitch", name: "BJ SWITCH", cat: "cards", fontClass: "f-bowlby", nameSize: "12px", blurb: "Two hands, trade a card", Scene: BlackjackSwitchScene, glow: "rgba(167,139,250,.2)", href: "/blackjack-switch", badge: "NEW", badgeClass: "new" },
-  { key: "dragontiger", name: "DRAGON TIGER", cat: "table", fontClass: "f-bowlby", nameSize: "11px", blurb: "One card. One winner.", Scene: DragonTigerScene, glow: "rgba(251,146,60,.2)", href: "/dragon-tiger" },
-  { key: "andarbahar", name: "ANDAR BAHAR", cat: "table", fontClass: "f-lilita", nameSize: "13px", blurb: "Pick a side", Scene: AndarBaharScene, glow: "rgba(167,139,250,.18)", href: "/andar-bahar" },
-  { key: "pachinko", name: "PACHINKO", cat: "orig", fontClass: "f-bungee", nameSize: "12px", blurb: "Neon pin storm", Scene: PachinkoScene, glow: "rgba(244,114,182,.2)", href: "/pachinko" },
-  { key: "cascade", name: "CASCADE", cat: "orig", fontClass: "f-lilita", nameSize: "14px", blurb: "Chain wins fall", Scene: CascadeScene, glow: "rgba(45,212,191,.2)", href: "/cascade" },
-  { key: "firewalk", name: "FIREWALK", cat: "orig", fontClass: "f-titan", nameSize: "13px", blurb: "Every step raises the heat", Scene: FirewalkScene, glow: "rgba(251,146,60,.24)", href: "/firewalk" },
-  { key: "heist", name: "HEIST", cat: "orig", fontClass: "f-bowlby", nameSize: "13px", blurb: "Crack the vault", Scene: HeistScene, glow: "rgba(251,191,36,.22)", href: "/heist" },
-  { key: "threecard", name: "THREE CARD", cat: "cards", fontClass: "f-lilita", nameSize: "13px", blurb: "Poker at speed", Scene: ThreeCardScene, glow: "rgba(52,211,153,.18)", href: "/three-card-poker" },
-  { key: "paigow", name: "PAI GOW", cat: "cards", fontClass: "f-lilita", nameSize: "14px", blurb: "Two hands · beat both", Scene: PaiGowScene, glow: "rgba(34,211,238,.2)", href: "/pai-gow-poker" },
-  { key: "greeddice", name: "GREED DICE", cat: "orig", fontClass: "f-titan", nameSize: "12px", blurb: "Push your luck", Scene: GreedDiceScene, glow: "rgba(251,191,36,.22)", href: "/greed-dice" },
-  { key: "cipher", name: "CIPHER", cat: "orig", fontClass: "f-bungee", nameSize: "13px", blurb: "Break the code", Scene: CipherScene, glow: "rgba(52,211,153,.2)", href: "/cipher" },
-  { key: "hilo", name: "HI-LO", cat: "orig", fontClass: "f-lilita", nameSize: "14px", blurb: "Higher or lower", Scene: HiLoScene, glow: "rgba(34,211,238,.18)", href: "/hilo" },
-  { key: "chicken", name: "CHICKEN", cat: "orig", fontClass: "f-titan", nameSize: "13px", blurb: "Cross if you dare", Scene: ChickenScene, glow: "rgba(251,191,36,.18)", href: "/chicken" },
+  { key: "blackjack", name: "BLACKJACK", family: "blackjack", addedAt: "2026-07-22", cat: "cards", fontClass: "f-titan", nameSize: "14px", blurb: "Single + multiplayer", Scene: BlackjackScene, glow: "rgba(251,191,36,.18)", href: "/BLACKJACK", badge: "3 SEATS LIVE", badgeClass: "new" },
+  { key: "poker", name: "POKER", family: "poker", addedAt: "2026-07-22", cat: "cards", fontClass: "f-bowlby", nameSize: "13px", blurb: "Hold'em cash tables", Scene: PokerScene, glow: "rgba(167,139,250,.2)", href: "/poker", badge: "2 TABLES", badgeClass: "new" },
+  { key: "keno", name: "KENO", family: "arcade", addedAt: "2026-07-22", cat: "orig", fontClass: "f-lilita", nameSize: "15px", blurb: "Pick 10 · ×100 top hit", Scene: KenoScene, glow: "rgba(34,211,238,.2)", href: "/keno2" },
+  { key: "dice", name: "DICE", family: "arcade", addedAt: "2026-07-22", cat: "orig", fontClass: "f-titan", nameSize: "14px", blurb: "98% RTP · instant", Scene: DiceScene, glow: "rgba(251,191,36,.18)", href: "/dice2" },
+  { key: "roulette", name: "ROULETTE", family: "table", addedAt: "2026-07-22", cat: "table", fontClass: "f-bowlby", nameSize: "12px", blurb: "European single-zero", Scene: RouletteScene, glow: "rgba(251,113,133,.18)", href: "/roulette2" },
+  { key: "dicex2", name: "DICE X2", family: "arcade", addedAt: "2026-07-22", cat: "orig", fontClass: "f-titan", nameSize: "13px", blurb: "Double dice, double roll", Scene: DiceX2Scene, glow: "rgba(167,139,250,.22)", href: "/dicex2" },
+  { key: "towers", name: "TOWERS", family: "arcade", addedAt: "2026-07-22", cat: "orig", fontClass: "f-lilita", nameSize: "15px", blurb: "Climb · cash out any floor", Scene: TowersScene, glow: "rgba(167,139,250,.2)", href: "/towers" },
+  { key: "limbo", name: "LIMBO", family: "arcade", addedAt: "2026-07-22", cat: "orig", fontClass: "f-bungee", nameSize: "13px", blurb: "Target any multiplier", Scene: LimboScene, glow: "rgba(52,211,153,.2)", href: "/limbo2" },
+  { key: "baccarat", name: "BACCARAT", family: "table", addedAt: "2026-07-22", cat: "table", fontClass: "f-bowlby", nameSize: "12px", blurb: "Player · Banker · Tie", Scene: BaccaratScene, glow: "rgba(251,191,36,.16)", href: "/baccarat" },
+  { key: "videopoker", name: "VIDEO POKER", family: "poker", addedAt: "2026-07-22", cat: "cards", fontClass: "f-bungee", nameSize: "11px", blurb: "Jacks or better", Scene: VideoPokerScene, glow: "rgba(34,211,238,.18)", href: "/video-poker" },
+  { key: "craps", name: "CRAPS", family: "table", addedAt: "2026-07-22", cat: "table", fontClass: "f-titan", nameSize: "14px", blurb: "Roll the bones", Scene: CrapsScene, glow: "rgba(251,113,133,.18)", href: "/craps" },
+  { key: "crapsmulti", name: "CRAPS TABLE", family: "table", addedAt: "2026-08-05", cat: "table", fontClass: "f-titan", nameSize: "12px", blurb: "One shooter, whole rail", Scene: CrapsMultiScene, glow: "rgba(134,239,172,.2)", href: "/craps/multi", badge: "MULTIPLAYER", badgeClass: "new" },
+  { key: "ultimateholdem", name: "ULTIMATE", family: "poker", addedAt: "2026-08-05", cat: "cards", fontClass: "f-bowlby", nameSize: "12px", blurb: "Hold'em vs the dealer", Scene: UltimateHoldemScene, glow: "rgba(167,139,250,.2)", href: "/ultimate-holdem", badge: "NEW", badgeClass: "new" },
+  { key: "uthmulti", name: "HOLD'EM TABLE", family: "poker", addedAt: "2026-08-06", cat: "cards", fontClass: "f-bowlby", nameSize: "10px", blurb: "One board, every seat", Scene: UltimateHoldemScene, glow: "rgba(167,139,250,.22)", href: "/ultimate-holdem/multi", badge: "MULTIPLAYER", badgeClass: "new" },
+  { key: "roulettemulti", name: "ROULETTE TABLE", family: "table", addedAt: "2026-08-07", cat: "table", fontClass: "f-bowlby", nameSize: "10px", blurb: "One wheel, every seat", Scene: RouletteMultiScene, glow: "rgba(34,211,238,.22)", href: "/roulette/multi", badge: "MULTIPLAYER", badgeClass: "new" },
+  { key: "caribbeanstud", name: "CARIB STUD", family: "poker", addedAt: "2026-08-05", cat: "cards", fontClass: "f-lilita", nameSize: "12px", blurb: "Five cards, one call", Scene: CaribbeanStudScene, glow: "rgba(56,189,248,.2)", href: "/caribbean-stud", badge: "NEW", badgeClass: "new" },
+  { key: "spanish21", name: "SPANISH 21", family: "blackjack", addedAt: "2026-08-05", cat: "cards", fontClass: "f-titan", nameSize: "12px", blurb: "No tens, your 21 wins", Scene: Spanish21Scene, glow: "rgba(251,113,133,.2)", href: "/spanish-21", badge: "NEW", badgeClass: "new" },
+  { key: "doubleexposure", name: "DBL EXPOSURE", family: "blackjack", addedAt: "2026-08-05", cat: "cards", fontClass: "f-bungee", nameSize: "10px", blurb: "Both dealer cards up", Scene: DoubleExposureScene, glow: "rgba(251,191,36,.2)", href: "/double-exposure", badge: "NEW", badgeClass: "new" },
+  { key: "pontoon", name: "PONTOON", family: "blackjack", addedAt: "2026-08-05", cat: "cards", fontClass: "f-lilita", nameSize: "13px", blurb: "Twist, stick, five-card trick", Scene: PontoonScene, glow: "rgba(56,189,248,.2)", href: "/pontoon", badge: "NEW", badgeClass: "new" },
+  { key: "freebet", name: "FREE BET", family: "blackjack", addedAt: "2026-08-05", cat: "cards", fontClass: "f-titan", nameSize: "13px", blurb: "House buys your double", Scene: FreeBetScene, glow: "rgba(134,239,172,.2)", href: "/free-bet-blackjack", badge: "NEW", badgeClass: "new" },
+  { key: "bjswitch", name: "BJ SWITCH", family: "blackjack", addedAt: "2026-08-05", cat: "cards", fontClass: "f-bowlby", nameSize: "12px", blurb: "Two hands, trade a card", Scene: BlackjackSwitchScene, glow: "rgba(167,139,250,.2)", href: "/blackjack-switch", badge: "NEW", badgeClass: "new" },
+  { key: "dragontiger", name: "DRAGON TIGER", family: "table", addedAt: "2026-07-22", cat: "table", fontClass: "f-bowlby", nameSize: "11px", blurb: "One card. One winner.", Scene: DragonTigerScene, glow: "rgba(251,146,60,.2)", href: "/dragon-tiger" },
+  { key: "andarbahar", name: "ANDAR BAHAR", family: "table", addedAt: "2026-07-22", cat: "table", fontClass: "f-lilita", nameSize: "13px", blurb: "Pick a side", Scene: AndarBaharScene, glow: "rgba(167,139,250,.18)", href: "/andar-bahar" },
+  { key: "pachinko", name: "PACHINKO", family: "arcade", addedAt: "2026-07-22", cat: "orig", fontClass: "f-bungee", nameSize: "12px", blurb: "Neon pin storm", Scene: PachinkoScene, glow: "rgba(244,114,182,.2)", href: "/pachinko" },
+  { key: "cascade", name: "CASCADE", family: "arcade", addedAt: "2026-07-22", cat: "orig", fontClass: "f-lilita", nameSize: "14px", blurb: "Chain wins fall", Scene: CascadeScene, glow: "rgba(45,212,191,.2)", href: "/cascade" },
+  { key: "firewalk", name: "FIREWALK", family: "arcade", addedAt: "2026-07-22", cat: "orig", fontClass: "f-titan", nameSize: "13px", blurb: "Every step raises the heat", Scene: FirewalkScene, glow: "rgba(251,146,60,.24)", href: "/firewalk" },
+  { key: "heist", name: "HEIST", family: "arcade", addedAt: "2026-07-22", cat: "orig", fontClass: "f-bowlby", nameSize: "13px", blurb: "Crack the vault", Scene: HeistScene, glow: "rgba(251,191,36,.22)", href: "/heist" },
+  { key: "threecard", name: "THREE CARD", family: "poker", addedAt: "2026-07-22", cat: "cards", fontClass: "f-lilita", nameSize: "13px", blurb: "Poker at speed", Scene: ThreeCardScene, glow: "rgba(52,211,153,.18)", href: "/three-card-poker" },
+  { key: "paigow", name: "PAI GOW", family: "poker", addedAt: "2026-07-22", cat: "cards", fontClass: "f-lilita", nameSize: "14px", blurb: "Two hands · beat both", Scene: PaiGowScene, glow: "rgba(34,211,238,.2)", href: "/pai-gow-poker" },
+  { key: "greeddice", name: "GREED DICE", family: "arcade", addedAt: "2026-07-22", cat: "orig", fontClass: "f-titan", nameSize: "12px", blurb: "Push your luck", Scene: GreedDiceScene, glow: "rgba(251,191,36,.22)", href: "/greed-dice" },
+  { key: "cipher", name: "CIPHER", family: "arcade", addedAt: "2026-07-22", cat: "orig", fontClass: "f-bungee", nameSize: "13px", blurb: "Break the code", Scene: CipherScene, glow: "rgba(52,211,153,.2)", href: "/cipher" },
+  { key: "hilo", name: "HI-LO", family: "arcade", addedAt: "2026-07-22", cat: "orig", fontClass: "f-lilita", nameSize: "14px", blurb: "Higher or lower", Scene: HiLoScene, glow: "rgba(34,211,238,.18)", href: "/hilo" },
+  { key: "chicken", name: "CHICKEN", family: "arcade", addedAt: "2026-07-22", cat: "orig", fontClass: "f-titan", nameSize: "13px", blurb: "Cross if you dare", Scene: ChickenScene, glow: "rgba(251,191,36,.18)", href: "/chicken" },
 ];
