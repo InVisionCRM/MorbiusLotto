@@ -716,6 +716,48 @@ export default function BlackjackPage() {
   // Game result for chip animations
   const [currentGameResult, setCurrentGameResult] = useState<'win' | 'loss' | 'push' | 'blackjack' | 'dealer_blackjack' | null>(null);
 
+  // Win-streak chain (server-authoritative). The settled payload's streak is
+  // held pending and only shown once the result reveal lands, so the flame
+  // never spoils the dealer's cards.
+  const [visibleStreak, setVisibleStreak] = useState(0);
+  const [streakLadder, setStreakLadder] = useState<Array<{ wins: number; pct: number }> | undefined>(undefined);
+  const [streakBonusFx, setStreakBonusFx] = useState<{ pct: number; amountMorbius: number; key: string } | null>(null);
+  const pendingStreakRef = useRef<{ streak: number; bonusWei: bigint; bonusPct: number; gameId: string } | null>(null);
+  const handleStreakInfo = useCallback((info: { streak: number; bonusWei: bigint; bonusPct: number; gameId: string }) => {
+    pendingStreakRef.current = info;
+  }, []);
+  useEffect(() => {
+    if (!currentGameResult) return;
+    const pending = pendingStreakRef.current;
+    if (!pending) return;
+    pendingStreakRef.current = null;
+    setVisibleStreak(pending.streak);
+    if (pending.bonusPct > 0 && pending.bonusWei > BigInt(0)) {
+      setStreakBonusFx({
+        pct: pending.bonusPct,
+        amountMorbius: Math.floor(Number(formatEther(pending.bonusWei))),
+        key: pending.gameId,
+      });
+      const t = setTimeout(() => setStreakBonusFx(null), 4500);
+      return () => clearTimeout(t);
+    }
+  }, [currentGameResult]);
+  // Hydrate the chain on connect so a hot run survives a reload.
+  useEffect(() => {
+    const base = getApiUrlOptional();
+    if (!base || !address) { setVisibleStreak(0); return; }
+    let cancelled = false;
+    fetch(`${base}/api/blackjack/streak/${address.toLowerCase()}`)
+      .then((r) => r.json())
+      .then((d) => {
+        if (cancelled) return;
+        if (Number.isFinite(d?.streak)) setVisibleStreak(Number(d.streak));
+        if (Array.isArray(d?.ladder) && d.ladder.length > 0) setStreakLadder(d.ladder);
+      })
+      .catch(() => { /* cosmetic hydration only */ });
+    return () => { cancelled = true; };
+  }, [address]);
+
   // Greedy MORBIUS chip stack for table animation. Must include 1 so min-bet sizes (e.g. 1) get a non-empty stack;
   // otherwise DEAL stays disabled (action bar requires chipStack.length > 0 when rebet is available).
   const MORBIUS_CHIP_DENOMINATIONS = [50000, 25000, 5000, 500, 100, 50, 25, 10, 5, 1];
@@ -1755,6 +1797,7 @@ export default function BlackjackPage() {
     setNewCardIndices,
     createCard,
     calculateHandTotal,
+    onStreakInfo: handleStreakInfo,
   });
 
   const handleCardsClearComplete = useCallback(() => {
@@ -2445,6 +2488,9 @@ export default function BlackjackPage() {
           handleDealClick={handleDealClick}
           handleDealerRevealComplete={handleDealerRevealComplete}
           currentGameResult={currentGameResult}
+          winStreak={visibleStreak}
+          streakLadder={streakLadder}
+          streakBonusFx={streakBonusFx}
           handleChipAnimationComplete={handleChipAnimationComplete}
           handleDoubleDownChips={handleDoubleDownChips}
           handleSplitChips={handleSplitChips}

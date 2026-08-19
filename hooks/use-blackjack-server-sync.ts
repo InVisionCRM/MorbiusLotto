@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback } from 'react';
+import { useCallback, useRef } from 'react';
 import { toBigIntSafe } from '@/lib/safe-bigint';
 import { ANIMATION_TIMINGS } from '@/app/BLACKJACK/constants';
 import type { Card, Hand, GameStateUI } from '@/app/BLACKJACK/types';
@@ -16,6 +16,8 @@ interface UseBlackjackServerSyncOptions {
   setNewCardIndices: React.Dispatch<React.SetStateAction<{ player: Set<number>; dealer: Set<number> }>>;
   createCard: (value: number, suit: string, hidden?: boolean) => Card;
   calculateHandTotal: (cards: Card[]) => { total: number; hasAce: boolean };
+  /** Fired once per settled game that carried win-streak chain fields. */
+  onStreakInfo?: (info: { streak: number; bonusWei: bigint; bonusPct: number; gameId: string }) => void;
 }
 
 export function useBlackjackServerSync({
@@ -28,12 +30,25 @@ export function useBlackjackServerSync({
   setNewCardIndices,
   createCard,
   calculateHandTotal,
+  onStreakInfo,
 }: UseBlackjackServerSyncOptions) {
+  // Phased deals replay the same payload several times — report its streak once.
+  const lastStreakGameIdRef = useRef<string | null>(null);
   const updateGameStateFromServerCore = useCallback((serverGameState: any, maxPlayerCards?: number, maxDealerCards?: number) => {
     if (!address) return null;
 
     const gameId = String(serverGameState.gameId || serverGameState.id || '');
     const status = String(serverGameState.status || 'waiting');
+
+    if (onStreakInfo && serverGameState.winStreak !== undefined && gameId && lastStreakGameIdRef.current !== gameId) {
+      lastStreakGameIdRef.current = gameId;
+      onStreakInfo({
+        streak: Number(serverGameState.winStreak),
+        bonusWei: serverGameState.streakBonusWei != null ? toBigIntSafe(serverGameState.streakBonusWei) : BigInt(0),
+        bonusPct: Number(serverGameState.streakBonusPct ?? 0),
+        gameId,
+      });
+    }
     const currentHandIndex = Number(serverGameState.currentHandIndex ?? 0);
 
     const suits: Array<Card['suit']> = ['hearts', 'diamonds', 'clubs', 'spades'];
@@ -224,6 +239,7 @@ export function useBlackjackServerSync({
     calculateHandTotal,
     clientSeed,
     createCard,
+    onStreakInfo,
     playSfx,
     prevDealerCardCountRef,
     prevPlayerCardCountRef,

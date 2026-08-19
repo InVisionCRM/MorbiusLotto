@@ -10,6 +10,7 @@ import {
   recordGameOutcome,
 } from './wheel-spin-wallet';
 import { POKER_CHIP_WEI } from '../lib/poker-chip-scale';
+import { settleBlackjackStreak, type StreakSettleResult } from './blackjack-streak.service';
 
 function formatWei(w: bigint): string {
   return Number(formatEther(w)).toLocaleString(undefined, { maximumFractionDigits: 2 });
@@ -100,6 +101,12 @@ export interface GameState {
   perfectPairsBetAmount?: bigint;
   /** RNG version: 2 = Fisher-Yates 52-card deck (card indices 0-51). */
   rngVersion?: number;
+  /** Win-streak chain: consecutive wins AFTER this hand (settled real-money games only). */
+  winStreak?: number;
+  /** Chain bonus paid on this hand in wei (present only when a bonus landed). */
+  streakBonusWei?: bigint;
+  /** Ladder % the chain bonus used (5/7/15/25/37/50). */
+  streakBonusPct?: number;
 }
 
 export interface CreateGameRequest {
@@ -397,7 +404,21 @@ export class BlackjackGameService {
       await this.dbService.updateSessionStats(session.id, totalStake, 0n, true);
 
       // If the game completed immediately, record profit + credit payout (main + Perfect Pairs) + reveal server seed
+      let streakInfo: StreakSettleResult | null = null;
       if (result) {
+        // Win-streak chain: fold the settled result in (blackjack counts as a
+        // win). Non-fatal — the hand itself is already settled.
+        try {
+          streakInfo = await settleBlackjackStreak(
+            this.dbService.getPool(),
+            request.playerAddress,
+            result === 'blackjack' ? 'win' : result,
+            request.betAmount,
+            game.id,
+          );
+        } catch (e) {
+          logger.warn('streak settle failed (instant blackjack completion)', { gameId: game.id, error: (e as Error).message });
+        }
         if (immediatePayout > 0n) {
           const feeApplied = await this.creditPayoutWithFee(request.playerAddress, totalStake, immediatePayout);
           const profit = immediatePayout > totalStake ? immediatePayout - totalStake : 0n;
@@ -438,6 +459,9 @@ export class BlackjackGameService {
         perfectPairsPayout: perfectPairsPayout > 0n ? perfectPairsPayout : undefined,
         perfectPairsBetAmount: perfectPairsBet > 0n ? perfectPairsBet : undefined,
         rngVersion: 2,
+        winStreak: streakInfo?.streak,
+        streakBonusWei: streakInfo && streakInfo.bonusChips > 0n ? streakInfo.bonusChips * POKER_CHIP_WEI : undefined,
+        streakBonusPct: streakInfo && streakInfo.bonusPct > 0 ? streakInfo.bonusPct : undefined,
       };
 
       logger.info('Game created', {
@@ -1024,6 +1048,25 @@ export class BlackjackGameService {
       }
     }
 
+    // Win-streak chain: fold the settled result in. Tournament games store
+    // total_bet_amount = 0 and never touch the chain. Non-fatal — the hand
+    // itself is already settled.
+    let streakInfo: StreakSettleResult | null = null;
+    if (game.total_bet_amount > 0n) {
+      try {
+        const streakWallet = await this.dbService.getPlayerAddressFromSession(game.session_id);
+        streakInfo = await settleBlackjackStreak(
+          this.dbService.getPool(),
+          streakWallet,
+          overallResult,
+          game.total_bet_amount,
+          gameId,
+        );
+      } catch (e) {
+        logger.warn('streak settle failed (dealer completion)', { gameId, error: (e as Error).message });
+      }
+    }
+
     try {
       const wheelWallet = await this.dbService.getPlayerAddressFromSession(game.session_id);
       const pool = this.dbService.getPool();
@@ -1072,6 +1115,9 @@ export class BlackjackGameService {
       perfectPairsPayout: perfectPairsPayout > 0n ? perfectPairsPayout : undefined,
       perfectPairsBetAmount: (game.perfect_pairs_bet_amount ?? 0n) > 0n ? game.perfect_pairs_bet_amount : undefined,
       rngVersion: 2,
+      winStreak: streakInfo?.streak,
+      streakBonusWei: streakInfo && streakInfo.bonusChips > 0n ? streakInfo.bonusChips * POKER_CHIP_WEI : undefined,
+      streakBonusPct: streakInfo && streakInfo.bonusPct > 0 ? streakInfo.bonusPct : undefined,
     };
   }
 

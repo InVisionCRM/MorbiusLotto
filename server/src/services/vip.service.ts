@@ -112,6 +112,8 @@ export class VipService {
   private tierCache: VipTier[] | null = null;
   private tierCacheAt = 0;
   private static readonly TIER_TTL_MS = 60_000;
+  /** Sticky once true; re-checked while false (code may deploy before migration 195 runs). */
+  private wagerCreditsTablePresent = false;
 
   // referralService is optional so VipService can be constructed standalone
   // (e.g. in tests); when present, a referee's claim also pays their referrer.
@@ -212,6 +214,19 @@ export class VipService {
       const v = BigInt(r.wagered ?? '0');
       wagerByAddr.set(r.wallet_address, v > 0n ? v : 0n);
     }
+    // Bonus tier-progress credits (migration 195) add on top of ledger wagers.
+    if (await this.hasWagerCreditsTable(this.pool)) {
+      const { rows: creditRows } = await this.pool.query<{ wallet_address: string; credits: string }>(
+        `SELECT wallet_address, COALESCE(SUM(chips), 0)::text AS credits
+         FROM vip_wager_credits
+         WHERE wallet_address = ANY($1)
+         GROUP BY wallet_address`,
+        [addrs],
+      );
+      for (const r of creditRows) {
+        wagerByAddr.set(r.wallet_address, (wagerByAddr.get(r.wallet_address) ?? 0n) + BigInt(r.credits ?? '0'));
+      }
+    }
     return addrs.map((addr) => {
       const lifetime = wagerByAddr.get(addr) ?? 0n;
       const tier = this.tierForWager(tiers, lifetime);
@@ -230,6 +245,16 @@ export class VipService {
   // Wager volume — derived live from poker_chip_ledger bet reasons.
   // delta is negative for bets, so -SUM(delta) = positive turnover in chips.
   // ──────────────────────────────────────────────────────────────────
+
+  /** True once vip_wager_credits exists (migration 195). to_regclass never throws, so this is transaction-safe. */
+  private async hasWagerCreditsTable(db: Pool | PoolClient): Promise<boolean> {
+    if (this.wagerCreditsTablePresent) return true;
+    const { rows } = await db.query<{ present: boolean }>(
+      `SELECT to_regclass('vip_wager_credits') IS NOT NULL AS present`,
+    );
+    if (rows[0]?.present) this.wagerCreditsTablePresent = true;
+    return this.wagerCreditsTablePresent;
+  }
 
   private async wagerSince(
     db: Pool | PoolClient,
@@ -251,7 +276,20 @@ export class VipService {
       params,
     );
     const v = BigInt(rows[0]?.wagered ?? '0');
-    return v > 0n ? v : 0n;
+    const ledgerWager = v > 0n ? v : 0n;
+    // Bonus tier-progress credits (migration 195: blackjack chain bonuses)
+    // count toward lifetime wager without fabricating ledger bets. Existence-
+    // checked (not try/caught — a failed query would poison claim()'s
+    // transaction) so tiers still resolve if the migration hasn't run yet.
+    if (!(await this.hasWagerCreditsTable(db))) return ledgerWager;
+    const { rows: creditRows } = await db.query<{ credits: string }>(
+      `SELECT COALESCE(SUM(chips), 0)::text AS credits
+       FROM vip_wager_credits
+       WHERE wallet_address = $1
+         ${sinceClause}`,
+      params,
+    );
+    return ledgerWager + BigInt(creditRows[0]?.credits ?? '0');
   }
 
   /**
