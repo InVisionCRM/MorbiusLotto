@@ -163,7 +163,8 @@
   <h1>🔥 Streak Heat Lab ❄️</h1>
   <p>The table border reacts to how the player is running — eleven stages from DEEP FREEZE to INFERNO.
      Hit WIN / LOSE to feel the momentum (streaks accelerate it), or scrub the meter directly.
-     Pick the treatment you want on the real felt.</p>
+     The temperature DRIFTS — color and glow ease toward every new value over a few seconds, so you
+     never see a hard change. Pick the treatment you want on the real felt.</p>
 </header>
 
 <div class="wrap">
@@ -209,7 +210,7 @@
       <h2>Heat meter</h2>
       <div class="meter-label"><span>❄️ −100</span><span id="heatVal">0</span><span>+100 🔥</span></div>
       <input type="range" id="heat" min="-100" max="100" value="0" step="1">
-      <p class="note">Wins add ~14 heat (+streak bonus), losses remove it the same way, pushes drift toward neutral. Every threshold crossed is a visible stage change.</p>
+      <p class="note">Wins add ~14 heat (+streak bonus), losses remove it the same way, pushes drift toward neutral. The border temperature eases toward the target over ~3s — stages are labels along a continuous ramp, never color snaps.</p>
     </div>
 
     <div class="card">
@@ -223,43 +224,77 @@
 (() => {
   'use strict';
 
-  /* ── Stage table: name, threshold (lower bound), colors ──
-     Eleven rungs so nearly every result moves the player somewhere visible. */
+  /* ── Stage labels: thresholds only name the ramp — they never drive color. ── */
   const STAGES = [
-    { min: -100, name: 'DEEP FREEZE', c: '#7dd3fc', c2: '#e0f2fe', kind: 'cold', k: 5 },
-    { min: -84,  name: 'FROZEN',      c: '#67e8f9', c2: '#cffafe', kind: 'cold', k: 4 },
-    { min: -66,  name: 'ICE COLD',    c: '#38bdf8', c2: '#bae6fd', kind: 'cold', k: 3 },
-    { min: -48,  name: 'CHILLED',     c: '#60a5fa', c2: '#93c5fd', kind: 'cold', k: 2 },
-    { min: -30,  name: 'COOLING',     c: '#818cf8', c2: '#a5b4fc', kind: 'cold', k: 1 },
-    { min: -14,  name: 'NEUTRAL',     c: '#94a3b8', c2: '#cbd5e1', kind: 'mid',  k: 0 },
-    { min: 14,   name: 'WARMING',     c: '#fbbf24', c2: '#fde68a', kind: 'hot',  k: 1 },
-    { min: 30,   name: 'HEATING UP',  c: '#f59e0b', c2: '#fcd34d', kind: 'hot',  k: 2 },
-    { min: 48,   name: 'HOT',         c: '#f97316', c2: '#fdba74', kind: 'hot',  k: 3 },
-    { min: 66,   name: 'ON FIRE',     c: '#ef4444', c2: '#fb923c', kind: 'hot',  k: 4 },
-    { min: 84,   name: 'INFERNO',     c: '#fff7ed', c2: '#fbbf24', kind: 'hot',  k: 5 },
+    { min: -100, name: 'DEEP FREEZE' },
+    { min: -84,  name: 'FROZEN' },
+    { min: -66,  name: 'ICE COLD' },
+    { min: -48,  name: 'CHILLED' },
+    { min: -30,  name: 'COOLING' },
+    { min: -14,  name: 'NEUTRAL' },
+    { min: 14,   name: 'WARMING' },
+    { min: 30,   name: 'HEATING UP' },
+    { min: 48,   name: 'HOT' },
+    { min: 66,   name: 'ON FIRE' },
+    { min: 84,   name: 'INFERNO' },
   ];
   const stageFor = (h) => { let s = STAGES[0]; for (const st of STAGES) if (h >= st.min) s = st; return s; };
+
+  /* ── Continuous color ramp across the whole heat axis.
+     Every visual samples THIS, at the smoothly-drifting shown heat — so
+     crossing a stage threshold changes the label, never the color curve. ── */
+  const RAMP = [
+    { at: -100, c: [125, 211, 252], c2: [224, 242, 254] },  /* glacial cyan  */
+    { at: -60,  c: [ 96, 165, 250], c2: [147, 197, 253] },  /* cold blue     */
+    { at: -25,  c: [129, 140, 248], c2: [165, 180, 252] },  /* cool indigo   */
+    { at: 0,    c: [148, 163, 184], c2: [203, 213, 225] },  /* neutral slate */
+    { at: 25,   c: [251, 191,  36], c2: [253, 230, 138] },  /* warm amber    */
+    { at: 60,   c: [249, 115,  22], c2: [253, 186, 116] },  /* hot orange    */
+    { at: 100,  c: [255, 247, 237], c2: [251, 191,  36] },  /* white-hot     */
+  ];
+  const lerp = (a, b, t) => a + (b - a) * t;
+  function rampAt(h) {
+    let lo = RAMP[0], hi = RAMP[RAMP.length - 1];
+    for (let i = 0; i < RAMP.length - 1; i++) {
+      if (h >= RAMP[i].at && h <= RAMP[i + 1].at) { lo = RAMP[i]; hi = RAMP[i + 1]; break; }
+    }
+    const t = hi.at === lo.at ? 0 : (h - lo.at) / (hi.at - lo.at);
+    const mix = (a, b) => [0, 1, 2].map((i) => Math.round(lerp(a[i], b[i], t)));
+    return { c: mix(lo.c, hi.c), c2: mix(lo.c2, hi.c2) };
+  }
+  const rgba = (c, a) => `rgba(${c[0]},${c[1]},${c[2]},${a})`;
 
   const $ = (id) => document.getElementById(id);
   const outer = $('stageOuter'), frame = $('frame');
 
-  let heat = 0;          // -100 .. 100
-  let streak = 0;        // +wins / -losses in a row
+  /* ── State: target moves instantly; SHOWN eases after it. ── */
+  let targetHeat = 0;    // where results/scrubbing put us
+  let shownHeat = 0;     // what the visuals render — drifts toward target
+  let streak = 0;
   let auto = null;
+  const TAU_MS = 1100;   // exponential time constant; a win takes ~3-4s to fully land
 
-  /* ── Heat model: streaks compound, so runs FEEL like runs ── */
   function applyResult(r) {
     if (r === 'win') {
       streak = streak > 0 ? streak + 1 : 1;
-      heat += 14 + Math.min(10, (streak - 1) * 3);
+      targetHeat += 14 + Math.min(10, (streak - 1) * 3);
     } else if (r === 'lose') {
       streak = streak < 0 ? streak - 1 : -1;
-      heat -= 14 + Math.min(10, (-streak - 1) * 3);
+      targetHeat -= 14 + Math.min(10, (-streak - 1) * 3);
     } else {
-      heat += heat > 0 ? -4 : heat < 0 ? 4 : 0;   // pushes cool the story toward neutral
+      targetHeat += targetHeat > 0 ? -4 : targetHeat < 0 ? 4 : 0;
     }
-    heat = Math.max(-100, Math.min(100, heat));
-    render(true);
+    targetHeat = Math.max(-100, Math.min(100, targetHeat));
+    updateStory();
+  }
+
+  function updateStory() {
+    $('heat').value = targetHeat;
+    $('streakLine').textContent =
+      streak > 1 ? `${streak} wins in a row` :
+      streak < -1 ? `${-streak} losses in a row` :
+      streak === 1 ? 'won the last hand' :
+      streak === -1 ? 'lost the last hand' : 'no streak';
   }
 
   /* ── Stage ladder ── */
@@ -267,64 +302,76 @@
   for (const st of STAGES) {
     const el = document.createElement('div');
     el.className = 'rung'; el.dataset.name = st.name;
-    el.style.setProperty('--rung-c', st.c);
     el.innerHTML = `<span>${st.name}</span><span class="dot"></span>`;
     ladder.appendChild(el);
   }
 
-  /* ── Render: push stage + intensity into CSS variables ── */
-  function render(fromPlay) {
-    const st = stageFor(heat);
-    const t = Math.min(1, Math.abs(heat) / 100);          // 0..1 intensity
-    const k = st.k;                                        // 0..5 rung strength
+  /* ── Label crossfade: the name steps at thresholds, softly. ── */
+  let shownLabel = 'NEUTRAL';
+  function setLabel(name) {
+    if (name === shownLabel) return;
+    shownLabel = name;
+    const el = $('stageName');
+    el.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 240, easing: 'ease-in' }).onfinish = () => {
+      el.textContent = name;
+      el.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 340, easing: 'ease-out' });
+    };
+  }
 
-    $('heatVal').textContent = (heat > 0 ? '+' : '') + Math.round(heat);
-    if (!fromPlay) { /* slider scrub resets the streak story */ streak = 0; }
-    $('heat').value = heat;
+  /* ── The per-frame visual write: everything derives from shownHeat. ── */
+  const fxState = { hot: false, cold: false, k: 0, c: [148,163,184], c2: [203,213,225] };
+  function applyVisual() {
+    const h = shownHeat;
+    const { c, c2 } = rampAt(h);
+    const t = Math.min(1, Math.abs(h) / 100);   // 0..1 continuous intensity
+    const k = t * 5;                             // fractional rung strength
+    const hot = h > 0;
+
+    const st = stageFor(h);
+    setLabel(st.name);
+    $('heatVal').textContent = (targetHeat > 0 ? '+' : '') + Math.round(targetHeat);
 
     const nameEl = $('stageName');
-    nameEl.textContent = st.name;
-    nameEl.style.color = st.c;
-    nameEl.style.textShadow = `0 0 ${8 + k * 5}px ${st.c}, 0 2px 8px rgba(0,0,0,0.9)`;
-    $('streakLine').textContent =
-      streak > 1 ? `${streak} wins in a row` :
-      streak < -1 ? `${-streak} losses in a row` :
-      streak === 1 ? 'won the last hand' :
-      streak === -1 ? 'lost the last hand' : 'no streak';
+    nameEl.style.color = rgba(c, 1);
+    nameEl.style.textShadow = `0 0 ${8 + k * 5}px ${rgba(c, 0.9)}, 0 2px 8px rgba(0,0,0,0.9)`;
 
-    for (const el of ladder.children) el.classList.toggle('now', el.dataset.name === st.name);
+    for (const el of ladder.children) {
+      const now = el.dataset.name === st.name;
+      el.classList.toggle('now', now);
+      if (now) el.style.setProperty('--rung-c', rgba(c, 1));
+    }
 
     const S = frame.style;
     /* Aura */
-    S.setProperty('--ring', k === 0 ? 'rgba(148,163,184,0.12)' : `color-mix(in srgb, ${st.c} ${20 + k * 12}%, rgba(0,0,0,0.35))`);
-    S.setProperty('--glow-c', `color-mix(in srgb, ${st.c} ${30 + k * 14}%, transparent)`);
-    S.setProperty('--glow-c2', `color-mix(in srgb, ${st.c2} ${10 + k * 10}%, transparent)`);
+    S.setProperty('--ring', t < 0.14 ? 'rgba(148,163,184,0.12)' : rgba(c, 0.14 + t * 0.4));
+    S.setProperty('--glow-c', rgba(c, t * 0.75));
+    S.setProperty('--glow-c2', rgba(c2, t * 0.42));
     S.setProperty('--glow-r', `${k * 12}px`);
     S.setProperty('--glow-s', `${k * 2.5}px`);
     S.setProperty('--pulse-s', k >= 2 ? `${3.6 - k * 0.5}s` : '0s');
     /* Flame */
-    const dim = 'rgba(30,41,59,0.9)';
-    S.setProperty('--fl-a', k === 0 ? dim : `color-mix(in srgb, ${st.c} ${25 + k * 13}%, ${dim})`);
-    S.setProperty('--fl-b', k === 0 ? dim : st.c);
-    S.setProperty('--fl-c', k === 0 ? dim : st.c2);
-    S.setProperty('--fl-speed', `${st.kind === 'cold' ? 26 - k * 2 : 15 - k * 2.4}s`);
+    S.setProperty('--fl-a', t < 0.14 ? 'rgba(30,41,59,0.9)' : rgba(c.map((v) => Math.round(v * 0.4)), 0.9));
+    S.setProperty('--fl-b', rgba(c, 0.25 + t * 0.75));
+    S.setProperty('--fl-c', rgba(c2, 0.2 + t * 0.7));
+    S.setProperty('--fl-speed', `${hot ? 15 - k * 2.4 : 26 - k * 2}s`);
     S.setProperty('--fl-blur', `${1 + k * 1.2}px`);
     S.setProperty('--fl-sat', `${1 + k * 0.14}`);
     /* Neon */
-    S.setProperty('--neon-c', k === 0 ? 'rgba(148,163,184,0.35)' : st.c);
-    S.setProperty('--neon-c2', `color-mix(in srgb, ${st.c} ${k * 9}%, transparent)`);
+    S.setProperty('--neon-c', t < 0.14 ? 'rgba(148,163,184,0.35)' : rgba(c, 0.35 + t * 0.6));
+    S.setProperty('--neon-c2', rgba(c, t * 0.4));
     S.setProperty('--neon-r', `${4 + k * 7}px`);
-    S.setProperty('--beat-s', st.kind === 'cold' ? `${3 + k * 0.7}s` : `${2.6 - k * 0.38}s`);
+    S.setProperty('--beat-s', hot ? `${2.6 - k * 0.38}s` : `${3 + k * 0.7}s`);
     S.setProperty('--beat-hi', `${1.1 + k * 0.09}`);
     S.setProperty('--beat-hi2', `${1.03 + k * 0.05}`);
 
-    fxState.kind = st.kind; fxState.k = k; fxState.c = st.c; fxState.c2 = st.c2;
+    fxState.hot = hot; fxState.cold = !hot; fxState.k = k; fxState.c = c; fxState.c2 = c2;
   }
 
-  /* ── Particles: embers rise around the ring when hot, frost falls when cold ── */
+  /* ── Particles: a quiet handful at the extremes, nothing crazy.
+     Spawn only past ~60% intensity, hard cap of 26, gentle fade in AND out. ── */
   const cv = $('fx'), ctx = cv.getContext('2d');
-  const fxState = { kind: 'mid', k: 0, c: '#94a3b8', c2: '#cbd5e1' };
   let parts = [];
+  const MAX_PARTS = 26;
   function resize() {
     const r = cv.getBoundingClientRect();
     cv.width = Math.round(r.width * devicePixelRatio);
@@ -334,30 +381,27 @@
   addEventListener('resize', resize);
 
   function spawn(w, h) {
-    const { kind, k } = fxState;
-    if (kind === 'mid' || k < 2) return;
-    const rate = (k - 1) * (kind === 'hot' ? 2.2 : 1.5);
-    for (let i = 0; i < rate; i++) {
-      if (Math.random() > 0.5) continue;
-      /* birth on the ring band: pick an edge position just inside the canvas */
-      const edge = Math.random();
-      let x, y;
-      if (edge < 0.4) { x = 34 + Math.random() * (w - 68); y = h - 34 + Math.random() * 10; }        /* bottom */
-      else if (edge < 0.6) { x = 34 + Math.random() * (w - 68); y = 24 + Math.random() * 10; }        /* top */
-      else if (edge < 0.8) { x = 24 + Math.random() * 12; y = 34 + Math.random() * (h - 68); }        /* left */
-      else { x = w - 36 + Math.random() * 12; y = 34 + Math.random() * (h - 68); }                    /* right */
-      parts.push({
-        x, y,
-        vx: (Math.random() - 0.5) * 0.35,
-        vy: kind === 'hot' ? -(0.5 + Math.random() * 0.9 + k * 0.18) : (0.25 + Math.random() * 0.5),
-        life: 1,
-        decay: 0.008 + Math.random() * 0.012,
-        r: kind === 'hot' ? 1 + Math.random() * 2.2 : 1 + Math.random() * 1.6,
-        cold: kind !== 'hot',
-        drift: Math.random() * Math.PI * 2,
-      });
-    }
-    if (parts.length > 320) parts.splice(0, parts.length - 320);
+    const { k } = fxState;
+    if (k < 3 || parts.length >= MAX_PARTS) return;
+    /* ~1 birth every few frames at full blast; a whisper, not a storm */
+    if (Math.random() > 0.05 * (k - 2.6)) return;
+    const hot = fxState.hot;
+    const edge = Math.random();
+    let x, y;
+    if (edge < 0.45) { x = 34 + Math.random() * (w - 68); y = h - 34 + Math.random() * 8; }
+    else if (edge < 0.65) { x = 34 + Math.random() * (w - 68); y = 26 + Math.random() * 8; }
+    else if (edge < 0.82) { x = 26 + Math.random() * 10; y = 34 + Math.random() * (h - 68); }
+    else { x = w - 34 + Math.random() * 10; y = 34 + Math.random() * (h - 68); }
+    parts.push({
+      x, y,
+      vx: (Math.random() - 0.5) * 0.25,
+      vy: hot ? -(0.35 + Math.random() * 0.55) : (0.2 + Math.random() * 0.35),
+      life: 0,
+      speed: 0.006 + Math.random() * 0.006,
+      r: 1 + Math.random() * 1.6,
+      cold: !hot,
+      drift: Math.random() * Math.PI * 2,
+    });
   }
 
   function tick() {
@@ -366,52 +410,64 @@
     ctx.clearRect(0, 0, w, h);
     spawn(w, h);
     for (const p of parts) {
-      p.drift += 0.03;
-      p.x += p.vx + (p.cold ? Math.sin(p.drift) * 0.35 : Math.sin(p.drift) * 0.15);
+      p.drift += 0.025;
+      p.x += p.vx + Math.sin(p.drift) * (p.cold ? 0.3 : 0.12);
       p.y += p.vy;
-      p.life -= p.decay;
+      p.life += p.speed;
     }
-    parts = parts.filter((p) => p.life > 0);
+    parts = parts.filter((p) => p.life < 1);
     for (const p of parts) {
-      ctx.globalAlpha = Math.max(0, p.life) * 0.85;
+      /* smooth envelope: ramp in over the first quarter, out over the last */
+      const env = Math.min(1, p.life * 4, (1 - p.life) * 2.2);
+      ctx.globalAlpha = Math.max(0, env) * 0.6;
       if (p.cold) {
-        ctx.strokeStyle = fxState.c2;
+        ctx.strokeStyle = rgba(fxState.c2, 1);
         ctx.lineWidth = 0.8;
-        const s = p.r * 2.2;
+        const s = p.r * 2;
         ctx.beginPath();
         for (let a = 0; a < 6; a++) {
-          const th = (a / 6) * Math.PI * 2 + p.drift * 0.25;
+          const th = (a / 6) * Math.PI * 2 + p.drift * 0.2;
           ctx.moveTo(p.x, p.y);
           ctx.lineTo(p.x + Math.cos(th) * s, p.y + Math.sin(th) * s);
         }
         ctx.stroke();
       } else {
-        const g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.r * 3);
-        g.addColorStop(0, fxState.c2);
-        g.addColorStop(0.4, fxState.c);
-        g.addColorStop(1, 'transparent');
+        const g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.r * 2.6);
+        g.addColorStop(0, rgba(fxState.c2, 1));
+        g.addColorStop(0.4, rgba(fxState.c, 0.85));
+        g.addColorStop(1, 'rgba(0,0,0,0)');
         ctx.fillStyle = g;
         ctx.beginPath();
-        ctx.arc(p.x, p.y, p.r * 3, 0, Math.PI * 2);
+        ctx.arc(p.x, p.y, p.r * 2.6, 0, Math.PI * 2);
         ctx.fill();
       }
     }
     ctx.globalAlpha = 1;
-    requestAnimationFrame(tick);
+  }
+
+  /* ── Main loop: ease shownHeat toward targetHeat, then paint. ── */
+  let lastTs = performance.now();
+  function loop(ts) {
+    const dt = Math.min(100, ts - lastTs);
+    lastTs = ts;
+    shownHeat += (targetHeat - shownHeat) * (1 - Math.exp(-dt / TAU_MS));
+    if (Math.abs(targetHeat - shownHeat) < 0.05) shownHeat = targetHeat;
+    applyVisual();
+    tick();
+    requestAnimationFrame(loop);
   }
 
   /* ── Wiring ── */
   $('btnWin').addEventListener('click', () => applyResult('win'));
   $('btnLose').addEventListener('click', () => applyResult('lose'));
   $('btnPush').addEventListener('click', () => applyResult('push'));
-  $('heat').addEventListener('input', (e) => { heat = Number(e.target.value); render(false); });
+  $('heat').addEventListener('input', (e) => { targetHeat = Number(e.target.value); streak = 0; updateStory(); });
 
   for (const b of $('treatments').querySelectorAll('button')) {
     b.addEventListener('click', () => {
       for (const x of $('treatments').querySelectorAll('button')) x.classList.remove('on');
       b.classList.add('on');
       outer.className = 'stage-outer ' + b.dataset.t;
-      render(true);
     });
   }
 
@@ -428,8 +484,9 @@
   $('simCold').addEventListener('click', () => startAuto('simCold', 0.18));
 
   resize();
-  render(true);
-  tick();
+  updateStory();
+  applyVisual();
+  requestAnimationFrame(loop);
 })();
 </script>
 </body>
