@@ -2198,11 +2198,11 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate, vari
                     }`}
                   >
                     <span className="sr-only">
-                      Buy-in: creator rake; user buy-ins fund the prize pool; creator earns 2% of the prize pool; MORBIUS
-                      only today; PRC-20 support coming soon.
+                      Buy-in: creator rake; user buy-ins fund the prize pool; creator earns 2% of the prize pool; buy in
+                      with any PRC-20 or MORBIUS.
                     </span>
                     <img
-                      src="/images/poker-buyin-type-promo.png"
+                      src="/images/poker-buyin-type-promo.webp"
                       alt=""
                       width={600}
                       height={400}

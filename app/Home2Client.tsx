@@ -13,6 +13,8 @@ import {
   HeroPlayer,
   TheFloor,
   SlotForge,
+  TourneyForge,
+  TableForge,
   WeeklyDrop,
   VipLadder,
   HomeFooter,
@@ -295,6 +297,8 @@ export default function Home2Client() {
           <NewGames />
           <TheFloor />
           <SlotForge />
+          <TourneyForge />
+          <TableForge />
           {weeklyDrop ? (
             <WeeklyDrop
               pot={weeklyDrop.pot}

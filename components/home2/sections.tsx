@@ -732,6 +732,144 @@ export function SlotForge() {
 }
 
 /* ────────────────────────────────────────────────────────────
+   6c. TOURNEY FORGE — custom PRC-20 buy-in poker tournaments
+   ──────────────────────────────────────────────────────────── */
+const TOURNEY_FEATS = [
+  { ic: '🪙', t: 'Buy-ins in your token', d: 'any PRC-20 — or MORBIUS' },
+  { ic: '🔒', t: 'Escrowed on-chain', d: 'every buy-in sits in the prize escrow' },
+  { ic: '💸', t: '2% of the pool is yours', d: 'paid out with the prizes' },
+  { ic: '⏱️', t: 'Sit & Go or scheduled', d: 'fires when the seats fill' },
+  { ic: '↩️', t: 'Refunds handled', d: 'short table cancels and pays everyone back' },
+  { ic: '📣', t: 'Share card built in', d: 'one-click PNG for the timeline' },
+];
+
+export function TourneyForge() {
+  return (
+    <section className="zone forge-zone tourney-zone">
+      <div className="zone-head">
+        <h2>
+          TOURNEY <em>FORGE</em>
+        </h2>
+        <span className="sub">poker tournaments in your own token</span>
+      </div>
+      <div className="forge-panel">
+        <div className="forge-copy">
+          <div className="forge-kicker">CREATOR TOOL &middot; PRC-20</div>
+          <h3>
+            Run a <em>poker&nbsp;tournament</em> for your token
+          </h3>
+          <p>
+            Pick your PRC-20, set the buy-in, and every seat pays into the
+            on-chain prize escrow. The pool builds as players join, the table
+            fires when it fills, and <b>2% of the prize pool is yours</b> when
+            the payouts settle.
+          </p>
+          <ul className="forge-feats">
+            {TOURNEY_FEATS.map((f) => (
+              <li key={f.t}>
+                <span className="fi">{f.ic}</span>
+                <span className="ft">
+                  <b>{f.t}</b>
+                  <i>{f.d}</i>
+                </span>
+              </li>
+            ))}
+          </ul>
+          <div className="forge-cta-row">
+            <Link className="forge-cta" href="/poker/tournaments/create">
+              <span className="fc-ic">🏆</span> CREATE A TOURNAMENT
+            </Link>
+            <Link className="forge-guide" href="/poker">
+              See what&apos;s running <span aria-hidden="true">→</span>
+            </Link>
+            <span className="forge-cta-sub">your token &middot; your rake</span>
+          </div>
+        </div>
+        <div className="forge-shots one">
+          <div className="fshot fshot-cab">
+            <img
+              src="/home2/tourney-share-card.webp"
+              alt="A poker tournament share card with a HEX buy-in and prize pool"
+              loading="lazy"
+            />
+            <span className="fshot-tag gold">your tournament, shareable</span>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/* ────────────────────────────────────────────────────────────
+   6d. TABLE FORGE — custom blackjack tables
+   ──────────────────────────────────────────────────────────── */
+const TABLE_FEATS = [
+  { ic: '🖼️', t: 'Your art on the felt', d: 'upload a board or start from a preset' },
+  { ic: '🃏', t: 'Cards & backs to match', d: 'faces, backs, and how they lie' },
+  { ic: '🎬', t: 'Deal animations', d: 'pick how cards land and clear' },
+  { ic: '🔊', t: 'Table sounds', d: 'chips, shuffles and the dealer' },
+  { ic: '📐', t: 'Nudge everything', d: 'seats, dealer and card angle, to the pixel' },
+  { ic: '🎥', t: 'Video tables too', d: 'an MP4 board on a 24-hour cycle' },
+];
+
+export function TableForge() {
+  return (
+    <section className="zone forge-zone table-zone">
+      <div className="zone-head">
+        <h2>
+          TABLE <em>FORGE</em>
+        </h2>
+        <span className="sub">custom blackjack tables</span>
+      </div>
+      <div className="forge-panel">
+        <div className="forge-copy">
+          <div className="forge-kicker">CREATOR TOOL &middot; BLACKJACK</div>
+          <h3>
+            Put your project on a <em>blackjack&nbsp;table</em>
+          </h3>
+          <p>
+            Six steps and your board is on the floor: drop in your art, style
+            the cards, choose the animations and sounds, then nudge every seat
+            into place. Players sit down at <b>your</b> table and play it in
+            MORBIUS.
+          </p>
+          <ul className="forge-feats">
+            {TABLE_FEATS.map((f) => (
+              <li key={f.t}>
+                <span className="fi">{f.ic}</span>
+                <span className="ft">
+                  <b>{f.t}</b>
+                  <i>{f.d}</i>
+                </span>
+              </li>
+            ))}
+          </ul>
+          <div className="forge-cta-row">
+            <Link className="forge-cta" href="/blackjack-multi/design">
+              <span className="fc-ic">🎨</span> OPEN TABLE FORGE
+            </Link>
+            <Link className="forge-guide" href="/blackjack-multi">
+              Play the live tables <span aria-hidden="true">→</span>
+            </Link>
+            <span className="forge-cta-sub">free to build &middot; no code needed</span>
+          </div>
+        </div>
+        <div className="forge-shots">
+          <div className="fshot fshot-builder">
+            <img src="/home2/tableforge-studio.webp" alt="The Table Forge blackjack table studio" loading="lazy" />
+            <span className="fshot-tag">the studio</span>
+          </div>
+          <div className="fshot fshot-cab">
+            <img src="/home2/tableforge-preview.webp" alt="A branded blackjack table mid-round" loading="lazy" />
+            <span className="fshot-tag gold">your table, in play</span>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/* ────────────────────────────────────────────────────────────
    7. THE WEEKLY DROP — raffle jackpot
    ──────────────────────────────────────────────────────────── */
 export interface WeeklyDropWinner {

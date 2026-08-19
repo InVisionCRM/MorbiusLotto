@@ -457,6 +457,43 @@
 .home2 .fshot-cab:hover{transform:rotate(1.5deg) translateY(-4px)}
 .home2 .fshot{transition:transform .25s}
 
+/* --- Tourney Forge / Table Forge: same panel, own accent --- */
+/* Tourney leans gold (prize pools); Table leans emerald (the felt). */
+.home2 .tourney-zone .forge-panel{border-color:rgba(251,191,36,.22);
+  background:
+    radial-gradient(ellipse at 88% 8%, rgba(251,191,36,.14), transparent 55%),
+    radial-gradient(ellipse at 8% 100%, rgba(167,139,250,.10), transparent 50%),
+    linear-gradient(165deg,#171106,#080b14 72%)}
+.home2 .tourney-zone .forge-kicker{color:#fde68a; border-color:rgba(251,191,36,.4); background:rgba(251,191,36,.12)}
+.home2 .tourney-zone .forge-copy h3 em{background:linear-gradient(100deg,#fbbf24,#f97316);
+  -webkit-background-clip:text; background-clip:text}
+.home2 .tourney-zone .forge-cta{background:linear-gradient(100deg,#fbbf24,#f59e0b); color:#241a02;
+  box-shadow:0 10px 30px rgba(245,158,11,.35)}
+.home2 .tourney-zone .forge-cta:hover{box-shadow:0 16px 40px rgba(245,158,11,.5)}
+.home2 .tourney-zone .forge-feats li:hover{border-color:rgba(251,191,36,.45)}
+
+.home2 .table-zone .forge-panel{border-color:rgba(52,211,153,.2);
+  background:
+    radial-gradient(ellipse at 88% 8%, rgba(52,211,153,.13), transparent 55%),
+    radial-gradient(ellipse at 8% 100%, rgba(34,211,238,.10), transparent 50%),
+    linear-gradient(165deg,#06170f,#080b14 72%)}
+.home2 .table-zone .forge-kicker{color:#6ee7b7; border-color:rgba(52,211,153,.4); background:rgba(52,211,153,.12)}
+.home2 .table-zone .forge-copy h3 em{background:linear-gradient(100deg,#34d399,#22d3ee);
+  -webkit-background-clip:text; background-clip:text}
+.home2 .table-zone .forge-cta{background:linear-gradient(100deg,#34d399,#22d3ee); color:#04140d;
+  box-shadow:0 10px 30px rgba(52,211,153,.32)}
+.home2 .table-zone .forge-cta:hover{box-shadow:0 16px 40px rgba(52,211,153,.46)}
+.home2 .table-zone .forge-feats li:hover{border-color:rgba(52,211,153,.45)}
+.home2 .table-zone .fshot-builder{border-color:rgba(52,211,153,.32)}
+
+/* A single shot sits centred and square-on instead of the two-card fan. It
+   keeps the card's own aspect ratio so the title never gets cropped off. */
+.home2 .forge-shots.one .fshot-cab{position:absolute; top:50%; left:0; right:auto; bottom:auto;
+  width:100%; height:auto; aspect-ratio:1120 / 596;
+  transform:translateY(-50%) rotate(-1deg)}
+.home2 .forge-shots.one .fshot-cab:hover{transform:translateY(calc(-50% - 4px)) rotate(0deg)}
+.home2 .forge-shots.one .fshot img{height:auto; object-fit:contain; object-position:center}
+
 /* ============================================================
    JACKPOT MODULE — "lighting soon"
    ============================================================ */
