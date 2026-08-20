@@ -228,6 +228,18 @@ export interface BlackjackSpWagerTierRow {
   updated_at: Date;
 }
 
+export interface BlackjackTableDesign {
+  id: string;
+  slug: string;
+  owner_address: string;
+  name: string;
+  design: Record<string, unknown>;
+  design_size_bytes: number;
+  status: 'saved' | 'published' | 'disabled';
+  created_at: string;
+  updated_at: string;
+}
+
 export interface CommunitySlotMachine {
   id: string;
   slug: string;
@@ -5409,5 +5421,105 @@ export class DatabaseService implements MoneyDatabaseQueries {
       [normalized, limit],
     );
     return result.rows.map((r: any) => this.normalizeSlotMachineRow(r));
+  }
+
+  // ── Create-A-Table saved designs ──────────────────────────────────────────
+  // Every wallet gets its own designs. Ownership always comes from the session
+  // on the route side; nothing here takes an address from a request body.
+
+  private normalizeTableDesignRow(row: any): BlackjackTableDesign {
+    return {
+      id: row.id,
+      slug: row.slug,
+      owner_address: row.owner_address,
+      name: row.name,
+      design: row.design,
+      design_size_bytes: row.design_size_bytes,
+      status: row.status,
+      created_at: row.created_at,
+      updated_at: row.updated_at,
+    };
+  }
+
+  async createTableDesign(
+    ownerAddress: string,
+    name: string,
+    design: Record<string, unknown>,
+    sizeBytes: number,
+  ): Promise<BlackjackTableDesign> {
+    const normalized = this.normalizeAddress(ownerAddress);
+    // Same bounded-retry slug allocation as the slot machines: 9 random bytes
+    // of base64url almost never collide, and the UNIQUE constraint plus this
+    // retry means a save never fails outright when they do.
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const slug = randomBytes(9).toString('base64url');
+      try {
+        const result = await this.pool.query(
+          `INSERT INTO blackjack_table_designs
+             (slug, owner_address, name, design, design_size_bytes)
+           VALUES ($1, $2, $3, $4::jsonb, $5)
+           RETURNING *`,
+          [slug, normalized, name, JSON.stringify(design), sizeBytes],
+        );
+        return this.normalizeTableDesignRow(result.rows[0]);
+      } catch (err: any) {
+        if (err?.code === '23505' && attempt < 4) continue; // unique_violation on slug
+        throw err;
+      }
+    }
+    throw new Error('failed to allocate a unique slug for the table design');
+  }
+
+  async updateTableDesign(
+    id: string,
+    name: string,
+    design: Record<string, unknown>,
+    sizeBytes: number,
+  ): Promise<BlackjackTableDesign | null> {
+    const result = await this.pool.query(
+      `UPDATE blackjack_table_designs
+          SET name = $2, design = $3::jsonb, design_size_bytes = $4, updated_at = NOW()
+        WHERE id = $1 AND status != 'disabled'
+        RETURNING *`,
+      [id, name, JSON.stringify(design), sizeBytes],
+    );
+    return result.rows[0] ? this.normalizeTableDesignRow(result.rows[0]) : null;
+  }
+
+  async disableTableDesign(id: string): Promise<void> {
+    await this.pool.query(
+      `UPDATE blackjack_table_designs SET status = 'disabled', updated_at = NOW() WHERE id = $1`,
+      [id],
+    );
+  }
+
+  async getTableDesignBySlug(slug: string): Promise<BlackjackTableDesign | null> {
+    const result = await this.pool.query(
+      `SELECT * FROM blackjack_table_designs WHERE slug = $1`,
+      [slug],
+    );
+    return result.rows[0] ? this.normalizeTableDesignRow(result.rows[0]) : null;
+  }
+
+  async listTableDesignsByOwner(ownerAddress: string, limit = 60): Promise<BlackjackTableDesign[]> {
+    const normalized = this.normalizeAddress(ownerAddress);
+    const result = await this.pool.query(
+      `SELECT * FROM blackjack_table_designs
+       WHERE owner_address = $1 AND status != 'disabled'
+       ORDER BY updated_at DESC
+       LIMIT $2`,
+      [normalized, limit],
+    );
+    return result.rows.map((r: any) => this.normalizeTableDesignRow(r));
+  }
+
+  async countTableDesignsByOwner(ownerAddress: string): Promise<number> {
+    const normalized = this.normalizeAddress(ownerAddress);
+    const result = await this.pool.query(
+      `SELECT COUNT(*)::int AS n FROM blackjack_table_designs
+        WHERE owner_address = $1 AND status != 'disabled'`,
+      [normalized],
+    );
+    return result.rows[0]?.n ?? 0;
   }
 }
