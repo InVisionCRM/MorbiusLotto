@@ -74,7 +74,14 @@ export const TABLE_CARD_BACKS: TableCardBack[] = [
   },
 ];
 
-export const DEFAULT_CARD_BACK = TABLE_CARD_BACKS[0];
+/**
+ * Lattice is the house default: the woven diamond grid is the one field here
+ * that reads as a playing-card back at a glance. Tables saved before
+ * `backDesign` existed have no id, so they land here too — keep this in step
+ * with `DEFAULT_BLACKJACK_TABLE_LAYOUT.cards.backDesign`.
+ */
+export const DEFAULT_CARD_BACK =
+  TABLE_CARD_BACKS.find((b) => b.id === 'lattice') ?? TABLE_CARD_BACKS[0];
 
 export function cardBackById(id: string | null | undefined): TableCardBack {
   return TABLE_CARD_BACKS.find((b) => b.id === id) ?? DEFAULT_CARD_BACK;
