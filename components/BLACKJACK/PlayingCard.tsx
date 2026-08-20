@@ -91,14 +91,12 @@ const PlayingCard: React.FC<PlayingCardProps> = ({ card, hidden = false, owner, 
               stretched edge to edge by object-cover and read as a logo tile. */}
           <span className="blackjack-card-back-rule" />
           {layout.cards.backImage ? (
-            <Image
-              src={layout.cards.backImage}
-              alt="Card back"
-              width={imageSize.w}
-              height={imageSize.h}
-              className="blackjack-card-back-mark"
-              priority
-            />
+            /* Plain <img>, not next/image: a table's mark can be a token logo
+               served from any host a creator picks, and next/image would
+               reject every hostname that isn't in next.config's allowlist.
+               The mark is small and decorative, so there's nothing to
+               optimise away. */
+            <img src={layout.cards.backImage} alt="Card back" className="blackjack-card-back-mark" />
           ) : (
             back.glyph && (
               <span className="blackjack-card-back-glyph" style={{ color: back.glyphColor }}>
