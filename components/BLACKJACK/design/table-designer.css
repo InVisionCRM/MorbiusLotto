@@ -168,10 +168,20 @@
   top: 8px;
   z-index: 30;
   display: flex;
-  flex-wrap: wrap;
+  /* One row that scrolls, never a block that wraps. The rail wrapped to two
+     rows on a phone AND on a wide screen (past 1080px the studio splits into
+     two columns, so the controls column is narrower than the window) — and a
+     sticky element that grows taller is the worst thing to put at the top of
+     a small screen. `safe center` keeps it centred when it fits and falls
+     back to start-aligned when it overflows, instead of hiding step 1 off
+     the left edge. */
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scroll-snap-type: x proximity;
+  scrollbar-width: none;
   gap: 4px;
   align-items: center;
-  justify-content: center;
+  justify-content: safe center;
   background: rgba(6, 16, 25, 0.85);
   -webkit-backdrop-filter: blur(9px);
   backdrop-filter: blur(9px);
@@ -181,10 +191,13 @@
   margin-bottom: 14px;
   box-shadow: 0 14px 34px -22px rgba(0, 0, 0, 0.95);
 }
+.bjtd-steps::-webkit-scrollbar { display: none; }
 .bjtd-step {
   display: inline-flex;
   align-items: center;
   gap: 8px;
+  flex: 0 0 auto;
+  scroll-snap-align: center;
   height: 36px;
   padding: 0 13px 0 6px;
   border-radius: 10px;
@@ -951,4 +964,139 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* ══ Motion ═══════════════════════════════════════════════════════════════
+   The studio was almost entirely static: steps swapped instantly, choices
+   changed with no acknowledgement, and on a phone — where the panel IS the
+   screen — that made every action feel like it might not have registered.
+   Everything here is short and non-blocking, and the reduced-motion block
+   further down turns all of it off. */
+
+/* Step panels enter from the direction you're travelling. Keyed on the step
+   in TSX, so it replays on every move. */
+@keyframes bjtdStepIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: none; }
+}
+.bjtd-step-body {
+  animation: bjtdStepIn 0.26s cubic-bezier(0.22, 0.9, 0.3, 1) both;
+}
+
+/* The active step's number pops once when it becomes current, so the rail
+   confirms the tap even when the panel below is off-screen. */
+@keyframes bjtdStepPop {
+  0%   { transform: scale(1); }
+  45%  { transform: scale(1.16); }
+  100% { transform: scale(1); }
+}
+.bjtd-step.active .bjtd-step-n {
+  animation: bjtdStepPop 0.34s ease-out;
+}
+
+/* Picking a swatch, preset or pattern: a quick lift that settles. Applies to
+   the selected one only — an idle grid of pulsing tiles is noise. */
+@keyframes bjtdPick {
+  0%   { transform: translateY(0) scale(1); }
+  40%  { transform: translateY(-3px) scale(1.04); }
+  100% { transform: translateY(0) scale(1); }
+}
+.bjtd-art-card.on,
+.bjtd-mech-card.on {
+  animation: bjtdPick 0.3s cubic-bezier(0.3, 1.3, 0.5, 1);
+}
+
+/* Saved-table rows fade in as the list arrives rather than snapping in. */
+@keyframes bjtdRowIn {
+  from { opacity: 0; transform: translateX(-6px); }
+  to   { opacity: 1; transform: none; }
+}
+.bjtd-design-row {
+  animation: bjtdRowIn 0.22s ease-out both;
+}
+
+/* Status lines (Saving… / Saved / error) slide up under the controls. */
+@keyframes bjtdMsgIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: none; }
+}
+.bjtd-msg:not(:empty) {
+  animation: bjtdMsgIn 0.2s ease-out;
+}
+
+/* ══ Phone ════════════════════════════════════════════════════════════════
+   Below 640px the studio was still laid out for a desktop: the six-step rail
+   wrapped onto three rows and then stuck to the top, eating a third of the
+   viewport, and the Deal preview button was a three-line slab. */
+@media (max-width: 640px) {
+  /* The tagline spells out the same six steps that the rail shows directly
+     below it. One of them has to go, and the rail is the one you can tap. */
+  .bjtd-header .bjtd-tagline {
+    display: none;
+  }
+  /* Sized to keep "Create-A-Table" on one line at 360px, the narrowest
+     phone worth supporting — wrapping the name of the tool is worse than a
+     smaller name. */
+  .bjtd-title {
+    font-size: clamp(19px, 6vw, 34px);
+  }
+
+  /* The base rule already makes the rail a single scrolling row; on a phone
+     it only needs tighter spacing and a real touch target. */
+  .bjtd-steps {
+    gap: 2px;
+    padding: 6px;
+  }
+  .bjtd-step {
+    height: 44px;
+    font-size: 11px;
+    padding: 0 11px 0 5px;
+  }
+
+  /* Deal preview is one action among several here, not a billboard. */
+  .bjtd-btn-glow {
+    padding: 12px 16px;
+    font-size: 14px;
+  }
+  .bjtd-btn-sub {
+    font-size: 10px;
+    opacity: 0.75;
+  }
+
+  /* Undo / redo / reset were ~30px tall — below the reliable tap floor. */
+  .bjtd-sm-btn {
+    min-height: 40px;
+  }
+  .bjtd-sm-btn.tiny {
+    min-height: 36px;
+  }
+
+  /* A 40-row saved list shouldn't own most of the screen. */
+  .bjtd-design-list {
+    max-height: 168px;
+  }
+}
+
+/* Keyboard-only advice, hidden where there is no keyboard. Keyed on the
+   pointer rather than the width: a small window on a desktop still has arrow
+   keys, and a large tablet still doesn't. */
+@media (pointer: coarse) {
+  .bjtd-kbd-only {
+    display: none;
+  }
+}
+
+/* Everything the studio animates, off in one place. Scoped to the studio so
+   it can stay a blanket rule: a viewer who asked for reduced motion wants the
+   result of an action, not the transition into it. Kept last so it wins
+   regardless of where an animation was declared above. */
+@media (prefers-reduced-motion: reduce) {
+  .bjtd-wrap *,
+  .bjtd-wrap *::before,
+  .bjtd-wrap *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
 }

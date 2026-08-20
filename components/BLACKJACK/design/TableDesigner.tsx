@@ -937,6 +937,12 @@ export default function TableDesigner() {
                 </div>
               </div>
 
+              {/* Keyed on the step so the panel replays its entry animation
+                  every time you move between steps — on a phone the whole
+                  panel is the screen, and an instant swap gives you no sense
+                  of having gone anywhere. */}
+              <div className="bjtd-step-body" key={tab}>
+
               {/* ── FINE-TUNE: where everything sits ── */}
               {tab === 'tune' && (
                 <div>
@@ -1804,6 +1810,7 @@ export default function TableDesigner() {
                   {stepNav}
                 </div>
               )}
+              </div>
             </section>
           </div>
 
@@ -2091,7 +2098,11 @@ export default function TableDesigner() {
               </div>
               <p className="bjtd-edit-hint">
                 Drag a <b>seat</b> or the <b>dealer</b> right on the felt &mdash; clicking one opens its
-                settings. Arrow keys nudge (&#8679; = &times;10) &middot; Ctrl+Z undoes.
+                settings.{' '}
+                {/* Keyboard nudging and Ctrl+Z are real, but only on a keyboard.
+                    Reading them on a phone is noise, so the pointer query hides
+                    this half rather than promising something you can't do. */}
+                <span className="bjtd-kbd-only">Arrow keys nudge (&#8679; = &times;10) &middot; Ctrl+Z undoes.</span>
               </p>
             </div>
           </div>
