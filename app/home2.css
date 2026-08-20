@@ -372,16 +372,42 @@
   gap:12px; overflow-x:auto; scroll-snap-type:x mandatory; scroll-padding-left:2px;
   padding-bottom:6px; scrollbar-width:none}
 .home2 .ng-track::-webkit-scrollbar{display:none}
-.home2 .ng-card{scroll-snap-align:start}
-.home2 .ng-card .stage{min-height:104px}
+.home2 .ng-card{scroll-snap-align:start; aspect-ratio:4/5; --name-scale:1.15}
+.home2 .ng-card .stage{min-height:0}
 @media (min-width:700px){
   .home2 .ng-track{grid-auto-columns:calc((100% - 12px * 4) / 5)}
 }
 @media (min-width:1080px){
   .home2 .ng-track{grid-auto-columns:calc((100% - 12px * 6) / 7)}
-  .home2 .ng-card .stage{min-height:118px}
+  .home2 .ng-card{--name-scale:1.28}
 }
-.home2 .floor-grid .scene-card .stage{min-height:126px}
+/* Floor cards are 4:5 portrait — taller than wide, so the scene art gets real
+   room and the title block can carry a big arced name. (2:3 was the other
+   candidate; at 7-across on the rail it turns into a skyscraper.) */
+.home2 .floor-grid .scene-card{aspect-ratio:4/5}
+.home2 .floor-grid .scene-card .stage{min-height:0}
+/* Title sizing has two inputs. `--name-size` is the catalog's per-game relative
+   weighting (long names authored smaller) and `--name-scale` is this context's
+   multiplier, so one knob resizes every title without per-game edits. Cards are
+   also size containers, so a title can be capped to the width it actually has:
+   `--name-chars` comes from CurvedName; 0.74em is a generous average
+   advance across the display faces (Bungee is the widest). Whichever of the
+   two is smaller wins, so short names get the full scale and long ones shrink
+   to fit rather than clipping — an arced title must never wrap. */
+.home2 .floor-grid .scene-card,
+.home2 .ng-card{container-type:inline-size}
+.home2 .floor-grid .scene-card .meta .name,
+.home2 .ng-card .meta .name{
+  font-size:min(
+    calc(var(--name-size,14px) * var(--name-scale,1.55)),
+    calc((100cqw - var(--name-gutter,34px)) / (var(--name-chars,8) * 0.74))
+  );
+  text-align:center; white-space:nowrap; overflow:hidden;
+}
+.home2 .floor-grid .scene-card .meta{text-align:center}
+.home2 .ng-card .meta{text-align:center}
+.home2 .floor-grid .scene-card .meta .row{justify-content:center}
+.home2 .ng-card .meta .row{justify-content:center}
 /* monogram tiles (scenes pending) */
 .home2 .mono-tile{
   border-radius:16px; border:1px solid var(--line); background:linear-gradient(165deg,var(--panel2),transparent);
@@ -833,21 +859,23 @@
   /* Compact 4-across game floor on phones */
   .home2 .floor-grid{grid-template-columns:repeat(4,1fr); gap:7px}
   .home2 .floor-grid .scene-card{border-radius:11px}
-  .home2 .floor-grid .scene-card .stage{min-height:58px; padding:6px 4px 0}
+  .home2 .floor-grid .scene-card .stage{min-height:0; padding:6px 4px 0}
   .home2 .floor-grid .scene-card .stage svg{width:min(90%,104px)}
   .home2 .floor-grid .scene-card .meta{padding:5px 5px 6px}
-  .home2 .floor-grid .scene-card .meta .name{font-size:9px!important; letter-spacing:.01em; line-height:1.1;
-    display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden}
+  .home2 .floor-grid .scene-card{--name-scale:.85; --name-gutter:12px}
+  .home2 .floor-grid .scene-card .meta .name{letter-spacing:.01em}
   .home2 .floor-grid .scene-card .meta .row{display:none}
   .home2 .floor-grid .scene-card .badge{top:5px; left:5px; font-size:6px; letter-spacing:.05em; padding:2px 5px}
   /* Rail cards sit 3-across on a phone — same compaction as the floor. */
   .home2 .ng-track{gap:8px; grid-auto-columns:calc((100% - 8px * 2) / 3)}
   .home2 .ng-card{border-radius:11px}
-  .home2 .ng-card .stage{min-height:66px; padding:6px 4px 0}
+  .home2 .ng-card .stage{min-height:0; padding:6px 4px 0}
   .home2 .ng-card .stage svg{width:min(90%,104px)}
   .home2 .ng-card .meta{padding:5px 6px 6px}
-  .home2 .ng-card .meta .name{font-size:9px!important; letter-spacing:.01em; line-height:1.1;
-    display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden}
+  .home2 .ng-card{--name-scale:.85; --name-gutter:14px}
+  .home2 .ng-card .meta .name{letter-spacing:.01em}
+  /* No line-clamp here: the width cap above already guarantees a one-line fit,
+     and an arced title that wrapped would break the curve across two rows. */
   .home2 .ng-card .meta .row{display:none}
   .home2 .ng-card .badge{top:5px; left:5px; font-size:6px; letter-spacing:.05em; padding:2px 5px}
   .home2 .shelf-head h3{font-size:12px}

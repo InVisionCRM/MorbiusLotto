@@ -18,6 +18,7 @@ import {
   FLOOR_GAMES,
 } from '@/components/home2/scenes';
 import { SelfExclusionModal } from '@/components/ResponsibleGaming';
+import { CurvedName } from '@/components/home2/curved-name';
 
 /* ────────────────────────────────────────────────────────────
    Shared: hero ember particles (port of the lab's embers())
@@ -596,7 +597,14 @@ const FLOOR_FILTERS: { f: string; label: string }[] = [
 ];
 
 function FloorCard({ g }: { g: FloorGameEntry }) {
-  const style = (g.glow ? ({ '--glow': g.glow } as React.CSSProperties) : undefined);
+  /* `nameSize` stays the per-game *relative* weighting the catalog authored
+     (long names smaller). The absolute size is CSS's call — each context
+     multiplies it by its own `--name-scale`, so one knob resizes every title
+     without touching 30-odd catalog rows. */
+  const style = {
+    '--name-size': g.nameSize,
+    ...(g.glow ? { '--glow': g.glow } : {}),
+  } as React.CSSProperties;
   return (
     <Link href={g.href} className="scene-card" data-cat={g.cat} style={style}>
       {g.badge && <span className={`badge ${g.badgeClass ?? 'new'}`}>{g.badge}</span>}
@@ -604,9 +612,7 @@ function FloorCard({ g }: { g: FloorGameEntry }) {
         <g.Scene />
       </div>
       <div className="meta">
-        <div className={`name ${g.fontClass}`} style={{ fontSize: g.nameSize }}>
-          {g.name}
-        </div>
+        <CurvedName text={g.name} className={`name ${g.fontClass}`} />
         <div className="row">
           <span className="st">{g.blurb}</span>
         </div>
