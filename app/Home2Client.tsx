@@ -18,11 +18,11 @@ import {
   WeeklyDrop,
   VipLadder,
   HomeFooter,
-  type HeroPlayerDigestItem,
   type WeeklyDropWinner,
 } from '@/components/home2/sections'
 import { HeroCarousel } from '@/components/home2/hero-carousel'
 import { NewGames } from '@/components/home2/new-games'
+import { FLOOR_GAMES } from '@/components/home2/scenes'
 import { HomeSidebar, ChipDock, MobileTopBar } from '@/components/home2/nav'
 import { GameLauncherSheet } from '@/components/home2/game-launcher-sheet'
 import { WhatsNewSplash } from '@/components/DevLog/WhatsNewSplash'
@@ -71,6 +71,19 @@ const DROP_WINNER_GRADIENTS = [
   'radial-gradient(circle at 32% 28%,#a5f3fc,#0891b2)',
   'radial-gradient(circle at 32% 28%,#c4b5fd,#7c3aed)',
 ]
+
+/**
+ * Route for a game key from the wins feed. Those keys track the lobby routes
+ * but not always the catalog's own ids ('video-poker' vs 'videopoker'), so
+ * both sides are flattened to letters and digits before matching. Returns
+ * undefined for a key the catalog doesn't know, and the caller drops the row
+ * rather than linking somewhere that 404s.
+ */
+function gameHref(key: string): string | undefined {
+  const flat = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '')
+  const want = flat(key)
+  return FLOOR_GAMES.find((g) => flat(g.key) === want)?.href
+}
 
 function gameLabel(key: string): string {
   return key
@@ -122,8 +135,19 @@ export default function Home2Client() {
     const wagerToNext = Math.max(0, nextMin - lifetime)
     const span = Math.max(1, nextMin - curMin)
     const progressPct = nextMin > 0 ? Math.min(100, Math.round(((lifetime - curMin) / span) * 100)) : 100
-    // Next tier rakeback comes from the tier levels we know from config order; fall back to label-only.
-    return { tierName, rakeback, nextName, wagerToNext: wagerToNext.toLocaleString('en-US'), progressPct }
+    // No rung above the current one means this player is already at the top of
+    // the ladder — the card says so rather than pointing at a tier that isn't there.
+    const atTopTier = !next
+    const nextRakeback = next ? `${next.rakebackBps / 100}%` : rakeback
+    return {
+      tierName,
+      rakeback,
+      nextName,
+      nextRakeback,
+      atTopTier,
+      wagerToNext: wagerToNext.toLocaleString('en-US'),
+      progressPct,
+    }
   }, [vipTier.data, vipLadder.data])
 
   // Live numbers: platform totals + recent-wins highlights
@@ -159,25 +183,16 @@ export default function Home2Client() {
     return items.length >= 4 ? items : undefined // fall back to defaults until data arrives
   }, [wins, topWin, drop])
 
-  const digest = useMemo<HeroPlayerDigestItem[] | undefined>(() => {
-    if (!topWin) return undefined
-    const who = topWin.username ?? shortAddress(topWin.address)
-    return [
-      { html: `🏆 Recent high: <b>${topWin.amount.toLocaleString('en-US')}</b> on ${gameLabel(topWin.game)} — ${who}` },
-      { html: `🎮 <b>${(gamesPlayed ?? 0).toLocaleString('en-US')}</b> games played all-time` },
-      { html: `👑 <b>${vip.rakeback}</b> back on your losses at ${vip.tierName}` },
-    ]
-  }, [topWin, gamesPlayed, vip])
-
   // Resume card: the player's own most recent win from the live feed
   const myLastWin = useMemo(
     () => (address ? wins.find((w) => w.address.toLowerCase() === address.toLowerCase()) ?? null : null),
     [wins, address]
   )
-  const resume = myLastWin
+  const resume = myLastWin && gameHref(myLastWin.game)
     ? {
-        title: `${gameLabel(myLastWin.game)} — your table is waiting`,
-        sub: `Last win here: ${myLastWin.amount.toLocaleString('en-US')} MORBIUS`,
+        title: `Back to ${gameLabel(myLastWin.game)}`,
+        sub: `last win here: ${myLastWin.amount.toLocaleString('en-US')} MORBIUS`,
+        href: gameHref(myLastWin.game),
       }
     : undefined
 
@@ -282,13 +297,16 @@ export default function Home2Client() {
           {mode === 'player' ? (
             <HeroPlayer
               name={displayName}
+              address={address}
+              avatarUrl={profileImageUrl}
               tierName={vip.tierName}
-              nextTierName={vip.nextName}
+              tierEmoji={TIER_EMOJI[vip.tierName] ?? '🥉'}
+              nextTierName={vip.atTopTier ? null : vip.nextName}
+              nextTierRakeback={vip.atTopTier ? vip.rakeback : vip.nextRakeback}
               wagerToNext={vip.wagerToNext}
-              digest={digest}
-              resume={resume}
+              progressPct={vip.progressPct}
               balance={balanceStr}
-              balanceUsd=""
+              resume={resume}
               onDeposit={onDeposit}
               onDashboard={onDashboard}
             />
