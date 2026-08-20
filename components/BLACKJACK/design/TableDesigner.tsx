@@ -66,6 +66,9 @@ import { SoundEventTile } from '@/components/BLACKJACK/design/sound/SoundEventTi
 import { TrimModal, type TrimTarget } from '@/components/BLACKJACK/design/sound/TrimModal';
 import { LibraryModal } from '@/components/BLACKJACK/design/sound/LibraryModal';
 import { useTablePublish } from '@/components/BLACKJACK/design/useTablePublish';
+import { CardBackSwatch } from '@/components/BLACKJACK/CardBackSwatch';
+import { Prc20TokenPicker, type SelectedPrc20Token } from '@/components/shared/Prc20TokenPicker';
+import { TABLE_CARD_BACKS, DEFAULT_CARD_BACK } from '@/lib/table-card-backs';
 import { BLACKJACK_IMAGE_BACKGROUNDS, DEFAULT_BLACKJACK_IMAGE_ID } from '@/app/BLACKJACK/constants';
 import type { BlackjackTableThemeConfig } from '@/lib/blackjack-table-theme';
 import '@/components/BLACKJACK/design/sound/sound-designer.css';
@@ -523,6 +526,10 @@ export default function TableDesigner() {
 
   // ── Image pickers: table art + card back ──────────────────────────────────
   const backFileRef = useRef<HTMLInputElement>(null);
+  /* Card-back token badge: open state for the picker, plus the token it
+     resolved, kept so the 'no logo published' hint can name it. */
+  const [showTokenPicker, setShowTokenPicker] = useState(false);
+  const [backToken, setBackToken] = useState<SelectedPrc20Token | null>(null);
   const pickCardBack = useCallback(
     (file: File | null) => {
       if (!file) return;
@@ -1107,18 +1114,9 @@ export default function TableDesigner() {
                       <span>Card back</span>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                      <img
-                        src={layout.cards.backImage}
-                        alt="Card back"
-                        width={44}
-                        height={62}
-                        style={{
-                          borderRadius: 6,
-                          objectFit: 'cover',
-                          border: '1px solid rgba(34,211,238,0.25)',
-                          background: '#0a2540',
-                        }}
-                      />
+                      {/* Preview the back as it actually deals — patterned field,
+                          inset rule, mark centred inside it — not the raw image. */}
+                      <CardBackSwatch layout={layout} w={44} h={62} />
                       <div className="bjtd-btn-row" style={{ marginTop: 0 }}>
                         <button type="button" className="bjtd-sm-btn" onClick={() => backFileRef.current?.click()}>
                           Upload image
@@ -1136,6 +1134,13 @@ export default function TableDesigner() {
                         >
                           Reset
                         </button>
+                        <button
+                          type="button"
+                          className={`bjtd-sm-btn${showTokenPicker ? ' go' : ''}`}
+                          onClick={() => setShowTokenPicker((v) => !v)}
+                        >
+                          Token logo
+                        </button>
                       </div>
                       <input
                         ref={backFileRef}
@@ -1144,6 +1149,64 @@ export default function TableDesigner() {
                         style={{ display: 'none' }}
                         onChange={(e) => pickCardBack(e.target.files?.[0] ?? null)}
                       />
+                    </div>
+                    {showTokenPicker && (
+                      <div style={{ marginTop: 10 }}>
+                        {/* Any PRC-20 on PulseChain can badge the back. The
+                            picker already resolves a logo (scan first, then
+                            DexScreener), so all this has to do is take the URL
+                            it hands back. */}
+                        <Prc20TokenPicker
+                          value={backToken}
+                          onChange={(t) => {
+                            setBackToken(t);
+                            if (!t?.logoUrl) return;
+                            beginGesture();
+                            patch((p) => ({ ...p, cards: { ...p.cards, backImage: t.logoUrl! } }));
+                          }}
+                          placeholder="Search a token, or paste 0x…"
+                        />
+                        {backToken && !backToken.logoUrl && (
+                          <div className="bjtd-hint" style={{ marginTop: 6 }}>
+                            {backToken.symbol} has no logo published on PulseChain or DexScreener — upload
+                            an image instead.
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    <div className="bjtd-ctl-lbl" style={{ marginTop: 14 }}>
+                      <span>Back pattern</span>
+                    </div>
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                      {TABLE_CARD_BACKS.map((b) => {
+                        const on = (layout.cards.backDesign ?? DEFAULT_CARD_BACK.id) === b.id;
+                        return (
+                          <button
+                            key={b.id}
+                            type="button"
+                            title={b.label}
+                            aria-pressed={on}
+                            onClick={() => {
+                              beginGesture();
+                              patch((p) => ({ ...p, cards: { ...p.cards, backDesign: b.id } }));
+                            }}
+                            style={{
+                              padding: 3,
+                              borderRadius: 8,
+                              background: 'transparent',
+                              border: `1px solid ${on ? 'rgba(34,211,238,.75)' : 'rgba(148,163,184,.22)'}`,
+                              cursor: 'pointer',
+                              lineHeight: 0,
+                            }}
+                          >
+                            <CardBackSwatch
+                              layout={{ ...layout, cards: { ...layout.cards, backDesign: b.id } }}
+                              w={34}
+                              h={48}
+                            />
+                          </button>
+                        );
+                      })}
                     </div>
                     <p className="bjtd-hint">Shown on every face-down card.</p>
                   </div>

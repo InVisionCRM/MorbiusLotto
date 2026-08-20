@@ -18,7 +18,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
-import { FLOOR_GAMES } from './scenes';
+import { FLOOR_GAMES, FAMILY_MARK } from './scenes';
+import { CurvedName } from './curved-name';
 
 /** How many of the newest games the rail carries. */
 const RAIL_SIZE = 10;
@@ -103,17 +104,21 @@ export function NewGames() {
       >
         {games.map((g) => {
           const fresh = now == null ? null : freshness(g.addedAt, now);
-          const style = (g.glow ? ({ '--glow': g.glow } as React.CSSProperties) : undefined);
+          const style = {
+            '--name-size': g.nameSize,
+            ...(g.glow ? { '--glow': g.glow } : {}),
+          } as React.CSSProperties;
           return (
             <Link key={g.key} href={g.href} className="ng-card scene-card" style={style}>
               {fresh && <span className={`badge ${fresh.hot ? 'new' : 'feat'}`}>{fresh.label}</span>}
+              <span className="wm" aria-hidden="true">
+                {FAMILY_MARK[g.family]}
+              </span>
               <div className="stage">
                 <g.Scene />
               </div>
               <div className="meta">
-                <div className={`name ${g.fontClass}`} style={{ fontSize: g.nameSize }}>
-                  {g.name}
-                </div>
+                <CurvedName text={g.name} className={`name ${g.fontClass}`} />
                 <div className="row">
                   <span className="st">{g.blurb}</span>
                 </div>

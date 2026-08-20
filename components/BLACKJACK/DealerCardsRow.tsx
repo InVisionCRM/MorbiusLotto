@@ -28,8 +28,12 @@ export default function DealerCardsRow({
   return (
     <>
       {cards.map((card, index) => {
-        if (index >= visibleCards) return null;
         const isHoleCard = hideHoleCard && index === 1;
+        // The hole card sits past `visibleCards` for as long as it is face
+        // down, so culling on that alone dropped it from the DOM entirely and
+        // the dealer appeared to be holding a single card. It has to render —
+        // as a back — until the reveal turns it over.
+        if (index >= visibleCards && !isHoleCard) return null;
         const isNewCard = newDealerCardIndices
           ? newDealerCardIndices.has(index)
           : index >= 2 && index === visibleCards - 1;

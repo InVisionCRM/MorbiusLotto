@@ -150,85 +150,60 @@
     radial-gradient(600px 500px at 50% 120%, rgba(167,139,250,.07), transparent 60%);
 }
 
-/* --- player hero --- */
-.home2 .hp-grid{display:grid; grid-template-columns:1fr 330px; gap:26px; align-items:start}
-.home2 .hp-greet{display:flex; align-items:center; gap:18px; margin-bottom:16px}
-.home2 .avatar-wrap{position:relative; width:86px; height:86px; flex-shrink:0}
-.home2 .avatar-ring{position:absolute; inset:-4px; border-radius:50%;
-  background:conic-gradient(var(--gold) 0 72%, rgba(255,255,255,.08) 72% 100%);
-  -webkit-mask:radial-gradient(circle, transparent 62%, #000 64%); mask:radial-gradient(circle, transparent 62%, #000 64%);
-  animation:h2-ringSpin 14s linear infinite}
-@keyframes h2-ringSpin{to{transform:rotate(360deg)}}
-.home2 .avatar-face{position:absolute; inset:2px; border-radius:50%; overflow:hidden;
-  background:radial-gradient(circle at 35% 30%, #1a2436, #0b0f1c); border:1px solid var(--line2);
-  display:grid; place-items:center}
-.home2 .hp-greet h1{font-size:clamp(20px,2.6vw,28px); font-weight:800; line-height:1.15}
-.home2 .hp-greet h1 .nm{background:linear-gradient(90deg,var(--cyan),#7dd3fc); -webkit-background-clip:text; background-clip:text; color:transparent}
-.home2 .hp-greet .vipline{font-size:12px; color:var(--text2); margin-top:5px}
-.home2 .hp-greet .vipline b{color:var(--gold); font-weight:700}
-.home2 .hp-greet .vipline .tier{
-  display:inline-block; font-size:9px; font-weight:800; letter-spacing:.12em; vertical-align:1px;
-  padding:2px 8px; margin-right:8px; border-radius:99px; color:#cbd5e1;
-  background:linear-gradient(180deg,rgba(148,163,184,.25),rgba(148,163,184,.1)); border:1px solid rgba(148,163,184,.35);
-}
+/* --- player hero: the Player Card ---
+   Port of option 01 in public/profile-hero-lab.html. The lab's custom
+   properties are the same names this stylesheet already defines, so the rules
+   below are its CSS with a `.home2` scope in front. */
+.home2 .pc{display:grid; grid-template-columns:1.15fr .85fr; gap:20px; align-items:center}
+.home2 .pc-card{position:relative; border-radius:18px; padding:20px 22px; overflow:hidden;
+  background:linear-gradient(135deg,#132038 0%,#0a1120 55%,#151a2e 100%);
+  border:1px solid rgba(148,163,184,.22);
+  box-shadow:0 24px 60px rgba(0,0,0,.6), inset 0 1px 0 rgba(255,255,255,.07)}
+/* The diagonal sheen that makes it read as a pressed card rather than a panel. */
+.home2 .pc-card::after{content:''; position:absolute; inset:0; pointer-events:none;
+  background:linear-gradient(105deg,transparent 42%,rgba(255,255,255,.07) 50%,transparent 58%)}
+.home2 .pc-top{display:flex; align-items:center; justify-content:space-between; gap:12px}
+.home2 .pc-brand{font-family:var(--display); font-size:12px; letter-spacing:.06em; color:var(--text2)}
+.home2 .tierchip{display:inline-flex; align-items:center; gap:5px; font-size:9.5px; font-weight:800;
+  letter-spacing:.1em; padding:3px 9px; border-radius:99px;
+  background:linear-gradient(90deg,rgba(192,192,192,.22),rgba(192,192,192,.06));
+  border:1px solid rgba(192,192,192,.35); color:#dfe6f0}
+.home2 .pc-body{display:flex; align-items:center; gap:16px; margin:18px 0 16px}
+.home2 .pc-name{font-size:20px; font-weight:800; letter-spacing:.01em}
+.home2 .pc-sub{font-size:10.5px; color:var(--muted); letter-spacing:.14em; margin-top:3px}
+.home2 .pc-bal .k{font-size:9px; letter-spacing:.16em; color:var(--muted); font-weight:800}
+.home2 .pc-bal .v{font-size:26px; font-weight:800; color:var(--gold); line-height:1.1}
+.home2 .pc-bal .v span{font-size:11px; color:var(--text2); font-weight:700; margin-left:4px}
+.home2 .pc-meter{margin-top:14px}
+.home2 .pc-meter .bar{height:5px; border-radius:99px; background:rgba(148,163,184,.16); overflow:hidden}
+.home2 .pc-meter .bar i{display:block; height:100%; border-radius:99px;
+  background:linear-gradient(90deg,var(--cyan),#7dd3fc); transition:width .5s ease}
+.home2 .pc-meter .lbl{display:flex; justify-content:space-between; gap:12px;
+  font-size:10px; color:var(--text2); margin-top:6px}
+.home2 .mono{font-variant-numeric:tabular-nums}
 
-/* away digest */
-.home2 .digest{display:flex; flex-wrap:wrap; gap:8px; margin:14px 0 18px}
-.home2 .digest .d{
-  display:inline-flex; align-items:center; gap:8px; font-size:11px; color:var(--text2);
-  background:var(--panel2); border:1px solid var(--line); padding:7px 13px; border-radius:99px;
-  animation:h2-digestIn .5s both;
-}
-.home2 .digest .d:nth-child(2){animation-delay:.12s}.home2 .digest .d:nth-child(3){animation-delay:.24s}.home2 .digest .d:nth-child(4){animation-delay:.36s}
-@keyframes h2-digestIn{from{opacity:0; transform:translateY(8px)}to{opacity:1; transform:none}}
-.home2 .digest .d b{color:var(--text); font-weight:600}
-.home2 .digest .d .k{font-size:8.5px; font-weight:800; letter-spacing:.12em; color:var(--cyan)}
+/* The avatar is identity, not a rolled face: a monogram tile, or the player's
+   own picture when they have set one. */
+.home2 .pc-body .av{position:relative; flex-shrink:0; display:grid; place-items:center}
+.home2 .av-mono{width:64px; height:64px; border-radius:16px; font-family:var(--display); font-size:24px;
+  background:linear-gradient(145deg,#12203a,#0a0f1c); border:1px solid var(--line2); color:var(--cyan)}
+.home2 .av-photo{width:64px; height:64px; border-radius:16px; object-fit:cover;
+  border:1px solid var(--line2)}
 
-/* resume card */
-.home2 .resume{
-  display:flex; align-items:center; gap:16px; border-radius:16px; padding:14px 18px;
-  background:linear-gradient(120deg, rgba(34,211,238,.10), rgba(255,255,255,.02) 55%);
-  border:1px solid rgba(34,211,238,.25); position:relative; overflow:hidden; max-width:560px;
-  transition:transform .2s, box-shadow .2s; cursor:pointer;
-}
-.home2 .resume:hover{transform:translateY(-2px); box-shadow:0 14px 40px rgba(34,211,238,.15)}
-.home2 .resume .mini{width:84px; height:60px; border-radius:10px; flex-shrink:0; overflow:hidden;
-  background:radial-gradient(circle at 50% 0%, #143024, #0a1812); border:1px solid rgba(52,211,153,.25);
-  display:grid; place-items:center}
-.home2 .resume .tt{font-size:9px; letter-spacing:.16em; color:var(--cyan); font-weight:800}
-.home2 .resume h3{font-size:15px; font-weight:700; margin:3px 0 2px}
-.home2 .resume p{font-size:11px; color:var(--text2)}
-.home2 .resume .go{margin-left:auto; width:40px; height:40px; border-radius:50%; flex-shrink:0;
-  background:var(--cyan); color:#04121a; display:grid; place-items:center; font-size:16px; font-weight:800;
-  box-shadow:0 0 18px rgba(34,211,238,.5)}
-
-/* balance chip column */
-.home2 .hp-side{display:flex; flex-direction:column; gap:14px}
-.home2 .chip3d{
-  position:relative; border-radius:20px; padding:22px 22px 18px;
-  background:linear-gradient(160deg,#101625,#0a0e1a); border:1px solid var(--line2);
-  overflow:hidden;
-}
-.home2 .chip3d::before{content:''; position:absolute; inset:0;
-  background:radial-gradient(300px 160px at 80% -20%, rgba(251,191,36,.15), transparent 60%)}
-.home2 .chip-coin{
-  width:74px; height:74px; border-radius:50%; margin-bottom:12px; position:relative;
-  background:radial-gradient(circle at 32% 28%, #2b1a4d, #150c2b 62%, #0a0618);
-  border:2.5px solid #d97706;
-  box-shadow:0 10px 26px rgba(147,51,234,.4), 0 0 18px rgba(245,158,11,.25), inset 0 2px 3px rgba(255,255,255,.15), inset 0 -3px 5px rgba(0,0,0,.5);
-  animation:h2-coinFloat 4s ease-in-out infinite; display:grid; place-items:center;
-}
-.home2 .chip-coin img{width:64%; height:64%; object-fit:contain; filter:drop-shadow(0 0 8px rgba(168,85,247,.8))}
-.home2 .chip-coin::before{content:''; position:absolute; inset:5px; border-radius:50%;
-  border:2px dashed rgba(251,191,36,.45)}
-
-@keyframes h2-coinFloat{50%{transform:translateY(-7px) rotate(3deg)}}
-.home2 .chip3d .lbl{font-size:9px; letter-spacing:.16em; color:var(--text2); font-weight:700}
-.home2 .chip3d .amt{font-size:26px; font-weight:800; margin:2px 0 3px}
-.home2 .chip3d .amt span{font-size:11px; color:var(--gold); letter-spacing:.06em}
-.home2 .chip3d .usd{font-size:11px; color:var(--muted); margin-bottom:14px}
-.home2 .chip3d .acts{display:flex; gap:8px; position:relative}
-.home2 .chip3d .acts button{flex:1; padding:10px 0; border-radius:10px; font-size:11.5px; font-weight:700; letter-spacing:.03em}
+/* The three things a returning player actually clicks. */
+.home2 .pc-side{display:flex; flex-direction:column; gap:10px}
+.home2 .pc-act{display:flex; align-items:center; gap:12px; padding:13px 15px; border-radius:14px;
+  width:100%; text-align:left; color:inherit;
+  background:var(--panel); border:1px solid var(--line); cursor:pointer;
+  transition:border-color .18s, transform .1s}
+.home2 .pc-act:hover{border-color:rgba(34,211,238,.4)}
+.home2 .pc-act:active{transform:translateY(1px)}
+.home2 .pc-act .ic{width:34px; height:34px; border-radius:10px; flex-shrink:0;
+  display:grid; place-items:center; font-size:16px; background:var(--cyan-dim)}
+.home2 .pc-act .tx{display:flex; flex-direction:column; gap:2px; min-width:0}
+.home2 .pc-act .tt{font-size:12.5px; font-weight:700}
+.home2 .pc-act .ss{font-size:10.5px; color:var(--muted)}
+.home2 .pc-act .go{margin-left:auto; color:var(--muted)}
 
 /* --- visitor hero --- */
 .home2 .hv{text-align:left; max-width:960px}
@@ -308,17 +283,51 @@
 .home2 .spot-grid{display:grid; grid-template-columns:1.6fr 1fr 1fr; gap:16px}
 .home2 .scene-card{
   position:relative; border-radius:18px; overflow:hidden; cursor:pointer;
-  background:linear-gradient(165deg,#0e1526,#080b14 70%);
+  /* Layers, top to bottom: a top-edge sheen, a fine dot grid, a faint
+     diagonal weave, then the base gradient. Portrait cards leave a lot of
+     flat panel around the scene art, and unbroken flat dark reads as unfinished
+     — this gives the surface something to catch light on without competing
+     with the art. All four are near-invisible individually; together they
+     read as printed stock. */
+  background:
+    radial-gradient(120% 62% at 50% -12%, rgba(255,255,255,.05), transparent 62%),
+    radial-gradient(circle 1px at 1px 1px, rgba(148,163,184,.055) 1px, transparent 0),
+    repeating-linear-gradient(135deg, rgba(255,255,255,.014) 0 1px, transparent 1px 7px),
+    linear-gradient(165deg,#0e1526,#080b14 70%);
+  background-size:auto, 14px 14px, auto, auto;
   border:1px solid var(--line2); transition:transform .25s, box-shadow .25s, border-color .25s;
   display:flex; flex-direction:column;
+}
+/* Inlay rule, set in from the edge the way a card's border print is. Two
+   hairlines — one light, one dark just inside it — so it reads as embossed
+   rather than drawn on. */
+.home2 .scene-card::before{
+  content:''; position:absolute; inset:6px; border-radius:13px; z-index:2;
+  border:1px solid rgba(148,163,184,.13);
+  box-shadow:inset 0 0 0 1px rgba(0,0,0,.3);
+  pointer-events:none;
+}
+/* Shelf watermark: big, rotated, mostly off the corner, barely there. */
+.home2 .scene-card .wm{
+  /* cqw against the card itself — only the floor and rail cards emit a mark,
+     and both are declared size containers further down. */
+  position:absolute; right:-4%; bottom:-6%; z-index:0; pointer-events:none;
+  font-size:58cqw; line-height:1; color:#fff; opacity:.03;
+  transform:rotate(-14deg); user-select:none;
 }
 .home2 .scene-card:hover{transform:translateY(-5px); border-color:rgba(34,211,238,.45); box-shadow:0 22px 60px rgba(3,10,20,.8), 0 0 30px rgba(34,211,238,.12)}
 .home2 .scene-card .stage{
   position:relative; padding:8px 10px 0; flex:1; min-height:150px;
   display:grid; place-items:center; perspective:700px; overflow:hidden;
 }
+.home2 .scene-card .stage{z-index:1}
 .home2 .scene-card .stage::before{content:''; position:absolute; inset:auto 8% -34% 8%; height:70%;
   background:radial-gradient(ellipse at 50% 0%, var(--glow, rgba(34,211,238,.22)), transparent 65%)}
+/* A hairline where the art meets the felt, tinted by the card's own glow —
+   it seats the scene instead of leaving it floating in the panel. */
+.home2 .scene-card .stage::after{content:''; position:absolute; left:16%; right:16%; bottom:6px; height:1px;
+  background:linear-gradient(90deg, transparent, var(--glow, rgba(34,211,238,.22)), transparent);
+  opacity:.85; pointer-events:none}
 .home2 .scene-card .stage svg{width:min(84%,300px); height:auto; transform:rotateX(9deg);
   filter:drop-shadow(0 18px 22px rgba(0,0,0,.55))}
 @keyframes h2-sceneFloat{50%{transform:rotateX(9deg) translateY(-6px)}}
@@ -372,16 +381,45 @@
   gap:12px; overflow-x:auto; scroll-snap-type:x mandatory; scroll-padding-left:2px;
   padding-bottom:6px; scrollbar-width:none}
 .home2 .ng-track::-webkit-scrollbar{display:none}
-.home2 .ng-card{scroll-snap-align:start}
-.home2 .ng-card .stage{min-height:104px}
+.home2 .ng-card{scroll-snap-align:start; aspect-ratio:4/5; --name-scale:1.15}
+/* One line only: a wrapped blurb lifts its card's title out of line with the
+   rest of the row, and the rail is the narrowest place a blurb has to fit. */
+.home2 .ng-card .meta .row .st{white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%}
+.home2 .ng-card .stage{min-height:0}
 @media (min-width:700px){
   .home2 .ng-track{grid-auto-columns:calc((100% - 12px * 4) / 5)}
 }
 @media (min-width:1080px){
   .home2 .ng-track{grid-auto-columns:calc((100% - 12px * 6) / 7)}
-  .home2 .ng-card .stage{min-height:118px}
+  .home2 .ng-card{--name-scale:1.28}
 }
-.home2 .floor-grid .scene-card .stage{min-height:126px}
+/* Floor cards are 4:5 portrait — taller than wide, so the scene art gets real
+   room and the title block can carry a big arced name. (2:3 was the other
+   candidate; at 7-across on the rail it turns into a skyscraper.) */
+.home2 .floor-grid .scene-card{aspect-ratio:4/5}
+.home2 .floor-grid .scene-card .stage{min-height:0}
+/* Title sizing has two inputs. `--name-size` is the catalog's per-game relative
+   weighting (long names authored smaller) and `--name-scale` is this context's
+   multiplier, so one knob resizes every title without per-game edits. Cards are
+   also size containers, so a title can be capped to the width it actually has:
+   `--name-chars` comes from CurvedName; 0.74em is a generous average
+   advance across the display faces (Bungee is the widest). Whichever of the
+   two is smaller wins, so short names get the full scale and long ones shrink
+   to fit rather than clipping — an arced title must never wrap. */
+.home2 .floor-grid .scene-card,
+.home2 .ng-card{container-type:inline-size}
+.home2 .floor-grid .scene-card .meta .name,
+.home2 .ng-card .meta .name{
+  font-size:min(
+    calc(var(--name-size,14px) * var(--name-scale,1.55)),
+    calc((100cqw - var(--name-gutter,34px)) / (var(--name-chars,8) * 0.74))
+  );
+  text-align:center; white-space:nowrap; overflow:hidden;
+}
+.home2 .floor-grid .scene-card .meta{text-align:center}
+.home2 .ng-card .meta{text-align:center}
+.home2 .floor-grid .scene-card .meta .row{justify-content:center}
+.home2 .ng-card .meta .row{justify-content:center}
 /* monogram tiles (scenes pending) */
 .home2 .mono-tile{
   border-radius:16px; border:1px solid var(--line); background:linear-gradient(165deg,var(--panel2),transparent);
@@ -766,7 +804,8 @@
   .home2 .mob-bar .mtitle i{color:var(--cyan); font-style:normal}
   .home2 .mob-bar .mav{margin-left:auto; width:32px; height:32px; border-radius:50%; overflow:hidden; border:2px solid rgba(251,191,36,.6)}
   .home2 .hero{padding:24px 18px}
-  .home2 .hp-grid{grid-template-columns:1fr}
+  /* Player Card stacks: card above its actions. Matches the lab's 760px rule. */
+  .home2 .pc{grid-template-columns:1fr}
   .home2 .furnace{margin:0 18px; padding:16px 18px; gap:18px}
   .home2 section.zone{padding:36px 18px 8px}
   .home2 .forge-panel{grid-template-columns:1fr; gap:22px; padding:22px 18px}
@@ -833,21 +872,24 @@
   /* Compact 4-across game floor on phones */
   .home2 .floor-grid{grid-template-columns:repeat(4,1fr); gap:7px}
   .home2 .floor-grid .scene-card{border-radius:11px}
-  .home2 .floor-grid .scene-card .stage{min-height:58px; padding:6px 4px 0}
+  .home2 .scene-card::before{inset:4px; border-radius:8px}
+  .home2 .floor-grid .scene-card .stage{min-height:0; padding:6px 4px 0}
   .home2 .floor-grid .scene-card .stage svg{width:min(90%,104px)}
   .home2 .floor-grid .scene-card .meta{padding:5px 5px 6px}
-  .home2 .floor-grid .scene-card .meta .name{font-size:9px!important; letter-spacing:.01em; line-height:1.1;
-    display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden}
+  .home2 .floor-grid .scene-card{--name-scale:.85; --name-gutter:12px}
+  .home2 .floor-grid .scene-card .meta .name{letter-spacing:.01em}
   .home2 .floor-grid .scene-card .meta .row{display:none}
   .home2 .floor-grid .scene-card .badge{top:5px; left:5px; font-size:6px; letter-spacing:.05em; padding:2px 5px}
   /* Rail cards sit 3-across on a phone — same compaction as the floor. */
   .home2 .ng-track{gap:8px; grid-auto-columns:calc((100% - 8px * 2) / 3)}
   .home2 .ng-card{border-radius:11px}
-  .home2 .ng-card .stage{min-height:66px; padding:6px 4px 0}
+  .home2 .ng-card .stage{min-height:0; padding:6px 4px 0}
   .home2 .ng-card .stage svg{width:min(90%,104px)}
   .home2 .ng-card .meta{padding:5px 6px 6px}
-  .home2 .ng-card .meta .name{font-size:9px!important; letter-spacing:.01em; line-height:1.1;
-    display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden}
+  .home2 .ng-card{--name-scale:.85; --name-gutter:14px}
+  .home2 .ng-card .meta .name{letter-spacing:.01em}
+  /* No line-clamp here: the width cap above already guarantees a one-line fit,
+     and an arced title that wrapped would break the curve across two rows. */
   .home2 .ng-card .meta .row{display:none}
   .home2 .ng-card .badge{top:5px; left:5px; font-size:6px; letter-spacing:.05em; padding:2px 5px}
   .home2 .shelf-head h3{font-size:12px}

@@ -16,8 +16,10 @@ import {
   CrashScene,
   MinesScene,
   FLOOR_GAMES,
+  FAMILY_MARK,
 } from '@/components/home2/scenes';
 import { SelfExclusionModal } from '@/components/ResponsibleGaming';
+import { CurvedName } from '@/components/home2/curved-name';
 
 /* ────────────────────────────────────────────────────────────
    Shared: hero ember particles (port of the lab's embers())
@@ -117,72 +119,102 @@ export function HomeTicker({ items = DEFAULT_TICKER_ITEMS }: { items?: string[] 
 }
 
 /* ────────────────────────────────────────────────────────────
-   2. HERO · PLAYER
+   2. HERO · PLAYER — the Player Card
+   Port of option 01 in public/profile-hero-lab.html. The card states rather
+   than narrates: identity, tier and balance embossed on one object, with the
+   three things a returning player actually clicks beside it. The greeting,
+   the "while you were away" digest and the resume paragraph are deliberately
+   gone — the ticker already carries that news, and the lab's whole point was
+   dropping five prose messages to zero.
    ──────────────────────────────────────────────────────────── */
-const DEFAULT_AVATAR = (
-  <svg viewBox="0 0 64 64" width="72" height="72">
-    <circle cx="32" cy="30" r="14" fill="#e8b98a" />
-    <rect x="14" y="44" width="36" height="22" rx="9" fill="#0f172a" />
-    <path d="M26 46l6 7 6-7-6-2z" fill="#fff" />
-    <rect x="29" y="52" width="6" height="9" rx="2" fill="#b91c1c" />
-    <rect x="18" y="22" width="28" height="7" rx="3" fill="#0b0e16" />
-    <rect x="22" y="6" width="20" height="18" rx="2" fill="#0b0e16" />
-    <rect x="22" y="20" width="20" height="4" rx="2" fill="#1c2333" />
-    <rect x="22" y="27" width="9" height="5" rx="2.5" fill="#0ea5b7" />
-    <rect x="33" y="27" width="9" height="5" rx="2.5" fill="#0ea5b7" />
-    <path d="M31 27h2v3h-2z" fill="#0b0e16" />
-    <path d="M27 38q5 4 10 0" stroke="#8a5a2b" strokeWidth="2" fill="none" strokeLinecap="round" />
-    <rect x="36" y="36" width="10" height="3" rx="1.5" fill="#7c4a21" transform="rotate(12 36 36)" />
-  </svg>
-);
 
-export interface HeroPlayerDigestItem {
-  html: string;
+/**
+ * Two letters for the monogram tile. A display name gives its initials; a
+ * single word gives first + last (Det → DT, as the lab drew it); a bare
+ * wallet address gives the first two characters after 0x, so the tile is
+ * still stable identity rather than noise.
+ */
+function monogramFor(name: string): string {
+  // A wallet-derived name is not a word — first + last would pull a letter
+  // from each end of a truncation, so take the two characters that actually
+  // identify the address.
+  const hex = /^0x([0-9a-f]{2})/i.exec(name.trim());
+  if (hex) return hex[1].toUpperCase();
+  const words = name.replace(/[….]/g, '').trim().split(/\s+/).filter(Boolean);
+  if (words.length >= 2) return (words[0][0] + words[1][0]).toUpperCase();
+  const w = words[0] ?? '';
+  if (w.length >= 2) return (w[0] + w[w.length - 1]).toUpperCase();
+  return (w || '?').toUpperCase();
 }
 
-const DEFAULT_DIGEST: HeroPlayerDigestItem[] = [
-  { html: '🏆 Weekly high: <b>48,200</b> on Plinko' },
-  { html: '📈 MORBIUS <b>+6.2%</b> this week' },
-  { html: '🎁 Rakeback ready: <b>1,120</b> — tap to claim' },
-];
+export interface HeroPlayerAction {
+  icon: string;
+  title: string;
+  sub: string;
+  href?: string;
+  onClick?: () => void;
+}
 
 export interface HeroPlayerProps {
   name?: string;
+  /** Wallet address, shown truncated on the card's identity line. */
+  address?: string;
+  /** Profile picture; falls back to the monogram tile when absent. */
+  avatarUrl?: string | null;
   tierName?: string;
-  nextTierName?: string;
+  tierEmoji?: string;
+  /** null when the player is already at the top rung. */
+  nextTierName?: string | null;
   nextTierRakeback?: string;
   wagerToNext?: string;
-  digest?: HeroPlayerDigestItem[];
-  resume?: { title: string; sub: string };
+  /** 0-100 along the current rung. */
+  progressPct?: number;
   balance?: string;
-  balanceUsd?: string;
-  avatar?: React.ReactNode;
+  /** Optional "MEMBER SINCE …" prefix; omitted when the join date is unknown. */
+  memberSince?: string;
+  /** First action row — where the player left off. Omitted if they have no history. */
+  resume?: { title: string; sub: string; href?: string };
   /** Optional ambient background layer (e.g. <PriceChartBg />) rendered behind .hero-inner. */
   chartBg?: React.ReactNode;
   onDeposit?: () => void;
   onDashboard?: () => void;
 }
 
-/* time-aware greeting — exactly the lab's logic */
-function computeGreeting(): string {
-  const h = new Date().getHours();
-  return h < 5 ? 'Late night' : h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening';
+function PlayerAction({ icon, title, sub, href, onClick }: HeroPlayerAction) {
+  const inner = (
+    <>
+      <span className="ic">{icon}</span>
+      <span className="tx">
+        <span className="tt">{title}</span>
+        <span className="ss">{sub}</span>
+      </span>
+      <span className="go">→</span>
+    </>
+  );
+  return href ? (
+    <Link href={href} className="pc-act">
+      {inner}
+    </Link>
+  ) : (
+    <button type="button" className="pc-act" onClick={onClick}>
+      {inner}
+    </button>
+  );
 }
 
 export function HeroPlayer({
-  name = 'Det',
-  tierName = 'SILVER',
-  nextTierName = 'GOLD',
-  nextTierRakeback = '12%',
-  wagerToNext = '2,450',
-  digest = DEFAULT_DIGEST,
-  resume = {
-    title: 'Blackjack — your seat is open',
-    sub: "Table #4 · 25–500 MORBIUS · you're up 3,200 lifetime here",
-  },
-  balance = '128,400',
-  balanceUsd = '≈ $53.93 · reserve synced 4s ago',
-  avatar = DEFAULT_AVATAR,
+  name = 'Player',
+  address,
+  avatarUrl = null,
+  tierName = 'BRONZE',
+  tierEmoji = '🥉',
+  nextTierName = 'SILVER',
+  nextTierRakeback = '8%',
+  wagerToNext = '0',
+  progressPct = 0,
+  balance = '0',
+  memberSince,
+  resume,
   chartBg = null,
   onDeposit,
   onDashboard,
@@ -190,86 +222,77 @@ export function HeroPlayer({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   useEmbers(canvasRef);
 
-  /* SSR-safe: same static default as the lab HTML, then set on mount */
-  const [greeting, setGreeting] = useState('Good evening');
-  useEffect(() => {
-    setGreeting(computeGreeting());
-  }, []);
+  const short = address ? `${address.slice(0, 6)}…${address.slice(-4)}` : null;
+  /* A player with no display name is already shown as their truncated
+     address, so don't print it a second time underneath. */
+  const nameIsAddress = /^0x/i.test(name.trim());
+  const identity = [memberSince ? `MEMBER SINCE ${memberSince}` : null, nameIsAddress ? null : short]
+    .filter(Boolean)
+    .join(' · ');
+  const atTop = !nextTierName;
 
   return (
     <header className="hero only-player">
       <canvas id="heroCanvas" ref={canvasRef} />
       {chartBg}
-      <div className="hero-inner hp-grid">
-        <div>
-          <div className="hp-greet">
-            <div className="avatar-wrap">
-              <div className="avatar-ring" />
-              <div className="avatar-face">{avatar}</div>
-            </div>
-            <div>
-              <h1>
-                <span id="greeting">{greeting}</span>, <span className="nm">{name}</span>.
-              </h1>
-              <div className="vipline">
-                <span className="tier">{tierName}</span>You&apos;re <b>{wagerToNext} MORBIUS</b> from{' '}
-                <b>{nextTierName}</b> — that&apos;s {nextTierRakeback} back on every losing bet.
-              </div>
-            </div>
-          </div>
-
-          <div className="digest">
-            <span className="d">
-              <span className="k">WHILE YOU WERE AWAY</span>
+      <div className="hero-inner pc">
+        <div className="pc-card">
+          <div className="pc-top">
+            <span className="pc-brand">MORBIUS · MEMBER</span>
+            <span className="tierchip">
+              {tierEmoji} {tierName}
             </span>
-            {digest.map((d, i) => (
-              <span key={i} className="d" dangerouslySetInnerHTML={{ __html: d.html }} />
-            ))}
           </div>
 
-          <div className="resume">
-            <div className="mini">
-              <svg viewBox="0 0 80 56" width="70">
-                <rect x="14" y="10" width="22" height="30" rx="3" fill="#f8fafc" transform="rotate(-8 25 25)" />
-                <rect x="34" y="8" width="22" height="30" rx="3" fill="#f8fafc" transform="rotate(7 45 23)" />
-                <text x="21" y="28" fontSize="11" fill="#dc2626" fontWeight="800" transform="rotate(-8 25 25)">
-                  A♥
-                </text>
-                <text x="41" y="26" fontSize="11" fill="#0f172a" fontWeight="800" transform="rotate(7 45 23)">
-                  K♠
-                </text>
-                <ellipse cx="63" cy="42" rx="9" ry="3.4" fill="#f59e0b" />
-                <ellipse cx="63" cy="38.5" rx="9" ry="3.4" fill="#fbbf24" />
-              </svg>
-            </div>
+          <div className="pc-body">
+            {avatarUrl ? (
+              <img className="av av-photo" src={avatarUrl} alt="" />
+            ) : (
+              <div className="av av-mono">{monogramFor(name)}</div>
+            )}
             <div>
-              <div className="tt">PICK UP WHERE YOU LEFT OFF</div>
-              <h3>{resume.title}</h3>
-              <p>{resume.sub}</p>
+              <div className="pc-name">{name}</div>
+              {identity && <div className="pc-sub mono">{identity}</div>}
             </div>
-            <div className="go">→</div>
+          </div>
+
+          <div className="pc-bal">
+            <div className="k">PLAY BALANCE</div>
+            <div className="v mono">
+              {balance} <span>MORBIUS</span>
+            </div>
+          </div>
+
+          <div className="pc-meter">
+            <div className="bar">
+              <i style={{ width: `${Math.max(0, Math.min(100, progressPct))}%` }} />
+            </div>
+            <div className="lbl">
+              {atTop ? (
+                <>
+                  <span>Top tier reached</span>
+                  <span>{nextTierRakeback} back on every loss</span>
+                </>
+              ) : (
+                <>
+                  <span>
+                    {wagerToNext} to {nextTierName}
+                  </span>
+                  <span>
+                    {nextTierRakeback} rakeback at {nextTierName}
+                  </span>
+                </>
+              )}
+            </div>
           </div>
         </div>
 
-        <div className="hp-side">
-          <div className="chip3d">
-            <div className="chip-coin">
-              <img src="/morbius/MorbiusLogo (3).png" alt="MORBIUS" />
-            </div>
-            <div className="lbl">PLAY BALANCE</div>
-            <div className="amt">
-              {balance} <span>MORBIUS</span>
-            </div>
-            <div className="usd">{balanceUsd}</div>
-            <div className="acts">
-              <button className="btn-gold" onClick={onDeposit}>
-                Deposit
-              </button>
-              <button className="btn-ghost" onClick={onDashboard}>
-                Dashboard
-              </button>
-            </div>
-          </div>
+        <div className="pc-side">
+          {resume && (
+            <PlayerAction icon="🂡" title={resume.title} sub={resume.sub} href={resume.href} />
+          )}
+          <PlayerAction icon="💰" title="Deposit" sub="top up your play balance" onClick={onDeposit} />
+          <PlayerAction icon="📊" title="Dashboard" sub="history, stats & verify" onClick={onDashboard} />
         </div>
       </div>
     </header>
@@ -596,17 +619,25 @@ const FLOOR_FILTERS: { f: string; label: string }[] = [
 ];
 
 function FloorCard({ g }: { g: FloorGameEntry }) {
-  const style = (g.glow ? ({ '--glow': g.glow } as React.CSSProperties) : undefined);
+  /* `nameSize` stays the per-game *relative* weighting the catalog authored
+     (long names smaller). The absolute size is CSS's call — each context
+     multiplies it by its own `--name-scale`, so one knob resizes every title
+     without touching 30-odd catalog rows. */
+  const style = {
+    '--name-size': g.nameSize,
+    ...(g.glow ? { '--glow': g.glow } : {}),
+  } as React.CSSProperties;
   return (
     <Link href={g.href} className="scene-card" data-cat={g.cat} style={style}>
       {g.badge && <span className={`badge ${g.badgeClass ?? 'new'}`}>{g.badge}</span>}
+      <span className="wm" aria-hidden="true">
+        {FAMILY_MARK[g.family]}
+      </span>
       <div className="stage">
         <g.Scene />
       </div>
       <div className="meta">
-        <div className={`name ${g.fontClass}`} style={{ fontSize: g.nameSize }}>
-          {g.name}
-        </div>
+        <CurvedName text={g.name} className={`name ${g.fontClass}`} />
         <div className="row">
           <span className="st">{g.blurb}</span>
         </div>

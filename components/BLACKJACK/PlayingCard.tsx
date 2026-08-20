@@ -5,6 +5,7 @@ import Image from 'next/image';
 import { Card } from '@/app/BLACKJACK/types';
 import { useBlackjackTableLayout } from '@/components/BLACKJACK/BlackjackTableLayoutContext';
 import { cardFacePath } from '@/lib/blackjack-table-layout';
+import { cardBackById } from '@/lib/table-card-backs';
 import './blackjack-cards.css';
 
 interface PlayingCardProps {
@@ -68,6 +69,8 @@ const PlayingCard: React.FC<PlayingCardProps> = ({ card, hidden = false, owner, 
     transform: `translateX(${fromX}px) translateY(${fromY}px) rotate(${fromRot}deg) scale(${fromScale})`,
   } : {};
 
+  const back = cardBackById(layout.cards.backDesign);
+
   if (hidden) {
     return (
       <div
@@ -79,15 +82,28 @@ const PlayingCard: React.FC<PlayingCardProps> = ({ card, hidden = false, owner, 
           ...initialStyle,
         }}
       >
-        <div className="w-full h-full bg-slate-900 overflow-hidden">
-          <Image
-            src={layout.cards.backImage}
-            alt="Card back"
-            width={imageSize.w}
-            height={imageSize.h}
-            className="w-full h-full object-cover"
-            priority
-          />
+        <div
+          className="blackjack-card-back"
+          style={{ background: back.background, boxShadow: back.boxShadow }}
+        >
+          {/* A real card back has a margin: the pattern runs to the edge, the
+              mark sits inside a rule. Before this, the table's logo was simply
+              stretched edge to edge by object-cover and read as a logo tile. */}
+          <span className="blackjack-card-back-rule" />
+          {layout.cards.backImage ? (
+            /* Plain <img>, not next/image: a table's mark can be a token logo
+               served from any host a creator picks, and next/image would
+               reject every hostname that isn't in next.config's allowlist.
+               The mark is small and decorative, so there's nothing to
+               optimise away. */
+            <img src={layout.cards.backImage} alt="Card back" className="blackjack-card-back-mark" />
+          ) : (
+            back.glyph && (
+              <span className="blackjack-card-back-glyph" style={{ color: back.glyphColor }}>
+                {back.glyph}
+              </span>
+            )
+          )}
         </div>
       </div>
     );

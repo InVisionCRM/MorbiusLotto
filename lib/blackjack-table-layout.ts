@@ -115,8 +115,17 @@ export interface BlackjackTableLayout {
     pitch: { dealer: number; player: number };
     restShadow: string;
     hoverShadow: string;
-    /** Image shown on the back of a face-down card. */
+    /**
+     * Mark centred on a face-down card. Sized to sit inside the back's
+     * border rather than being stretched over the whole card — the table's
+     * logo is a badge on the back, not the back itself.
+     */
     backImage: string;
+    /**
+     * Which patterned field the mark sits on; an id from TABLE_CARD_BACKS.
+     * Unknown or missing ids fall back to that module's default.
+     */
+    backDesign?: string;
     /** Directory holding the card face PNGs, named like `AS.png`, `10H.png`. */
     faceDir: string;
     /** Corner rounding, as a CSS length. */
@@ -164,6 +173,7 @@ export const DEFAULT_BLACKJACK_TABLE_LAYOUT: BlackjackTableLayout = {
     restShadow: '0 2px 4px rgba(0, 0, 0, 0.2)',
     hoverShadow: '0 6px 12px rgba(0, 0, 0, 0.4)',
     backImage: '/Pulse Branding/Logo/ball.png',
+    backDesign: 'lattice',
     faceDir: '/BlackJack/Cards/PNG',
     radius: '0.5rem',
     mobileRadius: '0.125rem',
