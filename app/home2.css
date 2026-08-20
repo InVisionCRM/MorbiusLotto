@@ -283,17 +283,51 @@
 .home2 .spot-grid{display:grid; grid-template-columns:1.6fr 1fr 1fr; gap:16px}
 .home2 .scene-card{
   position:relative; border-radius:18px; overflow:hidden; cursor:pointer;
-  background:linear-gradient(165deg,#0e1526,#080b14 70%);
+  /* Layers, top to bottom: a top-edge sheen, a fine dot grid, a faint
+     diagonal weave, then the base gradient. Portrait cards leave a lot of
+     flat panel around the scene art, and unbroken flat dark reads as unfinished
+     — this gives the surface something to catch light on without competing
+     with the art. All four are near-invisible individually; together they
+     read as printed stock. */
+  background:
+    radial-gradient(120% 62% at 50% -12%, rgba(255,255,255,.05), transparent 62%),
+    radial-gradient(circle 1px at 1px 1px, rgba(148,163,184,.055) 1px, transparent 0),
+    repeating-linear-gradient(135deg, rgba(255,255,255,.014) 0 1px, transparent 1px 7px),
+    linear-gradient(165deg,#0e1526,#080b14 70%);
+  background-size:auto, 14px 14px, auto, auto;
   border:1px solid var(--line2); transition:transform .25s, box-shadow .25s, border-color .25s;
   display:flex; flex-direction:column;
+}
+/* Inlay rule, set in from the edge the way a card's border print is. Two
+   hairlines — one light, one dark just inside it — so it reads as embossed
+   rather than drawn on. */
+.home2 .scene-card::before{
+  content:''; position:absolute; inset:6px; border-radius:13px; z-index:2;
+  border:1px solid rgba(148,163,184,.13);
+  box-shadow:inset 0 0 0 1px rgba(0,0,0,.3);
+  pointer-events:none;
+}
+/* Shelf watermark: big, rotated, mostly off the corner, barely there. */
+.home2 .scene-card .wm{
+  /* cqw against the card itself — only the floor and rail cards emit a mark,
+     and both are declared size containers further down. */
+  position:absolute; right:-4%; bottom:-6%; z-index:0; pointer-events:none;
+  font-size:58cqw; line-height:1; color:#fff; opacity:.03;
+  transform:rotate(-14deg); user-select:none;
 }
 .home2 .scene-card:hover{transform:translateY(-5px); border-color:rgba(34,211,238,.45); box-shadow:0 22px 60px rgba(3,10,20,.8), 0 0 30px rgba(34,211,238,.12)}
 .home2 .scene-card .stage{
   position:relative; padding:8px 10px 0; flex:1; min-height:150px;
   display:grid; place-items:center; perspective:700px; overflow:hidden;
 }
+.home2 .scene-card .stage{z-index:1}
 .home2 .scene-card .stage::before{content:''; position:absolute; inset:auto 8% -34% 8%; height:70%;
   background:radial-gradient(ellipse at 50% 0%, var(--glow, rgba(34,211,238,.22)), transparent 65%)}
+/* A hairline where the art meets the felt, tinted by the card's own glow —
+   it seats the scene instead of leaving it floating in the panel. */
+.home2 .scene-card .stage::after{content:''; position:absolute; left:16%; right:16%; bottom:6px; height:1px;
+  background:linear-gradient(90deg, transparent, var(--glow, rgba(34,211,238,.22)), transparent);
+  opacity:.85; pointer-events:none}
 .home2 .scene-card .stage svg{width:min(84%,300px); height:auto; transform:rotateX(9deg);
   filter:drop-shadow(0 18px 22px rgba(0,0,0,.55))}
 @keyframes h2-sceneFloat{50%{transform:rotateX(9deg) translateY(-6px)}}
@@ -348,6 +382,9 @@
   padding-bottom:6px; scrollbar-width:none}
 .home2 .ng-track::-webkit-scrollbar{display:none}
 .home2 .ng-card{scroll-snap-align:start; aspect-ratio:4/5; --name-scale:1.15}
+/* One line only: a wrapped blurb lifts its card's title out of line with the
+   rest of the row, and the rail is the narrowest place a blurb has to fit. */
+.home2 .ng-card .meta .row .st{white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%}
 .home2 .ng-card .stage{min-height:0}
 @media (min-width:700px){
   .home2 .ng-track{grid-auto-columns:calc((100% - 12px * 4) / 5)}
@@ -835,6 +872,7 @@
   /* Compact 4-across game floor on phones */
   .home2 .floor-grid{grid-template-columns:repeat(4,1fr); gap:7px}
   .home2 .floor-grid .scene-card{border-radius:11px}
+  .home2 .scene-card::before{inset:4px; border-radius:8px}
   .home2 .floor-grid .scene-card .stage{min-height:0; padding:6px 4px 0}
   .home2 .floor-grid .scene-card .stage svg{width:min(90%,104px)}
   .home2 .floor-grid .scene-card .meta{padding:5px 5px 6px}

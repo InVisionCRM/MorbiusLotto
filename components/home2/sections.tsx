@@ -16,6 +16,7 @@ import {
   CrashScene,
   MinesScene,
   FLOOR_GAMES,
+  FAMILY_MARK,
 } from '@/components/home2/scenes';
 import { SelfExclusionModal } from '@/components/ResponsibleGaming';
 import { CurvedName } from '@/components/home2/curved-name';
@@ -629,6 +630,9 @@ function FloorCard({ g }: { g: FloorGameEntry }) {
   return (
     <Link href={g.href} className="scene-card" data-cat={g.cat} style={style}>
       {g.badge && <span className={`badge ${g.badgeClass ?? 'new'}`}>{g.badge}</span>}
+      <span className="wm" aria-hidden="true">
+        {FAMILY_MARK[g.family]}
+      </span>
       <div className="stage">
         <g.Scene />
       </div>

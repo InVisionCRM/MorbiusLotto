@@ -1101,6 +1101,18 @@ export type FloorGame = {
   badgeClass?: "new" | "hot" | "feat";
 };
 
+/**
+ * Watermark printed faintly into a card's background, chosen by shelf. It is
+ * the one piece of art every card in a family shares, so a card reads as
+ * belonging to its shelf even when the scene art above it does not.
+ */
+export const FAMILY_MARK: Record<FloorGame['family'], string> = {
+  blackjack: '\u2660',
+  poker: '\u2663',
+  table: '\u2666',
+  arcade: '\u2726',
+};
+
 export const FLOOR_GAMES: FloorGame[] = [
   { key: "blackjack", name: "BLACKJACK", family: "blackjack", addedAt: "2026-07-22", cat: "cards", fontClass: "f-titan", nameSize: "14px", blurb: "Single + multiplayer", Scene: BlackjackScene, glow: "rgba(251,191,36,.18)", href: "/BLACKJACK", badge: "3 SEATS LIVE", badgeClass: "new" },
   { key: "poker", name: "POKER", family: "poker", addedAt: "2026-07-22", cat: "cards", fontClass: "f-bowlby", nameSize: "13px", blurb: "Hold'em cash tables", Scene: PokerScene, glow: "rgba(167,139,250,.2)", href: "/poker", badge: "2 TABLES", badgeClass: "new" },

@@ -18,7 +18,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
-import { FLOOR_GAMES } from './scenes';
+import { FLOOR_GAMES, FAMILY_MARK } from './scenes';
 import { CurvedName } from './curved-name';
 
 /** How many of the newest games the rail carries. */
@@ -111,6 +111,9 @@ export function NewGames() {
           return (
             <Link key={g.key} href={g.href} className="ng-card scene-card" style={style}>
               {fresh && <span className={`badge ${fresh.hot ? 'new' : 'feat'}`}>{fresh.label}</span>}
+              <span className="wm" aria-hidden="true">
+                {FAMILY_MARK[g.family]}
+              </span>
               <div className="stage">
                 <g.Scene />
               </div>
