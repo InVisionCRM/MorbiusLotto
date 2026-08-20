@@ -1,0 +1,433 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Create-A-Table — phone studio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+/* ─────────────────────────────────────────────────────────────────────────
+   Create-A-Table, phone-first.
+
+   The problem this is answering: today every choice lives in a long scrolling
+   column *below* the table, so you scroll down to pick a deal style, then back
+   up to see what it did. Every choice in this tool is visual — nobody judges
+   "Sweep" against "Flick" from the word — so a layout that puts the choice
+   off-screen from the result is broken by construction.
+
+   The shape here: the page never scrolls. The table is pinned in the top
+   two-thirds and is never covered. A short sheet occupies the bottom third
+   with one snapping row of live previews. Tapping a tile applies instantly and
+   the table re-deals behind it, sheet still open, thumb still in place.
+   ───────────────────────────────────────────────────────────────────────── */
+:root{
+  --abyss:#050e16; --cyan:#22d3ee; --cyan-soft:rgba(34,211,238,.12); --cyan-edge:rgba(34,211,238,.35);
+  --win:#f59e0b; --ink:#e2e8f0; --slate-400:#94a3b8; --slate-500:#64748b; --field:#081420;
+  --line:rgba(148,163,184,.14);
+  --disp:'Chakra Petch',system-ui,sans-serif; --mono:'JetBrains Mono',ui-monospace,monospace;
+  --sheet-h:33vh; --dock-h:60px;
+}
+*{box-sizing:border-box; -webkit-tap-highlight-color:transparent}
+html,body{height:100%; margin:0}
+body{
+  background:radial-gradient(ellipse 90% 60% at 50% -10%,#0a1a2a,transparent 70%),linear-gradient(160deg,#050e16,#02070b 90%);
+  color:var(--ink); font-family:var(--disp);
+  /* The whole studio is an app shell, not a document — nothing scrolls but
+     the carousels themselves. */
+  overflow:hidden;
+}
+.app{height:100dvh; display:flex; flex-direction:column}
+
+/* ── top bar: one line, no tagline ── */
+.top{display:flex; align-items:center; gap:8px; padding:10px 12px 6px; flex:0 0 auto}
+.top h1{margin:0; font-size:15px; font-weight:700; letter-spacing:.06em; flex:1}
+.top h1 em{font-style:normal; color:var(--cyan)}
+.icon{
+  width:36px; height:36px; border-radius:10px; display:grid; place-items:center;
+  background:var(--field); border:1px solid var(--line); color:var(--slate-400);
+  font-size:15px; cursor:pointer;
+}
+.icon:disabled{opacity:.35}
+.icon.go{border-color:var(--cyan-edge); color:var(--cyan)}
+
+/* ── the table: pinned, never covered by the sheet ── */
+.stage{
+  flex:1 1 auto; position:relative; min-height:0;
+  display:grid; place-items:center; padding:4px 12px 8px;
+  transition:padding-bottom .28s cubic-bezier(.2,.9,.25,1);
+}
+/* When the sheet is up the stage gives back exactly the sheet's height, so
+   the table shrinks to fit above it instead of being covered. Being able to
+   watch the table while you choose is the entire point — if the sheet ever
+   overlaps it, this layout is worth nothing. */
+.app.sheet-open .stage{padding-bottom:calc(var(--sheet-h) + 10px)}
+.felt{
+  position:relative; width:100%; aspect-ratio:4/3;
+  /* max-width is set from the free height in fit() — with aspect-ratio, a
+     width-driven box can't also honour a max-height without distorting. */
+  max-width:520px;
+  border-radius:16px; overflow:hidden;
+  background:radial-gradient(ellipse at 50% 26%,var(--felt-a,#14532d),var(--felt-b,#052e16) 78%);
+  box-shadow:inset 0 6px 22px rgba(0,0,0,.85), 0 10px 40px rgba(0,0,0,.5);
+  border:1px solid rgba(148,163,184,.16);
+  transition:background .35s ease;
+}
+.felt{transition:background .35s ease, max-width .28s cubic-bezier(.2,.9,.25,1)}
+.felt .rail{position:absolute; inset:5px; border-radius:12px; border:1px solid rgba(255,255,255,.06)}
+.felt .brand{
+  position:absolute; top:15%; left:50%; transform:translateX(-50%);
+  font-size:10px; letter-spacing:.34em; color:rgba(255,255,255,.34); font-weight:700;
+}
+/* dealer + seats — the seats are tap targets in Fine-tune */
+.spot{
+  position:absolute; width:34px; height:34px; margin:-17px 0 0 -17px; border-radius:50%;
+  border:1px dashed rgba(255,255,255,.22); display:grid; place-items:center;
+  font-size:9px; color:rgba(255,255,255,.4); font-family:var(--mono);
+  transition:border-color .18s, background .18s, transform .18s;
+}
+.spot.on{border-color:var(--cyan); border-style:solid; background:rgba(34,211,238,.16); color:#fff; transform:scale(1.12)}
+.card{
+  position:absolute; width:34px; height:48px; margin:-24px 0 0 -17px; border-radius:4px;
+  background:linear-gradient(160deg,#fff,#dfe6ee); box-shadow:0 6px 12px rgba(0,0,0,.5);
+  font:700 11px/1 var(--mono); color:#0f172a; padding:4px;
+}
+.card.back{background:repeating-linear-gradient(45deg,#0e2f4a 0 5px,#123c5e 5px 10px)}
+.card.deal{animation:dealIn var(--deal-ms,420ms) var(--deal-ease,cubic-bezier(.2,.9,.25,1)) both}
+@keyframes dealIn{from{transform:translate(var(--from-x,120px),var(--from-y,-70px)) rotate(var(--from-rot,14deg)) scale(var(--from-s,.85)); opacity:0}}
+
+/* ── dock: six steps, one thumb row, no wrap ── */
+.dock{
+  flex:0 0 auto; height:var(--dock-h); display:flex; gap:6px; padding:6px 10px;
+  border-top:1px solid var(--line); background:rgba(3,9,15,.9);
+  padding-bottom:max(6px,env(safe-area-inset-bottom));
+}
+.step{
+  flex:1; min-width:0; border-radius:11px; border:1px solid var(--line); background:var(--field);
+  color:var(--slate-400); font-family:var(--disp); font-size:9px; font-weight:600; letter-spacing:.04em;
+  display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px; cursor:pointer;
+  transition:color .18s, border-color .18s, background .18s;
+}
+.step .g{font-size:15px; line-height:1}
+.step.on{color:var(--cyan); border-color:var(--cyan-edge); background:rgba(34,211,238,.09)}
+.step.done .g::after{content:'·'; color:var(--win)}
+
+/* ── the sheet: bottom third only, table stays visible above it ── */
+.sheet{
+  position:fixed; left:0; right:0; bottom:var(--dock-h); z-index:20;
+  height:var(--sheet-h); display:flex; flex-direction:column;
+  background:linear-gradient(180deg,rgba(6,16,26,.97),rgba(4,10,17,.99));
+  border-top:1px solid var(--cyan-edge); border-radius:16px 16px 0 0;
+  box-shadow:0 -14px 40px rgba(0,0,0,.6);
+  transform:translateY(110%); transition:transform .28s cubic-bezier(.2,.9,.25,1);
+  padding-bottom:max(0px,env(safe-area-inset-bottom));
+}
+.sheet.open{transform:translateY(0)}
+.grab{width:38px; height:4px; border-radius:99px; background:rgba(148,163,184,.3); margin:7px auto 4px; flex:0 0 auto}
+.sheet-head{display:flex; align-items:center; gap:8px; padding:0 12px 6px; flex:0 0 auto}
+.sheet-head .t{font-size:11px; letter-spacing:.12em; text-transform:uppercase; color:var(--slate-400); flex:1}
+.sheet-head .x{width:28px; height:28px; border-radius:8px; border:1px solid var(--line); background:transparent; color:var(--slate-400); cursor:pointer}
+
+/* the one line of chrome that lets a step carry more than one axis */
+.segs{display:flex; gap:6px; padding:0 12px 8px; overflow-x:auto; scrollbar-width:none; flex:0 0 auto}
+.segs::-webkit-scrollbar{display:none}
+.seg{
+  flex:0 0 auto; padding:5px 11px; border-radius:99px; font-size:10.5px; font-weight:600; letter-spacing:.04em;
+  border:1px solid var(--line); background:var(--field); color:var(--slate-400); cursor:pointer; font-family:var(--disp);
+}
+.seg.on{border-color:var(--cyan-edge); color:var(--cyan); background:rgba(34,211,238,.1)}
+
+/* the carousel — one row, snapping, live previews */
+.rail-wrap{flex:1 1 auto; min-height:0; display:flex; align-items:flex-start}
+.rail-x{
+  display:flex; gap:9px; overflow-x:auto; scroll-snap-type:x mandatory;
+  padding:2px 12px 10px; width:100%; scrollbar-width:none;
+}
+.rail-x::-webkit-scrollbar{display:none}
+.tile{
+  flex:0 0 auto; width:96px; scroll-snap-align:center; border-radius:12px; cursor:pointer;
+  border:1px solid var(--line); background:var(--field); padding:7px; text-align:center;
+  color:var(--slate-400); font-family:var(--disp); transition:border-color .18s, background .18s, transform .18s;
+}
+.tile.on{border-color:var(--cyan); background:rgba(34,211,238,.1); color:var(--ink); transform:translateY(-3px)}
+/* The tile's parts are spans inside a <button>; without this they stay inline
+   and the preview box collapses behind the label. */
+.tile .prev,.tile .nm,.tile .ds{display:block}
+.tile .prev{
+  height:52px; border-radius:8px; margin-bottom:6px; position:relative; overflow:hidden;
+  background:radial-gradient(ellipse at 50% 30%,#14532d,#052e16 80%);
+}
+.tile .nm{font-size:10px; font-weight:700; letter-spacing:.03em; line-height:1.15}
+.tile .ds{font-size:8.5px; color:var(--slate-500); margin-top:2px; line-height:1.2}
+
+/* live mini previews inside the tiles */
+.mini{position:absolute; width:15px; height:21px; border-radius:2px; background:linear-gradient(160deg,#fff,#d8e2ec);
+  left:50%; top:50%; margin:-10px 0 0 -7px; box-shadow:0 3px 6px rgba(0,0,0,.5)}
+.mini.a{animation:miniLoop var(--loop,2200ms) var(--ease,cubic-bezier(.2,.9,.25,1)) infinite}
+@keyframes miniLoop{
+  0%{transform:translate(var(--mx,26px),var(--my,-16px)) rotate(var(--mr,14deg)) scale(var(--ms,.85)); opacity:0}
+  22%,72%{transform:none; opacity:1} 100%{transform:none; opacity:1}
+}
+.swatch{position:absolute; inset:0}
+.pattern-lattice{background:repeating-linear-gradient(45deg,#0e2f4a 0 5px,#123c5e 5px 10px)}
+.pattern-abyss{background:radial-gradient(circle at 50% 40%,#12263c,#050d16)}
+.pattern-ruby{background:repeating-linear-gradient(135deg,#4c1020 0 6px,#651427 6px 12px)}
+.pattern-gilt{background:repeating-linear-gradient(90deg,#3d2f08 0 4px,#5a460d 4px 8px)}
+.pattern-ink{background:linear-gradient(160deg,#1b1b22,#0a0a0f)}
+
+/* fine-tune: direct manipulation, plus only the fiddly numbers */
+.knobs{display:flex; gap:10px; padding:0 12px 10px; align-items:center; flex-wrap:wrap}
+.knob{flex:1 1 130px; min-width:120px}
+.knob .kl{display:flex; justify-content:space-between; font-size:9.5px; letter-spacing:.1em;
+  text-transform:uppercase; color:var(--slate-500); margin-bottom:3px}
+.knob .kl b{font-family:var(--mono); color:var(--cyan); font-weight:400}
+input[type=range]{width:100%; accent-color:var(--cyan); height:26px}
+.tip{padding:0 12px 8px; font-size:10px; color:var(--slate-500); line-height:1.4}
+.tip b{color:var(--slate-400)}
+
+/* upload: what replaces the wall of other people's tables */
+.up{
+  margin:0 12px; padding:14px; border:1px dashed var(--cyan-edge); border-radius:12px;
+  text-align:center; color:var(--slate-400); font-size:11px; cursor:pointer; background:rgba(34,211,238,.04);
+}
+.up b{display:block; color:var(--cyan); font-size:12px; margin-bottom:3px}
+.toast{
+  position:fixed; left:50%; bottom:calc(var(--dock-h) + 12px); transform:translateX(-50%) translateY(14px);
+  background:rgba(8,20,32,.96); border:1px solid var(--cyan-edge); color:var(--ink);
+  padding:7px 14px; border-radius:99px; font-size:11px; z-index:40; opacity:0;
+  transition:opacity .2s, transform .2s; pointer-events:none;
+}
+.toast.on{opacity:1; transform:translateX(-50%) translateY(0)}
+@media (prefers-reduced-motion:reduce){*{animation-duration:.001ms!important; transition-duration:.001ms!important}}
+</style>
+
+<div class="app">
+  <div class="top">
+    <h1>CREATE-A-<em>TABLE</em></h1>
+    <button class="icon" id="undo" disabled title="Undo">&#8629;</button>
+    <button class="icon" id="deal" title="Deal preview">&#9654;</button>
+    <button class="icon go" id="save" title="Save">&#10003;</button>
+  </div>
+
+  <div class="stage">
+    <div class="felt" id="felt">
+      <div class="rail"></div>
+      <div class="brand" id="brand">MORBIUS</div>
+      <div id="spots"></div>
+      <div id="cards"></div>
+    </div>
+  </div>
+
+  <div class="dock" id="dock"></div>
+</div>
+
+<div class="sheet" id="sheet">
+  <div class="grab"></div>
+  <div class="sheet-head"><span class="t" id="sheetTitle">Table art</span><button class="x" id="closeSheet">&times;</button></div>
+  <div class="segs" id="segs"></div>
+  <div class="rail-wrap"><div class="rail-x" id="rail"></div></div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+/* ── state ─────────────────────────────────────────────────────────────── */
+const S = {
+  step:null, seg:0, seat:2,
+  felt:'emerald', back:'lattice', size:'normal',
+  dealIn:0, clearOut:0, fx:0,
+  seats:[{x:18,y:74},{x:34,y:82},{x:50,y:85},{x:66,y:82},{x:82,y:74}],
+  angle:0, pitch:12,
+};
+
+const FELTS = [
+  {id:'emerald', nm:'Emerald', a:'#14532d', b:'#052e16'},
+  {id:'crimson', nm:'Crimson', a:'#7f1d1d', b:'#2b0707'},
+  {id:'midnight',nm:'Midnight',a:'#1e3a5f', b:'#050d18'},
+  {id:'plum',    nm:'Plum',    a:'#4c1d63', b:'#1a0726'},
+  {id:'slate',   nm:'Slate',   a:'#334155', b:'#0b1220'},
+  {id:'sand',    nm:'Sand',    a:'#78562a', b:'#2a1c08'},
+];
+const BACKS = [
+  {id:'lattice',nm:'Lattice'},{id:'abyss',nm:'Abyss'},{id:'ruby',nm:'Ruby'},
+  {id:'gilt',nm:'Gilt'},{id:'ink',nm:'Ink'},
+];
+const SIZES = [{id:'small',nm:'Small'},{id:'normal',nm:'Normal'},{id:'medium',nm:'Medium'},{id:'large',nm:'Large'}];
+/* the real DEAL_IN_PRESETS / CLEAR_OUT_PRESETS labels */
+const DEAL_IN = [
+  {nm:'From the shoe', ds:'Stock', mx:34, my:-8,  mr:8,  ms:.9,  ms2:420},
+  {nm:'Dealer arc',    ds:'Pitched settle', mx:26, my:-26, mr:18, ms:.86, ms2:520},
+  {nm:'Pitch slide',   ds:'Flat and low', mx:44, my:2,   mr:3,  ms:.94, ms2:380},
+  {nm:'Sky drop',      ds:'From above', mx:0,  my:-46, mr:-6, ms:.8,  ms2:460},
+  {nm:'Snap deal',     ds:'Businesslike', mx:20, my:-10, mr:10, ms:.92, ms2:240},
+  {nm:'Slow luxe',     ds:'High-roller pace', mx:24, my:-18, mr:12, ms:.88, ms2:760},
+];
+const CLEAR_OUT = [
+  {nm:'To the discard', ds:'Stock'},{nm:'Fling right', ds:'Off the right edge'},
+  {nm:'Drop off', ds:'Off the front'},{nm:'Vanish', ds:'Shrinks in place'},
+  {nm:'Sweep left', ds:'Dragged off, flat'},
+];
+const FX = ['Dry','Big room','Cavern','Tight & punchy','Slapback','Echo hall','Across the room','Deep','Chirpy']
+  .map(n=>({nm:n, ds:''}));
+
+const STEPS = [
+  {id:'art',   g:'▦', nm:'Art',    segs:['Felt','Upload']},
+  {id:'cards', g:'\u{1F0A1}', nm:'Cards',  segs:['Back','Size']},
+  {id:'anim',  g:'⟳', nm:'Motion', segs:['Deal in','Clear out']},
+  {id:'sound', g:'♪', nm:'Sound',  segs:['Space']},
+  {id:'tune',  g:'✥', nm:'Tune',   segs:['Seats','Cards']},
+  {id:'save',  g:'☁', nm:'Save',   segs:[]},
+];
+
+/* ── render: table ─────────────────────────────────────────────────────── */
+const felt=document.getElementById('felt'), spotsEl=document.getElementById('spots'), cardsEl=document.getElementById('cards');
+function paintFelt(){
+  const f=FELTS.find(x=>x.id===S.felt);
+  felt.style.setProperty('--felt-a',f.a); felt.style.setProperty('--felt-b',f.b);
+}
+function paintSpots(){
+  spotsEl.innerHTML = S.seats.map((s,i)=>
+    `<div class="spot${S.step==='tune'&&S.seat===i?' on':''}" data-seat="${i}" style="left:${s.x}%;top:${s.y}%">${i+1}</div>`
+  ).join('');
+}
+function deal(){
+  const p=DEAL_IN[S.dealIn];
+  const seat=S.seats[S.seat];
+  const shown=[[50,30,'back'],[43,30,''],[seat.x,seat.y-9,''],[seat.x+7,seat.y-9,'']];
+  cardsEl.innerHTML = shown.map(([x,y,k],i)=>
+    `<div class="card ${k} deal" style="left:${x}%;top:${y}%;--from-x:${p.mx}px;--from-y:${p.my}px;--from-rot:${p.mr}deg;--from-s:${p.ms};--deal-ms:${p.ms2}ms;animation-delay:${i*90}ms;transform:rotate(${S.pitch*(i%2?1:-1)*0.4}deg)">${k?'':'A♠'}</div>`
+  ).join('');
+}
+
+/* ── render: dock + sheet ──────────────────────────────────────────────── */
+const dock=document.getElementById('dock'), sheet=document.getElementById('sheet'),
+      rail=document.getElementById('rail'), segs=document.getElementById('segs'),
+      sheetTitle=document.getElementById('sheetTitle');
+
+dock.innerHTML = STEPS.map(s=>`<button class="step" data-step="${s.id}"><span class="g">${s.g}</span>${s.nm}</button>`).join('');
+dock.addEventListener('click', e=>{
+  const b=e.target.closest('.step'); if(!b) return;
+  const id=b.dataset.step;
+  if(S.step===id){ closeSheet(); return; }      // tapping the open step closes it
+  S.step=id; S.seg=0; openSheet();
+});
+const appEl=document.querySelector('.app'), stageEl=document.querySelector('.stage');
+/* Cap the felt's width by whatever height is actually free, so it always sits
+   fully above the sheet. Runs after the padding transition starts; the felt's
+   own width transition makes the resize read as one motion. */
+function fit(){
+  const st=getComputedStyle(stageEl);
+  const free=stageEl.clientHeight - parseFloat(st.paddingTop) - parseFloat(st.paddingBottom);
+  felt.style.maxWidth = Math.max(160, Math.min(520, free * 4/3)) + 'px';
+}
+addEventListener('resize', fit);
+
+function openSheet(){
+  sheet.classList.add('open'); appEl.classList.add('sheet-open'); requestAnimationFrame(fit);
+  [...dock.children].forEach(b=>b.classList.toggle('on', b.dataset.step===S.step));
+  const st=STEPS.find(s=>s.id===S.step);
+  sheetTitle.textContent = st.nm;
+  segs.innerHTML = st.segs.map((s,i)=>`<button class="seg${i===S.seg?' on':''}" data-seg="${i}">${s}</button>`).join('');
+  segs.style.display = st.segs.length>1 ? 'flex' : 'none';
+  paintSheet(); paintSpots();
+}
+function closeSheet(){ S.step=null; sheet.classList.remove('open'); appEl.classList.remove('sheet-open'); requestAnimationFrame(fit); [...dock.children].forEach(b=>b.classList.remove('on')); paintSpots(); }
+document.getElementById('closeSheet').onclick=closeSheet;
+segs.addEventListener('click', e=>{
+  const b=e.target.closest('.seg'); if(!b) return;
+  S.seg=+b.dataset.seg;
+  [...segs.children].forEach(x=>x.classList.toggle('on',x===b));
+  paintSheet();
+});
+
+function tiles(list, activeIdx, prevHtml, onPick){
+  rail.innerHTML = list.map((it,i)=>
+    `<button class="tile${i===activeIdx?' on':''}" data-i="${i}">
+       <span class="prev">${prevHtml(it,i)}</span>
+       <span class="nm">${it.nm}</span>${it.ds?`<span class="ds">${it.ds}</span>`:''}
+     </button>`).join('');
+  rail.onclick = e=>{ const b=e.target.closest('.tile'); if(!b) return; onPick(+b.dataset.i); };
+}
+function showKnobs(html){ rail.innerHTML = `<div style="width:100%">${html}</div>`; }
+
+function paintSheet(){
+  const st=S.step;
+  if(st==='art'){
+    if(S.seg===0) tiles(FELTS, FELTS.findIndex(f=>f.id===S.felt),
+      f=>`<span class="swatch" style="background:radial-gradient(ellipse at 50% 30%,${f.a},${f.b} 80%)"></span>`,
+      i=>{ S.felt=FELTS[i].id; paintFelt(); paintSheet(); toast(FELTS[i].nm); });
+    else showKnobs(`<div class="up"><b>Upload your table art</b>PNG / JPG / WEBP &middot; landscape works best</div>
+      <div class="tip">The old grid of seventeen existing tables is gone — that was browsing, not building.</div>`);
+  }
+  if(st==='cards'){
+    if(S.seg===0) tiles(BACKS, BACKS.findIndex(b=>b.id===S.back),
+      b=>`<span class="swatch pattern-${b.id}"></span>`,
+      i=>{ S.back=BACKS[i].id; deal(); paintSheet(); toast(BACKS[i].nm); });
+    else tiles(SIZES, SIZES.findIndex(s=>s.id===S.size),
+      (s,i)=>`<span class="mini" style="transform:scale(${.7+i*.18})"></span>`,
+      i=>{ S.size=SIZES[i].id; paintSheet(); toast(SIZES[i].nm); });
+  }
+  if(st==='anim'){
+    if(S.seg===0) tiles(DEAL_IN, S.dealIn,
+      p=>`<span class="mini a" style="--mx:${p.mx}px;--my:${p.my}px;--mr:${p.mr}deg;--ms:${p.ms};--loop:${p.ms2*2+1200}ms"></span>`,
+      i=>{ S.dealIn=i; deal(); paintSheet(); toast(DEAL_IN[i].nm); });
+    else tiles(CLEAR_OUT, S.clearOut,
+      ()=>`<span class="mini a" style="--mx:-30px;--my:6px;--mr:-12deg;--ms:.8;--loop:2400ms"></span>`,
+      i=>{ S.clearOut=i; paintSheet(); toast(CLEAR_OUT[i].nm); });
+  }
+  if(st==='sound'){
+    tiles(FX, S.fx, (f,i)=>`<span class="swatch" style="background:linear-gradient(160deg,#0b2436,#061320)"></span>
+      <span style="position:absolute;inset:0;display:grid;place-items:center;font-size:16px;color:rgba(34,211,238,${.3+i*.07})">♪</span>`,
+      i=>{ S.fx=i; paintSheet(); toast(FX[i].nm); });
+  }
+  if(st==='tune'){
+    /* No carousel here on purpose: this step is 2D, and a row of tiles can't
+       say "seat 3, a bit left and forward". You drag the seat on the table. */
+    if(S.seg===0) showKnobs(`
+      <div class="tip"><b>Drag a seat on the table</b> to move it. Tap to pick which one.</div>
+      <div class="knobs">
+        <div class="knob"><div class="kl"><span>Seat angle</span><b id="vAngle">${S.angle}&deg;</b></div>
+          <input type="range" id="rAngle" min="-30" max="30" value="${S.angle}"></div>
+      </div>`);
+    else showKnobs(`
+      <div class="knobs">
+        <div class="knob"><div class="kl"><span>Card pitch</span><b id="vPitch">${S.pitch}&deg;</b></div>
+          <input type="range" id="rPitch" min="0" max="45" value="${S.pitch}"></div>
+      </div>
+      <div class="tip">Changes land on the table above as you drag — you never lose sight of it.</div>`);
+    const a=document.getElementById('rAngle'), p=document.getElementById('rPitch');
+    if(a) a.oninput=e=>{ S.angle=+e.target.value; document.getElementById('vAngle').textContent=S.angle+'°'; };
+    if(p) p.oninput=e=>{ S.pitch=+e.target.value; document.getElementById('vPitch').textContent=S.pitch+'°'; deal(); };
+  }
+  if(st==='save'){
+    showKnobs(`<div style="padding:0 12px">
+      <div class="kl" style="font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--slate-500);margin-bottom:5px">My tables</div>
+      <input style="width:100%;background:var(--field);border:1px solid var(--cyan-edge);border-radius:10px;color:var(--ink);padding:9px 12px;font-family:var(--disp);font-size:12.5px" value="My table">
+      <div style="display:flex;gap:7px;margin-top:8px">
+        <button class="seg on" style="flex:1;padding:9px">Save table</button>
+        <button class="seg" style="flex:1;padding:9px">Save as new</button>
+      </div></div>`);
+  }
+}
+
+/* seat picking + dragging, straight on the table */
+let dragging=null;
+spotsEl.addEventListener('pointerdown', e=>{
+  const s=e.target.closest('.spot'); if(!s) return;
+  S.seat=+s.dataset.seat; paintSpots(); deal();
+  if(S.step==='tune'){ dragging=S.seat; s.setPointerCapture?.(e.pointerId); }
+});
+felt.addEventListener('pointermove', e=>{
+  if(dragging==null) return;
+  const r=felt.getBoundingClientRect();
+  S.seats[dragging]={x:Math.max(6,Math.min(94,(e.clientX-r.left)/r.width*100)),
+                     y:Math.max(30,Math.min(94,(e.clientY-r.top)/r.height*100))};
+  paintSpots(); deal();
+});
+addEventListener('pointerup', ()=>{ dragging=null; });
+
+const toastEl=document.getElementById('toast'); let tid;
+function toast(m){ toastEl.textContent=m; toastEl.classList.add('on'); clearTimeout(tid); tid=setTimeout(()=>toastEl.classList.remove('on'),1100); }
+document.getElementById('deal').onclick=()=>deal();
+document.getElementById('save').onclick=()=>{ S.step='save'; S.seg=0; openSheet(); };
+
+paintFelt(); paintSpots(); deal(); fit();
+</script>
