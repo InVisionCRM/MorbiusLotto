@@ -497,7 +497,6 @@ export function TonightsTable({ cards }: { cards?: React.ReactNode }) {
         <h2>
           TONIGHT&apos;S <em>TABLE</em>
         </h2>
-        <span className="sub">rotates daily — same for everyone, always fresh</span>
       </div>
       <div className="spot-grid">
         {cards ?? (
@@ -631,7 +630,6 @@ export function TheFloor() {
         <h2>
           THE <em>FLOOR</em>
         </h2>
-        <span className="sub">{FLOOR_GAMES.length} games, one chip</span>
         <div className="pills">
           {FLOOR_FILTERS.map((p) => (
             <button
@@ -664,7 +662,7 @@ export function TheFloor() {
 }
 
 /* ────────────────────────────────────────────────────────────
-   6b. REEL FORGE — build-your-own slot machine promo
+   6b. CREATE-A-SLOT — build-your-own slot machine promo
    ──────────────────────────────────────────────────────────── */
 const FORGE_FEATS = [
   { ic: '🎨', t: 'Design every reel', d: 'symbols, colors, sounds & border FX' },
@@ -680,18 +678,18 @@ export function SlotForge() {
     <section className="zone forge-zone">
       <div className="zone-head">
         <h2>
-          REEL <em>FORGE</em>
+          CREATE-A-<em>SLOT</em>
         </h2>
-        <span className="sub">the community slot studio</span>
+        <span className="soon">COMING SOON</span>
       </div>
       <div className="forge-panel">
         <div className="forge-copy">
-          <div className="forge-kicker">NEW &middot; CREATOR TOOL</div>
+          <div className="forge-kicker">CREATOR TOOL &middot; COMING SOON</div>
           <h3>
             Create your own <em>Slot&nbsp;Machine!</em>
           </h3>
           <p>
-            Forge a machine from scratch — pick the grid, draw the paytable, wire up a bonus
+            Build a machine from scratch — pick the grid, draw the paytable, wire up a bonus
             round — then publish it and drop it on any website with one embed code. Fund it
             with your own token and the house edge is <b>yours</b>.
           </p>
@@ -718,7 +716,7 @@ export function SlotForge() {
         </div>
         <div className="forge-shots">
           <div className="fshot fshot-builder">
-            <img src="/home2/forge-builder.webp" alt="The Reel Forge slot builder studio" loading="lazy" />
+            <img src="/home2/forge-builder.webp" alt="The Create-A-Slot builder studio" loading="lazy" />
             <span className="fshot-tag">the studio</span>
           </div>
           <div className="fshot fshot-cab">
@@ -732,7 +730,7 @@ export function SlotForge() {
 }
 
 /* ────────────────────────────────────────────────────────────
-   6c. TOURNEY FORGE — custom PRC-20 buy-in poker tournaments
+   6c. CREATE-A-TOURNAMENT — custom PRC-20 buy-in poker tournaments
    ──────────────────────────────────────────────────────────── */
 const TOURNEY_FEATS = [
   { ic: '🪙', t: 'Buy-ins in your token', d: 'any PRC-20 — or MORBIUS' },
@@ -748,9 +746,8 @@ export function TourneyForge() {
     <section className="zone forge-zone tourney-zone">
       <div className="zone-head">
         <h2>
-          TOURNEY <em>FORGE</em>
+          CREATE-A-<em>TOURNAMENT</em>
         </h2>
-        <span className="sub">poker tournaments in your own token</span>
       </div>
       <div className="forge-panel">
         <div className="forge-copy">
@@ -801,7 +798,7 @@ export function TourneyForge() {
 }
 
 /* ────────────────────────────────────────────────────────────
-   6d. TABLE FORGE — custom blackjack tables
+   6d. CREATE-A-TABLE — custom blackjack tables
    ──────────────────────────────────────────────────────────── */
 const TABLE_FEATS = [
   { ic: '🖼️', t: 'Your art on the felt', d: 'upload a board or start from a preset' },
@@ -817,13 +814,13 @@ export function TableForge() {
     <section className="zone forge-zone table-zone">
       <div className="zone-head">
         <h2>
-          TABLE <em>FORGE</em>
+          CREATE-A-<em>TABLE</em>
         </h2>
-        <span className="sub">custom blackjack tables</span>
+        <span className="soon">COMING SOON</span>
       </div>
       <div className="forge-panel">
         <div className="forge-copy">
-          <div className="forge-kicker">CREATOR TOOL &middot; BLACKJACK</div>
+          <div className="forge-kicker">BLACKJACK &middot; COMING SOON</div>
           <h3>
             Put your project on a <em>blackjack&nbsp;table</em>
           </h3>
@@ -846,7 +843,7 @@ export function TableForge() {
           </ul>
           <div className="forge-cta-row">
             <Link className="forge-cta" href="/blackjack-multi/design">
-              <span className="fc-ic">🎨</span> OPEN TABLE FORGE
+              <span className="fc-ic">🎨</span> OPEN THE TABLE BUILDER
             </Link>
             <Link className="forge-guide" href="/blackjack-multi">
               Play the live tables <span aria-hidden="true">→</span>
@@ -856,7 +853,7 @@ export function TableForge() {
         </div>
         <div className="forge-shots">
           <div className="fshot fshot-builder">
-            <img src="/home2/tableforge-studio.webp" alt="The Table Forge blackjack table studio" loading="lazy" />
+            <img src="/home2/tableforge-studio.webp" alt="The Create-A-Table builder studio" loading="lazy" />
             <span className="fshot-tag">the studio</span>
           </div>
           <div className="fshot fshot-cab">
@@ -1077,7 +1074,6 @@ export function VipLadder({ currentTier = 'SILVER' }: { currentTier?: string }) 
         <h2>
           THE <em>LADDER</em>
         </h2>
-        <span className="sub">rakeback on every losing bet — the house pays you back</span>
       </div>
       <div className="vip-strip">
         {VIP_TIERS.map((t) => (

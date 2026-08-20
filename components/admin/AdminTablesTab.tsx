@@ -216,7 +216,7 @@ function AngleStage({
 }
 
 /**
- * Card lean editor — the same presets Table Forge uses, plus fine-tune inputs
+ * Card lean editor — the same presets Create-A-Table uses, plus fine-tune inputs
  * and a live preview of both hands OVER the table's own art (the uploaded file
  * before save, the stored art when editing). Expands to near-fullscreen,
  * because a lean can only be judged against the drawn perspective and a

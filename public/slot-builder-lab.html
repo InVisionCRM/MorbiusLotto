@@ -3,12 +3,12 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<title>Reel Forge — Slot Studio lab</title>
+<title>Create-A-Slot — Slot Studio lab</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Audiowide&family=Bungee&family=Chakra+Petch:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Michroma&family=Orbitron:wght@500;700;900&family=Rajdhani:wght@500;600;700&family=Space+Grotesk:wght@500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
 <style>
-/* ── Reel Forge — Slot Studio (arcade2 Deep-Sea Neon) ──────────────────────
+/* ── Create-A-Slot — Slot Studio (arcade2 Deep-Sea Neon) ──────────────────────
    A config-driven slot BUILDER / creative studio. A single JSON slot
    definition (symbols, weights, pays, lines, theme, fx, anim) drives a live
    reel engine, a provably-fair spin, and an honest Monte-Carlo RTP simulator
@@ -674,7 +674,7 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
 
 <div class="wrap">
   <header>
-    <h1 class="title">Reel Forge<span class="glyph">&#9670;</span></h1>
+    <h1 class="title">Create-A-Slot<span class="glyph">&#9670;</span></h1>
     <p class="tagline">Config-driven slot studio &middot; upload symbols &middot; animated border FX &middot; synth sound packs &middot; provably fair &middot; honest Monte-Carlo RTP &middot; played in MORBIUS</p>
     <p class="tagline" style="margin-top:6px"><a href="/slot-guide.html" style="color:var(--cyan);font-weight:700">📖 Read the creator guide</a> &mdash; building, publishing, embedding on your site, funding a token bankroll and reading your stats.</p>
   </header>
@@ -4002,7 +4002,7 @@ input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--cyan
 
   /* ═══ SAVE & SHARE — a local "My Machines" library (localStorage) plus a
      Publish link that URL-encodes the whole slot definition so anyone who
-     opens it lands in Reel Forge with that exact machine. Self-contained. ═══ */
+     opens it lands in Create-A-Slot with that exact machine. Self-contained. ═══ */
   var MACH_KEY='reelforge_machines_v1';
   function machMsg(t,c){ var el=$('machMsg'); if(el){ el.textContent=t; el.className='json-msg '+(c||''); } }
   function machLoadAll(){ try{ return JSON.parse(localStorage.getItem(MACH_KEY)||'[]'); }catch(e){ return []; } }

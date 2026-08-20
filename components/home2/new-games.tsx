@@ -90,7 +90,6 @@ export function NewGames() {
         <h2>
           JUST <em>LANDED</em>
         </h2>
-        <span className="sub">the {games.length} newest tables on the floor</span>
       </div>
       <div
         className="ng-track"

@@ -30,7 +30,7 @@
  *  01-multiplayer    /craps — the table, mid come-out roll
  *  02-new-games      / — the floor grid, scrolled to the NEW/MULTIPLAYER rows
  *  03-pulsechain     scan.morbius.io — the token dashboard
- *  04-slot-builder   /slot-builder-lab.html — Reel Forge, the slot studio
+ *  04-slot-builder   /slot-builder-lab.html — Create-A-Slot, the slot studio
  *  05-weekly-drop    / — the hero, with the live pot and countdown
  *  06-vip            /vip — the tier ladder
  *  07-provably-fair  /BLACKJACK/verify — the verifier

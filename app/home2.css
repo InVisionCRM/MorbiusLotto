@@ -296,6 +296,9 @@
 .home2 .zone-head h2{font-family:var(--display); font-weight:400; font-size:clamp(18px,2.2vw,26px); letter-spacing:.03em}
 .home2 .zone-head h2 em{font-style:normal; color:var(--cyan)}
 .home2 .zone-head .sub{font-size:11px; color:var(--muted)}
+.home2 .zone-head .soon{font-size:9px; font-weight:800; letter-spacing:.16em; color:#fcd34d;
+  border:1px solid rgba(251,191,36,.45); background:rgba(251,191,36,.10);
+  border-radius:99px; padding:4px 10px; align-self:center}
 .home2 .zone-head .pills{margin-left:auto; display:flex; gap:6px; flex-wrap:wrap}
 .home2 .pill{font-size:10.5px; font-weight:600; padding:6px 14px; border-radius:99px; color:var(--text2); border:1px solid var(--line); transition:all .2s}
 .home2 .pill:hover{color:#fff}
