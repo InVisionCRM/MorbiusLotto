@@ -1121,9 +1121,14 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
                   hideHoleCard={hideHoleCard}
                   cardsExiting={cardsExiting}
                   cardSize="normal"
-                  counterValue={dealerHand.isBlackjack ? dealerHand.total : (isRevealing ? getVisibleDealerTotal() : (gameState === GameState.COMPLETE ? dealerHand.total : getVisibleDealerTotal()))}
-                  isBust={gameState === GameState.COMPLETE && !isRevealing && visibleDealerCards >= dealerHand.cards.length && dealerHand.isBust}
-                  isBlackjack={gameState === GameState.COMPLETE && !isRevealing && visibleDealerCards >= dealerHand.cards.length && dealerHand.isBlackjack}
+                  /* Never read the server's final total until every dealer card is
+                     face-up. Between the completed state landing and the reveal
+                     effect starting there is a frame where gameState is COMPLETE
+                     but the hole card is still down — trusting dealerHand.total
+                     there flashed the dealer's final score before the reveal. */
+                  counterValue={gameCompleteAndRevealed ? dealerHand.total : getVisibleDealerTotal()}
+                  isBust={gameCompleteAndRevealed && dealerHand.isBust}
+                  isBlackjack={gameCompleteAndRevealed && dealerHand.isBlackjack}
                   counterActive={gameState === GameState.DEALER_TURN}
                   winnerHighlight={dealerIsWinner}
                   badgeSize="large"
@@ -1394,16 +1399,16 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
                 );
                 const gameGroup = (
                   <div className={gameGroupClass} style={groupStyle}>
-                    <button onClick={(e) => { e.stopPropagation(); if (canHit) { if (soundEnabled) { if (onPlaySfx) onPlaySfx('/BlackJack/sounds/knock.wav'); else new Audio('/BlackJack/sounds/knock.wav').play().catch(() => {}); } onAction(Action.HIT); } }} disabled={!canHit} className={`bj-action-btn relative w-16 h-16 flex items-center justify-center rounded-lg bg-gradient-to-br from-red-500 to-red-700 border-2 border-red-400/50 shadow-lg ${!canHit ? 'pointer-events-none cursor-not-allowed' : 'cursor-pointer'}`} style={{ opacity: canHit ? 1 : 0.3, '--abi': 0 } as React.CSSProperties} onMouseDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()}>
+                    <button onClick={(e) => { e.stopPropagation(); if (canHit) { if (soundEnabled) { if (onPlaySfx) onPlaySfx('/BlackJack/sounds/knock.wav'); else new Audio('/BlackJack/sounds/knock.wav').play().catch(() => {}); } onAction(Action.HIT); } }} disabled={!canHit} className={`bj-action-btn relative w-16 h-16 flex items-center justify-center rounded-lg bg-gradient-to-br from-red-500 to-red-700 border-2 border-red-400/50 shadow-lg ${!canHit ? 'pointer-events-none cursor-not-allowed' : 'cursor-pointer'}`} style={{ opacity: canHit ? 1 : 0.3 }} onMouseDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()}>
                       <span className="text-white font-black text-sm tracking-wider">HIT</span>
                     </button>
-                    <button onClick={(e) => { e.stopPropagation(); if (canStand) onAction(Action.STAND); }} disabled={!canStand} className={`bj-action-btn relative w-16 h-16 flex items-center justify-center rounded-lg bg-gradient-to-br from-blue-500/50 to-blue-700/50 border-2 border-blue-400/50 shadow-lg ${!canStand ? 'pointer-events-none cursor-not-allowed' : 'cursor-pointer'}`} style={{ opacity: canStand ? 1 : 0.3, '--abi': 1 } as React.CSSProperties} onMouseDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()}>
+                    <button onClick={(e) => { e.stopPropagation(); if (canStand) onAction(Action.STAND); }} disabled={!canStand} className={`bj-action-btn relative w-16 h-16 flex items-center justify-center rounded-lg bg-gradient-to-br from-blue-500/50 to-blue-700/50 border-2 border-blue-400/50 shadow-lg ${!canStand ? 'pointer-events-none cursor-not-allowed' : 'cursor-pointer'}`} style={{ opacity: canStand ? 1 : 0.3 }} onMouseDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()}>
                       <span className="text-white font-black text-sm tracking-wider">STAND</span>
                     </button>
-                    <button onClick={(e) => { e.stopPropagation(); if (canDoubleDown) { onDoubleDownChips?.(); onAction(Action.DOUBLE_DOWN); } }} disabled={!canDoubleDown} className={`bj-action-btn relative w-16 h-16 flex items-center justify-center rounded-lg bg-gradient-to-br from-amber-500 to-amber-700 border-2 border-amber-400/50 shadow-lg ${!canDoubleDown ? 'pointer-events-none cursor-not-allowed' : 'cursor-pointer'}`} style={{ opacity: canDoubleDown ? 1 : 0.3, '--abi': 2 } as React.CSSProperties} onMouseDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()}>
+                    <button onClick={(e) => { e.stopPropagation(); if (canDoubleDown) { onDoubleDownChips?.(); onAction(Action.DOUBLE_DOWN); } }} disabled={!canDoubleDown} className={`bj-action-btn relative w-16 h-16 flex items-center justify-center rounded-lg bg-gradient-to-br from-amber-500 to-amber-700 border-2 border-amber-400/50 shadow-lg ${!canDoubleDown ? 'pointer-events-none cursor-not-allowed' : 'cursor-pointer'}`} style={{ opacity: canDoubleDown ? 1 : 0.3 }} onMouseDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()}>
                       <span className="text-white font-black text-xs tracking-wider">DOUBLE</span>
                     </button>
-                    <button onClick={(e) => { e.stopPropagation(); if (canSplit) { onSplitChips?.(); onAction(Action.SPLIT); } }} disabled={!canSplit} className={`bj-action-btn relative w-16 h-16 flex items-center justify-center rounded-lg bg-gradient-to-br from-emerald-500 to-emerald-700 border-2 border-emerald-400/50 shadow-lg ${!canSplit ? 'pointer-events-none cursor-not-allowed' : 'cursor-pointer'}`} style={{ opacity: canSplit ? 1 : 0.3, '--abi': 3 } as React.CSSProperties} onMouseDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()}>
+                    <button onClick={(e) => { e.stopPropagation(); if (canSplit) { onSplitChips?.(); onAction(Action.SPLIT); } }} disabled={!canSplit} className={`bj-action-btn relative w-16 h-16 flex items-center justify-center rounded-lg bg-gradient-to-br from-emerald-500 to-emerald-700 border-2 border-emerald-400/50 shadow-lg ${!canSplit ? 'pointer-events-none cursor-not-allowed' : 'cursor-pointer'}`} style={{ opacity: canSplit ? 1 : 0.3 }} onMouseDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()}>
                       <span className="text-white font-black text-sm tracking-wider">SPLIT</span>
                     </button>
                   </div>
@@ -1713,7 +1718,7 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
           cursor: pointer;
         }
         .bj-menu-btn:hover { border-color: rgba(34, 211, 238, 0.7); box-shadow: 0 2px 14px rgba(34, 211, 238, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.08); }
-        .bj-menu-btn:active { transform: scale(0.92); }
+        .bj-menu-btn:active { transform: translateY(1px); }
         .bj-menu-icon { display: flex; flex-direction: column; gap: 3.5px; width: 15px; }
         .bj-menu-icon span {
           display: block; height: 1.5px; border-radius: 1px; width: 100%;
@@ -1730,9 +1735,9 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
           border: 1px solid rgba(34, 211, 238, 0.25);
           backdrop-filter: blur(10px);
           box-shadow: 0 10px 30px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.05);
-          animation: bjMenuIn 0.18s cubic-bezier(0.34, 1.3, 0.64, 1) both;
+          animation: bjMenuIn 0.16s ease-out both;
         }
-        @keyframes bjMenuIn { from { opacity: 0; transform: translateY(-6px) scale(0.96); } to { opacity: 1; transform: none; } }
+        @keyframes bjMenuIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
         .bj-menu-item {
           display: flex; align-items: center; justify-content: space-between; gap: 12px;
           width: 100%; padding: 8px 10px; border-radius: 8px; border: 0; background: transparent;
@@ -1743,68 +1748,74 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
         }
         @keyframes bjMenuItemIn { from { opacity: 0; transform: translateX(8px); } to { opacity: 1; transform: none; } }
         .bj-menu-item:hover { background: rgba(34, 211, 238, 0.1); }
-        .bj-menu-item:active { transform: scale(0.97); }
+        .bj-menu-item:active { transform: translateY(1px); }
         .bj-menu-item:disabled { opacity: 0.45; cursor: default; }
         .bj-menu-item-label { font-size: 12px; font-weight: 600; color: rgba(226, 232, 240, 0.92); white-space: nowrap; }
         .bj-menu-item-hint { font-size: 10px; color: rgba(148, 163, 184, 0.75); white-space: nowrap; }
         .bj-menu-item-hint.gold { color: #fbbf24; font-weight: 700; }
         .bj-menu-item-hint.live { color: #fca5a5; font-weight: 700; }
 
-        /* ── Control polish ─────────────────────────────────────────────
-           One motion language for every table control: buttons arrive with a
-           staggered pop, lift with a glow on hover, squish on press, and a
-           gloss sweep crosses on hover. Opacity/transform transitions replace
-           the old hard enable/disable snap. Honors reduced motion. */
+        /* ── Control feel ───────────────────────────────────────────────
+           Every table control clicks like a physical button: hover gives a
+           1px lift and a touch of brightness, and the press drops the face
+           into the felt with a collapsed shadow. Deliberately no springy
+           overshoot, no scaling wobble, no rotation and no gloss sweep — a
+           real button moves along one axis and settles instantly. Hover is
+           confined to pointer devices so a phone tap can't leave a control
+           stuck in its hover state. Only opacity keeps a slow transition, so
+           enable/disable still fades instead of snapping. */
         .bj-action-btn {
-          animation: bjCtlIn 0.32s cubic-bezier(0.34, 1.4, 0.64, 1) both;
-          animation-delay: calc(var(--abi, 0) * 0.05s);
-          transition: transform 0.16s cubic-bezier(0.34, 1.3, 0.64, 1),
-                      box-shadow 0.16s ease, opacity 0.28s ease, filter 0.16s ease;
-          overflow: hidden;
+          transition: transform 0.1s ease-out, box-shadow 0.1s ease-out,
+                      filter 0.1s ease-out, opacity 0.28s ease;
         }
-        @keyframes bjCtlIn {
-          from { opacity: 0; transform: translateY(14px) scale(0.85); }
-          to   { transform: none; }
-        }
-        .bj-action-btn:not(:disabled):hover {
-          transform: translateY(-3px) scale(1.06);
-          filter: brightness(1.12);
-          box-shadow: 0 8px 22px rgba(0, 0, 0, 0.45), 0 0 18px rgba(255, 255, 255, 0.12);
+        @media (hover: hover) {
+          .bj-action-btn:not(:disabled):hover {
+            transform: translateY(-1px);
+            filter: brightness(1.06);
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.45);
+          }
         }
         .bj-action-btn:not(:disabled):active {
-          transform: translateY(1px) scale(0.94);
-          transition-duration: 0.07s;
+          transform: translateY(2px);
+          filter: brightness(0.94);
+          box-shadow: 0 1px 2px rgba(0, 0, 0, 0.5), inset 0 2px 5px rgba(0, 0, 0, 0.4);
+          transition-duration: 0.04s;
         }
-        .bj-action-btn::after {
-          content: '';
-          position: absolute; inset: 0;
-          background: linear-gradient(105deg, transparent 38%, rgba(255, 255, 255, 0.32) 50%, transparent 62%);
-          transform: translateX(-120%);
-          pointer-events: none;
-        }
-        .bj-action-btn:not(:disabled):hover::after { animation: bjCtlSheen 0.55s ease; }
-        @keyframes bjCtlSheen { to { transform: translateX(120%); } }
         .bj-action-btn:focus-visible {
           outline: 2px solid rgba(34, 211, 238, 0.9);
           outline-offset: 2px;
         }
 
+        /* Chips and the mobile action bar share this. The press matches
+           .action-bar-btn's own rule rather than fighting it — the two used to
+           disagree (a rotate/scale here vs. a straight drop there), so which
+           one you saw came down to stylesheet order. */
         .bj-chip-btn {
-          transition: transform 0.16s cubic-bezier(0.34, 1.4, 0.64, 1), filter 0.16s ease, opacity 0.25s ease;
+          transition: transform 0.1s ease-out, filter 0.1s ease-out,
+                      box-shadow 0.1s ease-out, opacity 0.25s ease;
         }
-        .bj-chip-btn:not(:disabled):hover {
-          transform: translateY(-3px) scale(1.12) rotate(-4deg);
-          filter: brightness(1.15) drop-shadow(0 6px 10px rgba(0, 0, 0, 0.5));
+        @media (hover: hover) {
+          .bj-chip-btn:not(:disabled):hover {
+            transform: translateY(-1px);
+            filter: brightness(1.08);
+          }
         }
         .bj-chip-btn:not(:disabled):active {
-          transform: scale(0.9) rotate(3deg);
-          transition-duration: 0.07s;
+          filter: brightness(0.94);
+          transition-duration: 0.04s;
+        }
+        /* The mobile bar's buttons already drop 3px onto their own raised ledge
+           (.action-bar-btn, tuned to their inline 4px shadow), so they get the
+           brightness above but not a second, competing transform. */
+        .bj-chip-btn:not(.action-bar-btn):not(:disabled):active {
+          transform: translateY(2px);
+          box-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
         }
 
         @media (prefers-reduced-motion: reduce) {
-          .bj-action-btn, .bj-menu-panel, .bj-menu-item { animation: none; }
-          .bj-action-btn:not(:disabled):hover { transform: none; }
-          .bj-chip-btn:not(:disabled):hover { transform: none; }
+          .bj-menu-panel, .bj-menu-item { animation: none; }
+          .bj-action-btn:not(:disabled):active,
+          .bj-chip-btn:not(.action-bar-btn):not(:disabled):active { transform: none; }
         }
 
         /* Result banner animation */

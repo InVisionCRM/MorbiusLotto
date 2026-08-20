@@ -296,6 +296,9 @@
 .home2 .zone-head h2{font-family:var(--display); font-weight:400; font-size:clamp(18px,2.2vw,26px); letter-spacing:.03em}
 .home2 .zone-head h2 em{font-style:normal; color:var(--cyan)}
 .home2 .zone-head .sub{font-size:11px; color:var(--muted)}
+.home2 .zone-head .soon{font-size:9px; font-weight:800; letter-spacing:.16em; color:#fcd34d;
+  border:1px solid rgba(251,191,36,.45); background:rgba(251,191,36,.10);
+  border-radius:99px; padding:4px 10px; align-self:center}
 .home2 .zone-head .pills{margin-left:auto; display:flex; gap:6px; flex-wrap:wrap}
 .home2 .pill{font-size:10.5px; font-weight:600; padding:6px 14px; border-radius:99px; color:var(--text2); border:1px solid var(--line); transition:all .2s}
 .home2 .pill:hover{color:#fff}
@@ -353,6 +356,31 @@
 
 /* --- THE FLOOR grid --- */
 .home2 .floor-grid{display:grid; grid-template-columns:repeat(auto-fill,minmax(196px,1fr)); gap:14px}
+/* --- FLOOR SHELVES (grouped by family) --- */
+.home2 .floor-shelf + .floor-shelf{margin-top:26px}
+.home2 .shelf-head{display:flex; align-items:baseline; gap:10px; margin:0 0 11px; padding-bottom:7px;
+  border-bottom:1px solid var(--line)}
+.home2 .shelf-head h3{font-family:var(--display); font-weight:400; font-size:14px; letter-spacing:.05em;
+  text-transform:uppercase; color:#e8eefc}
+.home2 .shelf-head .shelf-sub{font-size:10.5px; color:var(--muted)}
+.home2 .shelf-head .shelf-count{margin-left:auto; font-size:10px; font-weight:700; color:var(--text2);
+  border:1px solid var(--line); border-radius:99px; padding:2px 9px}
+
+/* --- JUST LANDED rail --- */
+.home2 .ng-zone{padding-bottom:4px}
+.home2 .ng-track{display:grid; grid-auto-flow:column; grid-auto-columns:calc((100% - 12px * 2) / 3);
+  gap:12px; overflow-x:auto; scroll-snap-type:x mandatory; scroll-padding-left:2px;
+  padding-bottom:6px; scrollbar-width:none}
+.home2 .ng-track::-webkit-scrollbar{display:none}
+.home2 .ng-card{scroll-snap-align:start}
+.home2 .ng-card .stage{min-height:104px}
+@media (min-width:700px){
+  .home2 .ng-track{grid-auto-columns:calc((100% - 12px * 4) / 5)}
+}
+@media (min-width:1080px){
+  .home2 .ng-track{grid-auto-columns:calc((100% - 12px * 6) / 7)}
+  .home2 .ng-card .stage{min-height:118px}
+}
 .home2 .floor-grid .scene-card .stage{min-height:126px}
 /* monogram tiles (scenes pending) */
 .home2 .mono-tile{
@@ -431,6 +459,43 @@
   border-color:rgba(34,211,238,.4); box-shadow:0 24px 60px rgba(0,0,0,.75), 0 0 34px rgba(34,211,238,.16)}
 .home2 .fshot-cab:hover{transform:rotate(1.5deg) translateY(-4px)}
 .home2 .fshot{transition:transform .25s}
+
+/* --- Tourney Forge / Table Forge: same panel, own accent --- */
+/* Tourney leans gold (prize pools); Table leans emerald (the felt). */
+.home2 .tourney-zone .forge-panel{border-color:rgba(251,191,36,.22);
+  background:
+    radial-gradient(ellipse at 88% 8%, rgba(251,191,36,.14), transparent 55%),
+    radial-gradient(ellipse at 8% 100%, rgba(167,139,250,.10), transparent 50%),
+    linear-gradient(165deg,#171106,#080b14 72%)}
+.home2 .tourney-zone .forge-kicker{color:#fde68a; border-color:rgba(251,191,36,.4); background:rgba(251,191,36,.12)}
+.home2 .tourney-zone .forge-copy h3 em{background:linear-gradient(100deg,#fbbf24,#f97316);
+  -webkit-background-clip:text; background-clip:text}
+.home2 .tourney-zone .forge-cta{background:linear-gradient(100deg,#fbbf24,#f59e0b); color:#241a02;
+  box-shadow:0 10px 30px rgba(245,158,11,.35)}
+.home2 .tourney-zone .forge-cta:hover{box-shadow:0 16px 40px rgba(245,158,11,.5)}
+.home2 .tourney-zone .forge-feats li:hover{border-color:rgba(251,191,36,.45)}
+
+.home2 .table-zone .forge-panel{border-color:rgba(52,211,153,.2);
+  background:
+    radial-gradient(ellipse at 88% 8%, rgba(52,211,153,.13), transparent 55%),
+    radial-gradient(ellipse at 8% 100%, rgba(34,211,238,.10), transparent 50%),
+    linear-gradient(165deg,#06170f,#080b14 72%)}
+.home2 .table-zone .forge-kicker{color:#6ee7b7; border-color:rgba(52,211,153,.4); background:rgba(52,211,153,.12)}
+.home2 .table-zone .forge-copy h3 em{background:linear-gradient(100deg,#34d399,#22d3ee);
+  -webkit-background-clip:text; background-clip:text}
+.home2 .table-zone .forge-cta{background:linear-gradient(100deg,#34d399,#22d3ee); color:#04140d;
+  box-shadow:0 10px 30px rgba(52,211,153,.32)}
+.home2 .table-zone .forge-cta:hover{box-shadow:0 16px 40px rgba(52,211,153,.46)}
+.home2 .table-zone .forge-feats li:hover{border-color:rgba(52,211,153,.45)}
+.home2 .table-zone .fshot-builder{border-color:rgba(52,211,153,.32)}
+
+/* A single shot sits centred and square-on instead of the two-card fan. It
+   keeps the card's own aspect ratio so the title never gets cropped off. */
+.home2 .forge-shots.one .fshot-cab{position:absolute; top:50%; left:0; right:auto; bottom:auto;
+  width:100%; height:auto; aspect-ratio:1120 / 596;
+  transform:translateY(-50%) rotate(-1deg)}
+.home2 .forge-shots.one .fshot-cab:hover{transform:translateY(calc(-50% - 4px)) rotate(0deg)}
+.home2 .forge-shots.one .fshot img{height:auto; object-fit:contain; object-position:center}
 
 /* ============================================================
    JACKPOT MODULE — "lighting soon"
@@ -775,6 +840,18 @@
     display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden}
   .home2 .floor-grid .scene-card .meta .row{display:none}
   .home2 .floor-grid .scene-card .badge{top:5px; left:5px; font-size:6px; letter-spacing:.05em; padding:2px 5px}
+  /* Rail cards sit 3-across on a phone — same compaction as the floor. */
+  .home2 .ng-track{gap:8px; grid-auto-columns:calc((100% - 8px * 2) / 3)}
+  .home2 .ng-card{border-radius:11px}
+  .home2 .ng-card .stage{min-height:66px; padding:6px 4px 0}
+  .home2 .ng-card .stage svg{width:min(90%,104px)}
+  .home2 .ng-card .meta{padding:5px 6px 6px}
+  .home2 .ng-card .meta .name{font-size:9px!important; letter-spacing:.01em; line-height:1.1;
+    display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden}
+  .home2 .ng-card .meta .row{display:none}
+  .home2 .ng-card .badge{top:5px; left:5px; font-size:6px; letter-spacing:.05em; padding:2px 5px}
+  .home2 .shelf-head h3{font-size:12px}
+  .home2 .shelf-head .shelf-sub{display:none}
   .home2 .spot-grid{grid-template-columns:1fr}
   .home2 .furn-stats{margin-left:0}
   .home2 .vip-strip{grid-template-columns:repeat(2,1fr)}

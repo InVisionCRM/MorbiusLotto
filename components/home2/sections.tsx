@@ -497,7 +497,6 @@ export function TonightsTable({ cards }: { cards?: React.ReactNode }) {
         <h2>
           TONIGHT&apos;S <em>TABLE</em>
         </h2>
-        <span className="sub">rotates daily — same for everyone, always fresh</span>
       </div>
       <div className="spot-grid">
         {cards ?? (
@@ -562,10 +561,14 @@ export function TonightsTable({ cards }: { cards?: React.ReactNode }) {
 /* ────────────────────────────────────────────────────────────
    6. THE FLOOR — unified 3D scene cards + filter pills
    ──────────────────────────────────────────────────────────── */
+type FloorFamily = 'blackjack' | 'poker' | 'table' | 'arcade';
+
 interface FloorGameEntry {
   key: string;
   name: string;
   cat: string;
+  family: FloorFamily;
+  addedAt: string;
   fontClass: string;
   nameSize: number;
   blurb: string;
@@ -576,16 +579,50 @@ interface FloorGameEntry {
   href: string;
 }
 
-const FLOOR_FILTERS = [
-  { f: 'all', label: 'All' },
-  { f: 'orig', label: 'Originals' },
-  { f: 'cards', label: 'Cards' },
-  { f: 'table', label: 'Table' },
+/* The floor is grouped by game family so it reads as a menu instead of a
+   34-card wall. 'all' shows every shelf with its heading; picking a family
+   shows just that shelf. Order runs card games first, then table, then the
+   originals — biggest draw to deepest cut. */
+const FLOOR_FAMILIES: { f: FloorFamily; label: string; sub: string }[] = [
+  { f: 'blackjack', label: 'Blackjack', sub: 'six ways to make 21' },
+  { f: 'poker', label: 'Poker', sub: "hold'em, stud & the dealer duels" },
+  { f: 'table', label: 'Casino Table', sub: 'the classics, one chip' },
+  { f: 'arcade', label: 'Arcade', sub: 'fast originals, instant settle' },
 ];
+
+const FLOOR_FILTERS: { f: string; label: string }[] = [
+  { f: 'all', label: 'All' },
+  ...FLOOR_FAMILIES.map((x) => ({ f: x.f as string, label: x.label })),
+];
+
+function FloorCard({ g }: { g: FloorGameEntry }) {
+  const style = (g.glow ? ({ '--glow': g.glow } as React.CSSProperties) : undefined);
+  return (
+    <Link href={g.href} className="scene-card" data-cat={g.cat} style={style}>
+      {g.badge && <span className={`badge ${g.badgeClass ?? 'new'}`}>{g.badge}</span>}
+      <div className="stage">
+        <g.Scene />
+      </div>
+      <div className="meta">
+        <div className={`name ${g.fontClass}`} style={{ fontSize: g.nameSize }}>
+          {g.name}
+        </div>
+        <div className="row">
+          <span className="st">{g.blurb}</span>
+        </div>
+      </div>
+    </Link>
+  );
+}
 
 export function TheFloor() {
   const [filter, setFilter] = useState('all');
   const games = FLOOR_GAMES as unknown as FloorGameEntry[];
+
+  const shelves = FLOOR_FAMILIES
+    .filter((fam) => filter === 'all' || filter === fam.f)
+    .map((fam) => ({ ...fam, games: games.filter((g) => g.family === fam.f) }))
+    .filter((shelf) => shelf.games.length > 0);
 
   return (
     <section className="zone">
@@ -593,7 +630,6 @@ export function TheFloor() {
         <h2>
           THE <em>FLOOR</em>
         </h2>
-        <span className="sub">{FLOOR_GAMES.length} games, one chip</span>
         <div className="pills">
           {FLOOR_FILTERS.map((p) => (
             <button
@@ -607,37 +643,26 @@ export function TheFloor() {
           ))}
         </div>
       </div>
-      <div className="floor-grid" id="floorGrid">
-        {games.map((g) => {
-          const visible = filter === 'all' || g.cat === filter;
-          const style: React.CSSProperties = {
-            ...(g.glow ? ({ '--glow': g.glow } as React.CSSProperties) : {}),
-            ...(visible ? {} : { display: 'none' }),
-          };
-          return (
-            <Link key={g.key} href={g.href} className="scene-card" data-cat={g.cat} style={style}>
-              {g.badge && <span className={`badge ${g.badgeClass ?? 'new'}`}>{g.badge}</span>}
-              <div className="stage">
-                <g.Scene />
-              </div>
-              <div className="meta">
-                <div className={`name ${g.fontClass}`} style={{ fontSize: g.nameSize }}>
-                  {g.name}
-                </div>
-                <div className="row">
-                  <span className="st">{g.blurb}</span>
-                </div>
-              </div>
-            </Link>
-          );
-        })}
-      </div>
+      {shelves.map((shelf) => (
+        <div key={shelf.f} className="floor-shelf">
+          <div className="shelf-head">
+            <h3>{shelf.label}</h3>
+            <span className="shelf-sub">{shelf.sub}</span>
+            <span className="shelf-count">{shelf.games.length}</span>
+          </div>
+          <div className="floor-grid">
+            {shelf.games.map((g) => (
+              <FloorCard key={g.key} g={g} />
+            ))}
+          </div>
+        </div>
+      ))}
     </section>
   );
 }
 
 /* ────────────────────────────────────────────────────────────
-   6b. REEL FORGE — build-your-own slot machine promo
+   6b. CREATE-A-SLOT — build-your-own slot machine promo
    ──────────────────────────────────────────────────────────── */
 const FORGE_FEATS = [
   { ic: '🎨', t: 'Design every reel', d: 'symbols, colors, sounds & border FX' },
@@ -653,18 +678,18 @@ export function SlotForge() {
     <section className="zone forge-zone">
       <div className="zone-head">
         <h2>
-          REEL <em>FORGE</em>
+          CREATE-A-<em>SLOT</em>
         </h2>
-        <span className="sub">the community slot studio</span>
+        <span className="soon">COMING SOON</span>
       </div>
       <div className="forge-panel">
         <div className="forge-copy">
-          <div className="forge-kicker">NEW &middot; CREATOR TOOL</div>
+          <div className="forge-kicker">CREATOR TOOL &middot; COMING SOON</div>
           <h3>
             Create your own <em>Slot&nbsp;Machine!</em>
           </h3>
           <p>
-            Forge a machine from scratch — pick the grid, draw the paytable, wire up a bonus
+            Build a machine from scratch — pick the grid, draw the paytable, wire up a bonus
             round — then publish it and drop it on any website with one embed code. Fund it
             with your own token and the house edge is <b>yours</b>.
           </p>
@@ -691,12 +716,149 @@ export function SlotForge() {
         </div>
         <div className="forge-shots">
           <div className="fshot fshot-builder">
-            <img src="/home2/forge-builder.webp" alt="The Reel Forge slot builder studio" loading="lazy" />
+            <img src="/home2/forge-builder.webp" alt="The Create-A-Slot builder studio" loading="lazy" />
             <span className="fshot-tag">the studio</span>
           </div>
           <div className="fshot fshot-cab">
             <img src="/home2/forge-cabinet.webp" alt="A community-built slot machine hitting a win" loading="lazy" />
             <span className="fshot-tag gold">your machine, live</span>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/* ────────────────────────────────────────────────────────────
+   6c. CREATE-A-TOURNAMENT — custom PRC-20 buy-in poker tournaments
+   ──────────────────────────────────────────────────────────── */
+const TOURNEY_FEATS = [
+  { ic: '🪙', t: 'Buy-ins in your token', d: 'any PRC-20 — or MORBIUS' },
+  { ic: '🔒', t: 'Escrowed on-chain', d: 'every buy-in sits in the prize escrow' },
+  { ic: '💸', t: '2% of the pool is yours', d: 'paid out with the prizes' },
+  { ic: '⏱️', t: 'Sit & Go or scheduled', d: 'fires when the seats fill' },
+  { ic: '↩️', t: 'Refunds handled', d: 'short table cancels and pays everyone back' },
+  { ic: '📣', t: 'Share card built in', d: 'one-click PNG for the timeline' },
+];
+
+export function TourneyForge() {
+  return (
+    <section className="zone forge-zone tourney-zone">
+      <div className="zone-head">
+        <h2>
+          CREATE-A-<em>TOURNAMENT</em>
+        </h2>
+      </div>
+      <div className="forge-panel">
+        <div className="forge-copy">
+          <div className="forge-kicker">CREATOR TOOL &middot; PRC-20</div>
+          <h3>
+            Run a <em>poker&nbsp;tournament</em> for your token
+          </h3>
+          <p>
+            Pick your PRC-20, set the buy-in, and every seat pays into the
+            on-chain prize escrow. The pool builds as players join, the table
+            fires when it fills, and <b>2% of the prize pool is yours</b> when
+            the payouts settle.
+          </p>
+          <ul className="forge-feats">
+            {TOURNEY_FEATS.map((f) => (
+              <li key={f.t}>
+                <span className="fi">{f.ic}</span>
+                <span className="ft">
+                  <b>{f.t}</b>
+                  <i>{f.d}</i>
+                </span>
+              </li>
+            ))}
+          </ul>
+          <div className="forge-cta-row">
+            <Link className="forge-cta" href="/poker/tournaments/create">
+              <span className="fc-ic">🏆</span> CREATE A TOURNAMENT
+            </Link>
+            <Link className="forge-guide" href="/poker">
+              See what&apos;s running <span aria-hidden="true">→</span>
+            </Link>
+            <span className="forge-cta-sub">your token &middot; your rake</span>
+          </div>
+        </div>
+        <div className="forge-shots one">
+          <div className="fshot fshot-cab">
+            <img
+              src="/home2/tourney-share-card.webp"
+              alt="A poker tournament share card with a HEX buy-in and prize pool"
+              loading="lazy"
+            />
+            <span className="fshot-tag gold">your tournament, shareable</span>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/* ────────────────────────────────────────────────────────────
+   6d. CREATE-A-TABLE — custom blackjack tables
+   ──────────────────────────────────────────────────────────── */
+const TABLE_FEATS = [
+  { ic: '🖼️', t: 'Your art on the felt', d: 'upload a board or start from a preset' },
+  { ic: '🃏', t: 'Cards & backs to match', d: 'faces, backs, and how they lie' },
+  { ic: '🎬', t: 'Deal animations', d: 'pick how cards land and clear' },
+  { ic: '🔊', t: 'Table sounds', d: 'chips, shuffles and the dealer' },
+  { ic: '📐', t: 'Nudge everything', d: 'seats, dealer and card angle, to the pixel' },
+  { ic: '🎥', t: 'Video tables too', d: 'an MP4 board on a 24-hour cycle' },
+];
+
+export function TableForge() {
+  return (
+    <section className="zone forge-zone table-zone">
+      <div className="zone-head">
+        <h2>
+          CREATE-A-<em>TABLE</em>
+        </h2>
+        <span className="soon">COMING SOON</span>
+      </div>
+      <div className="forge-panel">
+        <div className="forge-copy">
+          <div className="forge-kicker">BLACKJACK &middot; COMING SOON</div>
+          <h3>
+            Put your project on a <em>blackjack&nbsp;table</em>
+          </h3>
+          <p>
+            Six steps and your board is on the floor: drop in your art, style
+            the cards, choose the animations and sounds, then nudge every seat
+            into place. Players sit down at <b>your</b> table and play it in
+            MORBIUS.
+          </p>
+          <ul className="forge-feats">
+            {TABLE_FEATS.map((f) => (
+              <li key={f.t}>
+                <span className="fi">{f.ic}</span>
+                <span className="ft">
+                  <b>{f.t}</b>
+                  <i>{f.d}</i>
+                </span>
+              </li>
+            ))}
+          </ul>
+          <div className="forge-cta-row">
+            <Link className="forge-cta" href="/blackjack-multi/design">
+              <span className="fc-ic">🎨</span> OPEN THE TABLE BUILDER
+            </Link>
+            <Link className="forge-guide" href="/blackjack-multi">
+              Play the live tables <span aria-hidden="true">→</span>
+            </Link>
+            <span className="forge-cta-sub">free to build &middot; no code needed</span>
+          </div>
+        </div>
+        <div className="forge-shots">
+          <div className="fshot fshot-builder">
+            <img src="/home2/tableforge-studio.webp" alt="The Create-A-Table builder studio" loading="lazy" />
+            <span className="fshot-tag">the studio</span>
+          </div>
+          <div className="fshot fshot-cab">
+            <img src="/home2/tableforge-preview.webp" alt="A branded blackjack table mid-round" loading="lazy" />
+            <span className="fshot-tag gold">your table, in play</span>
           </div>
         </div>
       </div>
@@ -912,7 +1074,6 @@ export function VipLadder({ currentTier = 'SILVER' }: { currentTier?: string }) 
         <h2>
           THE <em>LADDER</em>
         </h2>
-        <span className="sub">rakeback on every losing bet — the house pays you back</span>
       </div>
       <div className="vip-strip">
         {VIP_TIERS.map((t) => (

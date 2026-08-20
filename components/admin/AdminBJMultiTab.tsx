@@ -180,13 +180,13 @@ export default function AdminBJMultiTab() {
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-1">
-                        {/* Table Forge: the per-table theme designer (art, seats,
+                        {/* Create-A-Table: the per-table theme designer (art, seats,
                             card angle, sounds). Deep-links straight to this table. */}
                         <a
                           href={`/blackjack-multi/design?table=${encodeURIComponent(t.id)}`}
                           target="_blank"
                           rel="noreferrer"
-                          title="Open in Table Forge (theme designer)"
+                          title="Open in Create-A-Table (theme designer)"
                           className="inline-flex items-center justify-center h-6 w-6 rounded text-cyan-400 hover:text-cyan-300 hover:bg-cyan-900/20"
                         >
                           <Paintbrush className="w-3 h-3" />

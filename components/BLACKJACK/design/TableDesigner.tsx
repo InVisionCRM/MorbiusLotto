@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * Table Forge — the blackjack table designer.
+ * Create-A-Table — the blackjack table designer.
  *
  * Structured to feel like the slot builder (public/slot-builder-lab.html):
  * a top-bar of whole-table presets, a quick-edit toolbar, a grouped control
@@ -792,7 +792,7 @@ export default function TableDesigner() {
       <div className="bjtd-wrap">
         <header className="bjtd-header">
           <h1 className="bjtd-title">
-            Table Forge<span className="bjtd-glyph">&#9670;</span>
+            Create-A-Table<span className="bjtd-glyph">&#9670;</span>
           </h1>
           <p className="bjtd-tagline">
             1 table art &middot; 2 cards &middot; 3 animations &middot; 4 sounds &middot; 5 fine-tune &middot; 6
