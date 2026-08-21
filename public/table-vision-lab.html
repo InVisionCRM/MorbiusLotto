@@ -1,0 +1,303 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Composed table — vision board</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;600;700&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
+<style>
+/* ─────────────────────────────────────────────────────────────────────────
+   Four candidate directions for a COMPOSED table — one built from layers
+   instead of one flat painted image.
+
+   Everything here is procedural: gradients, an SVG-turbulence grain, blend
+   modes. No bitmaps at all. That's deliberate — it's an honest preview of
+   what the layer system can produce before a single asset is commissioned,
+   and every panel below is the same handful of layer kinds restacked:
+
+       scene → surface → surface grain → printed markings →
+       rail → rail seam/stitch → trim → stickers → lighting
+
+   Judge the DIRECTION, not the palette. Colours are one field.
+   ───────────────────────────────────────────────────────────────────────── */
+:root{
+  --abyss:#050e16; --cyan:#22d3ee; --ink:#e2e8f0; --slate-400:#94a3b8; --slate-500:#64748b;
+  --line:rgba(148,163,184,.14);
+  --disp:'Chakra Petch',system-ui,sans-serif; --mono:'JetBrains Mono',ui-monospace,monospace;
+}
+*{box-sizing:border-box}
+body{
+  margin:0; padding:28px 22px 60px; font-family:var(--disp); color:var(--ink);
+  background:radial-gradient(ellipse 90% 60% at 50% -10%,#0a1a2a,transparent 70%),linear-gradient(160deg,#050e16,#02070b 90%);
+}
+h1{font-size:22px; letter-spacing:.05em; margin:0 0 4px}
+h1 em{font-style:normal; color:var(--cyan)}
+.lede{color:var(--slate-400); font-size:13px; max-width:760px; line-height:1.55; margin:0 0 26px}
+.grid{display:grid; gap:26px; grid-template-columns:repeat(auto-fit,minmax(420px,1fr)); max-width:1500px}
+.panel{border:1px solid var(--line); border-radius:14px; overflow:hidden; background:rgba(6,14,22,.6)}
+.phead{display:flex; align-items:baseline; gap:10px; padding:13px 15px 11px; border-bottom:1px solid var(--line)}
+.phead .n{font-family:var(--mono); font-size:11px; color:var(--cyan)}
+.phead h2{margin:0; font-size:15px; letter-spacing:.04em; flex:1}
+.phead .cost{font-size:10px; letter-spacing:.1em; text-transform:uppercase; padding:3px 9px; border-radius:99px;
+  border:1px solid var(--line); color:var(--slate-400)}
+.cost.lo{color:#34d399; border-color:rgba(52,211,153,.4)}
+.cost.mid{color:#fbbf24; border-color:rgba(251,191,36,.4)}
+.cost.hi{color:#fb7185; border-color:rgba(251,113,133,.4)}
+.pbody{padding:15px}
+.why{font-size:12px; color:var(--slate-400); line-height:1.55; margin:12px 0 0}
+.why b{color:var(--ink)}
+.why .warn{color:#fbbf24}
+
+/* ── the shared table primitives ─────────────────────────────────────────
+   The table is modelled as a SHAPE with a thick border, not as a felt with a
+   blob shoved under it: `border` follows `border-radius`, so the rail curves
+   with the table and every inset ring (seam, stitch, trim) curves with it too.
+   The first attempt drew the stitch as a straight dashed line across the
+   bounding box — which is what you get when you position a child by `inset`
+   instead of giving it its own matching radius. */
+.viewport{position:relative; width:100%; aspect-ratio:16/10; border-radius:10px; overflow:hidden;
+  background:#04080d; display:grid; place-items:end center; padding:6% 4% 0}
+
+/* the classic blackjack "D": flat-ish top edge, deep round bottom */
+.table-shape{
+  position:relative; width:100%; aspect-ratio:16/10.6; margin-bottom:-7%;
+  /* A blackjack "D": nearly straight across the dealer's edge, deep round
+     bottom where the players sit. */
+  border-radius:7% 7% 46% 46% / 5% 5% 62% 62%;
+  /* The SHAPE is the rail; the felt is inset inside it. Not a `border`:
+     border-width rejects percentages outright, and a border can't take a
+     gradient — the first pass used both and the rail rendered as nothing. */
+  background:var(--rail,linear-gradient(180deg,#4a2f1c,#2a1a0f 60%,#160d07));
+  box-shadow:var(--rail-shadow,inset 0 3px 9px rgba(255,220,170,.15)), 0 26px 54px rgba(0,0,0,.7);
+}
+/* Rail thickness. Percentage insets resolve against width horizontally and
+   height vertically, so the two are pre-compensated by the 16/10.6 aspect —
+   one value would give a rail half again as thick down the sides. */
+.table-shape{--rail-h:4.4%; --rail-v:6.6%}
+/* rings that hug the rail — same radius family, so they follow the curve */
+.ring{position:absolute; inset:var(--iv,0) var(--ih,0); border-radius:6% 6% 45% 45% / 5% 5% 61% 61%; pointer-events:none}
+.felt-clip{position:absolute; inset:var(--rail-v) var(--rail-h); border-radius:5% 5% 45% 45% / 5% 5% 61% 61%;
+  overflow:hidden; background:var(--felt,radial-gradient(ellipse 78% 74% at 50% 26%,#1d6b3f,#0d3f24 66%,#072816));
+  box-shadow:inset 0 6px 16px rgba(0,0,0,.55)}
+
+.grain{position:absolute; inset:0; pointer-events:none; opacity:var(--grain,.5); mix-blend-mode:overlay;
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='140' height='140'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3'/></filter><rect width='140' height='140' filter='url(%23n)' opacity='0.55'/></svg>")}
+
+/* printed markings, inside the felt clip */
+.spotring{position:absolute; width:11%; aspect-ratio:1; margin:-5.5% 0 0 -5.5%; border-radius:50%;
+  border:2px solid var(--mark,rgba(255,255,255,.34)); box-shadow:0 0 10px var(--markglow,transparent)}
+.arcline{position:absolute; left:9%; right:9%; height:46%; border-radius:50%/100% 100% 0 0;
+  border:2px solid var(--mark,rgba(255,255,255,.2)); border-bottom:none}
+.legend{position:absolute; left:50%; transform:translateX(-50%); font-size:9px; letter-spacing:.26em;
+  color:var(--mark,rgba(255,255,255,.44)); white-space:nowrap; font-weight:600}
+.light{position:absolute; inset:0; pointer-events:none}
+.sticker{position:absolute; font-weight:700; letter-spacing:.06em; pointer-events:none}
+</style>
+
+<h1>COMPOSED <em>TABLE</em> — four directions</h1>
+<p class="lede">
+  All four are built from the same layer kinds — scene, surface, grain, printed markings, rail, seam,
+  trim, stickers, lighting — restacked and restyled. Nothing here is a bitmap; it's all gradients,
+  SVG grain and blend modes, so it's an honest preview of what the layer system can do
+  <b>before any art is commissioned</b>. Pick the direction; palette is one field.
+</p>
+
+<div class="grid">
+
+  <!-- ─── 1 ─── -->
+  <div class="panel">
+    <div class="phead"><span class="n">01</span><h2>Top-down casino</h2><span class="cost lo">cheapest</span></div>
+    <div class="pbody">
+      <div class="viewport">
+        <div class="table-shape" style="--felt:radial-gradient(ellipse 78% 74% at 50% 26%,#1d6b3f,#0d3f24 66%,#072816); --rail:linear-gradient(180deg,#4a2f1c,#2a1a0f 60%,#160d07) border-box; --rail-shadow:inset 0 3px 9px rgba(255,220,170,.15)">
+          <div class="ring" style="--iv:3.1%; --ih:2.1%; border:1.5px dashed rgba(226,200,150,.5)"></div>
+          <div class="ring" style="--iv:6.6%; --ih:4.4%; border:2px solid rgba(214,178,96,.8)"></div>
+          <div class="felt-clip">
+            <div class="grain" style="--grain:.55"></div>
+            <div class="arcline" style="top:20%"></div>
+            <div class="legend" style="top:25%">BLACKJACK PAYS 3 TO 2</div>
+            <div class="legend" style="top:32%; font-size:7.5px; letter-spacing:.18em; opacity:.62">DEALER MUST DRAW TO 16 AND STAND ON ALL 17'S</div>
+            <div class="spotring" style="left:17%; top:64%"></div>
+            <div class="spotring" style="left:33%; top:72%"></div>
+            <div class="spotring" style="left:50%; top:75%"></div>
+            <div class="spotring" style="left:67%; top:72%"></div>
+            <div class="spotring" style="left:83%; top:64%"></div>
+
+            <div class="light" style="background:radial-gradient(ellipse 50% 44% at 50% 14%,rgba(255,244,214,.22),transparent 64%)"></div>
+            <div class="light" style="background:radial-gradient(ellipse 116% 100% at 50% 34%,transparent 44%,rgba(0,0,0,.6) 100%)"></div>
+          </div>
+        </div>
+      </div>
+      <p class="why">
+        The table straight on, as the current art mostly is — so <b>seat and card coordinates carry over unchanged</b>
+        and nothing in the game has to move. Everything you asked for is here: real felt grain, printed markings,
+        a stitched leather rail, brass trim, an overhead lamp falloff.
+        <b>No surroundings</b> — the table is the whole frame.
+      </p>
+    </div>
+  </div>
+
+  <!-- ─── 2 ─── -->
+  <div class="panel">
+    <div class="phead"><span class="n">02</span><h2>Table in a room</h2><span class="cost mid">moderate</span></div>
+    <div class="pbody">
+      <div class="viewport" style="place-items:stretch">
+        <!-- the room behind -->
+        <div style="position:absolute; inset:0; background:linear-gradient(180deg,#0b1016 0%,#151c26 44%,#070b10 100%)">
+          <div style="position:absolute; inset:0; filter:blur(2.5px); background:
+              radial-gradient(circle 7px at 9% 20%, rgba(255,196,120,.85), transparent 62%),
+              radial-gradient(circle 10px at 22% 13%, rgba(255,196,120,.6), transparent 64%),
+              radial-gradient(circle 8px at 34% 24%, rgba(255,220,160,.4), transparent 64%),
+              radial-gradient(circle 9px at 78% 15%, rgba(120,200,255,.55), transparent 64%),
+              radial-gradient(circle 12px at 91% 25%, rgba(255,160,200,.48), transparent 64%),
+              radial-gradient(circle 6px at 66% 27%, rgba(180,220,255,.32), transparent 64%)"></div>
+          <div style="position:absolute; left:0; right:0; top:0; height:38%; background:linear-gradient(180deg,rgba(0,0,0,.72),transparent)"></div>
+          <!-- lamp cone. Heavily blurred and barely there: a hard-edged
+               clip-path wedge reads as a grey triangle pasted over the room,
+               not as light. -->
+          <div style="position:absolute; left:50%; top:-6%; width:64%; height:66%; transform:translateX(-50%);
+             background:linear-gradient(180deg,rgba(255,242,206,.13),rgba(255,242,206,.04) 46%,transparent 82%);
+             clip-path:polygon(40% 0,60% 0,100% 100%,0 100%); filter:blur(22px); mix-blend-mode:screen"></div>
+          <!-- the fitting itself, so the light has a source -->
+          <div style="position:absolute; left:50%; top:2%; width:15%; height:3.4%; transform:translateX(-50%);
+             border-radius:0 0 50% 50%/0 0 100% 100%;
+             background:linear-gradient(180deg,#2a2f38,#12161c);
+             box-shadow:0 5px 18px rgba(255,238,190,.5)"></div>
+        </div>
+        <!-- the table, tilted into the room -->
+        <div style="position:absolute; left:3%; right:3%; bottom:-4%; perspective:1000px">
+          <div class="table-shape" style="width:100%; margin:0; transform:rotateX(30deg); transform-origin:50% 100%;
+               --felt:radial-gradient(ellipse 78% 74% at 50% 26%,#1d6b3f,#0d3f24 66%,#072816);
+               --rail:linear-gradient(180deg,#5a3a22,#2c1b0f 60%,#140c06) border-box; --rail-shadow:inset 0 3px 10px rgba(255,222,175,.2)">
+            <div class="ring" style="--iv:3.1%; --ih:2.1%; border:1.5px dashed rgba(226,200,150,.48)"></div>
+            <div class="ring" style="--iv:6.6%; --ih:4.4%; border:2px solid rgba(214,178,96,.72)"></div>
+            <div class="felt-clip">
+              <div class="grain" style="--grain:.5"></div>
+              <div class="arcline" style="top:20%"></div>
+              <div class="legend" style="top:25%">BLACKJACK PAYS 3 TO 2</div>
+              <div class="spotring" style="left:17%; top:64%"></div>
+              <div class="spotring" style="left:33%; top:72%"></div>
+              <div class="spotring" style="left:50%; top:75%"></div>
+              <div class="spotring" style="left:67%; top:72%"></div>
+              <div class="spotring" style="left:83%; top:64%"></div>
+              <div class="light" style="background:radial-gradient(ellipse 50% 46% at 50% 10%,rgba(255,244,214,.26),transparent 66%)"></div>
+              <div class="light" style="background:radial-gradient(ellipse 116% 100% at 50% 32%,transparent 46%,rgba(0,0,0,.55) 100%)"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <p class="why">
+        The table sits <b>in a place</b> — this is the "surroundings" half of what you described, and it's the
+        one direction that reads as a venue rather than a graphic. The scene is just two more layers behind
+        the table, so the cost is real but contained.
+        <span class="warn">The catch:</span> a tilted surface means seat coordinates no longer map straight
+        to screen space — the existing card pitch control helps, but every stock layout needs re-tuning once.
+      </p>
+    </div>
+  </div>
+
+  <!-- ─── 3 ─── -->
+  <div class="panel">
+    <div class="phead"><span class="n">03</span><h2>Neon / sticker-first</h2><span class="cost lo">cheapest</span></div>
+    <div class="pbody">
+      <div class="viewport">
+        <div class="table-shape" style="--felt:radial-gradient(ellipse 80% 76% at 50% 28%,#141a3a,#0a0d22 66%,#05061a); --rail:linear-gradient(180deg,#1b2148,#0a0c22 70%) border-box; --rail-shadow:inset 0 3px 0 rgba(34,211,238,.9), inset 0 9px 22px rgba(34,211,238,.3), 0 0 34px rgba(34,211,238,.18)">
+          
+          
+          <div class="felt-clip">
+            <div class="grain" style="--grain:.28"></div>
+            <div style="position:absolute; inset:0; background:
+               repeating-linear-gradient(90deg,rgba(120,180,255,.055) 0 1px,transparent 1px 32px),
+               repeating-linear-gradient(0deg,rgba(120,180,255,.055) 0 1px,transparent 1px 32px)"></div>
+            <div class="arcline" style="top:20%; --mark:rgba(34,211,238,.7)"></div>
+            <div class="legend" style="top:25%; --mark:#67e8f9">BLACKJACK PAYS 3 TO 2</div>
+            <div class="spotring" style="left:17%; top:64%; --mark:rgba(244,114,182,.9); --markglow:rgba(244,114,182,.5)"></div>
+            <div class="spotring" style="left:33%; top:72%; --mark:rgba(34,211,238,.9); --markglow:rgba(34,211,238,.5)"></div>
+            <div class="spotring" style="left:50%; top:75%; --mark:rgba(250,204,21,.95); --markglow:rgba(250,204,21,.5)"></div>
+            <div class="spotring" style="left:67%; top:72%; --mark:rgba(34,211,238,.9); --markglow:rgba(34,211,238,.5)"></div>
+            <div class="spotring" style="left:83%; top:64%; --mark:rgba(244,114,182,.9); --markglow:rgba(244,114,182,.5)"></div>
+            <div class="sticker" style="left:8%; top:12%; transform:rotate(-13deg); font-size:15px; color:#fde047; text-shadow:0 0 12px rgba(253,224,71,.65)">★ MORB</div>
+            <div class="sticker" style="right:9%; top:17%; transform:rotate(10deg); font-size:12px; color:#f472b6; text-shadow:0 0 12px rgba(244,114,182,.65)">HIGH ROLLER</div>
+            <div class="sticker" style="left:13%; bottom:20%; transform:rotate(6deg); font-size:11px; color:#22d3ee; text-shadow:0 0 12px rgba(34,211,238,.65)">369</div>
+            <div class="light" style="background:radial-gradient(ellipse 116% 100% at 50% 34%,transparent 46%,rgba(0,0,0,.58) 100%)"></div>
+          </div>
+        </div>
+      </div>
+      <p class="why">
+        Flat and graphic, and the only direction where <b>user stickers actually read</b> — a decal on a
+        photoreal felt looks pasted on, on this it looks designed. Cheapest to render, most on-brand,
+        and the most forgiving of assets people make themselves.
+        <b>Least "real table"</b> of the four, which is the thing you said you wanted to move toward.
+      </p>
+    </div>
+  </div>
+
+  <!-- ─── 4 ─── -->
+  <div class="panel">
+    <div class="phead"><span class="n">04</span><h2>High-roller / inlay</h2><span class="cost mid">moderate</span></div>
+    <div class="pbody">
+      <div class="viewport">
+        <div class="table-shape" style="--felt:radial-gradient(ellipse 76% 74% at 50% 26%,#5b1220,#320a13 66%,#1a050a); --rail:linear-gradient(180deg,#22222a,#0d0d11 62%) border-box; --rail-shadow:inset 0 4px 10px rgba(255,255,255,.15)">
+          <div class="ring" style="--iv:3.3%; --ih:2.2%; background:repeating-linear-gradient(96deg,rgba(0,0,0,.26) 0 2px,transparent 2px 9px),linear-gradient(180deg,#6b4423,#42280f 55%,#231506)"></div>
+          <div class="ring" style="--iv:6.6%; --ih:4.4%; border:2.5px solid rgba(226,196,124,.95); filter:drop-shadow(0 0 5px rgba(226,196,124,.5))"></div>
+          <div class="felt-clip">
+            <div class="grain" style="--grain:.55"></div>
+            <div class="arcline" style="top:20%; --mark:rgba(226,196,124,.55)"></div>
+            <div class="legend" style="top:25%; --mark:rgba(238,214,158,.88)">BLACKJACK PAYS 3 TO 2</div>
+            <div class="spotring" style="left:17%; top:64%; --mark:rgba(226,196,124,.8)"></div>
+            <div class="spotring" style="left:33%; top:72%; --mark:rgba(226,196,124,.8)"></div>
+            <div class="spotring" style="left:50%; top:75%; --mark:rgba(226,196,124,.95); --markglow:rgba(226,196,124,.3)"></div>
+            <div class="spotring" style="left:67%; top:72%; --mark:rgba(226,196,124,.8)"></div>
+            <div class="spotring" style="left:83%; top:64%; --mark:rgba(226,196,124,.8)"></div>
+
+            <div class="light" style="background:radial-gradient(ellipse 48% 42% at 50% 14%,rgba(255,238,198,.19),transparent 64%)"></div>
+            <div class="light" style="background:radial-gradient(ellipse 116% 100% at 50% 34%,transparent 42%,rgba(0,0,0,.66) 100%)"></div>
+          </div>
+        </div>
+      </div>
+      <p class="why">
+        Same geometry as 01, but showing what the layer stack gives you once materials are real —
+        <b>three stacked surround layers</b> (burl wood, leather roll, gold inlay) instead of one.
+        This is the argument for building rather than painting: the same table, redressed, without
+        anybody drawing a new picture.
+      </p>
+    </div>
+  </div>
+
+</div>
+
+<!-- ─── anatomy ─── -->
+<div class="panel" style="margin-top:26px; max-width:1500px">
+  <div class="phead"><span class="n">05</span><h2>What "composed" means — the same table, exploded</h2><span class="cost">reference</span></div>
+  <div class="pbody">
+    <div style="display:grid; gap:12px; grid-template-columns:repeat(auto-fit,minmax(150px,1fr))">
+      <div><div class="viewport" style="aspect-ratio:1/1; background:#04080d"><div class="tbl" style="background:radial-gradient(ellipse 78% 62% at 50% 34%,#1d6b3f,#0d3f24 62%,#072816)"></div></div>
+        <div style="font-size:10px; color:var(--slate-400); margin-top:6px; letter-spacing:.08em">1 · SURFACE</div></div>
+      <div><div class="viewport" style="aspect-ratio:1/1; background:#0d3f24"><div class="grain" style="--grain:1; mix-blend-mode:normal; opacity:.5"></div></div>
+        <div style="font-size:10px; color:var(--slate-400); margin-top:6px; letter-spacing:.08em">2 · GRAIN</div></div>
+      <div><div class="viewport" style="aspect-ratio:1/1; background:#0d3f24">
+          <div class="arcline" style="top:22%"></div><div class="legend" style="top:28%; font-size:7px">PAYS 3 TO 2</div>
+          <div class="spotring" style="left:22%; top:70%"></div><div class="spotring" style="left:50%; top:78%"></div><div class="spotring" style="left:78%; top:70%"></div></div>
+        <div style="font-size:10px; color:var(--slate-400); margin-top:6px; letter-spacing:.08em">3 · MARKINGS</div></div>
+      <div><div class="viewport" style="aspect-ratio:1/1; background:#0d3f24">
+          <div style="position:absolute; left:-6%; right:-6%; bottom:-22%; height:56%; border-radius:50%;
+             background:linear-gradient(180deg,#4a2f1c,#2a1a0f 55%,#160d07); box-shadow:inset 0 4px 10px rgba(255,220,170,.16)">
+            <div style="position:absolute; inset:8px 8px auto; height:2px; border-radius:99px;
+               background:repeating-linear-gradient(90deg,rgba(226,200,150,.5) 0 5px,transparent 5px 11px)"></div></div></div>
+        <div style="font-size:10px; color:var(--slate-400); margin-top:6px; letter-spacing:.08em">4 · RAIL + STITCH</div></div>
+      <div><div class="viewport" style="aspect-ratio:1/1; background:#0d3f24">
+          <div class="sticker" style="left:14%; top:24%; transform:rotate(-12deg); font-size:13px; color:#fde047">★ MORB</div>
+          <div class="sticker" style="right:12%; bottom:22%; transform:rotate(9deg); font-size:10px; color:#f472b6">369</div></div>
+        <div style="font-size:10px; color:var(--slate-400); margin-top:6px; letter-spacing:.08em">5 · STICKERS</div></div>
+      <div><div class="viewport" style="aspect-ratio:1/1; background:#0d3f24">
+          <div class="light" style="background:radial-gradient(ellipse 52% 40% at 50% 20%,rgba(255,244,214,.4),transparent 62%)"></div>
+          <div class="light" style="background:radial-gradient(ellipse 118% 96% at 50% 42%,transparent 38%,rgba(0,0,0,.72) 100%)"></div></div>
+        <div style="font-size:10px; color:var(--slate-400); margin-top:6px; letter-spacing:.08em">6 · LIGHTING</div></div>
+    </div>
+    <p class="why" style="max-width:900px">
+      Each of those is one entry in <b>table.layers[]</b>, and each carries a kind, an asset id, a tint, an
+      opacity and a blend mode. Swapping the felt or the rail is one field — that's what makes a library
+      worth having, and what a single painted image can never give you.
+    </p>
+  </div>
+</div>
