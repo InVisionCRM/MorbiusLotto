@@ -67,6 +67,8 @@ import { TrimModal, type TrimTarget } from '@/components/BLACKJACK/design/sound/
 import { LibraryModal } from '@/components/BLACKJACK/design/sound/LibraryModal';
 import { useTablePublish } from '@/components/BLACKJACK/design/useTablePublish';
 import { useMyTableDesigns } from '@/components/BLACKJACK/design/useMyTableDesigns';
+import { TABLE_COMPOSITIONS } from '@/lib/table-layers';
+import ComposedTable from '@/components/BLACKJACK/ComposedTable';
 import { CardBackSwatch } from '@/components/BLACKJACK/CardBackSwatch';
 import { Prc20TokenPicker, type SelectedPrc20Token } from '@/components/shared/Prc20TokenPicker';
 import { TABLE_CARD_BACKS, DEFAULT_CARD_BACK } from '@/lib/table-card-backs';
@@ -545,7 +547,9 @@ export default function TableDesigner() {
   const setTableArt = useCallback(
     (src: string) => {
       beginGesture();
-      patch((p) => ({ ...p, table: { ...p.table, image: src } }));
+      // Picking art drops any composition — the two are alternatives, and
+      // leaving layers on would silently hide the picture just chosen.
+      patch((p) => ({ ...p, table: { ...p.table, image: src, layers: undefined } }));
     },
     [beginGesture, patch],
   );
@@ -734,6 +738,7 @@ export default function TableDesigner() {
      useTablePublish above writes a theme onto a live multiplayer table and
      needs the admin wallet. This is the player-facing save: any signed-in
      wallet keeps its own designs, and saving one never touches a live table. */
+  const composedOn = !!layout.table.layers?.length;
   const mine = useMyTableDesigns();
   const [designName, setDesignName] = useState('My table');
 
@@ -1033,9 +1038,54 @@ export default function TableDesigner() {
                     always 16:9, so your image always fits.
                   </p>
 
+                  {/* Build the table instead of painting it. A composition
+                      replaces the backdrop with a real stack — felt, rail,
+                      trim, lighting — so it can be restyled without anyone
+                      drawing new art. */}
+                  <div className="bjtd-ctl" style={{ margin: '0 0 6px' }}>
+                    <div className="bjtd-ctl-lbl">
+                      <span>Build the table</span>
+                      {composedOn && <span className="bjtd-val">composed</span>}
+                    </div>
+                  </div>
+                  <div className="bjtd-btn-row" style={{ marginTop: 0 }}>
+                    {TABLE_COMPOSITIONS.map((c) => (
+                      <button
+                        key={c.id}
+                        type="button"
+                        title={c.hint}
+                        className={`bjtd-sm-btn${composedOn ? ' go' : ''}`}
+                        onClick={() => {
+                          beginGesture();
+                          patch((p) => ({ ...p, table: { ...p.table, layers: c.layers } }));
+                        }}
+                      >
+                        {c.label}
+                      </button>
+                    ))}
+                    {composedOn && (
+                      <button
+                        type="button"
+                        className="bjtd-sm-btn"
+                        onClick={() => {
+                          beginGesture();
+                          patch((p) => ({ ...p, table: { ...p.table, layers: undefined } }));
+                        }}
+                      >
+                        Back to art
+                      </button>
+                    )}
+                  </div>
+                  <div className="bjtd-hint" style={{ marginTop: 8 }}>
+                    {composedOn
+                      ? 'The board is built from layers. Uploading art below drops back to a painted table.'
+                      : 'Or keep painting: upload one picture for the whole board.'}
+                  </div>
+
                   <button
                     type="button"
                     className="bjtd-art-drop"
+                    style={{ marginTop: 12 }}
                     onClick={() => artFileRef.current?.click()}
                   >
                     <span className="bjtd-art-drop-big">Upload your table art</span>
@@ -1862,19 +1912,23 @@ export default function TableDesigner() {
                       >
                         {/* The table art itself + the same dark overlay the live
                             table draws, so the designer shows the real thing. */}
-                        <img
-                          src={stageArt}
-                          alt=""
-                          style={{
-                            position: 'absolute',
-                            inset: 0,
-                            width: '100%',
-                            height: '100%',
-                            objectFit: 'cover',
-                            objectPosition: 'center',
-                            pointerEvents: 'none',
-                          }}
-                        />
+                        {composedOn ? (
+                          <ComposedTable layers={layout.table.layers!} />
+                        ) : (
+                          <img
+                            src={stageArt}
+                            alt=""
+                            style={{
+                              position: 'absolute',
+                              inset: 0,
+                              width: '100%',
+                              height: '100%',
+                              objectFit: 'cover',
+                              objectPosition: 'center',
+                              pointerEvents: 'none',
+                            }}
+                          />
+                        )}
                         <div
                           style={{
                             position: 'absolute',
