@@ -4,6 +4,8 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { IconPlayerPlay, IconPlayerPause, IconPlayerSkipForward, IconVolume, IconChevronDown } from '@tabler/icons-react';
 import Image from 'next/image';
 import { Hand, GameState, Action, GameResult, Card } from '@/app/BLACKJACK/types';
+import ComposedTable from '@/components/BLACKJACK/ComposedTable';
+import { useBlackjackTableLayout } from '@/components/BLACKJACK/BlackjackTableLayoutContext';
 import type { CardValue, Suit } from '@/app/BLACKJACK/types';
 import PlayingCard from './PlayingCard';
 import DealerSection from './DealerSection';
@@ -265,6 +267,12 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
 
   const imageSrc = imageSrcProp ?? BLACKJACK_IMAGE_BACKGROUNDS.find((img) => img.id === imageSource)?.src ?? BLACKJACK_IMAGE_BACKGROUNDS.find((img) => img.id === DEFAULT_BLACKJACK_IMAGE_ID)?.src ?? BLACKJACK_IMAGE_BACKGROUNDS[0].src;
   const isExternalImage = /^https?:\/\//.test(imageSrc);
+
+  /* Layers win over both the image and the video when a table has them. An
+     empty array is treated as "no composition" so clearing the stack falls
+     back to the old art rather than rendering an empty board. */
+  const tableLayout = useBlackjackTableLayout();
+  const composedLayers = tableLayout.table.layers?.length ? tableLayout.table.layers : null;
 
   const videoSrc = videoSrcProp ?? BLACKJACK_VIDEO_BACKGROUNDS.find((v) => v.id === videoSource)?.src ?? BLACKJACK_VIDEO_BACKGROUNDS[0].src;
   const tableVideoRef = useRef<HTMLVideoElement | null>(null);
@@ -870,7 +878,12 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
 
       {/* Table surface: flex-1 with min height so table stays a good size */}
       <div className="flex-1 min-h-[420px] sm:min-h-[680px] relative">
-      {useVideoBackground ? (
+      {composedLayers ? (
+        /* A composed table replaces the single backdrop entirely — it draws
+           its own room, felt and rail. Seats and cards sit above it in the
+           same coordinate space, so nothing else has to move. */
+        <ComposedTable layers={composedLayers} style={{ zIndex: 0 }} />
+      ) : useVideoBackground ? (
         <video
           ref={tableVideoRef}
           key={videoSrc}

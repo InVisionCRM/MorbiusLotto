@@ -1,0 +1,255 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Table assets — the fun ones</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;600;700&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
+<style>
+/* ─────────────────────────────────────────────────────────────────────────
+   Take two. The first library was conventional casino stock — green felt,
+   leather rail, brass trim, and nine variations on "a different colour of the
+   same thing". This is the other direction: materials nobody else's blackjack
+   table has.
+
+   Still procedural. Still no bitmaps. A few of these need layer kinds the
+   renderer doesn't have yet (marked ⚑ below) — chiefly animation and an
+   emissive pass — and those are called out rather than quietly assumed.
+   ───────────────────────────────────────────────────────────────────────── */
+:root{
+  --cyan:#22d3ee; --ink:#e2e8f0; --slate-400:#94a3b8; --slate-500:#64748b;
+  --line:rgba(148,163,184,.14);
+  --disp:'Chakra Petch',system-ui,sans-serif; --mono:'JetBrains Mono',ui-monospace,monospace;
+}
+*{box-sizing:border-box}
+body{margin:0; padding:26px 22px 70px; font-family:var(--disp); color:var(--ink);
+  background:radial-gradient(ellipse 90% 60% at 50% -10%,#0a1a2a,transparent 70%),linear-gradient(160deg,#050e16,#02070b 90%)}
+h1{font-size:21px; letter-spacing:.05em; margin:0 0 4px}
+h1 em{font-style:normal; color:var(--cyan)}
+.lede{color:var(--slate-400); font-size:12.5px; max-width:800px; line-height:1.55; margin:0 0 8px}
+.flag{font-size:11.5px; color:#fbbf24; margin:0 0 24px}
+h2{font-size:13px; letter-spacing:.12em; text-transform:uppercase; color:var(--cyan);
+   margin:30px 0 4px; padding-bottom:6px; border-bottom:1px solid var(--line)}
+.note{font-size:11.5px; color:var(--slate-500); margin:0 0 14px; line-height:1.5}
+.row{display:grid; gap:12px; grid-template-columns:repeat(auto-fill,minmax(138px,1fr))}
+.sw{border:1px solid var(--line); border-radius:11px; overflow:hidden; background:rgba(6,14,22,.5)}
+.sw .art{height:80px; position:relative; overflow:hidden}
+.sw .cap{padding:7px 9px 8px}
+.sw .nm{font-size:11px; font-weight:700}
+.sw .id{font-family:var(--mono); font-size:8.5px; color:var(--slate-500); margin-top:2px}
+.sw .nm .w{color:#fbbf24}
+
+.grain{position:absolute; inset:0; pointer-events:none; mix-blend-mode:overlay; opacity:.4;
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='140' height='140'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3'/></filter><rect width='140' height='140' filter='url(%23n)' opacity='0.55'/></svg>")}
+
+/* ── the wild felts ── */
+.f{position:absolute; inset:0}
+.f-holo{background:
+  conic-gradient(from 210deg at 40% 30%, #ff3d81,#ffd166,#06d6a0,#4cc9f0,#b892ff,#ff3d81);
+  filter:saturate(1.3) brightness(.62)}
+.f-holo::after{content:''; position:absolute; inset:0; backdrop-filter:blur(6px);
+  background:radial-gradient(ellipse 70% 60% at 50% 25%, rgba(255,255,255,.22), transparent 65%)}
+.f-lava{background:radial-gradient(ellipse 80% 70% at 50% 30%,#3a0d05,#160402 70%,#0a0201)}
+.f-lava::after{content:''; position:absolute; inset:0; opacity:.9; background:
+  repeating-conic-gradient(from 12deg at 42% 55%, transparent 0 7deg, rgba(255,94,20,.55) 7deg 8deg, transparent 8deg 26deg),
+  repeating-conic-gradient(from 70deg at 66% 38%, transparent 0 9deg, rgba(255,160,40,.4) 9deg 10deg, transparent 10deg 32deg);
+  filter:blur(.6px) drop-shadow(0 0 5px rgba(255,110,30,.75))}
+.f-galaxy{background:
+  radial-gradient(ellipse 46% 40% at 28% 28%, rgba(126,87,255,.65), transparent 62%),
+  radial-gradient(ellipse 40% 34% at 72% 60%, rgba(255,86,171,.45), transparent 64%),
+  radial-gradient(ellipse 60% 50% at 55% 40%, rgba(40,120,255,.35), transparent 68%),
+  linear-gradient(180deg,#0a0620,#04020e)}
+.f-galaxy::after{content:''; position:absolute; inset:0; background:
+  radial-gradient(circle .8px at 12% 22%, #fff 99%, transparent),
+  radial-gradient(circle .7px at 34% 64%, #fff 99%, transparent),
+  radial-gradient(circle 1px at 58% 18%, #fff 99%, transparent),
+  radial-gradient(circle .6px at 71% 46%, #cfe6ff 99%, transparent),
+  radial-gradient(circle .9px at 86% 72%, #fff 99%, transparent),
+  radial-gradient(circle .7px at 45% 84%, #fff 99%, transparent),
+  radial-gradient(circle .6px at 22% 76%, #ffd9f0 99%, transparent)}
+.f-circuit{background:linear-gradient(180deg,#04231c,#01100d)}
+.f-circuit::after{content:''; position:absolute; inset:0; background:
+  repeating-linear-gradient(90deg, rgba(0,255,180,.22) 0 1px, transparent 1px 22px),
+  repeating-linear-gradient(0deg, rgba(0,255,180,.14) 0 1px, transparent 1px 22px),
+  radial-gradient(circle 2px at 22px 22px, rgba(0,255,190,.85), transparent 70%),
+  radial-gradient(circle 2px at 66px 44px, rgba(0,255,190,.7), transparent 70%),
+  radial-gradient(circle 2px at 110px 22px, rgba(0,255,190,.6), transparent 70%);
+  filter:drop-shadow(0 0 3px rgba(0,255,180,.5))}
+.f-carbon{background:#0d1014}
+.f-carbon::after{content:''; position:absolute; inset:0; background:
+  repeating-linear-gradient(45deg, #191d24 0 4px, #0d1014 4px 8px),
+  repeating-linear-gradient(-45deg, rgba(255,255,255,.05) 0 4px, transparent 4px 8px);
+  background-size:16px 16px}
+.f-vapor{background:linear-gradient(180deg,#2b1055 0%,#7b2a72 42%,#ff6f61 62%,#ffc371 76%,#120a2a 77%)}
+.f-vapor::after{content:''; position:absolute; left:0; right:0; bottom:0; height:36%; background:
+  repeating-linear-gradient(90deg, rgba(0,255,247,.5) 0 1px, transparent 1px 14px),
+  repeating-linear-gradient(0deg, rgba(0,255,247,.45) 0 1px, transparent 1px 9px);
+  transform:perspective(50px) rotateX(46deg); transform-origin:bottom}
+.f-vapor::before{content:''; position:absolute; left:50%; top:16%; width:38%; aspect-ratio:1;
+  transform:translateX(-50%); border-radius:50%;
+  background:linear-gradient(180deg,#ffe259,#ff6f61); opacity:.85}
+.f-ice{background:radial-gradient(ellipse 80% 70% at 50% 26%,#bfe6ff,#5f9fd0 62%,#2c5f8a)}
+.f-ice::after{content:''; position:absolute; inset:0; opacity:.75; background:
+  linear-gradient(112deg, transparent 44%, rgba(255,255,255,.9) 45%, transparent 46%),
+  linear-gradient(28deg, transparent 62%, rgba(255,255,255,.7) 63%, transparent 64%),
+  linear-gradient(-40deg, transparent 30%, rgba(255,255,255,.55) 31%, transparent 32%)}
+.f-toxic{background:radial-gradient(ellipse 78% 70% at 50% 28%,#6dff3a,#1c7a12 62%,#062f04)}
+.f-toxic::after{content:''; position:absolute; inset:0; background:
+  radial-gradient(circle 6px at 26% 62%, rgba(190,255,140,.55), transparent 70%),
+  radial-gradient(circle 9px at 63% 40%, rgba(190,255,140,.4), transparent 72%),
+  radial-gradient(circle 4px at 82% 70%, rgba(220,255,180,.5), transparent 70%);
+  filter:drop-shadow(0 0 6px rgba(120,255,60,.7))}
+.f-money{background:linear-gradient(180deg,#2f6b45,#17472c 70%,#0c2a19)}
+.f-money::after{content:''; position:absolute; inset:0; opacity:.5; background:
+  repeating-radial-gradient(circle at 50% 50%, transparent 0 5px, rgba(190,230,200,.3) 5px 6px),
+  repeating-linear-gradient(45deg, rgba(190,230,200,.12) 0 1px, transparent 1px 6px)}
+.f-marble{background:linear-gradient(180deg,#f2efe9,#cdc7bd)}
+.f-marble::after{content:''; position:absolute; inset:0; opacity:.55; background:
+  linear-gradient(118deg, transparent 38%, rgba(70,72,80,.55) 39.4%, transparent 41%),
+  linear-gradient(96deg, transparent 60%, rgba(70,72,80,.35) 61%, transparent 62.4%),
+  linear-gradient(140deg, transparent 20%, rgba(90,92,100,.3) 21%, transparent 22.6%);
+  filter:blur(.7px)}
+.f-velvet{background:radial-gradient(ellipse 70% 62% at 50% 22%,#8e2a5f,#4b0f31 62%,#220616)}
+.f-velvet::after{content:''; position:absolute; inset:0; background:
+  radial-gradient(ellipse 60% 44% at 50% 16%, rgba(255,180,220,.32), transparent 68%)}
+.f-oil{background:conic-gradient(from 140deg at 55% 45%, #10131a,#1b2b4d,#123a3a,#3b1f4d,#10131a)}
+.f-oil::after{content:''; position:absolute; inset:0; mix-blend-mode:color-dodge; opacity:.5;
+  background:conic-gradient(from 300deg at 40% 60%, #ff2d95,#00e5ff,#7cff3d,#ffd400,#ff2d95); filter:blur(9px)}
+
+/* ── wild rails ── */
+.r{position:absolute; inset:0}
+.r-neon{background:linear-gradient(180deg,#0d1030,#05061a);
+  box-shadow:inset 0 4px 0 #22d3ee, inset 0 10px 22px rgba(34,211,238,.5), inset 0 0 40px rgba(34,211,238,.2)}
+.r-chrome{background:linear-gradient(180deg,#f4f8fb 0%,#8e9aa6 18%,#3d454e 42%,#c9d4de 60%,#6a747f 78%,#20262c 100%)}
+.r-bullion{background:linear-gradient(180deg,#f6d365,#b8860b 70%,#6b4d05)}
+.r-bullion::after{content:''; position:absolute; inset:0;
+  background:repeating-linear-gradient(90deg, rgba(0,0,0,.28) 0 2px, transparent 2px 26px),
+             repeating-linear-gradient(0deg, rgba(0,0,0,.22) 0 2px, transparent 2px 18px)}
+.r-snake{background:linear-gradient(180deg,#3c5a2a,#16250f)}
+.r-snake::after{content:''; position:absolute; inset:0; opacity:.65; background:
+  repeating-conic-gradient(from 45deg at 50% 50%, rgba(190,220,150,.5) 0 25%, transparent 0 50%);
+  background-size:13px 13px}
+.r-rope{background:linear-gradient(180deg,#c9a26a,#6b4f2c)}
+.r-rope::after{content:''; position:absolute; inset:0; background:
+  repeating-linear-gradient(64deg, rgba(0,0,0,.35) 0 3px, transparent 3px 11px)}
+.r-lava-rock{background:linear-gradient(180deg,#2a2320,#0d0b0a)}
+.r-lava-rock::after{content:''; position:absolute; inset:0; background:
+  repeating-conic-gradient(from 20deg at 30% 60%, transparent 0 10deg, rgba(255,110,30,.55) 10deg 11deg, transparent 11deg 40deg);
+  filter:blur(.5px) drop-shadow(0 0 4px rgba(255,110,30,.7))}
+.r-candy{background:repeating-linear-gradient(58deg,#ff4d6d 0 10px,#fff 10px 20px)}
+.r-bone{background:linear-gradient(180deg,#efe6d2,#b6a684 72%,#7b6e52)}
+.r-bone::after{content:''; position:absolute; inset:0; opacity:.35;
+  background:repeating-radial-gradient(circle at 30% 40%, transparent 0 6px, rgba(120,105,75,.5) 6px 7px)}
+
+/* ── wild trims ── */
+.t{position:absolute; inset:0; display:grid; place-items:center; background:linear-gradient(180deg,#141821,#080b11)}
+.t .line{width:80%; height:5px; border-radius:99px}
+.t-bulbs{background:repeating-linear-gradient(90deg,#ffe9a8 0 4px, transparent 4px 12px);
+  filter:drop-shadow(0 0 5px rgba(255,214,120,.95)); height:6px!important}
+.t-holo{background:conic-gradient(from 0deg,#ff3d81,#ffd166,#06d6a0,#4cc9f0,#b892ff,#ff3d81);
+  filter:saturate(1.4) drop-shadow(0 0 6px rgba(255,255,255,.5))}
+.t-plasma{background:linear-gradient(90deg,#7cf,#a4f,#7cf); filter:drop-shadow(0 0 8px rgba(140,120,255,.95))}
+.t-drip{background:linear-gradient(90deg,#f6d365,#fff3c4,#b8860b); filter:drop-shadow(0 0 5px rgba(246,211,101,.8))}
+.t-ember{background:linear-gradient(90deg,#ff6a00,#ffce54,#ff2d00); filter:drop-shadow(0 0 8px rgba(255,90,0,.9))}
+.t-ghost{background:linear-gradient(90deg,rgba(180,255,230,.1),rgba(180,255,230,.85),rgba(180,255,230,.1));
+  filter:drop-shadow(0 0 9px rgba(150,255,220,.8))}
+
+/* ── kits ── */
+.kits{display:grid; gap:20px; grid-template-columns:repeat(auto-fit,minmax(340px,1fr)); max-width:1500px}
+.kit{border:1px solid var(--line); border-radius:13px; overflow:hidden; background:rgba(6,14,22,.5)}
+.kit .kh{padding:11px 13px 9px; border-bottom:1px solid var(--line)}
+.kit .kh b{font-size:13px}
+.kit .kh span{font-family:var(--mono); font-size:9px; color:var(--slate-500); margin-left:8px}
+.kit .kw{font-size:10.5px; color:var(--slate-500); margin-top:3px; line-height:1.45}
+.vp{position:relative; aspect-ratio:16/10; padding:6% 4% 0; display:grid; place-items:end center; overflow:hidden}
+.body{position:relative; width:100%; aspect-ratio:16/10.6; margin-bottom:-7%;
+  border-radius:7% 7% 46% 46% / 5% 5% 62% 62%; overflow:hidden; box-shadow:0 22px 46px rgba(0,0,0,.75)}
+.ring{position:absolute; border-radius:6% 6% 45% 45% / 5% 5% 61% 61%; pointer-events:none}
+.felt{position:absolute; inset:6.6% 4.4%; border-radius:5% 5% 45% 45% / 5% 5% 61% 61%; overflow:hidden;
+  box-shadow:inset 0 6px 18px rgba(0,0,0,.6)}
+.spot{position:absolute; width:11%; aspect-ratio:1; margin:-5.5% 0 0 -5.5%; border-radius:50%}
+.lg{position:absolute; left:50%; transform:translateX(-50%); white-space:nowrap; font-weight:700;
+  font-size:8px; letter-spacing:.24em}
+.lite{position:absolute; inset:0; pointer-events:none}
+</style>
+
+<h1>TABLE ASSETS — <em>THE FUN ONES</em></h1>
+<p class="lede">
+  Take two. The first sheet was casino stock — nine colours of the same green felt. These are materials
+  nobody else's blackjack table has. Still procedural, still no bitmaps.
+</p>
+<p class="flag">⚑ Marked items need layer kinds the renderer doesn't have yet — an <b>emissive</b> pass (things that glow rather than reflect) and <b>animation</b> (chase bulbs, drifting nebula, flowing lava). Both are additive; neither changes the model.</p>
+
+<h2>Felts</h2>
+<p class="note">Some of these carry their own light, which is why the emissive pass matters — right now a glow has to be faked with a drop-shadow rather than actually lighting the cards above it.</p>
+<div class="row" id="felts"></div>
+
+<h2>Rails</h2>
+<p class="note">The surround does most of the work in selling a concept — it's the part that frames every hand.</p>
+<div class="row" id="rails"></div>
+
+<h2>Trims</h2>
+<p class="note">Where the previous sheet was brass and chrome, these are the ones people will actually notice.</p>
+<div class="row" id="trims"></div>
+
+<h2>Complete kits</h2>
+<p class="note">Not colour swaps — whole concepts. Each is the same layer stack with a wildly different set of values.</p>
+<div class="kits" id="kits"></div>
+
+<script>
+const FELTS=[
+ ['holo','Holographic',1],['lava','Molten',1],['galaxy','Deep space',1],['circuit','Circuit board',1],
+ ['carbon','Carbon fibre',0],['vapor','Vaporwave',0],['ice','Cracked ice',0],['toxic','Toxic slime',1],
+ ['money','Cash print',0],['marble','Marble',0],['velvet','Crushed velvet',0],['oil','Oil slick',0],
+];
+const RAILS=[
+ ['neon','Neon shell',1],['chrome','Liquid chrome',0],['bullion','Gold bullion',0],['snake','Snakeskin',0],
+ ['rope','Ship rope',0],['lava-rock','Lava rock',1],['candy','Candy stripe',0],['bone','Bone',0],
+];
+const TRIMS=[
+ ['bulbs','Chase bulbs',1],['holo','Holo edge',0],['plasma','Plasma',1],
+ ['drip','Dripping gold',0],['ember','Ember',1],['ghost','Ghost light',1],
+];
+const sw=(cls,nm,id,wild)=>`<div class="sw"><div class="art">${cls}</div>
+  <div class="cap"><div class="nm">${nm}${wild?' <span class="w">⚑</span>':''}</div><div class="id">${id}</div></div></div>`;
+
+document.getElementById('felts').innerHTML=FELTS.map(([id,nm,w])=>
+  sw(`<div class="f f-${id}"></div><div class="grain"></div>`,nm,id,w)).join('');
+document.getElementById('rails').innerHTML=RAILS.map(([id,nm,w])=>
+  sw(`<div class="r r-${id}"></div>`,nm,id,w)).join('');
+document.getElementById('trims').innerHTML=TRIMS.map(([id,nm,w])=>
+  sw(`<div class="t"><div class="line t-${id}"></div></div>`,nm,id,w)).join('');
+
+const SPOTS=[[17,64],[33,72],[50,75],[67,72],[83,64]];
+const KITS=[
+ ['Vegas marquee','velvet + bullion + chase bulbs','velvet','bullion','bulbs','rgba(255,235,190,.85)',
+  'The one people picture when you say casino — and the bulbs make it move.','radial-gradient(ellipse 60% 50% at 50% 0%,#2a0f18,#0a0206 70%)'],
+ ['Deep space','galaxy + liquid chrome + plasma','galaxy','chrome','plasma','rgba(200,220,255,.8)',
+  'The felt is the sky. Cards float on a nebula.','radial-gradient(ellipse 70% 60% at 50% 10%,#0d0726,#02010a 72%)'],
+ ['Toxic lab','slime + bone rail + ghost light','toxic','bone','ghost','rgba(210,255,180,.85)',
+  'Radioactive green that actually glows on the chips.','radial-gradient(ellipse 60% 55% at 50% 5%,#0a2206,#020a02 72%)'],
+ ['Vaporwave','sunset grid + neon shell + holo edge','vapor','neon','holo','rgba(255,230,255,.9)',
+  'A sun setting behind an infinite grid, and a rail lit like a sign.','linear-gradient(180deg,#1b0733,#05010f)'],
+ ['Molten','lava + lava rock + ember','lava','lava-rock','ember','rgba(255,210,160,.85)',
+  'Cracks of magma under the cards. The rail is cooled crust.','radial-gradient(ellipse 60% 50% at 50% 8%,#220a04,#080201 72%)'],
+ ['Full house','cash print + candy stripe + dripping gold','money','candy','drip','rgba(230,255,225,.85)',
+  'Money-green banknote guilloche with a fairground rail.','radial-gradient(ellipse 60% 50% at 50% 5%,#08210f,#010703 72%)'],
+];
+document.getElementById('kits').innerHTML=KITS.map(([nm,recipe,f,r,t,mark,why,bg])=>`
+ <div class="kit">
+   <div class="kh"><b>${nm}</b><span>${recipe}</span><div class="kw">${why}</div></div>
+   <div class="vp" style="background:${bg}">
+     <div class="body">
+       <div class="r r-${r}" style="position:absolute;inset:0"></div>
+       <div class="ring" style="inset:6.6% 4.4%"><div class="line t-${t}" style="position:absolute;inset:-3px;border-radius:inherit;background:none;box-shadow:0 0 0 2px currentColor"></div></div>
+       <div class="felt">
+         <div class="f f-${f}"></div><div class="grain"></div>
+         <div style="position:absolute;left:9%;right:9%;top:18%;height:44%;border-radius:50%/100% 100% 0 0;border:2px solid ${mark};border-bottom:none"></div>
+         <div class="lg" style="top:23%;color:${mark}">BLACKJACK PAYS 3 TO 2</div>
+         ${SPOTS.map(([x,y])=>`<div class="spot" style="left:${x}%;top:${y}%;border:2px solid ${mark};opacity:.7"></div>`).join('')}
+         <div class="lite" style="background:radial-gradient(ellipse 116% 100% at 50% 32%,transparent 48%,rgba(0,0,0,.5) 100%)"></div>
+       </div>
+     </div>
+   </div>
+ </div>`).join('');
+</script>

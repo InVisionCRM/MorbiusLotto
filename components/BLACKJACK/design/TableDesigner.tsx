@@ -66,6 +66,9 @@ import { SoundEventTile } from '@/components/BLACKJACK/design/sound/SoundEventTi
 import { TrimModal, type TrimTarget } from '@/components/BLACKJACK/design/sound/TrimModal';
 import { LibraryModal } from '@/components/BLACKJACK/design/sound/LibraryModal';
 import { useTablePublish } from '@/components/BLACKJACK/design/useTablePublish';
+import { useMyTableDesigns } from '@/components/BLACKJACK/design/useMyTableDesigns';
+import { TABLE_COMPOSITIONS } from '@/lib/table-layers';
+import ComposedTable from '@/components/BLACKJACK/ComposedTable';
 import { CardBackSwatch } from '@/components/BLACKJACK/CardBackSwatch';
 import { Prc20TokenPicker, type SelectedPrc20Token } from '@/components/shared/Prc20TokenPicker';
 import { TABLE_CARD_BACKS, DEFAULT_CARD_BACK } from '@/lib/table-card-backs';
@@ -544,7 +547,9 @@ export default function TableDesigner() {
   const setTableArt = useCallback(
     (src: string) => {
       beginGesture();
-      patch((p) => ({ ...p, table: { ...p.table, image: src } }));
+      // Picking art drops any composition — the two are alternatives, and
+      // leaving layers on would silently hide the picture just chosen.
+      patch((p) => ({ ...p, table: { ...p.table, image: src, layers: undefined } }));
     },
     [beginGesture, patch],
   );
@@ -702,6 +707,18 @@ export default function TableDesigner() {
     return theme;
   }, [diff]);
 
+  /* The design a personal save stores. Deliberately the WHOLE layout, not the
+     diff: a saved design has to stand on its own when it's reloaded later,
+     and a diff only means anything relative to whatever the defaults happened
+     to be on the day it was written. The admin path keeps sending the sparse
+     version, because a live table layers its theme over the stock table. */
+  const currentFullDesign = useMemo((): BlackjackTableThemeConfig => {
+    const design: BlackjackTableThemeConfig = { version: 1, layout };
+    if (Object.keys(soundOverrides).length > 0) design.sounds = soundOverrides;
+    if (Object.keys(soundFx).length > 0) design.soundFx = soundFx;
+    return design;
+  }, [layout, soundOverrides, soundFx]);
+
   const handleLoad = useCallback(async () => {
     if (!publishTableId) return;
     const result = await publish.loadTheme(publishTableId);
@@ -716,6 +733,39 @@ export default function TableDesigner() {
     // Adopt the uploaded media paths so the design survives the editor too.
     if (saved) applyLoadedTheme(saved);
   }, [publishTableId, publish, currentThemeConfig, applyLoadedTheme]);
+
+  /* ── My tables: saving for everyone, not just admins ────────────────────
+     useTablePublish above writes a theme onto a live multiplayer table and
+     needs the admin wallet. This is the player-facing save: any signed-in
+     wallet keeps its own designs, and saving one never touches a live table. */
+  const composedOn = !!layout.table.layers?.length;
+  const mine = useMyTableDesigns();
+  const [designName, setDesignName] = useState('My table');
+
+  const handleSaveMine = useCallback(async () => {
+    const name = designName.trim() || 'My table';
+    // Overwrite the design being edited; otherwise start a new one. Saving is
+    // the one place the whole layout goes to the server — the diff-only theme
+    // config the admin path sends can't reconstruct a design on its own.
+    if (mine.activeSlug) await mine.update(mine.activeSlug, name, currentFullDesign);
+    else await mine.create(name, currentFullDesign);
+  }, [designName, mine, currentFullDesign]);
+
+  const handleSaveMineAsNew = useCallback(async () => {
+    const name = designName.trim() || 'My table';
+    await mine.create(name, currentFullDesign);
+  }, [designName, mine, currentFullDesign]);
+
+  const handleLoadMine = useCallback((slug: string) => {
+    const found = mine.designs.find((d) => d.slug === slug);
+    if (!found) return;
+    // Merge onto the stock layout rather than trusting the blob wholesale, so
+    // a design saved before a field existed still opens with that field set.
+    applyLoadedTheme(found.design);
+    mine.setActiveSlug(found.slug);
+    setDesignName(found.name);
+    mine.setStatus({ kind: 'ok', note: `Loaded \u201c${found.name}\u201d.` });
+  }, [mine, applyLoadedTheme]);
 
   /* Deep link from the admin page: /blackjack-multi/design?table=<id> opens
      the designer already pointed at that table, and pulls its saved theme as
@@ -892,6 +942,12 @@ export default function TableDesigner() {
                 </div>
               </div>
 
+              {/* Keyed on the step so the panel replays its entry animation
+                  every time you move between steps — on a phone the whole
+                  panel is the screen, and an instant swap gives you no sense
+                  of having gone anywhere. */}
+              <div className="bjtd-step-body" key={tab}>
+
               {/* ── FINE-TUNE: where everything sits ── */}
               {tab === 'tune' && (
                 <div>
@@ -982,9 +1038,54 @@ export default function TableDesigner() {
                     always 16:9, so your image always fits.
                   </p>
 
+                  {/* Build the table instead of painting it. A composition
+                      replaces the backdrop with a real stack — felt, rail,
+                      trim, lighting — so it can be restyled without anyone
+                      drawing new art. */}
+                  <div className="bjtd-ctl" style={{ margin: '0 0 6px' }}>
+                    <div className="bjtd-ctl-lbl">
+                      <span>Build the table</span>
+                      {composedOn && <span className="bjtd-val">composed</span>}
+                    </div>
+                  </div>
+                  <div className="bjtd-btn-row" style={{ marginTop: 0 }}>
+                    {TABLE_COMPOSITIONS.map((c) => (
+                      <button
+                        key={c.id}
+                        type="button"
+                        title={c.hint}
+                        className={`bjtd-sm-btn${composedOn ? ' go' : ''}`}
+                        onClick={() => {
+                          beginGesture();
+                          patch((p) => ({ ...p, table: { ...p.table, layers: c.layers } }));
+                        }}
+                      >
+                        {c.label}
+                      </button>
+                    ))}
+                    {composedOn && (
+                      <button
+                        type="button"
+                        className="bjtd-sm-btn"
+                        onClick={() => {
+                          beginGesture();
+                          patch((p) => ({ ...p, table: { ...p.table, layers: undefined } }));
+                        }}
+                      >
+                        Back to art
+                      </button>
+                    )}
+                  </div>
+                  <div className="bjtd-hint" style={{ marginTop: 8 }}>
+                    {composedOn
+                      ? 'The board is built from layers. Uploading art below drops back to a painted table.'
+                      : 'Or keep painting: upload one picture for the whole board.'}
+                  </div>
+
                   <button
                     type="button"
                     className="bjtd-art-drop"
+                    style={{ marginTop: 12 }}
                     onClick={() => artFileRef.current?.click()}
                   >
                     <span className="bjtd-art-drop-big">Upload your table art</span>
@@ -1593,12 +1694,96 @@ export default function TableDesigner() {
               {tab === 'share' && (
                 <div>
                   <p className="bjtd-hint" style={{ marginTop: 0 }}>
-                    <b>Save this design to a real table.</b> Everything — seats, cards, animations, sounds — is
-                    stored with the table, and every player who joins it sees and hears your design.
+                    <b>Save your table.</b> Everything — seats, cards, animations, sounds — is kept together,
+                    so you can come back and carry on, or open it again from any device.
                   </p>
+
+                  {/* My tables — open to any signed-in wallet. */}
+                  <div className="bjtd-save-panel">
+                    <div className="bjtd-ctl-lbl">
+                      <span>My tables</span>
+                      {mine.isConnected && (
+                        <span className="bjtd-val">
+                          {mine.designs.length} saved
+                        </span>
+                      )}
+                    </div>
+                    {!mine.isConnected ? (
+                      <p className="bjtd-msg dim">Connect your wallet to save this table to your account.</p>
+                    ) : (
+                      <>
+                        <input
+                          className="bjtd-text"
+                          value={designName}
+                          maxLength={48}
+                          placeholder="Name this table"
+                          onChange={(e) => setDesignName(e.target.value)}
+                        />
+                        <div className="bjtd-btn-row">
+                          <button
+                            type="button"
+                            className="bjtd-sm-btn go"
+                            onClick={() => void handleSaveMine()}
+                            disabled={mine.status.kind === 'busy'}
+                          >
+                            {mine.activeSlug ? 'Save changes' : 'Save table'}
+                          </button>
+                          {mine.activeSlug && (
+                            <button
+                              type="button"
+                              className="bjtd-sm-btn"
+                              onClick={() => void handleSaveMineAsNew()}
+                              disabled={mine.status.kind === 'busy'}
+                            >
+                              Save as new
+                            </button>
+                          )}
+                        </div>
+                        {mine.designs.length > 0 && (
+                          <ul className="bjtd-design-list">
+                            {mine.designs.map((d) => (
+                              <li
+                                key={d.slug}
+                                className={`bjtd-design-row${d.slug === mine.activeSlug ? ' on' : ''}`}
+                              >
+                                <span className="nm">{d.name}</span>
+                                <button
+                                  type="button"
+                                  className="bjtd-sm-btn tiny"
+                                  onClick={() => handleLoadMine(d.slug)}
+                                >
+                                  Open
+                                </button>
+                                <button
+                                  type="button"
+                                  className="bjtd-sm-btn tiny"
+                                  onClick={() => void mine.remove(d.slug)}
+                                  disabled={mine.status.kind === 'busy'}
+                                  aria-label={`Delete ${d.name}`}
+                                >
+                                  &times;
+                                </button>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                        {mine.status.kind !== 'idle' && (
+                          <div
+                            className={`bjtd-msg ${
+                              mine.status.kind === 'error' ? 'err' : mine.status.kind === 'ok' ? 'ok' : 'dim'
+                            }`}
+                          >
+                            {mine.status.note}
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+
+                  {/* Admin-only: push a design onto a live multiplayer table. */}
                   {!publish.address ? (
                     <p className="bjtd-msg dim" style={{ marginTop: 14 }}>
-                      Connect an admin wallet on the site to load or save table themes.
+                      Connect an admin wallet to also push a design onto a live multiplayer table.
                     </p>
                   ) : (
                     <div style={{ marginTop: 14 }}>
@@ -1675,6 +1860,7 @@ export default function TableDesigner() {
                   {stepNav}
                 </div>
               )}
+              </div>
             </section>
           </div>
 
@@ -1726,19 +1912,23 @@ export default function TableDesigner() {
                       >
                         {/* The table art itself + the same dark overlay the live
                             table draws, so the designer shows the real thing. */}
-                        <img
-                          src={stageArt}
-                          alt=""
-                          style={{
-                            position: 'absolute',
-                            inset: 0,
-                            width: '100%',
-                            height: '100%',
-                            objectFit: 'cover',
-                            objectPosition: 'center',
-                            pointerEvents: 'none',
-                          }}
-                        />
+                        {composedOn ? (
+                          <ComposedTable layers={layout.table.layers!} />
+                        ) : (
+                          <img
+                            src={stageArt}
+                            alt=""
+                            style={{
+                              position: 'absolute',
+                              inset: 0,
+                              width: '100%',
+                              height: '100%',
+                              objectFit: 'cover',
+                              objectPosition: 'center',
+                              pointerEvents: 'none',
+                            }}
+                          />
+                        )}
                         <div
                           style={{
                             position: 'absolute',
@@ -1962,7 +2152,11 @@ export default function TableDesigner() {
               </div>
               <p className="bjtd-edit-hint">
                 Drag a <b>seat</b> or the <b>dealer</b> right on the felt &mdash; clicking one opens its
-                settings. Arrow keys nudge (&#8679; = &times;10) &middot; Ctrl+Z undoes.
+                settings.{' '}
+                {/* Keyboard nudging and Ctrl+Z are real, but only on a keyboard.
+                    Reading them on a phone is noise, so the pointer query hides
+                    this half rather than promising something you can't do. */}
+                <span className="bjtd-kbd-only">Arrow keys nudge (&#8679; = &times;10) &middot; Ctrl+Z undoes.</span>
               </p>
             </div>
           </div>

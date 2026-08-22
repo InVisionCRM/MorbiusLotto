@@ -12,6 +12,8 @@
  * hardcoded constants it replaced.
  */
 
+import type { TableLayer } from './table-layers';
+
 /** Card render sizes, in CSS px. */
 export type CardSizeName = 'large' | 'medium' | 'normal' | 'small';
 
@@ -80,6 +82,13 @@ export interface BlackjackTableLayout {
    */
   table: {
     image: string;
+    /**
+     * A composed table: the board built from parts rather than painted as one
+     * picture. When present and non-empty this REPLACES `image` — see
+     * lib/table-layers.ts. Absent or empty falls through to `image`, so every
+     * table saved before layers existed renders exactly as it did.
+     */
+    layers?: TableLayer[];
   };
 
   /** One entry per seat, left to right. */
