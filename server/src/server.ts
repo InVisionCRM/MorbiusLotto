@@ -74,6 +74,7 @@ import { ReferralService } from './services/referral.service';
 import { registerReferralRoutes } from './routes/referral.routes';
 import { registerSlotMachineRoutes } from './routes/slot-machines.routes';
 import { registerTableDesignRoutes } from './routes/table-designs.routes';
+import { registerStickerRoutes } from './routes/stickers.routes';
 import { registerSlotMachinePlayRoutes } from './routes/slot-machines-play.routes';
 import { registerSlotMachineStatsRoutes } from './routes/slot-machines-stats.routes';
 import { registerSlotMachineBankrollRoutes } from './routes/slot-machines-bankroll.routes';
@@ -618,6 +619,7 @@ async function initializeServices() {
     registerReferralRoutes({ app, referralService, authService });
     registerSlotMachineRoutes({ app, dbService, authService });
     registerTableDesignRoutes({ app, dbService, authService });
+    registerStickerRoutes({ app, dbService, authService });
     registerSlotMachinePlayRoutes({ app, dbService, authService });
     registerSlotMachineBankrollRoutes({ app, dbService, authService });
     registerSlotMachineStatsRoutes({ app, dbService, authService });

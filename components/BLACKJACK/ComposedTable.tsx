@@ -18,7 +18,7 @@
 import React from 'react';
 import type {
   TableLayer, SceneLayer, SurfaceLayer, GrainLayer, MarkingsLayer,
-  RailLayer, SeamLayer, TrimLayer, ImageLayer, LightingLayer,
+  RailLayer, SeamLayer, TrimLayer, StickerLayer, ImageLayer, LightingLayer,
 } from '@/lib/table-layers';
 import { TABLE_RADIUS, TABLE_RADIUS_INNER } from '@/lib/table-layers';
 import { useBlackjackTableLayout } from '@/components/BLACKJACK/BlackjackTableLayoutContext';
@@ -81,6 +81,59 @@ export interface ComposedTableProps {
   style?: React.CSSProperties;
 }
 
+/**
+ * One decal on the cloth.
+ *
+ * Both variants share the placement transform, so a lettered decal and an
+ * uploaded one sit and turn identically — the only difference is what gets
+ * drawn inside. `translate(-50%,-50%)` runs BEFORE the rotation so a sticker
+ * turns about its own centre rather than swinging around the felt's corner.
+ */
+function Sticker({ l }: { l: StickerLayer }) {
+  const color = l.color ?? '#fde047';
+  const common: React.CSSProperties = {
+    left: `${l.x}%`,
+    top: `${l.y}%`,
+    transform: `translate(-50%, -50%) rotate(${l.rotate ?? 0}deg)`,
+    ...layerStyle(l),
+  };
+
+  if (l.src) {
+    return (
+      /* Plain <img>: a decal can be a data: URI straight from an upload, or
+         served from wherever the library stores it, and next/image rejects
+         every hostname that isn't in next.config's allowlist. */
+      <img
+        src={l.src}
+        alt=""
+        className="absolute pointer-events-none select-none"
+        style={{
+          ...common,
+          width: `${l.size ?? 14}%`,
+          ...(l.glow ? { filter: `drop-shadow(0 0 7px ${color})` } : null),
+        }}
+      />
+    );
+  }
+
+  if (!l.text) return null;
+
+  return (
+    <div
+      className="absolute pointer-events-none select-none whitespace-nowrap font-bold"
+      style={{
+        ...common,
+        color,
+        fontSize: `clamp(8px, ${l.size ?? 2}cqw, 34px)`,
+        letterSpacing: '.06em',
+        ...(l.glow ? { textShadow: `0 0 12px ${color}` } : null),
+      }}
+    >
+      {l.text}
+    </div>
+  );
+}
+
 export default function ComposedTable({ layers, className, style }: ComposedTableProps) {
   const layout = useBlackjackTableLayout();
   const on = layers.filter((l) => l.enabled !== false);
@@ -93,6 +146,9 @@ export default function ComposedTable({ layers, className, style }: ComposedTabl
   const marks = on.find((l): l is MarkingsLayer => l.kind === 'markings');
   const light = on.find((l): l is LightingLayer => l.kind === 'lighting');
   const images = on.filter((l): l is ImageLayer => l.kind === 'image');
+  /* Every sticker is drawn, not just the first — unlike the felt or the rail,
+     of which a table has exactly one. */
+  const stickers = on.filter((l): l is StickerLayer => l.kind === 'sticker');
 
   /* Rail thickness. Percentage insets resolve against width horizontally and
      height vertically, so the pair is pre-compensated by the table's aspect —
@@ -223,6 +279,15 @@ export default function ComposedTable({ layers, className, style }: ComposedTabl
                 )}
               </div>
             )}
+
+            {/* Stickers ride on the cloth: after the markings so a decal can
+                cover a printed legend, and before the lighting so the same
+                overhead pool falls across them. Clipped by the felt's own
+                overflow-hidden, so a decal dragged off the edge is cut by the
+                table's curve instead of floating over the rail. */}
+            {stickers.map((l, i) => (
+              <Sticker key={`sticker-${i}`} l={l} />
+            ))}
 
             {light && (
               <>
