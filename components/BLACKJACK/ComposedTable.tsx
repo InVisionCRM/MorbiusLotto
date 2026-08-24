@@ -13,6 +13,11 @@
  * border cannot take a gradient, so a rail expressed that way silently renders
  * nothing. Every detail ring (seam, trim) shares the shape's radius family, so
  * it follows the curve instead of cutting a straight line across the box.
+ *
+ * The WHOLE table is visible. An earlier pass sat the body against the bottom
+ * of the frame with a negative margin, which cut the front edge — and with it
+ * the near betting circles — off the board entirely. A table you can't see the
+ * front of doesn't read as a table.
  */
 
 import React from 'react';
@@ -26,9 +31,9 @@ import { useBlackjackTableLayout } from '@/components/BLACKJACK/BlackjackTableLa
 /* Cloth texture. SVG turbulence is the one thing flat gradients can't fake,
    and inlining it keeps the whole table free of network requests. */
 const GRAIN_URL = (scale: number) =>
-  `url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='140' height='140'>` +
-  `<filter id='n'><feTurbulence type='fractalNoise' baseFrequency='${scale}' numOctaves='3'/></filter>` +
-  `<rect width='140' height='140' filter='url(%23n)' opacity='0.55'/></svg>")`;
+  `url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'>` +
+  `<filter id='n'><feTurbulence type='fractalNoise' baseFrequency='${scale}' numOctaves='4'/></filter>` +
+  `<rect width='160' height='160' filter='url(%23n)' opacity='0.6'/></svg>")`;
 
 function layerStyle(l: TableLayer): React.CSSProperties {
   return {
@@ -44,29 +49,39 @@ function Scene({ l }: { l: SceneLayer }) {
     .join(',');
   return (
     <div className="absolute inset-0" style={{ ...layerStyle(l), background: `linear-gradient(180deg, ${l.from} 0%, ${l.to} 100%)` }}>
-      {bokeh && <div className="absolute inset-0" style={{ background: bokeh, filter: 'blur(2.5px)' }} />}
-      <div className="absolute inset-x-0 top-0 h-[38%]" style={{ background: 'linear-gradient(180deg, rgba(0,0,0,.72), transparent)' }} />
+      {bokeh && <div className="absolute inset-0" style={{ background: bokeh, filter: 'blur(3px)' }} />}
+      <div className="absolute inset-x-0 top-0 h-[34%]" style={{ background: 'linear-gradient(180deg, rgba(0,0,0,.7), transparent)' }} />
       {l.lamp && (
         <>
-          {/* Heavily blurred: a hard-edged clip-path wedge reads as a grey
-              triangle pasted over the room rather than as light. */}
+          {/* The cone is a soft vertical wash, NOT a clipped wedge. A hard-edged
+              polygon reads as a grey triangle pasted over the room; light in a
+              dark room has no edge you can point at. */}
           <div
             className="absolute"
             style={{
-              left: '50%', top: '-6%', width: '64%', height: '66%', transform: 'translateX(-50%)',
-              background: 'linear-gradient(180deg, rgba(255,242,206,.13), rgba(255,242,206,.04) 46%, transparent 82%)',
-              clipPath: 'polygon(40% 0, 60% 0, 100% 100%, 0 100%)',
-              filter: 'blur(22px)', mixBlendMode: 'screen',
+              left: '50%', top: '0%', width: '78%', height: '52%', transform: 'translateX(-50%)',
+              background:
+                'radial-gradient(ellipse 50% 100% at 50% 0%, rgba(255,238,198,.16), rgba(255,232,180,.05) 45%, transparent 78%)',
+              filter: 'blur(18px)', mixBlendMode: 'screen',
             }}
           />
-          {/* The fitting itself, so the light has a visible source. */}
+          {/* The fitting, and the hot spot inside it, so the light has a source. */}
           <div
             className="absolute"
             style={{
-              left: '50%', top: '2%', width: '15%', height: '3.4%', transform: 'translateX(-50%)',
+              left: '50%', top: '1.5%', width: '13%', height: '3%', transform: 'translateX(-50%)',
               borderRadius: '0 0 50% 50% / 0 0 100% 100%',
-              background: 'linear-gradient(180deg,#2a2f38,#12161c)',
-              boxShadow: '0 5px 18px rgba(255,238,190,.5)',
+              background: 'linear-gradient(180deg,#31363f,#0e1116)',
+              boxShadow: '0 2px 6px rgba(0,0,0,.6)',
+            }}
+          />
+          <div
+            className="absolute"
+            style={{
+              left: '50%', top: '3.6%', width: '8%', height: '1.4%', transform: 'translateX(-50%)',
+              borderRadius: '50%',
+              background: 'radial-gradient(ellipse at 50% 50%, rgba(255,244,214,.95), rgba(255,216,150,.5) 60%, transparent 100%)',
+              filter: 'blur(3px)',
             }}
           />
         </>
@@ -186,18 +201,32 @@ export default function ComposedTable({ layers, className, style }: ComposedTabl
         />
       ))}
 
-      {/* ── the table body ──────────────────────────────────────────────── */}
-      <div className="absolute inset-0 grid place-items-end" style={{ padding: '6% 4% 0' }}>
+      {/* ── the table body ──────────────────────────────────────────────────
+          Centred with room on every side. The front edge of a blackjack table
+          is its most recognisable feature; cropping it is what made the first
+          pass read as a green rectangle rather than as a table. */}
+      <div className="absolute inset-0 grid place-items-center" style={{ padding: '7% 3.5% 5%' }}>
         <div
           className="relative w-full"
           style={{
             aspectRatio: '16 / 10.6',
-            marginBottom: '-7%',
+            maxHeight: '100%',
             borderRadius: TABLE_RADIUS,
+            /* The rail's cross-section: a padded roll is lightest just inside
+               its crest and falls away to both edges, so a single two-stop
+               gradient always reads as flat plastic. */
             background: rail
-              ? `linear-gradient(180deg, ${rail.from}, ${rail.to} 70%)`
-              : 'linear-gradient(180deg,#3a2415,#160d07)',
-            boxShadow: `${rail?.sheen ? `inset 0 3px 10px ${rail.sheen}, ` : ''}0 26px 54px rgba(0,0,0,.7)`,
+              ? `linear-gradient(176deg, ${rail.to} 0%, ${rail.from} 18%, ${rail.from} 42%, ${rail.to} 88%)`
+              : 'linear-gradient(176deg,#160d07 0%,#3a2415 18%,#3a2415 42%,#160d07 88%)',
+            boxShadow: [
+              // the table sitting in the room
+              '0 34px 60px rgba(0,0,0,.72)',
+              '0 8px 18px rgba(0,0,0,.5)',
+              // the crest catching the lamp
+              `inset 0 2px 1px ${rail?.sheen ?? 'rgba(255,222,175,.28)'}`,
+              // the outer edge rolling away into shadow
+              'inset 0 -10px 16px rgba(0,0,0,.5)',
+            ].join(','),
             ...(rail ? layerStyle(rail) : null),
           }}
         >
@@ -208,6 +237,9 @@ export default function ComposedTable({ layers, className, style }: ComposedTabl
                 inset: `${railV * 0.47}% ${railW * 0.47}%`,
                 borderRadius: TABLE_RADIUS_INNER,
                 border: `1.5px ${seam.dashed ? 'dashed' : 'solid'} ${seam.color}`,
+                /* thread sits in a groove — without the dark side it reads as a
+                   dotted CSS border drawn on top of the rail */
+                filter: 'drop-shadow(0 1px 0 rgba(0,0,0,.55))',
                 ...layerStyle(seam),
               }}
             />
@@ -219,6 +251,7 @@ export default function ComposedTable({ layers, className, style }: ComposedTabl
                 inset,
                 borderRadius: TABLE_RADIUS_INNER,
                 border: `${trim.thickness ?? 2}px solid ${trim.color}`,
+                boxShadow: `0 0 0 1px rgba(0,0,0,.45)`,
                 ...(trim.glow ? { filter: `drop-shadow(0 0 5px ${trim.color})` } : null),
                 ...layerStyle(trim),
               }}
@@ -232,9 +265,21 @@ export default function ComposedTable({ layers, className, style }: ComposedTabl
               inset,
               borderRadius: TABLE_RADIUS_INNER,
               background: surface
-                ? `radial-gradient(ellipse 78% 74% at 50% 26%, ${surface.from}, ${surface.to} 66%, ${surface.edge ?? surface.to})`
-                : 'radial-gradient(ellipse 78% 74% at 50% 26%,#1d6b3f,#0d3f24 66%,#072816)',
-              boxShadow: 'inset 0 6px 16px rgba(0,0,0,.55)',
+                ? [
+                    // the crease where the cloth tucks under the rail
+                    'radial-gradient(ellipse 118% 108% at 50% 30%, transparent 62%, rgba(0,0,0,.5) 100%)',
+                    // a warm spill from the lamp, off-centre so it isn't a bullseye
+                    `radial-gradient(ellipse 54% 44% at 48% 12%, rgba(255,240,200,.1), transparent 70%)`,
+                    `radial-gradient(ellipse 92% 86% at 50% 18%, ${surface.from}, ${surface.to} 58%, ${surface.edge ?? surface.to} 100%)`,
+                  ].join(',')
+                : [
+                    'radial-gradient(ellipse 118% 108% at 50% 30%, transparent 62%, rgba(0,0,0,.5) 100%)',
+                    'radial-gradient(ellipse 54% 44% at 48% 12%, rgba(255,240,200,.1), transparent 70%)',
+                    'radial-gradient(ellipse 92% 86% at 50% 18%,#1d6b3f,#0d3f24 58%,#072816 100%)',
+                  ].join(','),
+              /* the rail casting onto the cloth — the single strongest cue that
+                 the felt sits DOWN inside the table rather than on top of it */
+              boxShadow: 'inset 0 10px 22px rgba(0,0,0,.62), inset 0 -6px 18px rgba(0,0,0,.45)',
               ...(surface ? layerStyle(surface) : null),
             }}
           >
@@ -242,29 +287,33 @@ export default function ComposedTable({ layers, className, style }: ComposedTabl
               <div
                 className="absolute inset-0 pointer-events-none"
                 style={{
-                  backgroundImage: GRAIN_URL(grain.scale ?? 0.9),
+                  backgroundImage: GRAIN_URL(grain.scale ?? 0.85),
+                  backgroundSize: '150px 150px',
                   opacity: grain.opacity ?? 0.5,
                   mixBlendMode: (grain.blend ?? 'overlay') as React.CSSProperties['mixBlendMode'],
                 }}
               />
             )}
 
+            {/* The nap. Baize is brushed, so it takes the light unevenly in
+                broad soft bands — without this the felt is a single flat
+                wash no matter how many gradient stops it has. */}
+            <div
+              className="absolute inset-0 pointer-events-none"
+              style={{
+                background:
+                  'repeating-linear-gradient(97deg, rgba(255,255,255,.016) 0 9px, rgba(0,0,0,.018) 9px 19px),' +
+                  'repeating-linear-gradient(13deg, rgba(255,255,255,.01) 0 14px, rgba(0,0,0,.012) 14px 27px)',
+                mixBlendMode: 'overlay',
+              }}
+            />
+
             {marks && (
               <div className="absolute inset-0 pointer-events-none" style={layerStyle(marks)}>
-                {marks.arc && (
-                  <div
-                    className="absolute"
-                    style={{
-                      left: '9%', right: '9%', top: '18%', height: '44%',
-                      borderRadius: '50% / 100% 100% 0 0',
-                      border: `2px solid ${marks.color}`, borderBottom: 'none',
-                    }}
-                  />
-                )}
                 {marks.legend && (
                   <div
                     className="absolute left-1/2 -translate-x-1/2 whitespace-nowrap font-semibold"
-                    style={{ top: '23%', fontSize: 'clamp(7px, 1.1cqw, 11px)', letterSpacing: '.26em', color: marks.color }}
+                    style={{ top: '17%', fontSize: 'clamp(7px, 1.1cqw, 12px)', letterSpacing: '.26em', color: marks.color }}
                   >
                     {marks.legend}
                   </div>
@@ -272,7 +321,7 @@ export default function ComposedTable({ layers, className, style }: ComposedTabl
                 {marks.subLegend && (
                   <div
                     className="absolute left-1/2 -translate-x-1/2 whitespace-nowrap font-semibold"
-                    style={{ top: '30%', fontSize: 'clamp(6px, .9cqw, 9px)', letterSpacing: '.18em', color: marks.color, opacity: 0.62 }}
+                    style={{ top: '24.5%', fontSize: 'clamp(6px, .9cqw, 10px)', letterSpacing: '.18em', color: marks.color, opacity: 0.62 }}
                   >
                     {marks.subLegend}
                   </div>
@@ -294,13 +343,13 @@ export default function ComposedTable({ layers, className, style }: ComposedTabl
                 <div
                   className="absolute inset-0 pointer-events-none"
                   style={{
-                    background: `radial-gradient(ellipse ${light.keySpread ?? 46}% ${(light.keySpread ?? 46) * 0.9}% at 50% 10%, ${light.key ?? 'rgba(255,244,214,.26)'}, transparent 66%)`,
+                    background: `radial-gradient(ellipse ${light.keySpread ?? 46}% ${(light.keySpread ?? 46) * 0.9}% at 50% 8%, ${light.key ?? 'rgba(255,244,214,.26)'}, transparent 70%)`,
                   }}
                 />
                 <div
                   className="absolute inset-0 pointer-events-none"
                   style={{
-                    background: `radial-gradient(ellipse 116% 100% at 50% 32%, transparent 46%, rgba(0,0,0,${light.vignette ?? 0.55}) 100%)`,
+                    background: `radial-gradient(ellipse 108% 96% at 50% 26%, transparent 40%, rgba(0,0,0,${light.vignette ?? 0.55}) 100%)`,
                   }}
                 />
               </>
@@ -309,11 +358,12 @@ export default function ComposedTable({ layers, className, style }: ComposedTabl
         </div>
       </div>
 
-      {/* Betting spots are drawn in the OUTER box, in the same canvas space the
-          seats and cards use — a ring printed inside the felt's own percentage
-          space would drift away from the cards the moment a seat is moved.
-          They're derived from the layout's seats rather than configured, so a
-          composed table can never print a spot where nobody sits. */}
+      {/* Betting spots and the insurance line are drawn in the OUTER box, in the
+          same canvas space the seats and cards use — a marking printed inside
+          the felt's own percentage space would drift away from the cards the
+          moment a seat is moved. They're derived from the layout's seats rather
+          than configured, so a composed table can never print a spot where
+          nobody sits. */}
       {marks && seatSpots.length > 0 && (
         <div className="absolute inset-0 pointer-events-none" style={layerStyle(marks)}>
           {seatSpots.map((s, i) => (
@@ -325,6 +375,7 @@ export default function ComposedTable({ layers, className, style }: ComposedTabl
                 width: `${spotSize}%`, aspectRatio: '1',
                 transform: 'translate(-50%, -50%)',
                 border: `2px solid ${marks.color}`,
+                boxShadow: `inset 0 0 14px rgba(0,0,0,.28)`,
                 opacity: 0.55,
               }}
             />

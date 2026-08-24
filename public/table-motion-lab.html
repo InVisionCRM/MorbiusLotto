@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Table studio motion — before / after</title>
+<style>
+:root{
+  --cyan:#22d3ee; --cyan-soft:rgba(34,211,238,.22); --cyan-edge:rgba(34,211,238,.55);
+  --slate-300:#cbd5e1; --slate-400:#94a3b8; --slate-500:#64748b;
+  --bg:#04080d; --panel:#071119; --mono:ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+*{box-sizing:border-box}
+body{margin:0;padding:26px 22px 70px;background:var(--bg);color:#e8f4fa;
+  font:14px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+h1{font-size:19px;letter-spacing:.16em;margin:0 0 4px;text-transform:uppercase}
+h1 em{color:var(--cyan);font-style:normal}
+.sub{color:var(--slate-400);font-size:12.5px;margin:0 0 26px;max-width:78ch}
+h2{font-size:12px;letter-spacing:.2em;color:var(--cyan);text-transform:uppercase;
+  margin:30px 0 4px;border-top:1px solid rgba(34,211,238,.14);padding-top:16px}
+.note{color:var(--slate-400);font-size:12px;margin:0 0 14px;max-width:80ch}
+.note b{color:#dbeafe;font-weight:600}
+
+.pair{display:grid;grid-template-columns:1fr 1fr;gap:14px;max-width:900px}
+@media(max-width:720px){.pair{grid-template-columns:1fr}}
+.cell{border:1px solid rgba(34,211,238,.13);border-radius:12px;background:var(--panel);
+  padding:12px;min-height:150px;display:flex;flex-direction:column}
+.cell .tag{font:9.5px/1 var(--mono);letter-spacing:.16em;text-transform:uppercase;
+  color:var(--slate-500);margin-bottom:10px}
+.cell.new .tag{color:var(--cyan)}
+.stage{flex:1;display:flex;align-items:center;justify-content:center;position:relative;
+  perspective:900px}
+button.replay{margin-top:10px;align-self:flex-start;background:rgba(34,211,238,.08);
+  border:1px solid var(--cyan-soft);color:#dff6fd;border-radius:8px;padding:6px 12px;
+  font:600 11px/1 system-ui;cursor:pointer;letter-spacing:.06em}
+button.replay:hover{border-color:var(--cyan-edge)}
+
+/* ── the things being animated ─────────────────────────────────────── */
+.panel{width:200px;height:96px;border-radius:10px;border:1px solid rgba(34,211,238,.2);
+  background:linear-gradient(160deg,#0b1b27,#061019);display:flex;align-items:center;
+  justify-content:center;font:600 11px/1 system-ui;color:var(--slate-300);
+  letter-spacing:.1em;text-transform:uppercase}
+.numwrap{display:flex;gap:10px;align-items:center}
+.num{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;
+  background:rgba(34,211,238,.12);border:1px solid var(--cyan-edge);color:#dff6fd;
+  font:700 13px/1 var(--mono)}
+.tile{position:relative;width:118px;aspect-ratio:16/9;border-radius:10px;overflow:visible;
+  border:1px solid var(--cyan-edge);cursor:pointer;
+  background:radial-gradient(ellipse 90% 80% at 50% 24%,#1d6b3f,#0d3f24 62%,#072816)}
+.tile .inner{position:absolute;inset:0;border-radius:9px;overflow:hidden}
+.rows{width:100%;display:flex;flex-direction:column;gap:6px}
+.row{height:26px;border-radius:7px;background:rgba(34,211,238,.06);
+  border:1px solid rgba(34,211,238,.14);display:flex;align-items:center;padding:0 10px;
+  font:600 10.5px/1 system-ui;color:var(--slate-300);letter-spacing:.08em}
+.msg{font:600 12px/1 system-ui;letter-spacing:.06em;color:#f87171}
+
+/* ══ OLD — the generic set ═══════════════════════════════════════════ */
+@keyframes oldStepIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.old.run .panel{animation:oldStepIn .26s cubic-bezier(.22,.9,.3,1) both}
+
+@keyframes oldPop{0%{transform:scale(1)}45%{transform:scale(1.16)}100%{transform:scale(1)}}
+.old.run .num{animation:oldPop .34s ease-out}
+
+@keyframes oldPick{0%{transform:translateY(0) scale(1)}40%{transform:translateY(-3px) scale(1.04)}
+  100%{transform:translateY(0) scale(1)}}
+.old.run .tile{animation:oldPick .3s cubic-bezier(.3,1.3,.5,1)}
+
+@keyframes oldRowIn{from{opacity:0;transform:translateX(-6px)}to{opacity:1;transform:none}}
+.old.run .row{animation:oldRowIn .22s ease-out both}
+
+@keyframes oldMsgIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
+.old.run .msg{animation:oldMsgIn .2s ease-out}
+
+/* ══ NEW — borrowed from the table ═══════════════════════════════════ */
+@keyframes bjtdDeal{
+  0%{opacity:0;transform:perspective(900px) translate3d(26%,-34%,90px) rotateZ(9deg) rotateX(26deg) scale(.94)}
+  62%{opacity:1;transform:perspective(900px) translate3d(-1.5%,1.5%,0) rotateZ(-1.4deg) rotateX(0) scale(1.004)}
+  100%{opacity:1;transform:perspective(900px) translate3d(0,0,0) rotateZ(0) rotateX(0) scale(1)}}
+.new.run .panel{transform-origin:70% 0%;animation:bjtdDeal .42s cubic-bezier(.16,.84,.3,1) both}
+
+@keyframes bjtdChipSpin{0%{transform:rotateY(0) scaleX(1)}50%{transform:rotateY(180deg) scaleX(.82)}
+  100%{transform:rotateY(360deg) scaleX(1)}}
+.new.run .num{animation:bjtdChipSpin .52s cubic-bezier(.36,0,.28,1)}
+
+@keyframes bjtdChipSet{
+  0%{transform:translateY(-7px) scale(1.05);box-shadow:0 12px 18px -6px rgba(0,0,0,.7)}
+  55%{transform:translateY(1px) scale(.985);box-shadow:0 2px 4px -2px rgba(0,0,0,.85)}
+  78%{transform:translateY(-1px) scale(1.004)}
+  100%{transform:translateY(0) scale(1);box-shadow:0 4px 10px -5px rgba(0,0,0,.6)}}
+@keyframes bjtdFeltRing{
+  0%{opacity:.75;transform:translate(-50%,-50%) scale(.12)}
+  100%{opacity:0;transform:translate(-50%,-50%) scale(2.6)}}
+.new.run .tile{animation:bjtdChipSet .34s cubic-bezier(.3,1.2,.4,1)}
+.new.run .tile::after{content:'';position:absolute;left:50%;top:50%;width:100%;aspect-ratio:1;
+  border-radius:50%;border:2px solid var(--cyan);pointer-events:none;
+  animation:bjtdFeltRing .5s cubic-bezier(.2,.7,.3,1) forwards}
+
+@keyframes bjtdSheen{from{transform:translateX(-120%) skewX(-18deg)}to{transform:translateX(220%) skewX(-18deg)}}
+.new .tile .inner::before{content:'';position:absolute;top:0;bottom:0;width:42%;
+  background:linear-gradient(100deg,transparent,rgba(255,255,255,.16),transparent);opacity:0}
+.new .tile:hover .inner::before{opacity:1;animation:bjtdSheen .62s ease-out}
+
+@keyframes bjtdStack{
+  0%{opacity:0;transform:translateY(-14px) scaleY(.9)}
+  70%{opacity:1;transform:translateY(2px) scaleY(1.02)}
+  100%{opacity:1;transform:translateY(0) scaleY(1)}}
+.new.run .row{animation:bjtdStack .3s cubic-bezier(.3,1.25,.45,1) both}
+.new.run .row:nth-child(1){animation-delay:0ms}
+.new.run .row:nth-child(2){animation-delay:45ms}
+.new.run .row:nth-child(3){animation-delay:90ms}
+.new.run .row:nth-child(4){animation-delay:135ms}
+
+@keyframes bjtdNeonStrike{
+  0%{opacity:0;text-shadow:none}
+  12%{opacity:1;text-shadow:0 0 10px currentColor}
+  18%{opacity:.25;text-shadow:none}
+  28%{opacity:1;text-shadow:0 0 12px currentColor}
+  34%{opacity:.4;text-shadow:none}
+  46%{opacity:1;text-shadow:0 0 14px currentColor}
+  100%{opacity:1;text-shadow:0 0 6px currentColor}}
+.new.run .msg{animation:bjtdNeonStrike .66s steps(1,end) both}
+
+@media(prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.001ms !important;animation-iteration-count:1 !important}
+}
+</style>
+
+<h1>Table studio motion — <em>before / after</em></h1>
+<p class="sub">The left column is what the studio ships today. The right is motion taken from the
+table itself rather than from a UI kit — a card dealt, a chip set on felt, a chip spun on its edge,
+a stack built. Click <b>Replay</b> on any row; hover the right-hand tile for the lamp sweep.</p>
+
+<button class="replay" id="all" style="margin:0 0 8px">▶ Replay everything</button>
+
+<h2>1 · Changing step</h2>
+<p class="note"><b>Before:</b> an 8px fade-up — the same transition as a cookie banner.
+<b>After:</b> the panel arrives like a card off the shoe: in from the dealer's side, turned,
+landing flat with the overshoot a card has when it slides across cloth and stops. The perspective
+is real, so it reads as having travelled rather than having scaled.</p>
+<div class="pair" data-group>
+  <div class="cell old"><div class="tag">before</div><div class="stage"><div class="panel">Step panel</div></div><button class="replay">Replay</button></div>
+  <div class="cell new"><div class="tag">after — dealt card</div><div class="stage"><div class="panel">Step panel</div></div><button class="replay">Replay</button></div>
+</div>
+
+<h2>2 · The active step number</h2>
+<p class="note"><b>Before:</b> scale to 1.16 and back. <b>After:</b> the number spins like a chip
+stood on its edge — past 180°, narrowing at the halfway point where you'd be seeing the edge rather
+than the face.</p>
+<div class="pair" data-group>
+  <div class="cell old"><div class="tag">before</div><div class="stage"><div class="numwrap"><div class="num">3</div></div></div><button class="replay">Replay</button></div>
+  <div class="cell new"><div class="tag">after — chip spin</div><div class="stage"><div class="numwrap"><div class="num">3</div></div></div><button class="replay">Replay</button></div>
+</div>
+
+<h2>3 · Picking a felt / rail / mechanic</h2>
+<p class="note"><b>Before:</b> a 3px lift. <b>After:</b> a chip being set down — it presses
+<em>down</em>, not up, its shadow collapses underneath it, and the felt takes the impact as a ring
+travelling outward. Hover for the table lamp crossing the surface.</p>
+<div class="pair" data-group>
+  <div class="cell old"><div class="tag">before</div><div class="stage"><div class="tile"><div class="inner"></div></div></div><button class="replay">Replay</button></div>
+  <div class="cell new"><div class="tag">after — chip set + felt ring</div><div class="stage"><div class="tile"><div class="inner"></div></div></div><button class="replay">Replay</button></div>
+</div>
+
+<h2>4 · Saved tables arriving</h2>
+<p class="note"><b>Before:</b> every row fades in from the left at once. <b>After:</b> they drop and
+settle in sequence, so a list reads as a stack being built.</p>
+<div class="pair" data-group>
+  <div class="cell old"><div class="tag">before</div><div class="stage"><div class="rows"><div class="row">Neon Room</div><div class="row">Deep Space</div><div class="row">Full House</div><div class="row">Molten</div></div></div><button class="replay">Replay</button></div>
+  <div class="cell new"><div class="tag">after — stacking chips</div><div class="stage"><div class="rows"><div class="row">Neon Room</div><div class="row">Deep Space</div><div class="row">Full House</div><div class="row">Molten</div></div></div><button class="replay">Replay</button></div>
+</div>
+
+<h2>5 · An error</h2>
+<p class="note"><b>Before:</b> the same 4px slide as a success — an error you can miss is an error
+you'll hit twice. <b>After:</b> it strikes like a neon tube that won't catch, stuttering twice
+before it holds.</p>
+<div class="pair" data-group>
+  <div class="cell old"><div class="tag">before</div><div class="stage"><div class="msg">Save failed — try again</div></div><button class="replay">Replay</button></div>
+  <div class="cell new"><div class="tag">after — neon strike</div><div class="stage"><div class="msg">Save failed — try again</div></div><button class="replay">Replay</button></div>
+</div>
+
+<script>
+/* Replaying a CSS animation means removing the class, forcing a reflow, and
+   putting it back — without the reflow the browser coalesces both changes and
+   nothing plays. */
+function play(cell){
+  cell.classList.remove('run');
+  void cell.offsetWidth;
+  cell.classList.add('run');
+}
+document.querySelectorAll('.cell .replay').forEach(function(b){
+  b.addEventListener('click', function(){ play(b.closest('.cell')); });
+});
+document.querySelectorAll('.tile').forEach(function(t){
+  t.addEventListener('click', function(){ play(t.closest('.cell')); });
+});
+document.getElementById('all').addEventListener('click', function(){
+  document.querySelectorAll('.cell').forEach(play);
+});
+/* Play once on load so the page isn't inert when it opens. */
+addEventListener('load', function(){
+  setTimeout(function(){ document.querySelectorAll('.cell').forEach(play); }, 250);
+});
+</script>
+</html>
