@@ -49,11 +49,28 @@ h2{font-size:13px; letter-spacing:.12em; text-transform:uppercase; color:var(--c
   filter:saturate(1.3) brightness(.62)}
 .f-holo::after{content:''; position:absolute; inset:0; backdrop-filter:blur(6px);
   background:radial-gradient(ellipse 70% 60% at 50% 25%, rgba(255,255,255,.22), transparent 65%)}
-.f-lava{background:radial-gradient(ellipse 80% 70% at 50% 30%,#3a0d05,#160402 70%,#0a0201)}
-.f-lava::after{content:''; position:absolute; inset:0; opacity:.9; background:
-  repeating-conic-gradient(from 12deg at 42% 55%, transparent 0 7deg, rgba(255,94,20,.55) 7deg 8deg, transparent 8deg 26deg),
-  repeating-conic-gradient(from 70deg at 66% 38%, transparent 0 9deg, rgba(255,160,40,.4) 9deg 10deg, transparent 10deg 32deg);
-  filter:blur(.6px) drop-shadow(0 0 5px rgba(255,110,30,.75))}
+/* Molten. Cracks are SVG paths, not conic gradients: a conic gradient radiates
+   from a point, so it reads as a starburst rather than as ground that split.
+   Real cracks wander and branch, and they're drawn twice — a wide blurred
+   halo underneath for the heat bleeding through the rock, a thin bright core
+   on top for the exposed magma. */
+.f-lava{background:
+  radial-gradient(ellipse 40% 30% at 38% 56%, rgba(255,90,20,.28), transparent 70%),
+  radial-gradient(ellipse 34% 26% at 68% 38%, rgba(255,60,10,.22), transparent 72%),
+  radial-gradient(ellipse 80% 70% at 50% 30%,#3a0d05,#160402 70%,#0a0201)}
+.f-lava::after{content:''; position:absolute; inset:7% 5%;
+  background-image:var(--crack); background-size:100% 100%; filter:blur(2.4px);
+  opacity:.85; -webkit-mask-image:var(--crack-fade); mask-image:var(--crack-fade)}
+.f-lava::before{content:''; position:absolute; inset:7% 5%; z-index:1;
+  background-image:var(--crack-core); background-size:100% 100%;
+  filter:drop-shadow(0 0 3px rgba(255,150,40,.9));
+  -webkit-mask-image:var(--crack-fade); mask-image:var(--crack-fade)}
+.f-lava{
+  /* Cracks die out toward the edge rather than stopping at the viewBox
+     boundary — otherwise a severed branch ends in mid-air over the rail. */
+  --crack-fade:radial-gradient(ellipse 74% 78% at 50% 50%, #000 42%, rgba(0,0,0,.55) 72%, transparent 96%);
+  --crack:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 260' preserveAspectRatio='none'><g fill='none' stroke='%23ff5e14' stroke-width='7' stroke-linecap='round'><path d='M18 96 L64 108 L92 92 L134 120 L176 104 L214 132 L262 118 L308 142 L372 128'/><path d='M92 92 L104 54 L86 24'/><path d='M134 120 L128 168 L152 206 L138 244'/><path d='M214 132 L236 176 L222 220'/><path d='M262 118 L286 78 L330 58'/><path d='M152 206 L200 216 L246 240'/><path d='M40 176 L88 158 L128 168'/><path d='M308 142 L318 190 L356 214'/></g></svg>");
+  --crack-core:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 260' preserveAspectRatio='none'><g fill='none' stroke='%23ffd27a' stroke-width='1.8' stroke-linecap='round'><path d='M18 96 L64 108 L92 92 L134 120 L176 104 L214 132 L262 118 L308 142 L372 128'/><path d='M92 92 L104 54 L86 24'/><path d='M134 120 L128 168 L152 206 L138 244'/><path d='M214 132 L236 176 L222 220'/><path d='M262 118 L286 78 L330 58'/><path d='M152 206 L200 216 L246 240'/><path d='M40 176 L88 158 L128 168'/><path d='M308 142 L318 190 L356 214'/></g></svg>")}
 .f-galaxy{background:
   radial-gradient(ellipse 46% 40% at 28% 28%, rgba(126,87,255,.65), transparent 62%),
   radial-gradient(ellipse 40% 34% at 72% 60%, rgba(255,86,171,.45), transparent 64%),
@@ -80,25 +97,74 @@ h2{font-size:13px; letter-spacing:.12em; text-transform:uppercase; color:var(--c
   repeating-linear-gradient(45deg, #191d24 0 4px, #0d1014 4px 8px),
   repeating-linear-gradient(-45deg, rgba(255,255,255,.05) 0 4px, transparent 4px 8px);
   background-size:16px 16px}
-.f-vapor{background:linear-gradient(180deg,#2b1055 0%,#7b2a72 42%,#ff6f61 62%,#ffc371 76%,#120a2a 77%)}
-.f-vapor::after{content:''; position:absolute; left:0; right:0; bottom:0; height:36%; background:
-  repeating-linear-gradient(90deg, rgba(0,255,247,.5) 0 1px, transparent 1px 14px),
-  repeating-linear-gradient(0deg, rgba(0,255,247,.45) 0 1px, transparent 1px 9px);
-  transform:perspective(50px) rotateX(46deg); transform-origin:bottom}
-.f-vapor::before{content:''; position:absolute; left:50%; top:16%; width:38%; aspect-ratio:1;
+/* Vaporwave. Three fixes over the first pass:
+   - The sun sat high enough that the felt's curve sliced a flat edge off it.
+     It's moved down and given the genre's horizontal banding, which also
+     means its lower half dissolves into stripes instead of ending in a hard
+     line — so nothing to clip.
+   - The grid was a single pixel of cyan competing with a lit sunset. It's
+     brighter, wider-spaced toward the horizon, and carries its own glow.
+   - A horizon band now separates sky from grid, which is what actually sells
+     the perspective. */
+.f-vapor{background:linear-gradient(180deg,#2b1055 0%,#7b2a72 40%,#ff6f61 58%,#ffc371 66%,#1a0b33 67%)}
+.f-vapor::before{content:''; position:absolute; left:50%; top:20%; width:34%; aspect-ratio:1;
   transform:translateX(-50%); border-radius:50%;
-  background:linear-gradient(180deg,#ffe259,#ff6f61); opacity:.85}
+  background:
+    /* the bands: transparent slots cut across the lower half of the disc */
+    repeating-linear-gradient(180deg,
+      transparent 0 52%,
+      rgba(0,0,0,0) 52% 55%,
+      transparent 55% 60%),
+    linear-gradient(180deg,#fff3a8 0%,#ffe259 34%,#ff8a5c 78%,#ff6f61 100%);
+  -webkit-mask-image:repeating-linear-gradient(180deg,
+      #000 0 54%, #000 54% 56%, transparent 56.6% 59%,
+      #000 59% 62%, transparent 63% 65.6%,
+      #000 65.6% 68%, transparent 69% 72%,
+      #000 72% 74%, transparent 75% 79%, #000 79% 100%);
+  mask-image:repeating-linear-gradient(180deg,
+      #000 0 54%, #000 54% 56%, transparent 56.6% 59%,
+      #000 59% 62%, transparent 63% 65.6%,
+      #000 65.6% 68%, transparent 69% 72%,
+      #000 72% 74%, transparent 75% 79%, #000 79% 100%);
+  filter:drop-shadow(0 0 14px rgba(255,140,90,.6))}
+.f-vapor::after{content:''; position:absolute; left:-20%; right:-20%; bottom:0; height:34%; background:
+  repeating-linear-gradient(90deg, rgba(120,255,250,.85) 0 1.5px, transparent 1.5px 13px),
+  repeating-linear-gradient(0deg, rgba(120,255,250,.75) 0 1.5px, transparent 1.5px 11px);
+  transform:perspective(46px) rotateX(44deg); transform-origin:bottom;
+  filter:drop-shadow(0 0 4px rgba(0,255,247,.8))}
 .f-ice{background:radial-gradient(ellipse 80% 70% at 50% 26%,#bfe6ff,#5f9fd0 62%,#2c5f8a)}
 .f-ice::after{content:''; position:absolute; inset:0; opacity:.75; background:
   linear-gradient(112deg, transparent 44%, rgba(255,255,255,.9) 45%, transparent 46%),
   linear-gradient(28deg, transparent 62%, rgba(255,255,255,.7) 63%, transparent 64%),
   linear-gradient(-40deg, transparent 30%, rgba(255,255,255,.55) 31%, transparent 32%)}
-.f-toxic{background:radial-gradient(ellipse 78% 70% at 50% 28%,#6dff3a,#1c7a12 62%,#062f04)}
+/* Toxic. The fill is deliberately uneven — overlapping off-centre pools of
+   different tone, darker sludge gathering at the rim — because a single flat
+   radial gradient reads as painted plastic rather than as something with
+   depth. Bubbles are rim-lit and hollow: a filled circle reads as a dot, a
+   bright edge around a darker middle reads as a bubble. */
+.f-toxic{background:
+  radial-gradient(ellipse 30% 26% at 32% 40%, rgba(190,255,95,.62), transparent 66%),
+  radial-gradient(ellipse 26% 22% at 66% 58%, rgba(120,230,45,.5), transparent 68%),
+  radial-gradient(ellipse 22% 18% at 52% 24%, rgba(225,255,160,.42), transparent 70%),
+  /* darker sludge sitting between the pools, so the pools have something to be brighter than */
+  radial-gradient(ellipse 18% 30% at 46% 66%, rgba(3,40,2,.55), transparent 72%),
+  radial-gradient(ellipse 16% 22% at 78% 30%, rgba(3,40,2,.45), transparent 74%),
+  radial-gradient(ellipse 78% 70% at 50% 28%,#4fd420,#136309 58%,#042202)}
+.f-toxic::before{content:''; position:absolute; inset:0;
+  /* thin film catching the light where the slime is shallow */
+  background:
+    radial-gradient(ellipse 54% 16% at 44% 34%, rgba(226,255,190,.3), transparent 70%),
+    radial-gradient(ellipse 40% 12% at 62% 52%, rgba(226,255,190,.22), transparent 72%);
+  mix-blend-mode:screen}
 .f-toxic::after{content:''; position:absolute; inset:0; background:
-  radial-gradient(circle 6px at 26% 62%, rgba(190,255,140,.55), transparent 70%),
-  radial-gradient(circle 9px at 63% 40%, rgba(190,255,140,.4), transparent 72%),
-  radial-gradient(circle 4px at 82% 70%, rgba(220,255,180,.5), transparent 70%);
-  filter:drop-shadow(0 0 6px rgba(120,255,60,.7))}
+  radial-gradient(circle 7px at 26% 62%, transparent 40%, rgba(226,255,180,.75) 62%, transparent 74%),
+  radial-gradient(circle 11px at 63% 40%, transparent 44%, rgba(210,255,160,.6) 64%, transparent 76%),
+  radial-gradient(circle 5px at 82% 70%, transparent 38%, rgba(236,255,200,.8) 60%, transparent 74%),
+  radial-gradient(circle 8px at 40% 26%, transparent 42%, rgba(210,255,160,.5) 63%, transparent 76%),
+  radial-gradient(circle 4px at 72% 66%, transparent 36%, rgba(236,255,200,.65) 58%, transparent 74%),
+  /* sludge pooling into the rim */
+  radial-gradient(ellipse 104% 96% at 50% 34%, transparent 48%, rgba(2,26,1,.82) 100%);
+  filter:drop-shadow(0 0 5px rgba(120,255,60,.55))}
 .f-money{background:linear-gradient(180deg,#2f6b45,#17472c 70%,#0c2a19)}
 .f-money::after{content:''; position:absolute; inset:0; opacity:.5; background:
   repeating-radial-gradient(circle at 50% 50%, transparent 0 5px, rgba(190,230,200,.3) 5px 6px),

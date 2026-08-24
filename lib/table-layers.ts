@@ -30,6 +30,7 @@ export type TableLayerKind =
   | 'rail'      // the padded surround
   | 'seam'      // stitching that follows the rail
   | 'trim'      // the hard line where rail meets felt
+  | 'sticker'   // a decal placed on the cloth
   | 'image'     // an arbitrary bitmap, e.g. an uploaded backdrop
   | 'lighting'; // the pass that seats everything in one light
 
@@ -104,6 +105,49 @@ export interface TrimLayer extends TableLayerBase {
   glow?: boolean;
 }
 
+/**
+ * A decal on the cloth — the layer the vision board called out as the one
+ * users would actually add themselves.
+ *
+ * Text and image are ONE kind rather than two, because everything that makes a
+ * sticker a sticker — where it sits, how far it's turned, how big it is — is
+ * shared, and only the content differs. `text` and `src` are mutually
+ * exclusive; the renderer draws whichever is present and skips a layer with
+ * neither.
+ *
+ * Position is a percentage of the FELT, not of the whole board, so a decal
+ * stays put on the cloth when the rail thickness changes. Stickers are drawn
+ * after the trim and before the lighting, so the same overhead light falls
+ * across them — a decal lit differently from the felt it's stuck to reads as a
+ * sprite floating above the table.
+ */
+export interface StickerLayer extends TableLayerBase {
+  kind: 'sticker';
+  /** Percentage of the felt, measured to the sticker's centre. */
+  x: number;
+  y: number;
+  /** Degrees. A decal applied by hand is never quite straight. */
+  rotate?: number;
+  /**
+   * Text decals: font size in cqw, so it tracks the table rather than the
+   * viewport. Image decals: width as a percentage of the felt.
+   */
+  size?: number;
+  /** A lettered decal — the board's "★ MORB" / "HIGH ROLLER" / "369". */
+  text?: string;
+  /** An uploaded decal. Set together with `stickerId` when it came from the library. */
+  src?: string;
+  /**
+   * The library row this came from, when it did. Kept so a table can be
+   * re-checked against moderation later: a decal whose sticker was since
+   * rejected can be found without diffing image bytes.
+   */
+  stickerId?: string;
+  color?: string;
+  /** Neon treatment from direction 03 — a glow in the sticker's own colour. */
+  glow?: boolean;
+}
+
 export interface ImageLayer extends TableLayerBase {
   kind: 'image';
   src: string;
@@ -122,7 +166,7 @@ export interface LightingLayer extends TableLayerBase {
 
 export type TableLayer =
   | SceneLayer | SurfaceLayer | GrainLayer | MarkingsLayer
-  | RailLayer | SeamLayer | TrimLayer | ImageLayer | LightingLayer;
+  | RailLayer | SeamLayer | TrimLayer | StickerLayer | ImageLayer | LightingLayer;
 
 /**
  * The shape of the table body. A blackjack table is a "D": nearly straight

@@ -240,6 +240,21 @@ export interface BlackjackTableDesign {
   updated_at: string;
 }
 
+export interface BlackjackSticker {
+  id: string;
+  slug: string;
+  owner_address: string;
+  name: string;
+  image: string;
+  image_bytes: number;
+  status: 'pending' | 'approved' | 'rejected' | 'deleted';
+  reviewed_by: string | null;
+  reviewed_at: string | null;
+  review_note: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface CommunitySlotMachine {
   id: string;
   slug: string;
@@ -5521,5 +5536,138 @@ export class DatabaseService implements MoneyDatabaseQueries {
       [normalized],
     );
     return result.rows[0]?.n ?? 0;
+  }
+
+  // ── Create-A-Table sticker library ────────────────────────────────────────
+  // Uploaded decals, which unlike a typed one can be shown to other players
+  // and therefore carry a review state. Listing helpers come in two flavours
+  // deliberately: `listStickersByOwner` returns the caller's own stickers at
+  // any status, `listApprovedStickers` returns only what moderation cleared.
+  // Nothing here reads an address from a request body.
+
+  private normalizeStickerRow(row: any): BlackjackSticker {
+    return {
+      id: row.id,
+      slug: row.slug,
+      owner_address: row.owner_address,
+      name: row.name,
+      image: row.image,
+      image_bytes: row.image_bytes,
+      status: row.status,
+      reviewed_by: row.reviewed_by ?? null,
+      reviewed_at: row.reviewed_at ?? null,
+      review_note: row.review_note ?? null,
+      created_at: row.created_at,
+      updated_at: row.updated_at,
+    };
+  }
+
+  async createSticker(
+    ownerAddress: string,
+    name: string,
+    image: string,
+    imageBytes: number,
+  ): Promise<BlackjackSticker> {
+    const normalized = this.normalizeAddress(ownerAddress);
+    // Same bounded-retry slug allocation the designs and slot machines use.
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const slug = randomBytes(9).toString('base64url');
+      try {
+        const result = await this.pool.query(
+          `INSERT INTO blackjack_stickers (slug, owner_address, name, image, image_bytes)
+           VALUES ($1, $2, $3, $4, $5)
+           RETURNING *`,
+          [slug, normalized, name, image, imageBytes],
+        );
+        return this.normalizeStickerRow(result.rows[0]);
+      } catch (err: any) {
+        if (err?.code === '23505' && attempt < 4) continue; // unique_violation on slug
+        throw err;
+      }
+    }
+    throw new Error('failed to allocate a unique slug for the sticker');
+  }
+
+  async getStickerBySlug(slug: string): Promise<BlackjackSticker | null> {
+    const result = await this.pool.query(
+      `SELECT * FROM blackjack_stickers WHERE slug = $1`,
+      [slug],
+    );
+    return result.rows[0] ? this.normalizeStickerRow(result.rows[0]) : null;
+  }
+
+  async listStickersByOwner(ownerAddress: string, limit = 60): Promise<BlackjackSticker[]> {
+    const normalized = this.normalizeAddress(ownerAddress);
+    const result = await this.pool.query(
+      `SELECT * FROM blackjack_stickers
+        WHERE owner_address = $1 AND status != 'deleted'
+        ORDER BY created_at DESC
+        LIMIT $2`,
+      [normalized, limit],
+    );
+    return result.rows.map((r: any) => this.normalizeStickerRow(r));
+  }
+
+  async countStickersByOwner(ownerAddress: string): Promise<number> {
+    const normalized = this.normalizeAddress(ownerAddress);
+    const result = await this.pool.query(
+      `SELECT COUNT(*)::int AS n FROM blackjack_stickers
+        WHERE owner_address = $1 AND status != 'deleted'`,
+      [normalized],
+    );
+    return result.rows[0]?.n ?? 0;
+  }
+
+  async listApprovedStickers(limit = 120): Promise<BlackjackSticker[]> {
+    const result = await this.pool.query(
+      `SELECT * FROM blackjack_stickers
+        WHERE status = 'approved'
+        ORDER BY created_at DESC
+        LIMIT $1`,
+      [limit],
+    );
+    return result.rows.map((r: any) => this.normalizeStickerRow(r));
+  }
+
+  /** The moderation queue: oldest first, so nothing waits behind newer uploads. */
+  async listPendingStickers(limit = 100): Promise<BlackjackSticker[]> {
+    const result = await this.pool.query(
+      `SELECT * FROM blackjack_stickers
+        WHERE status = 'pending'
+        ORDER BY created_at ASC
+        LIMIT $1`,
+      [limit],
+    );
+    return result.rows.map((r: any) => this.normalizeStickerRow(r));
+  }
+
+  /**
+   * Approve or reject. Guarded on `status = 'pending'` in the WHERE clause
+   * rather than checked first and updated after: two admins hitting the queue
+   * at once would otherwise both read 'pending' and the second would overwrite
+   * the first's decision. A null return means somebody already decided.
+   */
+  async reviewSticker(
+    id: string,
+    status: 'approved' | 'rejected',
+    reviewerAddress: string,
+    note: string | null,
+  ): Promise<BlackjackSticker | null> {
+    const result = await this.pool.query(
+      `UPDATE blackjack_stickers
+          SET status = $2, reviewed_by = $3, review_note = $4,
+              reviewed_at = NOW(), updated_at = NOW()
+        WHERE id = $1 AND status = 'pending'
+        RETURNING *`,
+      [id, status, this.normalizeAddress(reviewerAddress), note],
+    );
+    return result.rows[0] ? this.normalizeStickerRow(result.rows[0]) : null;
+  }
+
+  async deleteSticker(id: string): Promise<void> {
+    await this.pool.query(
+      `UPDATE blackjack_stickers SET status = 'deleted', updated_at = NOW() WHERE id = $1`,
+      [id],
+    );
   }
 }
