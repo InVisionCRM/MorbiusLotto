@@ -146,6 +146,7 @@ export function registerAdminRoutes({
           ticker: null,
           iframe_url: null,
           website_url: null,
+          card_pitch: null,
           sort_order: inserted,
           enabled: true,
         });
@@ -180,6 +181,7 @@ export function registerAdminRoutes({
         ticker: ticker ?? null,
         iframe_url: iframe_url ?? null,
         website_url: website_url ?? null,
+        card_pitch: null,
         sort_order: typeof sort_order === 'number' ? sort_order : 0,
         enabled: enabled !== false,
       });

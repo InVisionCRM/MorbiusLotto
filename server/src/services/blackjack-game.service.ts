@@ -325,7 +325,10 @@ export class BlackjackGameService {
 
       // Determine game status
       let status: GameState['status'] = 'player_turn';
-      let result: Game['result'];
+      // Only the three terminal openers below are reachable here — this block
+      // never leaves the hand 'ongoing', and the narrower type is what lets the
+      // streak settle call take `result` without a cast.
+      let result: 'win' | 'loss' | 'push' | 'blackjack' | undefined;
 
       if (initialHand.isBlackjack && dealerBlackjack) {
         status = 'completed';

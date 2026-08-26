@@ -35,11 +35,20 @@ function handTotalFromCardIndices(indices: number[], visibleCount: number): numb
 export function BlackjackMultiDealerArea({
   tableViewState,
   visibleDealerCards,
+  hideHoleCard = false,
   cardsExiting = false,
   newDealerCardIndices = null,
 }: {
   tableViewState: BJMultiTableState | null;
   visibleDealerCards: number;
+  /**
+   * Draw the second dealer card face down. Live multiplayer doesn't need this
+   * — the server sends a single dealer card during play, so the placeholder
+   * back from `showPlayingHoleFallback` stands in for the hole card. Anything
+   * rendering a COMPLETE mid-hand dealer hand (the design studio's preview,
+   * which deals from a fixture) has both cards in hand and has to be told.
+   */
+  hideHoleCard?: boolean;
   cardsExiting?: boolean;
   newDealerCardIndices?: Set<number> | null;
 }) {
@@ -56,6 +65,7 @@ export function BlackjackMultiDealerArea({
       <DealerSection
         cards={dCards.map(indexToCard)}
         visibleCards={visibleDealerCards}
+        hideHoleCard={hideHoleCard}
         cardSize="normal"
         isPlayingPhase={tableViewState?.phase === 'playing'}
         showPlayingHoleFallback
