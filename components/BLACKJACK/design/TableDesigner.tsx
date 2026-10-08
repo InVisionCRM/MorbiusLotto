@@ -599,6 +599,9 @@ export default function TableDesigner() {
     return new Set(state.dealerCards.map((_, i) => i));
   }, [dealPreview, state]);
 
+  /** The dealer's hole card is down for as long as players are still acting. */
+  const previewHidesHoleCard = state.phase === 'playing' && state.dealerCards.length >= 2;
+
   // ── Whole-table presets ────────────────────────────────────────────────────
   // A preset speaks for the motion block and the whole-table sound style; seat
   // placement, card art and uploaded clips are the user's and survive it.
@@ -2013,9 +2016,17 @@ export default function TableDesigner() {
                           onPointerUp={endDrag}
                           onPointerCancel={endDrag}
                         >
+                          {/* Mid-hand, a dealer shows ONE card. The preview was
+                              marking every dealer card visible, so the hole
+                              card sat face up and the badge showed the dealer's
+                              FULL total — a hand no player ever sees. Capping
+                              the visible count at one fixes the badge; the flag
+                              keeps the second card in the DOM as a back rather
+                              than culling it. */}
                           <BlackjackMultiDealerArea
                             tableViewState={state}
-                            visibleDealerCards={state.dealerCards.length}
+                            visibleDealerCards={previewHidesHoleCard ? 1 : state.dealerCards.length}
+                            hideHoleCard={previewHidesHoleCard}
                             cardsExiting={dealPreview === 'exit'}
                             newDealerCardIndices={previewNewDealerCards}
                           />
