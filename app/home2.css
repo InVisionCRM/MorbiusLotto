@@ -17,7 +17,7 @@
   --gold:#fbbf24; --gold-hot:#f59e0b; --gold-dim:rgba(251,191,36,.12);
   --emerald:#34d399; --rose:#fb7185; --violet:#a78bfa;
   --text:#e6edf6; --text2:#94a3b8; --muted:#5b6b82;
-  --font:'Poppins',sans-serif; --display:'Bowlby One SC',cursive;
+  --font:'Poppins',sans-serif; --display:'Poppins',sans-serif; --brand:'Jost',sans-serif;
   --dock-h:96px; /* clearance under the floating pit-rail dock (64px pill + 12px inset + raised chip) */
   font-family:var(--font); background:var(--bg0); color:var(--text);
   -webkit-font-smoothing:antialiased;
@@ -44,11 +44,11 @@
 .home2 .sb-logo{
   width:34px;height:34px;border-radius:10px; display:grid;place-items:center;
   background:radial-gradient(circle at 30% 25%,#2a1b45,#160d2c 60%,#0a0618);
-  font-family:var(--display); font-size:17px; color:#03141c;
+  font-family:var(--display); font-weight:800; font-size:17px; color:#03141c;
   box-shadow:0 0 22px rgba(147,51,234,.5), inset 0 1px 0 rgba(255,255,255,.12);
 }
 .home2 .sb-logo img{width:80%; height:80%; object-fit:contain; filter:drop-shadow(0 0 5px rgba(168,85,247,.7))}
-.home2 .sb-brand b{font-family:var(--display); font-weight:400; font-size:15px; letter-spacing:.04em}
+.home2 .sb-brand b{font-family:var(--brand); font-weight:800; font-size:16px; letter-spacing:.06em}
 .home2 .sb-brand b i{color:var(--cyan); font-style:normal}
 
 /* balance module */
@@ -163,7 +163,7 @@
 .home2 .pc-card::after{content:''; position:absolute; inset:0; pointer-events:none;
   background:linear-gradient(105deg,transparent 42%,rgba(255,255,255,.07) 50%,transparent 58%)}
 .home2 .pc-top{display:flex; align-items:center; justify-content:space-between; gap:12px}
-.home2 .pc-brand{font-family:var(--display); font-size:12px; letter-spacing:.06em; color:var(--text2)}
+.home2 .pc-brand{font-family:var(--brand); font-weight:800; font-size:12px; letter-spacing:.08em; color:var(--text2)}
 .home2 .tierchip{display:inline-flex; align-items:center; gap:5px; font-size:9.5px; font-weight:800;
   letter-spacing:.1em; padding:3px 9px; border-radius:99px;
   background:linear-gradient(90deg,rgba(192,192,192,.22),rgba(192,192,192,.06));
@@ -185,7 +185,7 @@
 /* The avatar is identity, not a rolled face: a monogram tile, or the player's
    own picture when they have set one. */
 .home2 .pc-body .av{position:relative; flex-shrink:0; display:grid; place-items:center}
-.home2 .av-mono{width:64px; height:64px; border-radius:16px; font-family:var(--display); font-size:24px;
+.home2 .av-mono{width:64px; height:64px; border-radius:16px; font-family:var(--display); font-weight:800; font-size:24px;
   background:linear-gradient(145deg,#12203a,#0a0f1c); border:1px solid var(--line2); color:var(--cyan)}
 .home2 .av-photo{width:64px; height:64px; border-radius:16px; object-fit:cover;
   border:1px solid var(--line2)}
@@ -210,7 +210,7 @@
 .home2 .hv .kick{font-size:10px; letter-spacing:.28em; color:var(--cyan); font-weight:800; margin-bottom:14px; display:flex; align-items:center; gap:10px}
 .home2 .hv .kick::before{content:''; width:26px; height:1px; background:var(--cyan)}
 .home2 .hv h1{
-  font-family:var(--display); font-weight:400; font-size:clamp(30px,4.6vw,58px);
+  font-family:var(--display); font-weight:800; font-size:clamp(30px,4.6vw,58px);
   line-height:1.04; letter-spacing:.01em; margin-bottom:16px;
 }
 .home2 .hv h1 .l2{display:block; background:linear-gradient(90deg,#fde68a,var(--gold-hot)); -webkit-background-clip:text; background-clip:text; color:transparent;
@@ -219,7 +219,7 @@
 .home2 .hv p.sub b{color:var(--text)}
 .home2 .hv .ctas{display:flex; gap:12px; align-items:center; margin-bottom:30px}
 .home2 .cta-main{
-  font-family:var(--display); font-size:15px; letter-spacing:.05em; color:#3b2503;
+  font-family:var(--display); font-weight:800; font-size:15px; letter-spacing:.05em; color:#3b2503;
   background:linear-gradient(180deg,#fde68a,#f59e0b); padding:15px 34px; border-radius:14px;
   box-shadow:0 6px 30px rgba(245,158,11,.4), inset 0 1px 0 rgba(255,255,255,.6);
   transition:transform .15s; position:relative; overflow:hidden;
@@ -246,7 +246,7 @@
 .home2 .furn-title{display:flex; align-items:center; gap:12px}
 .home2 .furn-title .fl{font-size:26px; animation:h2-flameBob 1.8s ease-in-out infinite}
 @keyframes h2-flameBob{50%{transform:translateY(-3px) scale(1.08)}}
-.home2 .furn-title .tt b{font-family:var(--display); font-weight:400; font-size:14px; letter-spacing:.06em; color:#fdba74; display:block}
+.home2 .furn-title .tt b{font-family:var(--display); font-weight:800; font-size:14px; letter-spacing:.06em; color:#fdba74; display:block}
 .home2 .furn-title .tt span{font-size:9.5px; color:var(--muted); letter-spacing:.1em; font-weight:600}
 .home2 .odometer{display:flex; align-items:baseline; gap:2px}
 .home2 .odometer .dg{
@@ -268,7 +268,7 @@
    ============================================================ */
 .home2 section.zone{padding:44px 34px 8px}
 .home2 .zone-head{display:flex; align-items:baseline; gap:16px; margin-bottom:20px; flex-wrap:wrap}
-.home2 .zone-head h2{font-family:var(--display); font-weight:400; font-size:clamp(18px,2.2vw,26px); letter-spacing:.03em}
+.home2 .zone-head h2{font-family:var(--display); font-weight:800; font-size:clamp(18px,2.2vw,26px); letter-spacing:.03em}
 .home2 .zone-head h2 em{font-style:normal; color:var(--cyan)}
 .home2 .zone-head .sub{font-size:11px; color:var(--muted)}
 .home2 .zone-head .soon{font-size:9px; font-weight:800; letter-spacing:.16em; color:#fcd34d;
@@ -369,7 +369,7 @@
 .home2 .floor-shelf + .floor-shelf{margin-top:26px}
 .home2 .shelf-head{display:flex; align-items:baseline; gap:10px; margin:0 0 11px; padding-bottom:7px;
   border-bottom:1px solid var(--line)}
-.home2 .shelf-head h3{font-family:var(--display); font-weight:400; font-size:14px; letter-spacing:.05em;
+.home2 .shelf-head h3{font-family:var(--display); font-weight:800; font-size:14px; letter-spacing:.05em;
   text-transform:uppercase; color:#e8eefc}
 .home2 .shelf-head .shelf-sub{font-size:10.5px; color:var(--muted)}
 .home2 .shelf-head .shelf-count{margin-left:auto; font-size:10px; font-weight:700; color:var(--text2);
@@ -381,45 +381,37 @@
   gap:12px; overflow-x:auto; scroll-snap-type:x mandatory; scroll-padding-left:2px;
   padding-bottom:6px; scrollbar-width:none}
 .home2 .ng-track::-webkit-scrollbar{display:none}
-.home2 .ng-card{scroll-snap-align:start; aspect-ratio:4/5; --name-scale:1.15}
-/* One line only: a wrapped blurb lifts its card's title out of line with the
-   rest of the row, and the rail is the narrowest place a blurb has to fit. */
-.home2 .ng-card .meta .row .st{white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%}
-.home2 .ng-card .stage{min-height:0}
+.home2 .ng-track .game-tile{scroll-snap-align:start}
 @media (min-width:700px){
   .home2 .ng-track{grid-auto-columns:calc((100% - 12px * 4) / 5)}
 }
 @media (min-width:1080px){
   .home2 .ng-track{grid-auto-columns:calc((100% - 12px * 6) / 7)}
-  .home2 .ng-card{--name-scale:1.28}
 }
-/* Floor cards are 4:5 portrait — taller than wide, so the scene art gets real
-   room and the title block can carry a big arced name. (2:3 was the other
-   candidate; at 7-across on the rail it turns into a skyscraper.) */
-.home2 .floor-grid .scene-card{aspect-ratio:4/5}
-.home2 .floor-grid .scene-card .stage{min-height:0}
-/* Title sizing has two inputs. `--name-size` is the catalog's per-game relative
-   weighting (long names authored smaller) and `--name-scale` is this context's
-   multiplier, so one knob resizes every title without per-game edits. Cards are
-   also size containers, so a title can be capped to the width it actually has:
-   `--name-chars` comes from CurvedName; 0.74em is a generous average
-   advance across the display faces (Bungee is the widest). Whichever of the
-   two is smaller wins, so short names get the full scale and long ones shrink
-   to fit rather than clipping — an arced title must never wrap. */
-.home2 .floor-grid .scene-card,
-.home2 .ng-card{container-type:inline-size}
-.home2 .floor-grid .scene-card .meta .name,
-.home2 .ng-card .meta .name{
-  font-size:min(
-    calc(var(--name-size,14px) * var(--name-scale,1.55)),
-    calc((100cqw - var(--name-gutter,34px)) / (var(--name-chars,8) * 0.74))
-  );
-  text-align:center; white-space:nowrap; overflow:hidden;
-}
-.home2 .floor-grid .scene-card .meta{text-align:center}
-.home2 .ng-card .meta{text-align:center}
-.home2 .floor-grid .scene-card .meta .row{justify-content:center}
-.home2 .ng-card .meta .row{justify-content:center}
+
+/* --- GAME TILES (Floor, Just Landed rail, launcher) ---
+   Full-bleed art at the reference lobby's 108:136 with the title painted in.
+   The ribbon and the ⓘ mark are sized in cqw against the tile, so a launcher
+   thumbnail and a floor card keep the same proportions (badge = 20pt on a
+   108pt tile in the reference). */
+.home2 .game-tile{position:relative; display:block; aspect-ratio:108/136; border-radius:12px; overflow:hidden;
+  container-type:inline-size; isolation:isolate; background:#0b0b14;
+  box-shadow:0 10px 24px rgba(0,0,0,.35); transition:transform .25s, box-shadow .25s}
+.home2 .game-tile:hover{transform:translateY(-4px); box-shadow:0 18px 40px rgba(0,0,0,.55), 0 0 0 1px rgba(255,255,255,.08)}
+.home2 .game-tile:focus-visible{outline:2px solid var(--cyan); outline-offset:3px}
+.home2 .game-tile .gt-art{display:block; width:100%; height:100%; object-fit:cover}
+.home2 .game-tile .gt-badge{position:absolute; left:0; top:0; height:18.5cqw; display:inline-flex; align-items:center;
+  gap:3.3cqw; padding:0 7.9cqw 0 6cqw; border-bottom-right-radius:7.4cqw; white-space:nowrap;
+  font-family:'Poppins',sans-serif; font-weight:600; font-size:10.4cqw; line-height:1; color:#fff}
+.home2 .game-tile .gt-badge.exclusive,
+.home2 .game-tile .gt-badge.live{background:linear-gradient(90deg,#4e2ed6,#5038e2 62%,#4c26ce)}
+.home2 .game-tile .gt-badge.new{background:linear-gradient(180deg,#c8283a,#a51d2c)}
+.home2 .game-tile .gt-badge.multi{background:linear-gradient(90deg,#7728ca,#6a22c0)}
+.home2 .game-tile .gt-badge.age{background:rgba(5,8,18,.72); color:#cbd5e1; font-weight:500}
+.home2 .game-tile .gt-mark{display:block; height:11.7cqw; width:auto}
+.home2 .game-tile .gt-dot{width:5.6cqw; height:5.6cqw; border-radius:50%; background:#2ee59a; box-shadow:0 0 1.6cqw #2ee59a}
+.home2 .game-tile .gt-info{position:absolute; top:3.3cqw; right:3.3cqw; width:12.4cqw; height:12.4cqw; pointer-events:none}
+.home2 .game-tile .gt-info svg{display:block; width:100%; height:100%}
 /* monogram tiles (scenes pending) */
 .home2 .mono-tile{
   border-radius:16px; border:1px solid var(--line); background:linear-gradient(165deg,var(--panel2),transparent);
@@ -427,7 +419,7 @@
   display:flex; flex-direction:column; justify-content:flex-end;
 }
 .home2 .mono-tile::before{content:attr(data-letter); position:absolute; top:-14px; right:2px;
-  font-family:var(--display); font-size:84px; line-height:1; color:hsla(var(--h),85%,60%,.14);
+  font-family:var(--display); font-weight:800; font-size:84px; line-height:1; color:hsla(var(--h),85%,60%,.14);
   transition:all .3s}
 .home2 .mono-tile:hover{transform:translateY(-4px); border-color:hsla(var(--h),85%,60%,.4)}
 .home2 .mono-tile:hover::before{color:hsla(var(--h),85%,60%,.3); transform:scale(1.1) rotate(-4deg)}
@@ -452,7 +444,7 @@
 .home2 .forge-kicker{display:inline-block; align-self:flex-start; font-size:9px; font-weight:800; letter-spacing:.22em;
   color:#c4b5fd; border:1px solid rgba(167,139,250,.4); background:rgba(124,92,255,.12);
   border-radius:99px; padding:5px 12px; margin-bottom:14px}
-.home2 .forge-copy h3{font-family:var(--display); font-weight:400; font-size:clamp(22px,2.8vw,34px);
+.home2 .forge-copy h3{font-family:var(--display); font-weight:800; font-size:clamp(22px,2.8vw,34px);
   letter-spacing:.02em; line-height:1.14; margin-bottom:12px}
 .home2 .forge-copy h3 em{font-style:normal; background:linear-gradient(100deg,#a78bfa,#22d3ee);
   -webkit-background-clip:text; background-clip:text; color:transparent}
@@ -469,7 +461,7 @@
 .home2 .forge-cta-row{display:flex; align-items:center; gap:14px; flex-wrap:wrap}
 .home2 .forge-cta{
   display:inline-flex; align-items:center; gap:9px;
-  font-family:var(--display); font-weight:400; font-size:14px; letter-spacing:.05em; color:#0b0716;
+  font-family:var(--display); font-weight:800; font-size:14px; letter-spacing:.05em; color:#0b0716;
   background:linear-gradient(100deg,#a78bfa,#22d3ee); border-radius:14px; padding:13px 22px;
   box-shadow:0 10px 30px rgba(124,92,255,.35), 0 0 18px rgba(34,211,238,.18);
   transition:transform .2s, box-shadow .2s;
@@ -538,58 +530,54 @@
 /* ============================================================
    JACKPOT MODULE — "lighting soon"
    ============================================================ */
+/* Weekly Drop banner: painted art behind (rays, tickets, coins — no text), the
+   chunky WEEKLY DROP logo as the title, live numbers in HTML on top. */
 .home2 .jackpot{
   margin:44px 34px 0; border-radius:22px; position:relative; overflow:hidden; text-align:center;
-  padding:44px 30px 40px; border:1px solid rgba(251,191,36,.3);
-  background:
-    radial-gradient(700px 300px at 50% -60%, rgba(251,191,36,.16), transparent 65%),
-    linear-gradient(180deg,#0e0d16,#080810);
+  padding:30px 30px 40px; border:1px solid rgba(167,139,250,.38);
+  background:url(/home2/drop-bg.webp) center/cover no-repeat, #2a0b6e;
+  box-shadow:0 24px 60px -30px rgba(0,0,0,.9);
 }
-.home2 .jackpot::before{content:''; position:absolute; inset:0; pointer-events:none;
-  background-image:radial-gradient(circle 3px, rgba(253,230,138,.85) 40%, transparent 60%);
-  background-size:34px 34px; background-position:10px 10px;
-  -webkit-mask:linear-gradient(#000,#000) content-box, linear-gradient(#000,#000);
-  -webkit-mask-composite:xor; mask-composite:exclude; padding:12px;
-  animation:h2-bulbs 1.1s steps(2) infinite; opacity:.65}
+.home2 .jackpot h2.jp-logo{margin:0 auto 4px; line-height:0}
+.home2 .jackpot h2.jp-logo img{width:min(340px,78%); height:auto; display:inline-block;
+  filter:drop-shadow(0 10px 24px rgba(10,4,40,.55))}
 .home2 .jackpot .soon{
-  display:inline-block; font-size:9px; font-weight:800; letter-spacing:.22em; color:var(--gold);
-  border:1px solid rgba(251,191,36,.45); padding:5px 14px; border-radius:99px; margin-bottom:16px;
-  background:rgba(251,191,36,.07);
+  display:inline-block; font-size:10px; font-weight:800; letter-spacing:.22em; color:#ffd36b;
+  border:1px solid rgba(255,211,107,.6); padding:6px 15px; border-radius:99px; margin-bottom:10px;
+  background:rgba(7,11,52,.55); position:relative; z-index:1;
 }
-.home2 .jackpot h2{font-family:var(--display); font-weight:400; font-size:clamp(22px,3vw,34px); letter-spacing:.04em; margin-bottom:6px}
-.home2 .jackpot h2 span{color:var(--gold)}
 .home2 .jackpot .jp-num{
-  font-family:var(--display); font-weight:400; font-size:clamp(38px,6.5vw,72px); line-height:1.1;
-  background:linear-gradient(180deg,#fff7d6,#fbbf24 55%,#b45309); -webkit-background-clip:text; background-clip:text; color:transparent;
-  filter:drop-shadow(0 0 34px rgba(251,191,36,.35)); font-variant-numeric:tabular-nums; margin:8px 0 4px;
+  font-family:'Bungee',cursive; font-weight:400; font-size:clamp(38px,6.5vw,72px); line-height:1.1; color:#ffffff;
+  text-shadow:0 0 22px rgba(143,180,255,.85), 0 0 2px rgba(143,180,255,.9); font-variant-numeric:tabular-nums;
+  margin:4px 0 2px; position:relative; z-index:1;
 }
-.home2 .jackpot .jp-unit{font-size:11px; letter-spacing:.3em; color:var(--gold); font-weight:800; margin-bottom:18px}
-.home2 .jackpot p.how{font-size:12px; color:var(--text2); max-width:560px; margin:0 auto; line-height:1.7}
-.home2 .jackpot p.how b{color:var(--text)}
+.home2 .jackpot .jp-unit{font-family:var(--brand); font-size:12px; letter-spacing:.32em; color:#ffd36b; font-weight:600; margin-bottom:18px; position:relative; z-index:1}
+.home2 .jackpot p.how{font-size:12px; color:#c9d6ff; max-width:560px; margin:0 auto; line-height:1.7; position:relative; z-index:1}
+.home2 .jackpot p.how b{color:#ffffff}
 .home2 .jp-count{display:flex; gap:10px; justify-content:center; margin:8px 0 20px; position:relative; z-index:1}
-.home2 .jp-count .cb{min-width:62px; padding:10px 8px 8px; border-radius:12px; background:rgba(0,0,0,.45); border:1px solid rgba(251,191,36,.25); box-shadow:inset 0 2px 8px rgba(0,0,0,.5)}
-.home2 .jp-count .cb b{display:block; font-size:23px; font-weight:800; color:#fde68a; font-variant-numeric:tabular-nums; line-height:1.1}
-.home2 .jp-count .cb span{font-size:8px; letter-spacing:.18em; color:var(--muted); font-weight:800}
+.home2 .jp-count .cb{min-width:62px; padding:10px 8px 8px; border-radius:12px; background:rgba(7,11,52,.82); border:1.5px solid #6fa8ff; box-shadow:0 0 12px rgba(111,168,255,.35)}
+.home2 .jp-count .cb b{display:block; font-size:23px; font-weight:800; color:#ffffff; font-variant-numeric:tabular-nums; line-height:1.1}
+.home2 .jp-count .cb span{font-size:8px; letter-spacing:.18em; color:#c9d6ff; font-weight:800}
 .home2 .jp-you{max-width:440px; margin:0 auto 20px; padding:13px 18px; border-radius:14px;
-  background:rgba(251,191,36,.07); border:1px solid rgba(251,191,36,.25); text-align:left; position:relative; z-index:1}
+  background:rgba(7,11,52,.78); border:1.5px solid rgba(111,168,255,.6); text-align:left; position:relative; z-index:1}
 .home2 .jp-you .t{display:flex; justify-content:space-between; font-size:11px; font-weight:800; letter-spacing:.06em; margin-bottom:8px}
 .home2 .jp-you .t b{color:var(--gold); font-size:15px}
-.home2 .jp-you .bar{height:6px; border-radius:99px; background:rgba(255,255,255,.08); overflow:hidden}
+.home2 .jp-you .bar{height:12px; border-radius:99px; background:#070b34; border:1.5px solid #6fa8ff; box-shadow:0 0 10px rgba(111,168,255,.55); overflow:hidden; padding:1.5px}
 .home2 .jp-you .bar i{display:block; height:100%; width:68%; border-radius:99px;
-  background:linear-gradient(90deg,#f59e0b,#fde68a); box-shadow:0 0 12px rgba(251,191,36,.6); animation:h2-vipGlow 2.2s ease-in-out infinite}
-.home2 .jp-you .sub{font-size:10px; color:var(--text2); margin-top:7px; line-height:1.5}
-.home2 .jp-entrants{font-size:10.5px; color:var(--text2); margin:-10px auto 20px; position:relative; z-index:1}
+  background:linear-gradient(90deg,#5ff0ff,#2a6bff)}
+.home2 .jp-you .sub{font-size:10px; color:#c9d6ff; margin-top:7px; line-height:1.5}
+.home2 .jp-entrants{font-size:10.5px; color:#c9d6ff; margin:-10px auto 20px; position:relative; z-index:1}
 .home2 .jp-entrants b{color:var(--gold); font-variant-numeric:tabular-nums}
 .home2 .jp-entrants button{
   background:none; border:0; padding:0; cursor:pointer; font:inherit; font-weight:800;
   color:var(--gold); text-decoration:underline; text-underline-offset:3px;
 }
 .home2 .jp-entrants button:hover{color:#fde68a}
-.home2 .jp-wlbl{font-size:9px; letter-spacing:.22em; color:var(--muted); font-weight:800; margin-bottom:12px}
+.home2 .jp-wlbl{font-size:9px; letter-spacing:.22em; color:#c9d6ff; position:relative; z-index:1; font-weight:800; margin-bottom:12px}
 .home2 .jp-winners{display:flex; gap:18px; justify-content:center; flex-wrap:wrap; margin-bottom:20px; position:relative; z-index:1}
-.home2 .jp-winners .w{display:flex; flex-direction:column; align-items:center; gap:3px; font-size:9.5px; color:var(--text2)}
+.home2 .jp-winners .w{display:flex; flex-direction:column; align-items:center; gap:3px; font-size:9.5px; color:#e0e7ff}
 .home2 .jp-winners .w .av{width:46px; height:46px; border-radius:50%; display:grid; place-items:center;
-  font-family:var(--display); font-size:16px; color:#0b0e16; border:2px solid rgba(255,255,255,.18); margin-bottom:3px}
+  font-family:var(--display); font-weight:800; font-size:16px; color:#0b0e16; border:2px solid rgba(255,255,255,.18); margin-bottom:3px}
 .home2 .jp-winners .w.first .av{border-color:var(--gold); box-shadow:0 0 20px rgba(251,191,36,.75); animation:h2-vipGlow 2s ease-in-out infinite}
 .home2 .jp-winners .w b{color:var(--gold); font-size:10.5px}
 
@@ -603,7 +591,7 @@
 }
 .home2 .vip-card:hover{transform:translateY(-4px)}
 .home2 .vip-card .medal{width:44px; height:44px; border-radius:50%; margin:0 auto 10px; display:grid; place-items:center;
-  font-family:var(--display); font-size:16px; color:#0b0e16;
+  font-family:var(--display); font-weight:800; font-size:16px; color:#0b0e16;
   background:radial-gradient(circle at 32% 28%, hsla(var(--h),80%,80%,1), hsla(var(--h),75%,50%,1) 60%, hsla(var(--h),70%,30%,1));
   box-shadow:0 4px 16px hsla(var(--h),80%,55%,.35), inset 0 1px 1px rgba(255,255,255,.5)}
 /* real VIP tier badge (PNG medallion) in place of the letter medal */
@@ -622,7 +610,7 @@
 .home2 .foot{margin-top:52px; border-top:1px solid var(--line); padding:40px 34px calc(30px + var(--dock-h)); display:flex; flex-direction:column; gap:30px}
 .home2 .foot-top{display:flex; gap:48px; flex-wrap:wrap; justify-content:space-between}
 .home2 .foot-brand{max-width:300px; display:flex; flex-direction:column; gap:12px}
-.home2 .foot .brand{font-family:var(--display); font-size:19px; letter-spacing:.02em}
+.home2 .foot .brand{font-family:var(--brand); font-weight:800; font-size:20px; letter-spacing:.06em}
 .home2 .foot .brand i{color:var(--cyan); font-style:normal}
 .home2 .foot-tag{font-size:12px; color:var(--muted); line-height:1.55; margin:0}
 .home2 .foot-social{display:flex; gap:9px; margin-top:4px}
@@ -632,7 +620,7 @@
 .home2 .foot-social svg{width:16px; height:16px; fill:currentColor}
 .home2 .foot-cols{display:flex; gap:44px; flex-wrap:wrap}
 .home2 .foot-col{display:flex; flex-direction:column; gap:10px; min-width:112px}
-.home2 .foot-col h4{font-family:var(--display); font-size:11px; letter-spacing:.14em; text-transform:uppercase; color:var(--text); margin:0 0 3px}
+.home2 .foot-col h4{font-family:var(--display); font-weight:800; font-size:11px; letter-spacing:.14em; text-transform:uppercase; color:var(--text); margin:0 0 3px}
 .home2 .foot-col a{font-size:12px; color:var(--text2); transition:color .2s; width:fit-content}
 .home2 .foot-col a:hover{color:var(--cyan)}
 .home2 .foot-bottom{display:flex; gap:16px; flex-wrap:wrap; align-items:center; padding-top:22px; border-top:1px solid var(--line)}
@@ -675,8 +663,6 @@
 .home2 .sheet.launcher{max-height:76vh; display:flex; flex-direction:column; transition:none}
 /* owner: the game menu must not be animated — instant open, static art */
 .home2 .sheet-veil.gl-veil{transition:none}
-.home2 .launcher .gl-stage svg{animation:none !important}
-.home2 .launcher .gl-stage svg *{animation:none !important; transition:none !important}
 .home2 .launcher .gl-search{
   width:100%; padding:10px 14px; border-radius:12px; margin-bottom:12px;
   background:var(--panel2); border:1px solid var(--line2); color:var(--text);
@@ -696,22 +682,11 @@
   grid-auto-rows:max-content;
   padding-bottom:calc(6px + env(safe-area-inset-bottom,0));
 }
-.home2 .launcher .gl-card{
-  display:flex; flex-direction:column; border-radius:13px; overflow:hidden;
-  border:1px solid var(--line); background:var(--panel);
-  transition:transform .4s cubic-bezier(.34,1.56,.64,1), border-color .2s;
-}
-.home2 .launcher .gl-card:active{transform:scale(.92); border-color:rgba(34,211,238,.45)}
-.home2 .launcher .gl-stage{
-  /* flex:none — the card is a flex column, so without it the art strip is the
-     first thing a squeezed card shrinks away (min-height:auto is 0 here
-     because of the overflow:hidden below). */
-  height:72px; flex:none; display:grid; place-items:center; overflow:hidden;
-  background:radial-gradient(120% 110% at 50% 0%, #131a2c, #070a12 78%);
-  border-bottom:1px solid var(--line);
-}
-.home2 .launcher .gl-stage svg{width:88%; height:auto; max-height:62px}
-.home2 .launcher .gl-name{padding:7px 4px 9px; text-align:center; letter-spacing:.04em; color:var(--text); line-height:1.2}
+/* launcher thumbnails: same tile, tighter corners, no ⓘ, press-down instead of lift */
+.home2 .launcher .gl-tile{border-radius:9px; box-shadow:none; transition:transform .4s cubic-bezier(.34,1.56,.64,1)}
+.home2 .launcher .gl-tile:hover{transform:none; box-shadow:none}
+.home2 .launcher .gl-tile:active{transform:scale(.92)}
+.home2 .launcher .gl-tile .gt-info{display:none}
 .home2 .launcher .gl-empty{grid-column:1/-1; text-align:center; color:var(--muted); font-size:12px; padding:26px 0}
 
 /* ── WEEKLY DROP SHEET (dock → DROP) ──────────────────────── */
@@ -721,7 +696,7 @@
   background:var(--gold-dim); border:1px solid rgba(251,191,36,.35); padding:4px 12px; border-radius:99px; margin-bottom:10px;
 }
 .home2 .dropsheet .ds-pot{
-  font-family:var(--display); font-size:38px; line-height:1.1; color:var(--gold);
+  font-family:var(--display); font-weight:800; font-size:38px; line-height:1.1; color:var(--gold);
   text-shadow:0 0 30px rgba(251,191,36,.35); font-variant-numeric:tabular-nums;
 }
 .home2 .dropsheet .ds-unit{font-size:9.5px; letter-spacing:.16em; color:var(--text2); font-weight:700; margin:4px 0 14px}
@@ -761,7 +736,7 @@
   background:linear-gradient(160deg,rgba(251,191,36,.08),transparent 70%);
 }
 .home2 .walletsheet .ws-amt{
-  font-family:var(--display); font-size:30px; line-height:1.1; color:var(--gold);
+  font-family:var(--display); font-weight:800; font-size:30px; line-height:1.1; color:var(--gold);
   text-shadow:0 0 26px rgba(251,191,36,.3); font-variant-numeric:tabular-nums;
 }
 .home2 .walletsheet .ws-amt span{font-size:12px; letter-spacing:.1em}
@@ -800,7 +775,7 @@
     padding:10px 14px; background:rgba(5,6,12,.85); backdrop-filter:blur(14px); border-bottom:1px solid var(--line);
   }
   .home2 .mob-bar .sb-logo{width:30px;height:30px;font-size:14px;border-radius:8px}
-  .home2 .mob-bar .mtitle{font-family:var(--display); font-size:13px}
+  .home2 .mob-bar .mtitle{font-family:var(--brand); font-weight:800; font-size:14px; letter-spacing:.06em}
   .home2 .mob-bar .mtitle i{color:var(--cyan); font-style:normal}
   .home2 .mob-bar .mav{margin-left:auto; width:32px; height:32px; border-radius:50%; overflow:hidden; border:2px solid rgba(251,191,36,.6)}
   .home2 .hero{padding:24px 18px}
@@ -926,7 +901,7 @@
   display:flex; align-items:center; gap:10px;
   padding:12px 16px; border-bottom:1px solid var(--line);
 }
-.home2 .home2-chart-modal .head b{font-family:var(--display); font-size:13px; letter-spacing:.04em}
+.home2 .home2-chart-modal .head b{font-family:var(--display); font-weight:800; font-size:13px; letter-spacing:.04em}
 .home2 .home2-chart-modal .chg{
   font-size:10.5px; font-weight:800; padding:3px 8px; border-radius:999px;
   font-variant-numeric:tabular-nums;
@@ -961,7 +936,7 @@
   display:flex; align-items:center; gap:10px;
   padding:12px 16px; border-bottom:1px solid var(--line);
 }
-.home2 .home2-entrants-modal .head b{font-family:var(--display); font-size:13px; letter-spacing:.04em}
+.home2 .home2-entrants-modal .head b{font-family:var(--display); font-weight:800; font-size:13px; letter-spacing:.04em}
 .home2 .home2-entrants-modal .head .count{
   font-size:10.5px; font-weight:800; padding:3px 8px; border-radius:999px;
   color:var(--gold); background:rgba(251,191,36,.12); font-variant-numeric:tabular-nums;
@@ -986,7 +961,7 @@
 /* mini version of the jackpot winner avatar circle */
 .home2 .home2-entrants-modal .row .av{
   width:28px; height:28px; border-radius:50%; flex:none; display:grid; place-items:center;
-  font-family:var(--display); font-size:11px; color:#0b0e16; border:2px solid rgba(255,255,255,.18);
+  font-family:var(--display); font-weight:800; font-size:11px; color:#0b0e16; border:2px solid rgba(255,255,255,.18);
 }
 .home2 .home2-entrants-modal .row .name{
   flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
@@ -1023,7 +998,7 @@
   box-shadow:inset 0 0 0 1px color-mix(in srgb, var(--acc) 40%, transparent)}
 .home2 .hc-kdot{width:7px; height:7px; border-radius:50%; background:var(--acc);
   box-shadow:0 0 9px var(--acc)}
-.home2 .hc-title{font-family:var(--display); font-weight:400; letter-spacing:.005em; line-height:.98;
+.home2 .hc-title{font-family:var(--display); font-weight:800; letter-spacing:.005em; line-height:.98;
   font-size:clamp(26px,3.7vw,44px); color:#f4f8ff; text-shadow:0 3px 0 rgba(0,0,0,.35); margin:0 0 14px}
 .home2 .hc-title .l2{display:block;
   background:linear-gradient(92deg, var(--acc), var(--acc2)); -webkit-background-clip:text; background-clip:text;

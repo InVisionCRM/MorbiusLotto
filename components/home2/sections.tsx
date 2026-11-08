@@ -3,8 +3,8 @@
 /**
  * Home2 sections — faithful port of public/home-nav-lab.html.
  * Markup, class names and behavior mirror the lab exactly; CSS lives in the
- * `.home2`-scoped stylesheet ported separately. Scene art comes from
- * components/home2/scenes.tsx.
+ * `.home2`-scoped stylesheet ported separately. Game tiles come from
+ * components/home2/game-tile.tsx; the catalog lives in components/home2/scenes.tsx.
  */
 
 import React, { useEffect, useRef, useState } from 'react';
@@ -16,10 +16,10 @@ import {
   CrashScene,
   MinesScene,
   FLOOR_GAMES,
-  FAMILY_MARK,
+  type FloorGame,
 } from '@/components/home2/scenes';
+import { GameTile } from '@/components/home2/game-tile';
 import { SelfExclusionModal } from '@/components/ResponsibleGaming';
-import { CurvedName } from '@/components/home2/curved-name';
 
 /* ────────────────────────────────────────────────────────────
    Shared: hero ember particles (port of the lab's embers())
@@ -582,25 +582,9 @@ export function TonightsTable({ cards }: { cards?: React.ReactNode }) {
 }
 
 /* ────────────────────────────────────────────────────────────
-   6. THE FLOOR — unified 3D scene cards + filter pills
+   6. THE FLOOR — game tiles grouped into family shelves + filter pills
    ──────────────────────────────────────────────────────────── */
-type FloorFamily = 'blackjack' | 'poker' | 'table' | 'arcade';
-
-interface FloorGameEntry {
-  key: string;
-  name: string;
-  cat: string;
-  family: FloorFamily;
-  addedAt: string;
-  fontClass: string;
-  nameSize: number;
-  blurb: string;
-  Scene: React.ComponentType;
-  badge?: string;
-  badgeClass?: string;
-  glow?: string;
-  href: string;
-}
+type FloorFamily = FloorGame['family'];
 
 /* The floor is grouped by game family so it reads as a menu instead of a
    34-card wall. 'all' shows every shelf with its heading; picking a family
@@ -618,37 +602,9 @@ const FLOOR_FILTERS: { f: string; label: string }[] = [
   ...FLOOR_FAMILIES.map((x) => ({ f: x.f as string, label: x.label })),
 ];
 
-function FloorCard({ g }: { g: FloorGameEntry }) {
-  /* `nameSize` stays the per-game *relative* weighting the catalog authored
-     (long names smaller). The absolute size is CSS's call — each context
-     multiplies it by its own `--name-scale`, so one knob resizes every title
-     without touching 30-odd catalog rows. */
-  const style = {
-    '--name-size': g.nameSize,
-    ...(g.glow ? { '--glow': g.glow } : {}),
-  } as React.CSSProperties;
-  return (
-    <Link href={g.href} className="scene-card" data-cat={g.cat} style={style}>
-      {g.badge && <span className={`badge ${g.badgeClass ?? 'new'}`}>{g.badge}</span>}
-      <span className="wm" aria-hidden="true">
-        {FAMILY_MARK[g.family]}
-      </span>
-      <div className="stage">
-        <g.Scene />
-      </div>
-      <div className="meta">
-        <CurvedName text={g.name} className={`name ${g.fontClass}`} />
-        <div className="row">
-          <span className="st">{g.blurb}</span>
-        </div>
-      </div>
-    </Link>
-  );
-}
-
 export function TheFloor() {
   const [filter, setFilter] = useState('all');
-  const games = FLOOR_GAMES as unknown as FloorGameEntry[];
+  const games = FLOOR_GAMES;
 
   const shelves = FLOOR_FAMILIES
     .filter((fam) => filter === 'all' || filter === fam.f)
@@ -683,7 +639,7 @@ export function TheFloor() {
           </div>
           <div className="floor-grid">
             {shelf.games.map((g) => (
-              <FloorCard key={g.key} g={g} />
+              <GameTile key={g.key} game={g} />
             ))}
           </div>
         </div>
@@ -1001,8 +957,8 @@ export function WeeklyDrop({
   return (
     <section className="jackpot" id="weeklyDrop">
       <div className="soon">{statusPill}</div>
-      <h2>
-        THE WEEKLY <span>DROP</span>
+      <h2 className="jp-logo">
+        <img src="/home2/drop-logo.webp" alt="The Weekly Drop" width={800} height={400} />
       </h2>
       <div className="jp-num" id="jpNum">
         {potVal.toLocaleString('en-US')}
