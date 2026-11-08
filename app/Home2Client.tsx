@@ -7,7 +7,6 @@ import { useRouter } from 'next/navigation'
 import { useAccount, useDisconnect } from 'wagmi'
 import { useAppKit } from '@reown/appkit/react'
 import { useQueryClient } from '@tanstack/react-query'
-import { SceneDefs } from '@/components/home2/scenes'
 import {
   HomeTicker,
   HeroPlayer,
@@ -262,7 +261,6 @@ export default function Home2Client() {
 
   return (
     <div className={`home2${navOpen ? ' nav-open' : ''}`} data-mode={mode}>
-      <SceneDefs />
       {/* First visit only — it stores a versioned flag and never returns. */}
       <WhatsNewSplash />
       <div className="app">

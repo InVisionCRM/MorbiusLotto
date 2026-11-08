@@ -17,9 +17,8 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import Link from 'next/link';
-import { FLOOR_GAMES, FAMILY_MARK } from './scenes';
-import { CurvedName } from './curved-name';
+import { FLOOR_GAMES } from './scenes';
+import { GameTile, type TileBadge } from './game-tile';
 
 /** How many of the newest games the rail carries. */
 const RAIL_SIZE = 10;
@@ -32,12 +31,12 @@ function daysSince(iso: string, now: number): number {
   return Math.floor((now - t) / 86_400_000);
 }
 
-/** "NEW" for the first fortnight, then a quiet age stamp. */
-function freshness(iso: string, now: number): { label: string; hot: boolean } | null {
+/** "New" for the first fortnight, then a quiet age stamp. */
+function freshness(iso: string, now: number): TileBadge | null {
   const d = daysSince(iso, now);
   if (!Number.isFinite(d)) return null;
-  if (d <= 14) return { label: 'NEW', hot: true };
-  if (d <= 60) return { label: `${Math.max(1, Math.round(d / 7))}w ago`, hot: false };
+  if (d <= 14) return { kind: 'new', label: 'New' };
+  if (d <= 60) return { kind: 'age', label: `${Math.max(1, Math.round(d / 7))}w ago` };
   return null;
 }
 
@@ -65,7 +64,7 @@ export function NewGames() {
   const step = useCallback(() => {
     const el = trackRef.current;
     if (!el) return;
-    const card = el.querySelector<HTMLElement>('.ng-card');
+    const card = el.querySelector<HTMLElement>('.game-tile');
     if (!card) return;
     const gap = parseFloat(getComputedStyle(el).columnGap || '0') || 0;
     const stride = card.offsetWidth + gap;
@@ -102,30 +101,11 @@ export function NewGames() {
         onFocusCapture={() => setPaused(true)}
         onBlurCapture={() => setPaused(false)}
       >
-        {games.map((g) => {
-          const fresh = now == null ? null : freshness(g.addedAt, now);
-          const style = {
-            '--name-size': g.nameSize,
-            ...(g.glow ? { '--glow': g.glow } : {}),
-          } as React.CSSProperties;
-          return (
-            <Link key={g.key} href={g.href} className="ng-card scene-card" style={style}>
-              {fresh && <span className={`badge ${fresh.hot ? 'new' : 'feat'}`}>{fresh.label}</span>}
-              <span className="wm" aria-hidden="true">
-                {FAMILY_MARK[g.family]}
-              </span>
-              <div className="stage">
-                <g.Scene />
-              </div>
-              <div className="meta">
-                <CurvedName text={g.name} className={`name ${g.fontClass}`} />
-                <div className="row">
-                  <span className="st">{g.blurb}</span>
-                </div>
-              </div>
-            </Link>
-          );
-        })}
+        {games.map((g) => (
+          /* The rail's ribbon is about recency; until the date is known on
+             the client it shows none, so server and first render agree. */
+          <GameTile key={g.key} game={g} badge={now == null ? null : freshness(g.addedAt, now) ?? g.badge ?? null} />
+        ))}
       </div>
     </section>
   );
