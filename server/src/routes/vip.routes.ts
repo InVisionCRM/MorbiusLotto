@@ -53,12 +53,17 @@ export function registerVipRoutes({ app, vipService, authService }: RegisterVipR
 
   // GET /api/vip/tier/:address — public: one wallet's current tier (avatar badges, profiles).
   app.get('/api/vip/tier/:address', async (req: Request, res: Response) => {
+    const address = req.params.address.trim();
+    if (!/^0x[a-fA-F0-9]{40}$/.test(address)) {
+      res.status(400).json({ error: 'Invalid address' });
+      return;
+    }
     try {
-      const tier = await vipService.getTierForAddress(req.params.address);
+      const tier = await vipService.getTierForAddress(address);
       sendJson(res, tier);
     } catch (error) {
       logger.error('[VIP] tier lookup failed', error);
-      res.status(400).json({ error: 'Invalid address' });
+      res.status(500).json({ error: 'Internal server error' });
     }
   });
 
