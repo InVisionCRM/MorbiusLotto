@@ -122,6 +122,7 @@ function apiBase(): string {
 
 export async function fetchMinesInfo(): Promise<MinesInfo> {
   const r = await fetch(`${apiBase()}/api/arcade/mines/info`);
+  if (!r.ok) throw new Error(`fetchMinesInfo failed: HTTP ${r.status}`);
   const j = await r.json();
   return j as MinesInfo;
 }

@@ -112,6 +112,7 @@ function apiBase(): string {
 
 export async function fetchCrashInfo(): Promise<CrashInfo> {
   const r = await fetch(`${apiBase()}/api/arcade/crash/info`);
+  if (!r.ok) throw new Error(`fetchCrashInfo failed: HTTP ${r.status}`);
   const j = await r.json();
   return j as CrashInfo;
 }
@@ -149,12 +150,14 @@ export async function fetchCrashHistory(limit = 25): Promise<CrashHistoryRound[]
 
 export async function fetchCrashRecent(limit = 25): Promise<CrashRecentRound[]> {
   const r = await fetch(`${apiBase()}/api/arcade/crash/recent?limit=${limit}`);
+  if (!r.ok) throw new Error(`fetchCrashRecent failed: HTTP ${r.status}`);
   const j = await r.json();
   return (j.rounds ?? []) as CrashRecentRound[];
 }
 
 export async function fetchCrashLeaderboard(limit = 10): Promise<CrashLeaderboardEntry[]> {
   const r = await fetch(`${apiBase()}/api/arcade/crash/leaderboard?limit=${limit}`);
+  if (!r.ok) throw new Error(`fetchCrashLeaderboard failed: HTTP ${r.status}`);
   const j = await r.json();
   return (j.players ?? []) as CrashLeaderboardEntry[];
 }

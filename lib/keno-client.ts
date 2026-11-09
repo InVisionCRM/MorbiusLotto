@@ -85,12 +85,14 @@ function apiBase(): string {
 
 export async function fetchKenoInfo(): Promise<KenoInfo> {
   const r = await fetch(`${apiBase()}/api/keno/info`);
+  if (!r.ok) throw new Error(`fetchKenoInfo failed: HTTP ${r.status}`);
   const j = await r.json();
   return j as KenoInfo;
 }
 
 export async function fetchKenoMultipliers(): Promise<KenoMultipliers> {
   const r = await fetch(`${apiBase()}/api/keno/multipliers`);
+  if (!r.ok) throw new Error(`fetchKenoMultipliers failed: HTTP ${r.status}`);
   const j = await r.json();
   return j.multipliersX100 as KenoMultipliers;
 }

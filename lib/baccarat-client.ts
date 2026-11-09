@@ -319,6 +319,7 @@ function apiBase(): string {
 
 export async function fetchBaccaratInfo(): Promise<BaccaratInfo> {
   const r = await fetch(`${apiBase()}/api/arcade/baccarat/info`);
+  if (!r.ok) throw new Error(`fetchBaccaratInfo failed: HTTP ${r.status}`);
   const j = await r.json();
   return j as BaccaratInfo;
 }
@@ -343,12 +344,14 @@ export async function fetchBaccaratHistory(limit = 25): Promise<BaccaratHistoryH
 
 export async function fetchBaccaratRecent(limit = 25): Promise<BaccaratRecentHand[]> {
   const r = await fetch(`${apiBase()}/api/arcade/baccarat/recent?limit=${limit}`);
+  if (!r.ok) throw new Error(`fetchBaccaratRecent failed: HTTP ${r.status}`);
   const j = await r.json();
   return (j.hands ?? []) as BaccaratRecentHand[];
 }
 
 export async function fetchBaccaratLeaderboard(limit = 10): Promise<BaccaratLeaderboardEntry[]> {
   const r = await fetch(`${apiBase()}/api/arcade/baccarat/leaderboard?limit=${limit}`);
+  if (!r.ok) throw new Error(`fetchBaccaratLeaderboard failed: HTTP ${r.status}`);
   const j = await r.json();
   return (j.players ?? []) as BaccaratLeaderboardEntry[];
 }

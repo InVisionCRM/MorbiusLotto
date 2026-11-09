@@ -216,6 +216,7 @@ function apiBase(): string {
 
 export async function fetchUthInfo(): Promise<UthInfo> {
   const r = await fetch(`${apiBase()}/api/arcade/ultimate-holdem/info`);
+  if (!r.ok) throw new Error(`fetchUthInfo failed: HTTP ${r.status}`);
   return (await r.json()) as UthInfo;
 }
 

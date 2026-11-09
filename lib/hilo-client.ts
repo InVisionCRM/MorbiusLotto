@@ -226,6 +226,7 @@ function apiBase(): string {
 
 export async function fetchHiLoInfo(): Promise<HiLoInfo> {
   const r = await fetch(`${apiBase()}/api/arcade/hilo/info`);
+  if (!r.ok) throw new Error(`fetchHiLoInfo failed: HTTP ${r.status}`);
   const j = await r.json();
   return j as HiLoInfo;
 }
@@ -272,12 +273,14 @@ export async function fetchHiLoHistory(limit = 25): Promise<HiLoHistoryRound[]> 
 
 export async function fetchHiLoRecent(limit = 25): Promise<HiLoRecentRound[]> {
   const r = await fetch(`${apiBase()}/api/arcade/hilo/recent?limit=${limit}`);
+  if (!r.ok) throw new Error(`fetchHiLoRecent failed: HTTP ${r.status}`);
   const j = await r.json();
   return (j.rounds ?? []) as HiLoRecentRound[];
 }
 
 export async function fetchHiLoLeaderboard(limit = 10): Promise<HiLoLeaderboardEntry[]> {
   const r = await fetch(`${apiBase()}/api/arcade/hilo/leaderboard?limit=${limit}`);
+  if (!r.ok) throw new Error(`fetchHiLoLeaderboard failed: HTTP ${r.status}`);
   const j = await r.json();
   return (j.players ?? []) as HiLoLeaderboardEntry[];
 }

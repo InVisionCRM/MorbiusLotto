@@ -86,12 +86,14 @@ function apiBase(): string {
 
 export async function fetchPlinkoInfo(): Promise<PlinkoInfo> {
   const r = await fetch(`${apiBase()}/api/plinko/info`);
+  if (!r.ok) throw new Error(`fetchPlinkoInfo failed: HTTP ${r.status}`);
   const j = await r.json();
   return j as PlinkoInfo;
 }
 
 export async function fetchPlinkoMultipliers(): Promise<PlinkoMultipliers> {
   const r = await fetch(`${apiBase()}/api/plinko/multipliers`);
+  if (!r.ok) throw new Error(`fetchPlinkoMultipliers failed: HTTP ${r.status}`);
   const j = await r.json();
   return j.multipliersX100 as PlinkoMultipliers;
 }
@@ -161,6 +163,7 @@ export interface PlinkoRecentBall {
 
 export async function fetchPlinkoRecent(limit = 25): Promise<PlinkoRecentBall[]> {
   const r = await fetch(`${apiBase()}/api/plinko/recent?limit=${limit}`);
+  if (!r.ok) throw new Error(`fetchPlinkoRecent failed: HTTP ${r.status}`);
   const j = await r.json();
   return (j.rounds ?? []) as PlinkoRecentBall[];
 }
@@ -176,6 +179,7 @@ export interface PlinkoLeaderboardEntry {
 
 export async function fetchPlinkoLeaderboard(limit = 10): Promise<PlinkoLeaderboardEntry[]> {
   const r = await fetch(`${apiBase()}/api/plinko/leaderboard?limit=${limit}`);
+  if (!r.ok) throw new Error(`fetchPlinkoLeaderboard failed: HTTP ${r.status}`);
   const j = await r.json();
   return (j.players ?? []) as PlinkoLeaderboardEntry[];
 }

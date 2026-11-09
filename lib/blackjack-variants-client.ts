@@ -339,6 +339,7 @@ export async function fetchBjInfo(variant: BjVariant): Promise<BjInfo> {
   const r = await fetch(
     `${apiBase()}/api/arcade/blackjack-variants/info?variant=${encodeURIComponent(variant)}`,
   );
+  if (!r.ok) throw new Error(`fetchBjInfo failed: HTTP ${r.status}`);
   return (await r.json()) as BjInfo;
 }
 

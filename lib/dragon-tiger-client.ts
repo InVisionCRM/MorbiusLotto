@@ -152,6 +152,7 @@ function apiBase(): string {
 
 export async function fetchDragonTigerInfo(): Promise<DragonTigerInfo> {
   const r = await fetch(`${apiBase()}/api/arcade/dragon-tiger/info`);
+  if (!r.ok) throw new Error(`fetchDragonTigerInfo failed: HTTP ${r.status}`);
   const j = await r.json();
   return j as DragonTigerInfo;
 }
@@ -176,6 +177,7 @@ export async function fetchDragonTigerHistory(limit = 25): Promise<DragonTigerHi
 
 export async function fetchDragonTigerRecent(limit = 25): Promise<DragonTigerRecentRound[]> {
   const r = await fetch(`${apiBase()}/api/arcade/dragon-tiger/recent?limit=${limit}`);
+  if (!r.ok) throw new Error(`fetchDragonTigerRecent failed: HTTP ${r.status}`);
   const j = await r.json();
   return (j.rounds ?? []) as DragonTigerRecentRound[];
 }
@@ -184,6 +186,7 @@ export async function fetchDragonTigerLeaderboard(
   limit = 10,
 ): Promise<DragonTigerLeaderboardEntry[]> {
   const r = await fetch(`${apiBase()}/api/arcade/dragon-tiger/leaderboard?limit=${limit}`);
+  if (!r.ok) throw new Error(`fetchDragonTigerLeaderboard failed: HTTP ${r.status}`);
   const j = await r.json();
   return (j.players ?? []) as DragonTigerLeaderboardEntry[];
 }

@@ -220,12 +220,14 @@ export async function fetchTowersHistory(limit = 25): Promise<TowersHistoryRound
 
 export async function fetchTowersRecent(limit = 25): Promise<TowersRecentRound[]> {
   const r = await fetch(`${apiBase()}/api/arcade/towers/recent?limit=${limit}`);
+  if (!r.ok) throw new Error(`fetchTowersRecent failed: HTTP ${r.status}`);
   const j = await r.json();
   return (j.rounds ?? []) as TowersRecentRound[];
 }
 
 export async function fetchTowersLeaderboard(limit = 10): Promise<TowersLeaderboardEntry[]> {
   const r = await fetch(`${apiBase()}/api/arcade/towers/leaderboard?limit=${limit}`);
+  if (!r.ok) throw new Error(`fetchTowersLeaderboard failed: HTTP ${r.status}`);
   const j = await r.json();
   return (j.players ?? []) as TowersLeaderboardEntry[];
 }

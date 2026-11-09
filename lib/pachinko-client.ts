@@ -129,6 +129,7 @@ function apiBase(): string {
 
 export async function fetchPachinkoInfo(): Promise<PachinkoInfo> {
   const r = await fetch(`${apiBase()}/api/arcade/pachinko/info`);
+  if (!r.ok) throw new Error(`fetchPachinkoInfo failed: HTTP ${r.status}`);
   const j = await r.json();
   return j as PachinkoInfo;
 }
@@ -154,12 +155,14 @@ export async function fetchPachinkoHistory(limit = 25): Promise<PachinkoHistoryR
 
 export async function fetchPachinkoRecent(limit = 25): Promise<PachinkoRecentDrop[]> {
   const r = await fetch(`${apiBase()}/api/arcade/pachinko/recent?limit=${limit}`);
+  if (!r.ok) throw new Error(`fetchPachinkoRecent failed: HTTP ${r.status}`);
   const j = await r.json();
   return (j.rounds ?? []) as PachinkoRecentDrop[];
 }
 
 export async function fetchPachinkoLeaderboard(limit = 10): Promise<PachinkoLeaderboardEntry[]> {
   const r = await fetch(`${apiBase()}/api/arcade/pachinko/leaderboard?limit=${limit}`);
+  if (!r.ok) throw new Error(`fetchPachinkoLeaderboard failed: HTTP ${r.status}`);
   const j = await r.json();
   return (j.players ?? []) as PachinkoLeaderboardEntry[];
 }

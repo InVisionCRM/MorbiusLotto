@@ -188,6 +188,7 @@ function apiBase(): string {
 
 export async function fetchFirewalkInfo(): Promise<FirewalkInfo> {
   const r = await fetch(`${apiBase()}/api/arcade/firewalk/info`);
+  if (!r.ok) throw new Error(`fetchFirewalkInfo failed: HTTP ${r.status}`);
   const j = await r.json();
   return j as FirewalkInfo;
 }
@@ -238,12 +239,14 @@ export async function fetchFirewalkHistory(limit = 25): Promise<FirewalkHistoryR
 
 export async function fetchFirewalkRecent(limit = 25): Promise<FirewalkRecentRound[]> {
   const r = await fetch(`${apiBase()}/api/arcade/firewalk/recent?limit=${limit}`);
+  if (!r.ok) throw new Error(`fetchFirewalkRecent failed: HTTP ${r.status}`);
   const j = await r.json();
   return (j.rounds ?? []) as FirewalkRecentRound[];
 }
 
 export async function fetchFirewalkLeaderboard(limit = 10): Promise<FirewalkLeaderboardEntry[]> {
   const r = await fetch(`${apiBase()}/api/arcade/firewalk/leaderboard?limit=${limit}`);
+  if (!r.ok) throw new Error(`fetchFirewalkLeaderboard failed: HTTP ${r.status}`);
   const j = await r.json();
   return (j.players ?? []) as FirewalkLeaderboardEntry[];
 }

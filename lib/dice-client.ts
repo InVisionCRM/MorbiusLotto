@@ -103,6 +103,7 @@ function apiBase(): string {
 
 export async function fetchDiceInfo(): Promise<DiceInfo> {
   const r = await fetch(`${apiBase()}/api/arcade/dice/info`);
+  if (!r.ok) throw new Error(`fetchDiceInfo failed: HTTP ${r.status}`);
   const j = await r.json();
   return j as DiceInfo;
 }
@@ -128,12 +129,14 @@ export async function fetchDiceHistory(limit = 25): Promise<DiceHistoryRound[]> 
 
 export async function fetchDiceRecent(limit = 25): Promise<DiceRecentRoll[]> {
   const r = await fetch(`${apiBase()}/api/arcade/dice/recent?limit=${limit}`);
+  if (!r.ok) throw new Error(`fetchDiceRecent failed: HTTP ${r.status}`);
   const j = await r.json();
   return (j.rounds ?? []) as DiceRecentRoll[];
 }
 
 export async function fetchDiceLeaderboard(limit = 10): Promise<DiceLeaderboardEntry[]> {
   const r = await fetch(`${apiBase()}/api/arcade/dice/leaderboard?limit=${limit}`);
+  if (!r.ok) throw new Error(`fetchDiceLeaderboard failed: HTTP ${r.status}`);
   const j = await r.json();
   return (j.players ?? []) as DiceLeaderboardEntry[];
 }

@@ -145,7 +145,10 @@ export function ThreeCardPokerGame() {
         setInfo(i);
         setAnte((a) => Math.min(Math.max(a, i.minBet), i.maxBet));
       })
-      .catch(() => {});
+      .catch((e) => {
+        console.error('[ThreeCardPoker] info load failed', e);
+        setError('Couldn’t load the game settings — refresh the page to try again.');
+      });
   }, []);
 
   const loadMyHistory = useCallback(() => {

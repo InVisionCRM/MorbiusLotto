@@ -182,6 +182,7 @@ function apiBase(): string {
 
 export async function fetchHeistInfo(): Promise<HeistInfo> {
   const r = await fetch(`${apiBase()}/api/arcade/heist/info`);
+  if (!r.ok) throw new Error(`fetchHeistInfo failed: HTTP ${r.status}`);
   const j = await r.json();
   return j as HeistInfo;
 }
@@ -226,12 +227,14 @@ export async function fetchHeistHistory(limit = 25): Promise<HeistHistoryRound[]
 
 export async function fetchHeistRecent(limit = 25): Promise<HeistRecentRound[]> {
   const r = await fetch(`${apiBase()}/api/arcade/heist/recent?limit=${limit}`);
+  if (!r.ok) throw new Error(`fetchHeistRecent failed: HTTP ${r.status}`);
   const j = await r.json();
   return (j.rounds ?? []) as HeistRecentRound[];
 }
 
 export async function fetchHeistLeaderboard(limit = 10): Promise<HeistLeaderboardEntry[]> {
   const r = await fetch(`${apiBase()}/api/arcade/heist/leaderboard?limit=${limit}`);
+  if (!r.ok) throw new Error(`fetchHeistLeaderboard failed: HTTP ${r.status}`);
   const j = await r.json();
   return (j.players ?? []) as HeistLeaderboardEntry[];
 }

@@ -122,7 +122,10 @@ export function StakeRouletteGame() {
   useEffect(() => {
     fetchRoulette2Info()
       .then(setInfo)
-      .catch(() => {});
+      .catch((e) => {
+        console.error('[StakeRoulette] info load failed', e);
+        setError('Couldn’t load the game settings — refresh the page to try again.');
+      });
     fetchRoulette2Recent(RECENT_NUMBERS_LIMIT)
       .then((spins) => setRecentNumbers(spins.map((s) => s.result)))
       .catch(() => {});

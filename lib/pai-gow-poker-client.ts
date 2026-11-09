@@ -515,6 +515,7 @@ function apiBase(): string {
 
 export async function fetchPaiGowInfo(): Promise<PaiGowInfo> {
   const r = await fetch(`${apiBase()}/api/arcade/pai-gow-poker/info`);
+  if (!r.ok) throw new Error(`fetchPaiGowInfo failed: HTTP ${r.status}`);
   const j = await r.json();
   return j as PaiGowInfo;
 }
@@ -547,12 +548,14 @@ export async function fetchPaiGowHistory(limit = 25): Promise<PaiGowHistoryRound
 
 export async function fetchPaiGowRecent(limit = 25): Promise<PaiGowRecentHand[]> {
   const r = await fetch(`${apiBase()}/api/arcade/pai-gow-poker/recent?limit=${limit}`);
+  if (!r.ok) throw new Error(`fetchPaiGowRecent failed: HTTP ${r.status}`);
   const j = await r.json();
   return (j.rounds ?? []) as PaiGowRecentHand[];
 }
 
 export async function fetchPaiGowLeaderboard(limit = 10): Promise<PaiGowLeaderboardEntry[]> {
   const r = await fetch(`${apiBase()}/api/arcade/pai-gow-poker/leaderboard?limit=${limit}`);
+  if (!r.ok) throw new Error(`fetchPaiGowLeaderboard failed: HTTP ${r.status}`);
   const j = await r.json();
   return (j.players ?? []) as PaiGowLeaderboardEntry[];
 }

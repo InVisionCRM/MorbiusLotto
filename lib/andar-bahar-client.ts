@@ -155,6 +155,7 @@ function apiBase(): string {
 
 export async function fetchAndarBaharInfo(): Promise<AndarBaharInfo> {
   const r = await fetch(`${apiBase()}/api/arcade/andar-bahar/info`);
+  if (!r.ok) throw new Error(`fetchAndarBaharInfo failed: HTTP ${r.status}`);
   const j = await r.json();
   return j as AndarBaharInfo;
 }
@@ -180,12 +181,14 @@ export async function fetchAndarBaharHistory(limit = 25): Promise<AndarBaharHist
 
 export async function fetchAndarBaharRecent(limit = 25): Promise<AndarBaharRecentRound[]> {
   const r = await fetch(`${apiBase()}/api/arcade/andar-bahar/recent?limit=${limit}`);
+  if (!r.ok) throw new Error(`fetchAndarBaharRecent failed: HTTP ${r.status}`);
   const j = await r.json();
   return (j.rounds ?? []) as AndarBaharRecentRound[];
 }
 
 export async function fetchAndarBaharLeaderboard(limit = 10): Promise<AndarBaharLeaderboardEntry[]> {
   const r = await fetch(`${apiBase()}/api/arcade/andar-bahar/leaderboard?limit=${limit}`);
+  if (!r.ok) throw new Error(`fetchAndarBaharLeaderboard failed: HTTP ${r.status}`);
   const j = await r.json();
   return (j.players ?? []) as AndarBaharLeaderboardEntry[];
 }

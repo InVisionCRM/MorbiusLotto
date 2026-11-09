@@ -280,6 +280,7 @@ function apiBase(): string {
 
 export async function fetchThreeCardInfo(): Promise<ThreeCardInfo> {
   const r = await fetch(`${apiBase()}/api/arcade/three-card-poker/info`);
+  if (!r.ok) throw new Error(`fetchThreeCardInfo failed: HTTP ${r.status}`);
   const j = await r.json();
   return j as ThreeCardInfo;
 }
@@ -321,12 +322,14 @@ export async function fetchThreeCardHistory(limit = 25): Promise<ThreeCardHistor
 
 export async function fetchThreeCardRecent(limit = 25): Promise<ThreeCardRecentHand[]> {
   const r = await fetch(`${apiBase()}/api/arcade/three-card-poker/recent?limit=${limit}`);
+  if (!r.ok) throw new Error(`fetchThreeCardRecent failed: HTTP ${r.status}`);
   const j = await r.json();
   return (j.rounds ?? []) as ThreeCardRecentHand[];
 }
 
 export async function fetchThreeCardLeaderboard(limit = 10): Promise<ThreeCardLeaderboardEntry[]> {
   const r = await fetch(`${apiBase()}/api/arcade/three-card-poker/leaderboard?limit=${limit}`);
+  if (!r.ok) throw new Error(`fetchThreeCardLeaderboard failed: HTTP ${r.status}`);
   const j = await r.json();
   return (j.players ?? []) as ThreeCardLeaderboardEntry[];
 }
