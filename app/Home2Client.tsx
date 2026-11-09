@@ -207,8 +207,10 @@ export default function Home2Client() {
     const toNext = Math.max(0, target - wagered)
     const winners: WeeklyDropWinner[] = drop.lastWinners.map((w) => {
       const name = w.displayName ?? shortAddress(w.address)
+      // Address-only winners: initial is the first hex digit after "0x", not the "0".
+      const initialFrom = w.displayName ?? w.address.slice(2)
       return {
-        letter: (name[0] ?? '?').toUpperCase(),
+        letter: (initialFrom[0] ?? '?').toUpperCase(),
         name,
         amount: Number(w.amountChips).toLocaleString('en-US'),
         gradient: DROP_WINNER_GRADIENTS[Math.min(Math.max(w.rank, 1), 3) - 1],
@@ -216,7 +218,8 @@ export default function Home2Client() {
     })
     return {
       pot: Number(drop.draw.potChips),
-      statusPill: `🎟 DROP #${drop.draw.id} · LIVE`,
+      // drop.draw.id is a database UUID — meaningless to players, so it isn't shown.
+      statusPill: '🎟 DROP · LIVE',
       accruedNote: (() => {
         const accrued = Number(drop.draw.accruedChips ?? 0)
         const guaranteed = Number(drop.draw.guaranteedMin)
@@ -331,6 +334,8 @@ export default function Home2Client() {
               progress={weeklyDrop.progress}
               entriesSub={weeklyDrop.entriesSub}
               winners={weeklyDrop.winners}
+              totalEntrants={weeklyDrop.totalEntrants}
+              onViewEntrants={() => setEntrantsOpen(true)}
             />
           ) : (
             <WeeklyDrop entries={0} progress={0} entriesSub={<>The Weekly Drop is lighting soon — every 1,000 MORBIUS you play will be a ticket.</>} winners={[]} />
@@ -421,6 +426,7 @@ export default function Home2Client() {
         statusPill={weeklyDrop?.statusPill}
       />
       <ChartModal open={chartOpen} onClose={() => setChartOpen(false)} />
+      <EntrantsModal open={entrantsOpen} onClose={() => setEntrantsOpen(false)} />
       {walletModalOpen && <GameWalletModal isOpen={walletModalOpen} onClose={() => setWalletModalOpen(false)} />}
     </div>
   )
