@@ -20,12 +20,12 @@ interface PromoTier {
 
 /** Matches the seeded ladder — used until the live /api/vip/config responds. */
 const FALLBACK_TIERS: PromoTier[] = [
-  { tierLevel: 1, tierName: 'Bronze', color: '#cd7f32', rakebackBps: 5 },
-  { tierLevel: 2, tierName: 'Silver', color: '#c0c0c0', rakebackBps: 8 },
-  { tierLevel: 3, tierName: 'Gold', color: '#f5c542', rakebackBps: 12 },
-  { tierLevel: 4, tierName: 'Platinum', color: '#5fd0c5', rakebackBps: 16 },
-  { tierLevel: 5, tierName: 'Diamond', color: '#5ea0ff', rakebackBps: 20 },
-  { tierLevel: 6, tierName: 'Obsidian', color: '#7c5cff', rakebackBps: 25 },
+  { tierLevel: 1, tierName: 'Bronze', color: '#cd7f32', rakebackBps: 500 },
+  { tierLevel: 2, tierName: 'Silver', color: '#c0c0c0', rakebackBps: 800 },
+  { tierLevel: 3, tierName: 'Gold', color: '#f5c542', rakebackBps: 1200 },
+  { tierLevel: 4, tierName: 'Platinum', color: '#5fd0c5', rakebackBps: 1600 },
+  { tierLevel: 5, tierName: 'Diamond', color: '#5ea0ff', rakebackBps: 2000 },
+  { tierLevel: 6, tierName: 'Obsidian', color: '#7c5cff', rakebackBps: 2500 },
 ]
 
 const BENEFITS = [
