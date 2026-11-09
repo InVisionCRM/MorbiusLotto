@@ -123,7 +123,10 @@ export function StakeTowersGame() {
         setInfo(i);
         setBet((b) => Math.min(Math.max(b, i.minBet), i.maxBet));
       })
-      .catch(() => {});
+      .catch((e) => {
+        console.error('[towers] info load failed', e);
+        setError('Couldn’t load the game settings — refresh the page to try again.');
+      });
   }, []);
 
   const loadMyHistory = useCallback(() => {
@@ -486,7 +489,7 @@ export function StakeTowersGame() {
             <div className="flex items-center justify-between">
               <span className="text-xs uppercase tracking-wide text-slate-500">Bet</span>
               <span className="text-[11px] text-slate-600">
-                {minBet.toLocaleString()}–{maxBet.toLocaleString()}
+                {info ? `${info.minBet.toLocaleString()}–${info.maxBet.toLocaleString()}` : '—'}
               </span>
             </div>
             <input

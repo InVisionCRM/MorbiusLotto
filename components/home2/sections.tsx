@@ -89,19 +89,16 @@ function useEmbers(canvasRef: React.RefObject<HTMLCanvasElement | null>) {
 /* ────────────────────────────────────────────────────────────
    1. TICKER — cumulative + highlight events
    ──────────────────────────────────────────────────────────── */
-const DEFAULT_TICKER_ITEMS = [
-  '<b class="g">🏆 WEEKLY HIGH</b> <b>48,200</b> on Plinko — MorbKing',
-  '<b class="e">▲ PRICE</b> MORBIUS $0.00042 · +6.2% 24h',
-  '<b class="g">💎 ALL-TIME</b> biggest Crash cashout <b>×124</b>',
-  '<b class="c">👑 RANK UP</b> pTIGER hit GOLD — 12% rakeback',
-  '<b class="o">🎁 RAKEBACK</b> 84,300 MORBIUS paid back to players',
-  '<b class="c">🃏 TABLES</b> Blackjack #4 · 3 seats open now',
-  '<b class="g">🎟 WEEKLY DROP</b> top 3 win every Sunday 8PM ET',
-];
+/* Every item comes from the page (live wins + standing facts) — the ticker
+ * never invents an event. A short list is repeated so the track is still
+ * wider than the screen, then doubled for the seamless loop. */
+const TICKER_MIN_ITEMS = 8;
 
-export function HomeTicker({ items = DEFAULT_TICKER_ITEMS }: { items?: string[] }) {
-  /* duplicate the sequence for a seamless loop, exactly like the lab */
-  const doubled = [...items, ...items];
+export function HomeTicker({ items }: { items: string[] }) {
+  if (items.length === 0) throw new Error('HomeTicker needs at least one item');
+  const filled: string[] = [];
+  while (filled.length < TICKER_MIN_ITEMS) filled.push(...items);
+  const doubled = [...filled, ...filled];
   return (
     <div className="ticker">
       <div className="ticker-track" id="tickerTrack">
@@ -863,26 +860,18 @@ export interface WeeklyDropWinner {
   gradient: string;
 }
 
-const DEFAULT_WINNERS: WeeklyDropWinner[] = [
-  { letter: 'M', name: 'MorbKing', amount: '15,000', gradient: 'radial-gradient(circle at 32% 28%,#fde68a,#f59e0b)' },
-  { letter: 'P', name: 'pTIGER', amount: '6,250', gradient: 'radial-gradient(circle at 32% 28%,#a5f3fc,#0891b2)' },
-  { letter: 'L', name: 'LuckyPLS', amount: '3,750', gradient: 'radial-gradient(circle at 32% 28%,#c4b5fd,#7c3aed)' },
-];
-
 export interface WeeklyDropProps {
   /** Small line under the unit row, e.g. '+142 fed by bets this week'. */
   accruedNote?: string | null;
   pot?: number;
-  entries?: number;
-  progress?: number;
-  entriesSub?: React.ReactNode;
-  winners?: WeeklyDropWinner[];
+  entries: number;
+  progress: number;
+  entriesSub: React.ReactNode;
+  winners: WeeklyDropWinner[];
   /** Pill text above the title (e.g. '🎟 DROP #12 · LIVE'). */
   statusPill?: string;
   /** When provided, count down to this instant instead of the computed next Sunday 8PM. */
   countdownTo?: Date;
-  /** When true, the pot is real: skip the fake drip interval and just show `pot`. */
-  potLive?: boolean;
   /**
    * Players holding ≥ 1 entry in the open draw. When set (backend live), a
    * "N players entered · View entrants" line shows under the jp-you card in
@@ -898,37 +887,19 @@ export interface WeeklyDropProps {
 const nextDrop = nextSundayDropUtc;
 
 export function WeeklyDrop({
+  // 25,000 is the guaranteed weekly minimum — the pot shown before a draw opens.
+  // Only the server ever changes this number; nothing here animates it.
   pot = 25000,
-  entries = 14,
-  progress = 68,
-  entriesSub = (
-    <>
-      <b style={{ color: 'var(--gold)' }}>320 MORBIUS</b> wagered to your next entry · +1 free entry for signing in
-      today ✓
-    </>
-  ),
-  winners = DEFAULT_WINNERS,
+  entries,
+  progress,
+  entriesSub,
+  winners,
   statusPill = '🎟 LIGHTING SOON',
   countdownTo,
-  potLive = false,
   totalEntrants = null,
   onViewEntrants,
   accruedNote = null,
 }: WeeklyDropProps) {
-  const [potVal, setPotVal] = useState(pot);
-  useEffect(() => {
-    setPotVal(pot);
-  }, [pot]);
-
-  /* lab: v += 1 + floor(random()*6) every 2200ms — disabled when the pot is live */
-  useEffect(() => {
-    if (potLive) return;
-    const id = setInterval(() => {
-      setPotVal((v) => v + 1 + Math.floor(Math.random() * 6));
-    }, 2200);
-    return () => clearInterval(id);
-  }, [potLive]);
-
   /* live countdown — to `countdownTo` when given, else next Sunday 20:00 (lab's tick()) */
   const countdownMs = countdownTo?.getTime();
   const [cd, setCd] = useState({ d: '0', h: '00', m: '00', s: '00' });
@@ -961,7 +932,7 @@ export function WeeklyDrop({
         <img src="/home2/drop-logo.webp" alt="The Weekly Drop" width={800} height={400} />
       </h2>
       <div className="jp-num" id="jpNum">
-        {potVal.toLocaleString('en-US')}
+        {pot.toLocaleString('en-US')}
       </div>
       <div className="jp-unit">MORBIUS · TOP 3 WIN EVERY SUNDAY · 8PM ET</div>
       {accruedNote && (

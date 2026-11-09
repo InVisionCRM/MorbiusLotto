@@ -176,6 +176,8 @@ function apiBase(): string {
 
 export async function fetchTowersInfo(): Promise<TowersInfo> {
   const r = await fetch(`${apiBase()}/api/arcade/towers/info`);
+  // An error body is not game info — reading it as TowersInfo crashed the page.
+  if (!r.ok) throw new Error(`Towers info request failed: HTTP ${r.status}`);
   const j = await r.json();
   return j as TowersInfo;
 }
