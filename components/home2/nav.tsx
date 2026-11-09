@@ -126,16 +126,24 @@ const MY_STUFF_LINKS: SbLinkItem[] = [
 /* HomeSidebar                                                          */
 /* ------------------------------------------------------------------ */
 
+/* Sub-cent token price: keep 3 significant digits ($0.000421), never exponent notation. */
+const USD_PRICE = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumSignificantDigits: 3 });
+
 export interface HomeSidebarProps {
   mode: 'player' | 'visitor';
-  balance?: string;
-  tierEmoji?: string;
-  tierName?: string;
-  tierRakeback?: string;
-  nextTier?: string;
-  nextRakeback?: string;
-  progressPct?: number;
-  wagerToNext?: string;
+  balance: string;
+  tierEmoji: string;
+  tierName: string;
+  tierRakeback: string;
+  /** Next ladder rung, or null when the player is already at the top tier. */
+  nextTier: string | null;
+  nextRakeback: string;
+  progressPct: number;
+  wagerToNext: string;
+  /** Largest win in the live recent-wins feed; null hides the row until it loads. */
+  recentHigh: number | null;
+  /** MORBIUS/USD from DexScreener; null hides the row until it loads. */
+  priceUsd: number | null;
   onConnect?: () => void;
   onDeposit?: () => void;
   onWithdraw?: () => void;
@@ -146,14 +154,16 @@ export interface HomeSidebarProps {
 
 export function HomeSidebar({
   mode,
-  balance = '128,400',
-  tierEmoji = '🥈',
-  tierName = 'SILVER',
-  tierRakeback = '8%',
-  nextTier = 'GOLD',
-  nextRakeback = '12%',
-  progressPct = 72,
-  wagerToNext = '2,450',
+  balance,
+  tierEmoji,
+  tierName,
+  tierRakeback,
+  nextTier,
+  nextRakeback,
+  progressPct,
+  wagerToNext,
+  recentHigh,
+  priceUsd,
   onConnect,
   onDeposit,
   onWithdraw,
@@ -212,15 +222,19 @@ export function HomeSidebar({
               <span className="cur">
                 {tierEmoji} {tierName} · {tierRakeback}
               </span>
-              <span className="next">
-                {nextTier} · {nextRakeback}
-              </span>
+              <span className="next">{nextTier ? `${nextTier} · ${nextRakeback}` : 'TOP TIER'}</span>
             </div>
             <div className="bar">
               <i style={{ width: `${progressPct}%` }}></i>
             </div>
             <div className="sub">
-              <b>{wagerToNext}</b> MORBIUS wagered to rank up
+              {nextTier ? (
+                <>
+                  <b>{wagerToNext}</b> MORBIUS wagered to rank up
+                </>
+              ) : (
+                <>Top of the ladder — the highest rakeback rate</>
+              )}
             </div>
           </div>
         )}
@@ -283,14 +297,18 @@ export function HomeSidebar({
         </details>
       </div>
       <div className="sb-foot">
-        <div className="r">
-          <span>🏆 Weekly high</span>
-          <b className="burn">48,200</b>
-        </div>
-        <div className="r">
-          <span>MORBIUS</span>
-          <b className="up">$0.00042 ▲</b>
-        </div>
+        {recentHigh != null && (
+          <div className="r">
+            <span>🏆 Recent high</span>
+            <b className="burn">{recentHigh.toLocaleString('en-US')}</b>
+          </div>
+        )}
+        {priceUsd != null && (
+          <div className="r">
+            <span>MORBIUS</span>
+            <b className="up">{USD_PRICE.format(priceUsd)}</b>
+          </div>
+        )}
         <div
           className="r"
           onClick={onChartClick}
@@ -321,7 +339,7 @@ export function HomeSidebar({
 /* ------------------------------------------------------------------ */
 
 export interface ChipDockProps {
-  balance?: string;
+  balance: string;
   /** Center gold chip — opens the side-nav drawer (the menu). */
   onChip?: () => void;
   /** GAMES slot — opens the GameLauncherSheet. */
@@ -336,7 +354,7 @@ export interface ChipDockProps {
 }
 
 export function ChipDock({
-  balance = '128,400',
+  balance,
   onChip,
   onGames,
   onDrop,

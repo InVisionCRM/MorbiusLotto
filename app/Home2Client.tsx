@@ -39,6 +39,7 @@ import { usePlayerServerBalance } from '@/hooks/use-player-server-balance'
 import { usePlatformAnalytics } from '@/hooks/use-platform-analytics'
 import { useLatestWins } from '@/hooks/use-latest-wins'
 import { useWeeklyDrop } from '@/hooks/use-weekly-drop'
+import { useTokenPriceUsd } from '@/hooks/use-token-price-usd'
 
 const GameWalletModal = dynamic(
   () => import('@/components/shared/GameWalletModal').then((m) => m.GameWalletModal),
@@ -64,7 +65,7 @@ function shortAddress(addr?: string): string {
   return addr ? `${addr.slice(0, 6)}…${addr.slice(-4)}` : ''
 }
 
-/* Rank 1/2/3 avatar gradients — same three as DEFAULT_WINNERS in sections.tsx */
+/* Rank 1/2/3 avatar gradients for the Weekly Drop's last winners */
 const DROP_WINNER_GRADIENTS = [
   'radial-gradient(circle at 32% 28%,#fde68a,#f59e0b)',
   'radial-gradient(circle at 32% 28%,#a5f3fc,#0891b2)',
@@ -115,6 +116,7 @@ export default function Home2Client() {
   const analytics = usePlatformAnalytics()
   const { wins } = useLatestWins()
   const weeklyDropQuery = useWeeklyDrop(address)
+  const morbiusUsd = useTokenPriceUsd() // defaults to the MORBIUS token
 
   const balanceStr = balanceQuery.data != null ? formatWholeMorbius(balanceQuery.data) : '0'
   const displayName = profileDisplayName ?? shortAddress(address) ?? 'Player'
@@ -179,7 +181,8 @@ export default function Home2Client() {
         ? `<b class="g">🎟 WEEKLY DROP</b> pot at ${Number(drop.draw.potChips).toLocaleString('en-US')} · top 3 win Sunday 8PM`
         : '<b class="g">🎟 WEEKLY DROP</b> lighting soon · top 3 win every Sunday 8PM'
     )
-    return items.length >= 4 ? items : undefined // fall back to defaults until data arrives
+    // Always real: live wins when the feed has them, plus the two standing facts above.
+    return items
   }, [wins, topWin, drop])
 
   // Resume card: the player's own most recent win from the live feed
@@ -270,9 +273,12 @@ export default function Home2Client() {
           tierEmoji={TIER_EMOJI[vip.tierName] ?? '🥉'}
           tierName={vip.tierName}
           tierRakeback={vip.rakeback}
-          nextTier={vip.nextName}
+          nextTier={vip.atTopTier ? null : vip.nextName}
+          nextRakeback={vip.nextRakeback}
           progressPct={vip.progressPct}
           wagerToNext={vip.wagerToNext}
+          recentHigh={topWin?.amount ?? null}
+          priceUsd={morbiusUsd}
           onConnect={onConnect}
           onDeposit={onDeposit}
           onWithdraw={onDeposit}
@@ -318,7 +324,7 @@ export default function Home2Client() {
           {weeklyDrop ? (
             <WeeklyDrop
               pot={weeklyDrop.pot}
-              potLive
+              accruedNote={weeklyDrop.accruedNote}
               statusPill={weeklyDrop.statusPill}
               countdownTo={weeklyDrop.countdownTo}
               entries={weeklyDrop.entries}

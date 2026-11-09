@@ -178,6 +178,8 @@ export async function fetchVideoPokerPaytable(
 ): Promise<VideoPokerPaytable> {
   const qs = variant ? `?variant=${encodeURIComponent(variant)}` : '';
   const r = await fetch(`${apiBase()}/api/video-poker/paytable${qs}`);
+  // An error body is not a paytable — reading it as one crashed the page.
+  if (!r.ok) throw new Error(`Video poker paytable request failed: HTTP ${r.status}`);
   const j = await r.json();
   return j as VideoPokerPaytable;
 }
