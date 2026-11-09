@@ -16,12 +16,12 @@ interface GuideTier {
 }
 
 const FALLBACK_TIERS: GuideTier[] = [
-  { tierLevel: 1, tierName: 'Bronze', color: '#cd7f32', rakebackBps: 5, minLifetimeWagerChips: '10000', levelUpBonusChips: '10' },
-  { tierLevel: 2, tierName: 'Silver', color: '#c0c0c0', rakebackBps: 8, minLifetimeWagerChips: '100000', levelUpBonusChips: '50' },
-  { tierLevel: 3, tierName: 'Gold', color: '#f5c542', rakebackBps: 12, minLifetimeWagerChips: '500000', levelUpBonusChips: '250' },
-  { tierLevel: 4, tierName: 'Platinum', color: '#5fd0c5', rakebackBps: 16, minLifetimeWagerChips: '2500000', levelUpBonusChips: '1500' },
-  { tierLevel: 5, tierName: 'Diamond', color: '#5ea0ff', rakebackBps: 20, minLifetimeWagerChips: '10000000', levelUpBonusChips: '7500' },
-  { tierLevel: 6, tierName: 'Obsidian', color: '#7c5cff', rakebackBps: 25, minLifetimeWagerChips: '50000000', levelUpBonusChips: '50000' },
+  { tierLevel: 1, tierName: 'Bronze', color: '#cd7f32', rakebackBps: 500, minLifetimeWagerChips: '10000', levelUpBonusChips: '10' },
+  { tierLevel: 2, tierName: 'Silver', color: '#c0c0c0', rakebackBps: 800, minLifetimeWagerChips: '100000', levelUpBonusChips: '50' },
+  { tierLevel: 3, tierName: 'Gold', color: '#f5c542', rakebackBps: 1200, minLifetimeWagerChips: '500000', levelUpBonusChips: '250' },
+  { tierLevel: 4, tierName: 'Platinum', color: '#5fd0c5', rakebackBps: 1600, minLifetimeWagerChips: '2500000', levelUpBonusChips: '1500' },
+  { tierLevel: 5, tierName: 'Diamond', color: '#5ea0ff', rakebackBps: 2000, minLifetimeWagerChips: '10000000', levelUpBonusChips: '7500' },
+  { tierLevel: 6, tierName: 'Obsidian', color: '#7c5cff', rakebackBps: 2500, minLifetimeWagerChips: '50000000', levelUpBonusChips: '50000' },
 ]
 
 function fmtCompact(v: string): string {

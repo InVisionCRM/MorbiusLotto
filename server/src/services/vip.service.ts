@@ -14,6 +14,9 @@
  *     chips and advances the cursor to NOW(); the max(0, …) clamp means a
  *     winning window simply accrues nothing — already-claimed rakeback is
  *     never clawed back.
+ *   - When a tier's rate has changed inside a player's window, each stretch is
+ *     paid at the rate in force for it (vip_rakeback_rate_history, migration
+ *     198): a rate change applies to losses from the change onward only.
  *   - A one-time LEVEL-UP BONUS is granted for every tier crossed above
  *     player_vip_state.highest_tier_awarded.
  *
@@ -21,7 +24,7 @@
  * 'vip_rakeback' / 'vip_tier_bonus'), mirroring holder rewards (migration 148).
  * Wager volume / chips are whole chips (1 chip = 1 MORBIUS); see poker-chip-scale.ts.
  *
- * Schema: migration 166_vip_rewards.sql.
+ * Schema: migrations 166_vip_rewards.sql, 198_vip_rakeback_rate_history.sql.
  */
 
 import type { Pool, PoolClient } from 'pg';
@@ -102,6 +105,19 @@ interface VipStateRow {
   lifetime_bonus_chips: string;
 }
 
+/** A tier's earlier rakeback rate, which applied to net loss up to `effectiveUntil`. Internal: never sent to clients. */
+interface RakebackRatePeriod {
+  bps: number;
+  effectiveUntil: Date;
+}
+
+/** One consistent snapshot of the ladder and its rate history (loaded together so they never disagree). */
+interface RateSnapshot {
+  tiers: VipTier[];
+  /** tier_level → earlier rates, ascending by effectiveUntil. */
+  history: Map<number, RakebackRatePeriod[]>;
+}
+
 function normalizeAddr(addr: string): string {
   const a = addr.trim().toLowerCase();
   if (!/^0x[a-fA-F0-9]{40}$/.test(a)) throw new Error('Invalid wallet address');
@@ -109,8 +125,8 @@ function normalizeAddr(addr: string): string {
 }
 
 export class VipService {
-  private tierCache: VipTier[] | null = null;
-  private tierCacheAt = 0;
+  private rateCache: RateSnapshot | null = null;
+  private rateCacheAt = 0;
   private static readonly TIER_TTL_MS = 60_000;
   /** Sticky once true; re-checked while false (code may deploy before migration 195 runs). */
   private wagerCreditsTablePresent = false;
@@ -124,9 +140,14 @@ export class VipService {
   // ──────────────────────────────────────────────────────────────────
 
   async getTiers(): Promise<VipTier[]> {
+    return (await this.loadRates()).tiers;
+  }
+
+  /** Ladder + rate history, cached together for TIER_TTL_MS. */
+  private async loadRates(): Promise<RateSnapshot> {
     const now = Date.now();
-    if (this.tierCache && now - this.tierCacheAt < VipService.TIER_TTL_MS) {
-      return this.tierCache;
+    if (this.rateCache && now - this.rateCacheAt < VipService.TIER_TTL_MS) {
+      return this.rateCache;
     }
     const { rows } = await this.pool.query<{
       tier_level: number;
@@ -149,9 +170,24 @@ export class VipService {
       levelUpBonusChips: r.level_up_bonus_chips,
       color: r.color,
     }));
-    this.tierCache = tiers;
-    this.tierCacheAt = now;
-    return tiers;
+    const { rows: historyRows } = await this.pool.query<{
+      tier_level: number;
+      rakeback_bps: number;
+      effective_until: Date;
+    }>(
+      `SELECT tier_level, rakeback_bps, effective_until
+       FROM vip_rakeback_rate_history
+       ORDER BY tier_level ASC, effective_until ASC`,
+    );
+    const history = new Map<number, RakebackRatePeriod[]>();
+    for (const h of historyRows) {
+      const periods = history.get(h.tier_level) ?? [];
+      periods.push({ bps: h.rakeback_bps, effectiveUntil: h.effective_until });
+      history.set(h.tier_level, periods);
+    }
+    this.rateCache = { tiers, history };
+    this.rateCacheAt = now;
+    return this.rateCache;
   }
 
   /** Highest tier whose lifetime-wager threshold is met by `lifetimeWager`. */
@@ -306,23 +342,54 @@ export class VipService {
     db: Pool | PoolClient,
     addr: string,
     since: Date | null,
+    until: Date | null = null,
   ): Promise<bigint> {
     const params: unknown[] = [addr];
-    let sinceClause = '';
+    let windowClause = '';
     if (since) {
       params.push(since.toISOString());
-      sinceClause = `AND created_at > $2`;
+      windowClause += ` AND created_at > $${params.length}`;
+    }
+    if (until) {
+      params.push(until.toISOString());
+      windowClause += ` AND created_at <= $${params.length}`;
     }
     const { rows } = await db.query<{ net_loss: string }>(
       `SELECT COALESCE(-SUM(delta), 0)::text AS net_loss
        FROM poker_chip_ledger
        WHERE wallet_address = $1
          AND (${BET_REASON_PREDICATE} OR ${GAME_CREDIT_REASON_PREDICATE})
-         ${sinceClause}`,
+         ${windowClause}`,
       params,
     );
     const v = BigInt(rows[0]?.net_loss ?? '0');
     return v > 0n ? v : 0n;
+  }
+
+  /**
+   * Rakeback owed on net loss since `cursor` at `tier`'s rates. Each recorded
+   * rate change inside the window splits it: (cursor, until₁] pays the first
+   * recorded rate, …, and (last until, now] pays the tier's current rate. Each
+   * stretch is clamped at 0 on its own, so a winning stretch accrues nothing
+   * and never cancels out a losing one.
+   */
+  private async rakebackSince(
+    db: Pool | PoolClient,
+    addr: string,
+    cursor: Date,
+    tier: VipTier,
+    history: Map<number, RakebackRatePeriod[]>,
+  ): Promise<bigint> {
+    let from = cursor;
+    let owed = 0n;
+    for (const period of history.get(tier.tierLevel) ?? []) {
+      if (period.effectiveUntil <= from) continue;
+      const loss = await this.netLossSince(db, addr, from, period.effectiveUntil);
+      owed += (loss * BigInt(period.bps)) / 10000n;
+      from = period.effectiveUntil;
+    }
+    const loss = await this.netLossSince(db, addr, from);
+    return owed + (loss * BigInt(tier.rakebackBps)) / 10000n;
   }
 
   // ──────────────────────────────────────────────────────────────────
@@ -364,13 +431,11 @@ export class VipService {
 
   async getStatus(walletAddress: string): Promise<VipStatus> {
     const addr = normalizeAddr(walletAddress);
-    const tiers = await this.getTiers();
+    const { tiers, history } = await this.loadRates();
     const state = await this.ensureState(this.pool, addr);
 
     const lastClaim = new Date(state.last_rakeback_claim_at);
     const lifetime = await this.wagerSince(this.pool, addr, null);
-    // Rakeback base is NET LOSS since last claim, not wager (owner decision 2026-07-02).
-    const netLossSinceClaim = await this.netLossSince(this.pool, addr, lastClaim);
 
     const currentTier = this.tierForWager(tiers, lifetime);
     const nextTier = tiers.find((t) => t.tierLevel === currentTier.tierLevel + 1) ?? null;
@@ -386,9 +451,9 @@ export class VipService {
       progressPct = span > 0n ? Math.min(100, Math.max(0, Number((into * 10000n) / span) / 100)) : 0;
     }
 
-    // Rakeback (2026-07-02 owner decision): current tier's rate × net loss
+    // Rakeback (2026-07-02 owner decision): tier rate × net loss
     // (max(0, bets − payouts)) since last claim — losses only, never wager volume.
-    const claimableRakeback = (netLossSinceClaim * BigInt(currentTier.rakebackBps)) / 10000n;
+    const claimableRakeback = await this.rakebackSince(this.pool, addr, lastClaim, currentTier, history);
     const pendingBonus = this.pendingBonus(tiers, state.highest_tier_awarded, currentTier.tierLevel);
 
     return {
@@ -412,7 +477,7 @@ export class VipService {
 
   async claim(walletAddress: string): Promise<VipClaimResult> {
     const addr = normalizeAddr(walletAddress);
-    const tiers = await this.getTiers();
+    const { tiers, history } = await this.loadRates();
 
     const client = await this.pool.connect();
     try {
@@ -439,10 +504,15 @@ export class VipService {
       // Rakeback base is NET LOSS since last claim (owner decision 2026-07-02:
       // rakeback = bps × max(0, bets − payouts), losses only). Tier progression
       // (`lifetime` above) intentionally stays wager-based.
-      const netLossSinceClaim = await this.netLossSince(client, addr, new Date(state.last_rakeback_claim_at));
       const currentTier = this.tierForWager(tiers, lifetime);
 
-      const rakebackChips = (netLossSinceClaim * BigInt(currentTier.rakebackBps)) / 10000n;
+      const rakebackChips = await this.rakebackSince(
+        client,
+        addr,
+        new Date(state.last_rakeback_claim_at),
+        currentTier,
+        history,
+      );
       const bonusChips = this.pendingBonus(tiers, state.highest_tier_awarded, currentTier.tierLevel);
 
       let chipBalance = 0n;
