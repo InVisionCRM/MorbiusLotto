@@ -165,6 +165,7 @@ function apiBase(): string {
 
 export async function fetchChickenInfo(): Promise<ChickenInfo> {
   const r = await fetch(`${apiBase()}/api/arcade/chicken/info`);
+  if (!r.ok) throw new Error(`fetchChickenInfo failed: HTTP ${r.status}`);
   const j = await r.json();
   return j as ChickenInfo;
 }
@@ -209,12 +210,14 @@ export async function fetchChickenHistory(limit = 25): Promise<ChickenHistoryRou
 
 export async function fetchChickenRecent(limit = 25): Promise<ChickenRecentRound[]> {
   const r = await fetch(`${apiBase()}/api/arcade/chicken/recent?limit=${limit}`);
+  if (!r.ok) throw new Error(`fetchChickenRecent failed: HTTP ${r.status}`);
   const j = await r.json();
   return (j.rounds ?? []) as ChickenRecentRound[];
 }
 
 export async function fetchChickenLeaderboard(limit = 10): Promise<ChickenLeaderboardEntry[]> {
   const r = await fetch(`${apiBase()}/api/arcade/chicken/leaderboard?limit=${limit}`);
+  if (!r.ok) throw new Error(`fetchChickenLeaderboard failed: HTTP ${r.status}`);
   const j = await r.json();
   return (j.players ?? []) as ChickenLeaderboardEntry[];
 }

@@ -182,6 +182,7 @@ function apiBase(): string {
 
 export async function fetchRoulette2Info(): Promise<Roulette2Info> {
   const r = await fetch(`${apiBase()}/api/arcade/roulette/info`);
+  if (!r.ok) throw new Error(`fetchRoulette2Info failed: HTTP ${r.status}`);
   const j = await r.json();
   return j as Roulette2Info;
 }
@@ -206,12 +207,14 @@ export async function fetchRoulette2History(limit = 25): Promise<Roulette2Histor
 
 export async function fetchRoulette2Recent(limit = 25): Promise<Roulette2RecentSpin[]> {
   const r = await fetch(`${apiBase()}/api/arcade/roulette/recent?limit=${limit}`);
+  if (!r.ok) throw new Error(`fetchRoulette2Recent failed: HTTP ${r.status}`);
   const j = await r.json();
   return (j.spins ?? []) as Roulette2RecentSpin[];
 }
 
 export async function fetchRoulette2Leaderboard(limit = 10): Promise<Roulette2LeaderboardEntry[]> {
   const r = await fetch(`${apiBase()}/api/arcade/roulette/leaderboard?limit=${limit}`);
+  if (!r.ok) throw new Error(`fetchRoulette2Leaderboard failed: HTTP ${r.status}`);
   const j = await r.json();
   return (j.players ?? []) as Roulette2LeaderboardEntry[];
 }

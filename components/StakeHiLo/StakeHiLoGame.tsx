@@ -123,7 +123,10 @@ export function StakeHiLoGame() {
         setInfo(i);
         setBet((b) => Math.min(Math.max(b, i.minBet), i.maxBet));
       })
-      .catch(() => {});
+      .catch((e) => {
+        console.error('[StakeHiLo] info load failed', e);
+        setError('Couldn’t load the game settings — refresh the page to try again.');
+      });
   }, []);
 
   const loadMyHistory = useCallback(() => {

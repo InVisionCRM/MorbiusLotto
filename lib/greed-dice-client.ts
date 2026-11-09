@@ -184,6 +184,7 @@ function apiBase(): string {
 
 export async function fetchGreedDiceInfo(): Promise<GreedDiceInfo> {
   const r = await fetch(`${apiBase()}/api/arcade/greed-dice/info`);
+  if (!r.ok) throw new Error(`fetchGreedDiceInfo failed: HTTP ${r.status}`);
   const j = await r.json();
   return j as GreedDiceInfo;
 }
@@ -230,12 +231,14 @@ export async function fetchGreedDiceHistory(limit = 25): Promise<GreedDiceHistor
 
 export async function fetchGreedDiceRecent(limit = 25): Promise<GreedDiceRecentRound[]> {
   const r = await fetch(`${apiBase()}/api/arcade/greed-dice/recent?limit=${limit}`);
+  if (!r.ok) throw new Error(`fetchGreedDiceRecent failed: HTTP ${r.status}`);
   const j = await r.json();
   return (j.rounds ?? []) as GreedDiceRecentRound[];
 }
 
 export async function fetchGreedDiceLeaderboard(limit = 10): Promise<GreedDiceLeaderboardEntry[]> {
   const r = await fetch(`${apiBase()}/api/arcade/greed-dice/leaderboard?limit=${limit}`);
+  if (!r.ok) throw new Error(`fetchGreedDiceLeaderboard failed: HTTP ${r.status}`);
   const j = await r.json();
   return (j.players ?? []) as GreedDiceLeaderboardEntry[];
 }

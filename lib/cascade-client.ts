@@ -144,6 +144,7 @@ function apiBase(): string {
 
 export async function fetchCascadeInfo(): Promise<CascadeInfo> {
   const r = await fetch(`${apiBase()}/api/arcade/cascade/info`);
+  if (!r.ok) throw new Error(`fetchCascadeInfo failed: HTTP ${r.status}`);
   const j = await r.json();
   return j as CascadeInfo;
 }
@@ -169,12 +170,14 @@ export async function fetchCascadeHistory(limit = 25): Promise<CascadeHistoryRou
 
 export async function fetchCascadeRecent(limit = 25): Promise<CascadeRecentRound[]> {
   const r = await fetch(`${apiBase()}/api/arcade/cascade/recent?limit=${limit}`);
+  if (!r.ok) throw new Error(`fetchCascadeRecent failed: HTTP ${r.status}`);
   const j = await r.json();
   return (j.rounds ?? []) as CascadeRecentRound[];
 }
 
 export async function fetchCascadeLeaderboard(limit = 10): Promise<CascadeLeaderboardEntry[]> {
   const r = await fetch(`${apiBase()}/api/arcade/cascade/leaderboard?limit=${limit}`);
+  if (!r.ok) throw new Error(`fetchCascadeLeaderboard failed: HTTP ${r.status}`);
   const j = await r.json();
   return (j.players ?? []) as CascadeLeaderboardEntry[];
 }

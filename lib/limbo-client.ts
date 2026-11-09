@@ -89,6 +89,7 @@ function apiBase(): string {
 
 export async function fetchLimboInfo(): Promise<LimboInfo> {
   const r = await fetch(`${apiBase()}/api/arcade/limbo/info`);
+  if (!r.ok) throw new Error(`fetchLimboInfo failed: HTTP ${r.status}`);
   const j = await r.json();
   return j as LimboInfo;
 }
@@ -114,12 +115,14 @@ export async function fetchLimboHistory(limit = 25): Promise<LimboHistoryRound[]
 
 export async function fetchLimboRecent(limit = 25): Promise<LimboRecentRound[]> {
   const r = await fetch(`${apiBase()}/api/arcade/limbo/recent?limit=${limit}`);
+  if (!r.ok) throw new Error(`fetchLimboRecent failed: HTTP ${r.status}`);
   const j = await r.json();
   return (j.rounds ?? []) as LimboRecentRound[];
 }
 
 export async function fetchLimboLeaderboard(limit = 10): Promise<LimboLeaderboardEntry[]> {
   const r = await fetch(`${apiBase()}/api/arcade/limbo/leaderboard?limit=${limit}`);
+  if (!r.ok) throw new Error(`fetchLimboLeaderboard failed: HTTP ${r.status}`);
   const j = await r.json();
   return (j.players ?? []) as LimboLeaderboardEntry[];
 }

@@ -155,7 +155,11 @@ export function BlackjackVariantGame({ variant }: { variant: BjVariant }) {
         setInfo(i);
         setBet((b) => Math.min(Math.max(b, i.minBet), i.maxBet));
       })
-      .catch(() => {});
+      .catch((e) => {
+        if (cancelled) return;
+        console.error('[BlackjackVariants] info load failed', e);
+        setError('Couldn’t load the game settings — refresh the page to try again.');
+      });
     return () => {
       cancelled = true;
     };

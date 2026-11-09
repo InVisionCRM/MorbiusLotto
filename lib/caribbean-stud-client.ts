@@ -141,6 +141,7 @@ function apiBase(): string {
 
 export async function fetchCsInfo(): Promise<CsInfo> {
   const r = await fetch(`${apiBase()}/api/arcade/caribbean-stud/info`);
+  if (!r.ok) throw new Error(`fetchCsInfo failed: HTTP ${r.status}`);
   return (await r.json()) as CsInfo;
 }
 

@@ -160,7 +160,10 @@ export function StakeBaccaratGame() {
   useEffect(() => {
     fetchBaccaratInfo()
       .then(setInfo)
-      .catch(() => {});
+      .catch((e) => {
+        console.error('[StakeBaccarat] info load failed', e);
+        setError('Couldn’t load the game settings — refresh the page to try again.');
+      });
     fetchBaccaratRecent(24)
       .then((rows) =>
         setRoadEntries(

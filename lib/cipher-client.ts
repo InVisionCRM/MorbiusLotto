@@ -241,6 +241,7 @@ function apiBase(): string {
 
 export async function fetchCipherInfo(): Promise<CipherInfo> {
   const r = await fetch(`${apiBase()}/api/arcade/cipher/info`);
+  if (!r.ok) throw new Error(`fetchCipherInfo failed: HTTP ${r.status}`);
   const j = await r.json();
   return j as CipherInfo;
 }
@@ -285,12 +286,14 @@ export async function fetchCipherHistory(limit = 25): Promise<CipherHistoryRound
 
 export async function fetchCipherRecent(limit = 25): Promise<CipherRecentRound[]> {
   const r = await fetch(`${apiBase()}/api/arcade/cipher/recent?limit=${limit}`);
+  if (!r.ok) throw new Error(`fetchCipherRecent failed: HTTP ${r.status}`);
   const j = await r.json();
   return (j.rounds ?? []) as CipherRecentRound[];
 }
 
 export async function fetchCipherLeaderboard(limit = 10): Promise<CipherLeaderboardEntry[]> {
   const r = await fetch(`${apiBase()}/api/arcade/cipher/leaderboard?limit=${limit}`);
+  if (!r.ok) throw new Error(`fetchCipherLeaderboard failed: HTTP ${r.status}`);
   const j = await r.json();
   return (j.players ?? []) as CipherLeaderboardEntry[];
 }
