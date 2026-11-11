@@ -3,7 +3,7 @@
  *
  * Polls the game server's GET /api/poker/bot-schedule. When a scheduled bot game's
  * tournament goes `active` and has a table, it opens this worker's own broadcast view
- * (/view/<tableId>, view.html — renders the public table snapshot from
+ * (/view, view.html — renders the current game's public table snapshot from
  * GET /api/poker/bot-schedule/table/<id>/state, no hole cards until showdown) in a
  * kiosk Chromium on a virtual X display and pushes that display with ffmpeg to X over
  * RTMP (X_RTMP_URL + X_STREAM_KEY). The site's own /poker/<tableId> page needs a
@@ -18,6 +18,10 @@
  *   STREAM_ENABLED=0|1                     master switch (default 0 = dry: logs only)
  *   STREAM_TEST_OUTPUT=/tmp/test.flv       when set (and STREAM_ENABLED=0), record to a file instead
  *   STREAM_MAX_MINUTES=180
+ *   STREAM_PREROLL_SECONDS=120             start pushing this long before the slot time so an X
+ *                                          scheduled broadcast (auto-publish) finds video already
+ *                                          flowing; the view shows a "starting soon" card until the
+ *                                          table exists
  *   STREAM_WIDTH=1280 STREAM_HEIGHT=720 STREAM_FPS=30 STREAM_VIDEO_KBPS=3500
  *   PORT=8080                              /health and /status
  *
@@ -43,6 +47,7 @@ const KBPS = Number(env('STREAM_VIDEO_KBPS', '3500'));
 const DISPLAY = env('STREAM_DISPLAY', ':99');
 const POLL_MS = 20_000;
 const PORT = Number(env('PORT', '8080'));
+const PREROLL_MS = Number(env('STREAM_PREROLL_SECONDS', '120')) * 1000;
 
 const state = { current: null, lastPoll: null, lastError: null, history: [] };
 const log = (msg, extra = {}) => console.log(JSON.stringify({ t: new Date().toISOString(), msg, ...extra }));
@@ -67,7 +72,7 @@ function ensureXvfb() {
 function startStream(game) {
   const target = rtmpTarget();
   const name = String(game.slotKey || '').split(' ')[1] || '';
-  const url = `http://127.0.0.1:${PORT}/view/${game.tableId}?name=${encodeURIComponent(`Beat the Bots ${name} ET`)}`;
+  const url = `http://127.0.0.1:${PORT}/view?name=${encodeURIComponent(`Beat the Bots ${name} ET`)}`;
   if (!target) {
     log('dry run: would stream game (STREAM_ENABLED=0 or X_RTMP_URL/X_STREAM_KEY missing)', { tournamentId: game.tournamentId, url });
     state.current = { ...game, dry: true, startedAt: Date.now(), procs: [] };
@@ -140,14 +145,23 @@ async function poll() {
       const done = !g || ['completed', 'cancelled', 'finished'].includes(String(g.tournamentStatus));
       if (done) stopStream('tournament finished');
       else if (Date.now() - cur.startedAt > MAX_MIN * 60_000) stopStream('max duration');
-      else if (g.tableId && g.tableId !== cur.tableId && !cur.dry) {
-        // table changed (e.g. consolidation) → restart on the new table
-        stopStream('table changed');
-        startStream(g);
+      else if (cur.tournamentStatus !== 'active' && g.tournamentStatus !== 'active' && Date.now() - Date.parse(g.scheduledAt) > 20 * 60_000) stopStream('never started');
+      else {
+        // the view follows the table via /api/current (table appears at start; may change on consolidation)
+        cur.tableId = g.tableId;
+        cur.tournamentStatus = g.tournamentStatus;
       }
       return;
     }
-    const live = games.find((g) => g.tournamentStatus === 'active' && g.tableId && !state.history.some((h) => h.tournamentId === g.tournamentId));
+    const now = Date.now();
+    const fresh = (g) => g.tournamentId && !state.history.some((h) => h.tournamentId === g.tournamentId);
+    const live =
+      games.find((g) => fresh(g) && g.tournamentStatus === 'active' && g.tableId) ||
+      games.find((g) => {
+        if (!fresh(g) || g.tournamentStatus !== 'registration') return false;
+        const until = Date.parse(g.scheduledAt) - now;
+        return until <= PREROLL_MS && until > -10 * 60_000;
+      });
     if (live) startStream(live);
   } catch (err) {
     state.lastError = String(err?.message ?? err);
@@ -157,11 +171,15 @@ async function poll() {
 
 http
   .createServer((req, res) => {
-    const viewM = /^\/view\/([0-9a-f-]{36})(\?.*)?$/i.exec(req.url || '');
+    const viewM = /^\/view(\?.*)?$/i.exec(req.url || '');
     if (viewM) { res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' }); return res.end(VIEW_HTML); }
-    const stateM = /^\/api\/state\/([0-9a-f-]{36})$/i.exec(req.url || '');
-    if (stateM) {
-      fetch(`${API_BASE}/api/poker/bot-schedule/table/${stateM[1]}/state`, { signal: AbortSignal.timeout(8000) })
+    if (req.url === '/api/current') {
+      const c = state.current;
+      if (!c || !c.tableId) {
+        res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
+        return res.end(JSON.stringify({ pending: true, scheduledAt: c?.scheduledAt ?? null }));
+      }
+      fetch(`${API_BASE}/api/poker/bot-schedule/table/${c.tableId}/state`, { signal: AbortSignal.timeout(8000) })
         .then(async (r) => { res.writeHead(r.status, { 'content-type': 'application/json', 'cache-control': 'no-store' }); res.end(await r.text()); })
         .catch((e) => { res.writeHead(502, { 'content-type': 'application/json' }); res.end(JSON.stringify({ error: String(e?.message ?? e) })); });
       return;

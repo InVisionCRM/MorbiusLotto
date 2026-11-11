@@ -50,9 +50,14 @@
   <div id="felt"><div id="street"></div><div id="board"></div><div id="pot"></div></div>
   <div id="seats"></div>
   <div id="banner" style="display:none"></div>
+  <div id="soon" style="display:none; position:absolute; left:50%; top:330px; transform:translateX(-50%); text-align:center;
+    background:rgba(0,0,0,.6); padding:18px 34px; border-radius:14px;">
+    <div style="font-size:34px; font-weight:700;">Starting soon</div>
+    <div id="soonAt" style="font-size:22px; color:#9fb3d9; margin-top:6px;"></div>
+    <div style="font-size:20px; margin-top:10px; color:#bbf7d0;">7 bots · 3 open seats · join at morbius.io/poker</div>
+  </div>
   <div id="foot">morbius.io/poker · 7 bots (_bot) vs humans</div>
 <script>
-const tableId = location.pathname.split('/').pop();
 const qs = new URLSearchParams(location.search);
 document.getElementById('tname').textContent = qs.get('name') || 'Beat the Bots';
 const RANKS = ['2','3','4','5','6','7','8','9','10','J','Q','K','A'];
@@ -121,8 +126,20 @@ function render(st) {
 }
 async function tick() {
   try {
-    const r = await fetch(`/api/state/${tableId}`, { cache: 'no-store' });
-    if (r.ok) render(await r.json());
+    const r = await fetch('/api/current', { cache: 'no-store' });
+    if (r.ok) {
+      const body = await r.json();
+      const soon = document.getElementById('soon');
+      if (body.pending) {
+        soon.style.display = '';
+        document.getElementById('seats').innerHTML = '';
+        document.getElementById('pot').textContent = '';
+        if (body.scheduledAt) {
+          const s = Math.max(0, Math.round((Date.parse(body.scheduledAt) - Date.now()) / 1000));
+          document.getElementById('soonAt').textContent = s > 0 ? `Cards in the air in ${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}` : 'Dealing…';
+        }
+      } else { soon.style.display = 'none'; render(body); }
+    }
   } catch {}
   setTimeout(tick, 1000);
 }
