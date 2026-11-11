@@ -54,6 +54,7 @@ import { WebSocketService } from './services/websocket.service';
 import { PokerGameService } from './services/poker-game.service';
 import { PokerTournamentService } from './services/poker-tournament.service';
 import { chipsToWei } from './lib/poker-chip-scale';
+import { loadPokerBotRegistry, syncPokerBotProfiles } from './lib/poker-bot-registry';
 import { applyPokerChipDelta, getPokerChipBalance, setWeeklyDropWagerHook, setWeeklyDropRefundHook } from './services/poker-chip-wallet';
 import { WeeklyDropService } from './services/weekly-drop.service';
 import { registerDropRoutes } from './routes/drop.routes';
@@ -452,6 +453,27 @@ async function initializeServices() {
     // a player triggers. Check at boot instead and name the exact command, so
     // the gap shows up in the deploy log rather than in someone's console.
     await warnOnMissingGameTables(dbService);
+
+    // In-house poker bots: load `poker_bot_accounts` into the registry BEFORE
+    // the WS server exists — bot-token auth, tournament bot ticks and the
+    // Weekly Drop exclusion all read it synchronously. Fails the boot (no
+    // env fallback) if migration 200 hasn't run, so the gap is in the deploy
+    // log rather than a silent "bots never show up".
+    let pokerBots;
+    try {
+      pokerBots = await loadPokerBotRegistry(dbService.getPool());
+    } catch (err) {
+      throw new Error(
+        `poker_bot_accounts registry failed to load — run migrations/200_poker_bot_accounts.sql: ${(err as Error).message}`,
+      );
+    }
+    await syncPokerBotProfiles(dbService.getPool());
+    logger.info('Poker bot registry loaded', { count: pokerBots.length, bots: pokerBots.map((b) => b.displayName) });
+    setInterval(() => {
+      loadPokerBotRegistry(dbService.getPool()).catch((err) =>
+        logger.error('Poker bot registry refresh failed', { error: (err as Error).message }),
+      );
+    }, 60_000).unref();
 
     // Initialize WebSocket service. authService is passed last so WS upgrades
     // can read the SIWE session cookie and skip the EIP-712 challenge for

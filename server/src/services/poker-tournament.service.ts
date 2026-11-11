@@ -6,7 +6,7 @@ import { isAdminWallet } from '../lib/cosmetics-catalog';
 import { TournamentService } from './tournament.service';
 import { PokerGameService } from './poker-game.service';
 import { applyPokerChipDelta } from './poker-chip-wallet';
-import { getServerPokerBotAddressSet } from '../lib/poker-server-bot-addresses';
+import { getPokerBotAddressSet } from '../lib/poker-bot-registry';
 import { getEscrowPoolStatus } from '../utils/escrow-status';
 import { tournamentIdToBytes32 } from '../utils/tournament-id-bytes32';
 import {
@@ -1767,7 +1767,7 @@ export class PokerTournamentService {
   /**
    * Periodic tick called by the WS service every few seconds. Finds freeroll
    * tournaments still in `registration` that need more players to start, and
-   * registers in-house bot wallets (from `POKER_BOT_ADDRESSES`) directly via
+   * registers in-house bot wallets (active rows in `poker_bot_accounts`) directly via
    * `joinPokerTournament` — no WebSocket, no signed auth, no external CLI.
    *
    * Why in-process: bot scripts running as external clients have to go
@@ -1793,7 +1793,7 @@ export class PokerTournamentService {
     const flag = String(process.env.POKER_BOT_FILL_ENABLED ?? '').toLowerCase();
     if (flag !== 'true' && flag !== '1' && flag !== 'yes') return;
 
-    const botSet = getServerPokerBotAddressSet();
+    const botSet = getPokerBotAddressSet();
     if (botSet.size === 0) return;
 
     const rawDelay = process.env.POKER_BOT_FILL_DELAY_SECONDS;

@@ -35,6 +35,7 @@ import crypto from 'crypto';
 import type { Pool, PoolClient } from 'pg';
 import { logger } from '../utils/logger';
 import { applyPokerChipDelta } from './poker-chip-wallet';
+import { isPokerBotWallet } from '../lib/poker-bot-registry';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Tunables
@@ -402,6 +403,9 @@ export class WeeklyDropService {
     } catch {
       return; // non-wallet ledger rows (shouldn't happen for *_bet) — skip
     }
+    // In-house poker bots never fund the pot or earn tickets: their chips are
+    // house bankroll, and a bot can't claim a prize it "wins".
+    if (isPokerBotWallet(addr)) return;
     const chipsPerEntry = DROP_ENTRY_RATES[gameKey] ?? DEFAULT_CHIPS_PER_ENTRY;
     const effectiveChips = (wagerChips * CHIPS_PER_ENTRY) / chipsPerEntry;
     const potDelta = (wagerChips * DROP_POT_BPS) / 10000n;
@@ -804,10 +808,14 @@ export class WeeklyDropService {
          ORDER BY player_address ASC`,
         [drawId],
       );
-      const snapshot: DropEntrySnapshot[] = entryRows.rows.map((r) => ({
-        address: r.player_address,
-        entries: r.entries,
-      }));
+      // Defensive second guard (accrual already skips bots): a bot row that
+      // slipped in before the registry existed must never be drawn.
+      const snapshot: DropEntrySnapshot[] = entryRows.rows
+        .filter((r) => !isPokerBotWallet(r.player_address))
+        .map((r) => ({
+          address: r.player_address,
+          entries: r.entries,
+        }));
 
       // 3) Commit BEFORE selection: publish commitment + entry snapshot/hash.
       const serverSeed = crypto.randomBytes(32).toString('hex');

@@ -5,10 +5,19 @@
  */
 
 import { decidePokerBotAction, pokerAmountToBigInt } from '../../lib/poker-bot-ai';
-import { CYPRESS_DEFAULT_POKER_BOT_ADDRESSES } from '../../lib/poker-bot-wallet-pool';
-import { getServerPokerBotAddressSet, parsePokerBotAddressCsv } from '../../lib/poker-server-bot-addresses';
+import {
+  PokerBotRegistryNotLoadedError,
+  getPokerBotAccount,
+  getPokerBotAddressSet,
+  isPokerBotWallet,
+  listPokerBotAccounts,
+  setPokerBotRegistryForTesting,
+} from '../../lib/poker-bot-registry';
+import { getPokerBotBankrollWallet } from '../../lib/poker-bot-bankroll';
 
-const SAMPLE_BOT = '0x000000000000000000000000000000000000beef';
+const BOT_1 = '0x000000000000000000000000000000000000b071';
+const BOT_2 = '0x000000000000000000000000000000000000B072'; // mixed case on purpose
+const HUMAN = '0x000000000000000000000000000000000000beef';
 
 describe('poker-server-bot-ai (unit)', () => {
   afterEach(() => {
@@ -41,67 +50,92 @@ describe('poker-server-bot-ai (unit)', () => {
     expect(d.action).toBe('check');
   });
 
-  it('parsePokerBotAddressCsv trims and lowercases', () => {
-    const a = '0x1111111111111111111111111111111111111111';
-    const b = '0xAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA';
-    const list = parsePokerBotAddressCsv(` ${a} , ${b} , bad , 0x123 `);
-    expect(list).toEqual([a.toLowerCase(), b.toLowerCase()]);
-  });
-
   it('pokerAmountToBigInt handles scientific notation strings', () => {
     expect(pokerAmountToBigInt('4.95e+21')).toBe(4950000000000000000000n);
     expect(pokerAmountToBigInt(4.95e21)).toBeGreaterThan(0n);
   });
+});
 
-  it('getServerPokerBotAddressSet reads POKER_BOT_ADDRESSES', () => {
-    const prev = process.env.POKER_BOT_ADDRESSES;
-    process.env.POKER_BOT_ADDRESSES = SAMPLE_BOT;
-    try {
-      const set = getServerPokerBotAddressSet();
-      expect(set.has(SAMPLE_BOT.toLowerCase())).toBe(true);
-    } finally {
-      if (prev === undefined) delete process.env.POKER_BOT_ADDRESSES;
-      else process.env.POKER_BOT_ADDRESSES = prev;
-    }
+describe('poker-bot-registry (unit)', () => {
+  afterEach(() => {
+    setPokerBotRegistryForTesting(null);
   });
 
-  it('getServerPokerBotAddressSet falls back to built-in pool when env unset (non-strict)', () => {
-    const prevAddr = process.env.POKER_BOT_ADDRESSES;
-    const prevStrict = process.env.POKER_SERVER_BOT_STRICT_ADDRESSES;
-    const prevCypress = process.env.CYPRESS_POKER_TEST_PLAYERS;
-    const prevTest = process.env.POKER_TEST_PLAYERS;
-    delete process.env.POKER_BOT_ADDRESSES;
-    delete process.env.POKER_SERVER_BOT_STRICT_ADDRESSES;
-    delete process.env.CYPRESS_POKER_TEST_PLAYERS;
-    delete process.env.POKER_TEST_PLAYERS;
-    try {
-      const set = getServerPokerBotAddressSet();
-      expect(set.size).toBe(CYPRESS_DEFAULT_POKER_BOT_ADDRESSES.length);
-      expect(set.has(CYPRESS_DEFAULT_POKER_BOT_ADDRESSES[0].toLowerCase())).toBe(true);
-    } finally {
-      if (prevAddr === undefined) delete process.env.POKER_BOT_ADDRESSES;
-      else process.env.POKER_BOT_ADDRESSES = prevAddr;
-      if (prevStrict === undefined) delete process.env.POKER_SERVER_BOT_STRICT_ADDRESSES;
-      else process.env.POKER_SERVER_BOT_STRICT_ADDRESSES = prevStrict;
-      if (prevCypress === undefined) delete process.env.CYPRESS_POKER_TEST_PLAYERS;
-      else process.env.CYPRESS_POKER_TEST_PLAYERS = prevCypress;
-      if (prevTest === undefined) delete process.env.POKER_TEST_PLAYERS;
-      else process.env.POKER_TEST_PLAYERS = prevTest;
-    }
+  it('throws PokerBotRegistryNotLoadedError before the registry is loaded (fail-fast, no env fallback)', () => {
+    setPokerBotRegistryForTesting(null);
+    expect(() => isPokerBotWallet(BOT_1)).toThrow(PokerBotRegistryNotLoadedError);
+    expect(() => getPokerBotAddressSet()).toThrow(PokerBotRegistryNotLoadedError);
+    expect(() => listPokerBotAccounts()).toThrow(PokerBotRegistryNotLoadedError);
   });
 
-  it('getServerPokerBotAddressSet is empty when strict and POKER_BOT_ADDRESSES unset', () => {
-    const prevAddr = process.env.POKER_BOT_ADDRESSES;
-    const prevStrict = process.env.POKER_SERVER_BOT_STRICT_ADDRESSES;
-    delete process.env.POKER_BOT_ADDRESSES;
-    process.env.POKER_SERVER_BOT_STRICT_ADDRESSES = 'true';
-    try {
-      expect(getServerPokerBotAddressSet().size).toBe(0);
-    } finally {
-      if (prevAddr === undefined) delete process.env.POKER_BOT_ADDRESSES;
-      else process.env.POKER_BOT_ADDRESSES = prevAddr;
-      if (prevStrict === undefined) delete process.env.POKER_SERVER_BOT_STRICT_ADDRESSES;
-      else process.env.POKER_SERVER_BOT_STRICT_ADDRESSES = prevStrict;
-    }
+  it('recognises registered bots case-insensitively and rejects humans', () => {
+    setPokerBotRegistryForTesting([
+      { walletAddress: BOT_1, displayName: 'Brunson_bot', personality: {} },
+      { walletAddress: BOT_2, displayName: 'Hellmuth_bot', personality: { aggro: 0.7 } },
+    ]);
+    expect(isPokerBotWallet(BOT_1)).toBe(true);
+    expect(isPokerBotWallet(BOT_2)).toBe(true);
+    expect(isPokerBotWallet(BOT_2.toLowerCase())).toBe(true);
+    expect(isPokerBotWallet(HUMAN)).toBe(false);
+
+    const set = getPokerBotAddressSet();
+    expect(set.size).toBe(2);
+    expect(set.has(BOT_2.toLowerCase())).toBe(true);
+    expect(set.has(BOT_2)).toBe(false); // always lowercase
+
+    expect(getPokerBotAccount(BOT_2)?.displayName).toBe('Hellmuth_bot');
+    expect(getPokerBotAccount(BOT_2)?.personality).toEqual({ aggro: 0.7 });
+    expect(getPokerBotAccount(HUMAN)).toBeNull();
+  });
+
+  it('an empty registry means "no bots", not an error', () => {
+    setPokerBotRegistryForTesting([]);
+    expect(isPokerBotWallet(BOT_1)).toBe(false);
+    expect(getPokerBotAddressSet().size).toBe(0);
+  });
+
+  it('rejects display names without the _bot suffix', () => {
+    expect(() =>
+      setPokerBotRegistryForTesting([{ walletAddress: BOT_1, displayName: 'Brunson', personality: {} }]),
+    ).toThrow(/_bot/);
+  });
+
+  it('rejects malformed addresses', () => {
+    expect(() =>
+      setPokerBotRegistryForTesting([{ walletAddress: '0x1234', displayName: 'Short_bot', personality: {} }]),
+    ).toThrow(/wallet_address/);
+  });
+});
+
+describe('poker-bot-bankroll wallet config (unit)', () => {
+  let prev: string | undefined;
+  beforeEach(() => {
+    prev = process.env.POKER_BOT_BANKROLL_WALLET;
+    setPokerBotRegistryForTesting([{ walletAddress: BOT_1, displayName: 'Brunson_bot', personality: {} }]);
+  });
+  afterEach(() => {
+    if (prev === undefined) delete process.env.POKER_BOT_BANKROLL_WALLET;
+    else process.env.POKER_BOT_BANKROLL_WALLET = prev;
+    setPokerBotRegistryForTesting(null);
+  });
+
+  it('throws when POKER_BOT_BANKROLL_WALLET is unset', () => {
+    delete process.env.POKER_BOT_BANKROLL_WALLET;
+    expect(() => getPokerBotBankrollWallet()).toThrow(/POKER_BOT_BANKROLL_WALLET/);
+  });
+
+  it('throws when POKER_BOT_BANKROLL_WALLET is not an address', () => {
+    process.env.POKER_BOT_BANKROLL_WALLET = 'not-an-address';
+    expect(() => getPokerBotBankrollWallet()).toThrow(/POKER_BOT_BANKROLL_WALLET/);
+  });
+
+  it('throws when the bankroll wallet is itself a bot', () => {
+    process.env.POKER_BOT_BANKROLL_WALLET = BOT_1;
+    expect(() => getPokerBotBankrollWallet()).toThrow(/must not be a bot/);
+  });
+
+  it('returns the lowercase bankroll wallet when valid', () => {
+    process.env.POKER_BOT_BANKROLL_WALLET = '0x00000000000000000000000000000000000000AA';
+    expect(getPokerBotBankrollWallet()).toBe('0x00000000000000000000000000000000000000aa');
   });
 });

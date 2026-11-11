@@ -5,6 +5,7 @@
  * to bypass — last resort, leaves leftover rows in prod on a crash.
  */
 import { Pool, PoolClient } from 'pg';
+import { loadPokerBotRegistry } from '../lib/poker-bot-registry';
 import * as dotenv from 'dotenv';
 import * as path from 'path';
 
@@ -79,6 +80,10 @@ export let testPool: Pool;
 beforeAll(async () => {
   const connectionString = resolveTestDatabaseUrl();
   testPool = new Pool({ connectionString });
+
+  // Same fail-fast boot step as server.ts: the registry must be loaded before
+  // any poker path runs (cash join, bot ticks, Weekly Drop accrual all read it).
+  await loadPokerBotRegistry(testPool);
 
   // Seed test players — upsert so re-runs don't fail
   await testPool.query(`
