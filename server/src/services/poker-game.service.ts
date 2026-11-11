@@ -259,6 +259,15 @@ function chevtekStreetToPoker(round: BettingRound | undefined, hasWinners: boole
 // ---------------------------------------------------------------------------
 // Rake configuration (cash games only — tournaments use virtual chips)
 // ---------------------------------------------------------------------------
+/**
+ * True when at least one other player could still act on a bet (not folded, not all-in).
+ * When false, a bet/raise from `actor` would hang chevtek (see playerAction).
+ */
+export function othersCanRespond(table: { actingPlayers?: unknown[] }, actor: unknown): boolean {
+  const acting = Array.isArray(table.actingPlayers) ? table.actingPlayers : [];
+  return acting.some((p) => p !== actor);
+}
+
 const RAKE_PERCENT = 5; // 5% of each pot
 
 // Cash-game AFK auto-sit-out threshold: after this many consecutive timeouts
@@ -2552,6 +2561,17 @@ export class PokerGameService {
 
     // Pre-validate action against engine's legal actions before executing
     const legal = actor.legalActions();
+    // chevtek bug: it offers bet/raise even when every other live player is all-in,
+    // and executing that raise spins forever in Player.raiseAction's lastActor loop,
+    // freezing the whole Node process (API down, every table stuck). Nobody can call a
+    // raise there, so treat it as a call (facing a bet) or a check.
+    if ((action === 'bet' || action === 'raise') && !othersCanRespond(table, actor)) {
+      logger.warn('Poker raise with no player able to respond; converted to call/check', {
+        tableId, handId, player: normalized, action,
+      });
+      action = (table.currentBet ?? 0) > actor.bet ? 'call' : 'check';
+      amount = undefined;
+    }
     const requestedAction = action === 'bet' || action === 'raise'
       ? (legal.includes(action) ? action : (action === 'bet' && legal.includes('raise') ? 'raise' : action))
       : action;
@@ -3682,14 +3702,15 @@ export class PokerGameService {
           case 'fold': actor.foldAction(); break;
           case 'check': actor.checkAction(); break;
           case 'call': actor.callAction(); break;
-          case 'bet': {
-            const chips = Number(actionRow.amount ?? 0);
-            actor.betAction(chips);
-            break;
-          }
+          case 'bet':
           case 'raise': {
+            // Same guard as playerAction: never replay a raise nobody can answer (engine hang).
+            if (!othersCanRespond(table, actor)) {
+              if ((table.currentBet ?? 0) > actor.bet) actor.callAction(); else actor.checkAction();
+              break;
+            }
             const chips = Number(actionRow.amount ?? 0);
-            actor.raiseAction(chips);
+            if (actionRow.action === 'bet') actor.betAction(chips); else actor.raiseAction(chips);
             break;
           }
         }
@@ -3699,7 +3720,9 @@ export class PokerGameService {
           tableId, action: actionRow.action, player: addr,
           replayed: replayedCount, total: totalActions,
           currentBet: table.currentBet, actorBet: actor.bet,
-          legalActions: actor.legalActions(),
+          legalActions: othersCanRespond(table, actor)
+            ? actor.legalActions()
+            : actor.legalActions().filter((x: string) => x !== 'bet' && x !== 'raise'),
           err,
         });
         replayFailed = true;
