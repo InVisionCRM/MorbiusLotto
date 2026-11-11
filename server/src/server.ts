@@ -543,7 +543,7 @@ async function initializeServices() {
     freerollScheduler.start();
 
     // Scheduled "Beat the Bots" games (POKER_BOT_SCHEDULE_ENABLED=true; see poker-bot-schedule.service.ts)
-    pokerBotScheduler = new PokerBotScheduleService(dbService.getPool(), pokerTournamentService);
+    pokerBotScheduler = new PokerBotScheduleService(dbService.getPool(), pokerTournamentService, pokerGameService);
     pokerBotScheduler.start();
     const botSchedulerRef = pokerBotScheduler;
     app.get('/api/poker/bot-schedule', async (_req, res) => {
@@ -562,6 +562,27 @@ async function initializeServices() {
       } catch (err) {
         logger.error('GET /api/poker/bot-schedule failed', { error: (err as Error)?.message });
         res.status(500).json({ error: 'Failed to load bot schedule' });
+      }
+    });
+    // Public, read-only table snapshot for the X stream renderer (stream/ service).
+    // Only tables of scheduled bot games; hole cards are never included (viewer = null),
+    // showdown cards appear only once the hand is shown down — same as any seat sees.
+    app.get('/api/poker/bot-schedule/table/:tableId/state', async (req, res) => {
+      try {
+        const tableId = String(req.params.tableId || '');
+        if (!/^[0-9a-f-]{36}$/i.test(tableId)) return res.status(400).json({ error: 'bad tableId' });
+        const ok = await dbService.getPool().query(
+          `SELECT 1 FROM poker_tables pt
+             JOIN poker_bot_scheduled_games g ON g.tournament_id = pt.tournament_id
+            WHERE pt.id = $1 LIMIT 1`,
+          [tableId],
+        );
+        if (ok.rows.length === 0) return res.status(404).json({ error: 'not a scheduled bot game table' });
+        const state = await pokerGameService.getTableState(tableId, null);
+        res.set('Cache-Control', 'no-store');
+        res.json({ ...state, myHoleCards: null });
+      } catch (err) {
+        res.status(500).json({ error: (err as Error)?.message || 'failed' });
       }
     });
 

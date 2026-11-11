@@ -183,6 +183,8 @@ export class PokerBotScheduleService {
   constructor(
     private readonly pool: Pool,
     private readonly tournaments: PokerTournamentService,
+    /** Optional: lets the scheduler re-deal a bot game table that stalled (e.g. after a deploy). */
+    private readonly games?: { startHand(tableId: string): Promise<unknown> },
   ) {}
 
   start(): void {
@@ -224,6 +226,7 @@ export class PokerBotScheduleService {
       for (const slot of slots) {
         await this.createSlotGame(slot, cfg);
       }
+      await this.resumeStalledTables(nowMs);
     } catch (err) {
       logger.error('[bot-schedule] tick failed', { error: (err as Error)?.message });
     } finally {
@@ -285,6 +288,42 @@ export class PokerBotScheduleService {
       await this.markSlot(slot.slotKey, tournamentId, 'error', msg.slice(0, 500));
       return tournamentId;
     }
+  }
+
+  /**
+   * A server restart clears in-flight hands ("stale hands from previous session") and
+   * loses the in-memory next-hand timer. Human tables re-deal when a player reconnects,
+   * but a bot-heavy table has nobody to trigger that, so it would sit idle forever.
+   * Re-deal any active scheduled-game table with no hand in progress and no hand
+   * finished in the last STALL_MS (normal between-hands pause is 15 s).
+   */
+  async resumeStalledTables(nowMs = Date.now()): Promise<number> {
+    if (!this.games) return 0;
+    const STALL_MS = 60_000;
+    const r = await this.pool.query(
+      `SELECT pt.id AS table_id
+         FROM poker_bot_scheduled_games g
+         JOIN tournaments t ON t.id = g.tournament_id AND t.status = 'active'
+         JOIN poker_tables pt ON pt.tournament_id = g.tournament_id
+        WHERE g.scheduled_at > NOW() - INTERVAL '12 hours'
+          AND g.scheduled_at < $1
+          AND NOT EXISTS (SELECT 1 FROM poker_hands h WHERE h.table_id = pt.id AND h.completed_at IS NULL)
+          AND COALESCE((SELECT MAX(h.completed_at) FROM poker_hands h WHERE h.table_id = pt.id), pt.created_at)
+              < $1::timestamptz - ($2 * INTERVAL '1 millisecond')
+          AND (SELECT COUNT(*) FROM poker_seats s WHERE s.table_id = pt.id AND s.stack > 0) >= 2`,
+      [new Date(nowMs).toISOString(), STALL_MS],
+    );
+    let resumed = 0;
+    for (const row of r.rows) {
+      try {
+        await this.games.startHand(String(row.table_id));
+        resumed++;
+        logger.info('[bot-schedule] resumed stalled bot game table', { tableId: row.table_id });
+      } catch (err) {
+        logger.warn('[bot-schedule] resume failed', { tableId: row.table_id, error: (err as Error)?.message });
+      }
+    }
+    return resumed;
   }
 
   /** Top each bot up to the buy-in (ledgered) and register it. Returns bots seated. */
