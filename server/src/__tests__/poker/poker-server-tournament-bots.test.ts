@@ -12,6 +12,7 @@ import { DatabaseService } from '../../services/database.service';
 import { ProvablyFairService } from '../../services/provably-fair.service';
 import { PokerTournamentService, PokerTournamentConfig } from '../../services/poker-tournament.service';
 import { TournamentService } from '../../services/tournament.service';
+import { loadPokerBotRegistry, setPokerBotRegistryForTesting } from '../../lib/poker-bot-registry';
 const PLAYER_1 = TEST_PLAYERS[0];
 const PLAYER_2 = TEST_PLAYERS[1];
 
@@ -86,9 +87,11 @@ async function advanceUntilActorIs(
   throw new Error(`could not reach actor ${targetLower} in ${maxSteps} steps`);
 }
 
-let prevBotEnv: string | undefined;
 let prevThinkEnv: string | undefined;
 let prevServerBotsEnv: string | undefined;
+
+/** Registry entry that makes PLAYER_2 act as an in-process bot for one test. */
+const PLAYER_2_AS_BOT = [{ walletAddress: PLAYER_2.toLowerCase(), displayName: 'Tick_bot', personality: {} }];
 
 beforeAll(async () => {
   dbService = new DatabaseService();
@@ -111,14 +114,13 @@ afterAll(async () => {
 
 beforeEach(async () => {
   await resetTestBalances();
-  prevBotEnv = process.env.POKER_BOT_ADDRESSES;
   prevThinkEnv = process.env.POKER_SERVER_BOT_THINK_MS;
   prevServerBotsEnv = process.env.POKER_SERVER_TOURNAMENT_BOTS;
 });
 
-afterEach(() => {
-  if (prevBotEnv === undefined) delete process.env.POKER_BOT_ADDRESSES;
-  else process.env.POKER_BOT_ADDRESSES = prevBotEnv;
+afterEach(async () => {
+  // Restore the DB-backed registry that setup.ts loaded for the other suites.
+  await loadPokerBotRegistry(testPool);
   if (prevThinkEnv === undefined) delete process.env.POKER_SERVER_BOT_THINK_MS;
   else process.env.POKER_SERVER_BOT_THINK_MS = prevThinkEnv;
   if (prevServerBotsEnv === undefined) delete process.env.POKER_SERVER_TOURNAMENT_BOTS;
@@ -126,8 +128,8 @@ afterEach(() => {
 });
 
 describe('tickServerTournamentBots (integration)', () => {
-  it('acts in-process when the current actor is in POKER_BOT_ADDRESSES (tournament table)', async () => {
-    process.env.POKER_BOT_ADDRESSES = PLAYER_2.toLowerCase();
+  it('acts in-process when the current actor is a registered bot (tournament table)', async () => {
+    setPokerBotRegistryForTesting(PLAYER_2_AS_BOT);
     process.env.POKER_SERVER_BOT_THINK_MS = '200';
     delete process.env.POKER_SERVER_TOURNAMENT_BOTS;
 
@@ -167,8 +169,8 @@ describe('tickServerTournamentBots (integration)', () => {
     expect(['call', 'raise', 'bet', 'check', 'fold']).toContain(last.rows[0]?.action);
   });
 
-  it('no-ops when POKER_BOT_ADDRESSES is empty', async () => {
-    delete process.env.POKER_BOT_ADDRESSES;
+  it('no-ops when the registry has no bots', async () => {
+    setPokerBotRegistryForTesting([]);
 
     const tournamentId = await createTestTournament();
     const tableId = await joinThroughScheduledStart(tournamentId, [PLAYER_1, PLAYER_2]);
@@ -199,7 +201,7 @@ describe('tickServerTournamentBots (integration)', () => {
   });
 
   it('no-ops when POKER_SERVER_TOURNAMENT_BOTS=false', async () => {
-    process.env.POKER_BOT_ADDRESSES = PLAYER_2.toLowerCase();
+    setPokerBotRegistryForTesting(PLAYER_2_AS_BOT);
     process.env.POKER_SERVER_BOT_THINK_MS = '200';
     process.env.POKER_SERVER_TOURNAMENT_BOTS = 'false';
 

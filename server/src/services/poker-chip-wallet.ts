@@ -114,7 +114,13 @@ export type PokerChipLedgerReason =
   | 'referral_reward'   // referral: % of a referee's rakeback credited to their referrer
   | 'referral_clawback' // referral: admin reversal of earned referral rewards when a referrer is blacklisted for abuse
   | 'referral_welcome_clawback' // referral: admin reversal of a welcome bonus paid to a farmed referee
-  | 'weekly_drop_prize'; // The Weekly Drop raffle prize (WEEKLY_DROP_SPEC.md) — auto-credit at draw
+  | 'weekly_drop_prize' // The Weekly Drop raffle prize (WEEKLY_DROP_SPEC.md) — auto-credit at draw
+  // In-house poker bots (lib/poker-bot-bankroll.ts). Transfers between the
+  // POKER_BOT_BANKROLL_WALLET house wallet and a bot wallet. Deliberately NOT
+  // `_bet` / `_payout` / `_refund` suffixed: bot bankroll is house liability
+  // management, never wager turnover for VIP tiers or the Weekly Drop.
+  | 'bot_bankroll_fund'   // bankroll → bot top-up before a buy-in
+  | 'bot_bankroll_sweep'; // bot → bankroll after the event
 
 const DEFAULT_PLATFORM_FEE_WALLET = '0x41682815b05fe6b54a6c0f8813bb99423ee0309d';
 

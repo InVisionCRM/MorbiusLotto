@@ -7,6 +7,7 @@ exports.WebSocketService = void 0;
 const ws_1 = require("ws");
 const tournament_service_1 = require("./tournament.service");
 const cosmetics_catalog_1 = require("../lib/cosmetics-catalog");
+const poker_bot_registry_1 = require("../lib/poker-bot-registry");
 const logger_1 = require("../utils/logger");
 const safe_bigint_1 = require("../utils/safe-bigint");
 const uuid_1 = require("uuid");
@@ -196,7 +197,7 @@ class WebSocketService {
                     logger_1.logger.error('Poker post-hand recovery sweep error', err);
                 }
             }, 2000);
-            // In-process tournament bot actions (POKER_BOT_ADDRESSES on game server; no WS child required)
+            // In-process tournament bot actions (poker_bot_accounts registry; no WS child required)
             this.pokerServerBotInterval = setInterval(async () => {
                 try {
                     if (typeof this.pokerGameService.tickServerTournamentBots === 'function') {
@@ -535,7 +536,8 @@ class WebSocketService {
         // ── Bot-token auth ────────────────────────────────────────────────
         // Server-side scripts (poker-bot, simulators, CI) authenticate by
         // sending a shared secret in the `x-bot-auth-token` header. The
-        // claimed `?address=` must also appear in POKER_BOT_ADDRESSES. This
+        // claimed `?address=` must also be an active row in poker_bot_accounts
+        // (lib/poker-bot-registry.ts, loaded at startup — no env list). This
         // path is unreachable from browsers because the WebSocket API in
         // browsers can't set custom headers on upgrade requests — even if
         // the token leaked into a client bundle, a browser couldn't use it.
@@ -549,11 +551,7 @@ class WebSocketService {
                 : undefined;
         const expectedBotToken = process.env.POKER_BOT_AUTH_TOKEN?.trim();
         if (botToken && expectedBotToken && botToken === expectedBotToken && claimedAddress) {
-            const botAddresses = (process.env.POKER_BOT_ADDRESSES ?? '')
-                .split(',')
-                .map(a => a.trim().toLowerCase())
-                .filter(Boolean);
-            if (botAddresses.includes(claimedAddress)) {
+            if ((0, poker_bot_registry_1.isPokerBotWallet)(claimedAddress)) {
                 ws.playerAddress = claimedAddress;
                 ws.isAuthenticated = true;
                 logger_1.logger.info('WS Auth: bot token accepted', { connectionId, playerAddress: claimedAddress });
@@ -575,7 +573,7 @@ class WebSocketService {
                 });
                 return;
             }
-            logger_1.logger.warn('WS Auth: bot token presented but address not in POKER_BOT_ADDRESSES', { connectionId, claimedAddress });
+            logger_1.logger.warn('WS Auth: bot token presented but address is not a registered poker bot', { connectionId, claimedAddress });
         }
 
         // For BROWSER clients with no valid cookie (e.g. user landed on poker

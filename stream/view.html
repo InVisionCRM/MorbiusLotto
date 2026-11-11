@@ -1,0 +1,132 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>Morbius Poker Live</title>
+<style>
+  :root { --w: 1280px; --h: 720px; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: var(--w); height: var(--h); overflow: hidden; background: #05070f; color: #e8eefc;
+    font-family: "DejaVu Sans", "Noto Sans", Arial, sans-serif; }
+  #top { position: absolute; left: 0; right: 0; top: 0; height: 56px; display: flex; align-items: center;
+    justify-content: space-between; padding: 0 28px; background: linear-gradient(#0b1224, #05070f); border-bottom: 1px solid #1c2a4a; }
+  #title { font-size: 24px; font-weight: 700; letter-spacing: .5px; }
+  #title .live { background: #e11d48; color: #fff; font-size: 14px; padding: 3px 8px; border-radius: 4px; margin-right: 10px; vertical-align: middle; }
+  #meta { font-size: 18px; color: #9fb3d9; }
+  #felt { position: absolute; left: 140px; top: 150px; width: 1000px; height: 470px; border-radius: 235px;
+    background: radial-gradient(ellipse at center, #136a46 0%, #0b4a31 60%, #07301f 100%);
+    border: 14px solid #2a1a0e; box-shadow: 0 0 0 4px #5b3a1e, 0 20px 60px rgba(0,0,0,.6) inset; }
+  #board { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -60%); display: flex; gap: 10px; }
+  #pot { position: absolute; left: 50%; top: 50%; transform: translate(-50%, 70%); font-size: 22px; font-weight: 700;
+    background: rgba(0,0,0,.45); padding: 6px 16px; border-radius: 18px; }
+  #street { position: absolute; left: 50%; top: 18%; transform: translateX(-50%); font-size: 15px; color: #bfe8d2; letter-spacing: 3px; text-transform: uppercase; }
+  .card { width: 58px; height: 82px; border-radius: 7px; background: #fff; color: #111; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; font-weight: 700; box-shadow: 0 3px 8px rgba(0,0,0,.5); }
+  .card .r { font-size: 28px; line-height: 1; } .card .s { font-size: 26px; line-height: 1; }
+  .card.red { color: #d01b2e; }
+  .card.back { background: repeating-linear-gradient(45deg, #1d3b8f, #1d3b8f 6px, #2c55c4 6px, #2c55c4 12px); border: 3px solid #fff; }
+  .card.empty { background: rgba(255,255,255,.08); box-shadow: none; border: 2px dashed rgba(255,255,255,.18); }
+  .small .card { width: 40px; height: 56px; border-radius: 5px; } .small .card .r { font-size: 19px; } .small .card .s { font-size: 17px; }
+  .seat { position: absolute; width: 190px; transform: translate(-50%, -50%); text-align: center; }
+  .seat .cards { display: flex; gap: 4px; justify-content: center; height: 58px; margin-bottom: 4px; }
+  .seat .plate { background: rgba(10,16,32,.92); border: 2px solid #2a3b63; border-radius: 12px; padding: 6px 8px; }
+  .seat .name { font-size: 16px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .seat .stack { font-size: 15px; color: #ffd36b; }
+  .seat.acting .plate { border-color: #facc15; box-shadow: 0 0 18px #facc15; }
+  .seat.folded { opacity: .45; }
+  .seat.out { opacity: .25; }
+  .seat.winner .plate { border-color: #22c55e; box-shadow: 0 0 22px #22c55e; }
+  .seat .bet { position: absolute; left: 50%; transform: translateX(-50%); font-size: 14px; background: #000a; padding: 2px 8px; border-radius: 10px; color: #fff; white-space: nowrap; }
+  .seat .badge { display: inline-block; font-size: 11px; font-weight: 700; border-radius: 50%; width: 20px; height: 20px; line-height: 20px; margin-left: 4px; }
+  .badge.d { background: #fff; color: #000; } .badge.sb { background: #60a5fa; color: #000; } .badge.bb { background: #f59e0b; color: #000; }
+  .seat .act { font-size: 13px; color: #a5f3fc; min-height: 16px; }
+  #banner { position: absolute; left: 50%; top: 452px; transform: translateX(-50%); font-size: 22px; font-weight: 700; color: #bbf7d0;
+    background: rgba(0,0,0,.6); padding: 8px 22px; border-radius: 10px; white-space: nowrap; }
+  #foot { position: absolute; right: 22px; bottom: 10px; font-size: 14px; color: #6b7fa8; }
+</style>
+</head>
+<body>
+  <div id="top"><div id="title"><span class="live">LIVE</span><span id="tname">Morbius Poker</span></div><div id="meta"></div></div>
+  <div id="felt"><div id="street"></div><div id="board"></div><div id="pot"></div></div>
+  <div id="seats"></div>
+  <div id="banner" style="display:none"></div>
+  <div id="foot">morbius.io/poker · 7 bots (_bot) vs humans</div>
+<script>
+const tableId = location.pathname.split('/').pop();
+const qs = new URLSearchParams(location.search);
+document.getElementById('tname').textContent = qs.get('name') || 'Beat the Bots';
+const RANKS = ['2','3','4','5','6','7','8','9','10','J','Q','K','A'];
+const SUITS = ['♣','♦','♥','♠'];
+const fmt = (v) => { const n = Number(v || 0); return n.toLocaleString('en-US'); };
+function cardEl(n, opts = {}) {
+  const d = document.createElement('div');
+  if (opts.back) { d.className = 'card back'; return d; }
+  if (n == null || n < 0) { d.className = 'card empty'; return d; }
+  const s = Math.floor(n / 13), r = n % 13;
+  d.className = 'card' + (s === 1 || s === 2 ? ' red' : '');
+  d.innerHTML = `<div class="r">${RANKS[r]}</div><div class="s">${SUITS[s]}</div>`;
+  return d;
+}
+// 10 seat anchors around the felt (felt: left 140, top 120, 1000x470 incl. border)
+function seatPos(i, n) {
+  const cx = 640, cy = 385, rx = 560, ry = 262;
+  const a = Math.PI / 2 + (2 * Math.PI * i) / n;
+  return { x: cx + rx * Math.cos(a), y: cy + ry * Math.sin(a) };
+}
+const short = (a) => a ? a.slice(0, 6) + '…' + a.slice(-4) : '';
+function render(st) {
+  const h = st.currentHand;
+  document.getElementById('meta').textContent = `Blinds ${fmt(st.smallBlind)}/${fmt(st.bigBlind)}`;
+  const board = document.getElementById('board'); board.innerHTML = '';
+  const cc = h?.communityCards || [];
+  for (let i = 0; i < 5; i++) board.appendChild(cardEl(cc[i] ?? null));
+  document.getElementById('pot').textContent = h ? `Pot ${fmt(h.pot)}` : 'Waiting for next hand';
+  document.getElementById('street').textContent = h?.street || '';
+  const winners = new Set((h?.winners || []).map((w) => (w.address || '').toLowerCase()));
+  const showdown = h?.showdownHands || {};
+  const seatsEl = document.getElementById('seats'); seatsEl.innerHTML = '';
+  const n = st.maxSeats || st.seats.length;
+  for (const s of st.seats) {
+    if (!s.playerAddress) continue;
+    const p = seatPos(s.position, n);
+    const el = document.createElement('div');
+    const addr = s.playerAddress.toLowerCase();
+    const out = ['busted', 'eliminated', 'sitting_out', 'left'].includes(s.status) || (Number(s.stack) <= 0 && Number(s.currentBet) <= 0 && !h);
+    el.className = 'seat' + (s.isActing ? ' acting' : '') + (s.folded ? ' folded' : '') + (out ? ' out' : '') + (winners.has(addr) ? ' winner' : '');
+    el.style.left = p.x + 'px'; el.style.top = p.y + 'px';
+    const cards = document.createElement('div'); cards.className = 'cards small';
+    const shown = showdown[addr] || showdown[s.playerAddress];
+    if (shown && shown.length) shown.forEach((c) => cards.appendChild(cardEl(c)));
+    else if (h && !s.folded && !out) { cards.appendChild(cardEl(0, { back: true })); cards.appendChild(cardEl(0, { back: true })); }
+    el.appendChild(cards);
+    const plate = document.createElement('div'); plate.className = 'plate';
+    const badges = (s.isDealer ? '<span class="badge d">D</span>' : '') + (s.isSmallBlind ? '<span class="badge sb">S</span>' : '') + (s.isBigBlind ? '<span class="badge bb">B</span>' : '');
+    const last = h?.streetActions?.[s.position];
+    plate.innerHTML = `<div class="name">${(s.displayName || short(s.playerAddress)).replace(/[<>&]/g, '')}${badges}</div>
+      <div class="stack">${fmt(s.stack)}</div><div class="act">${last ? (last.action + (Number(last.amount) > 0 ? ' ' + fmt(last.amount) : '')) : ''}</div>`;
+    el.appendChild(plate);
+    if (Number(s.currentBet) > 0) {
+      const b = document.createElement('div'); b.className = 'bet'; b.textContent = fmt(s.currentBet);
+      b.style.top = p.y > 385 ? '-22px' : 'calc(100% + 6px)';
+      el.appendChild(b);
+    }
+    seatsEl.appendChild(el);
+  }
+  const banner = document.getElementById('banner');
+  if (h?.winners?.length) {
+    const nameOf = (a) => { const s = st.seats.find((x) => (x.playerAddress || '').toLowerCase() === (a || '').toLowerCase()); return s?.displayName || short(a); };
+    banner.textContent = h.winners.map((w) => `${nameOf(w.address)} wins ${fmt(w.amount)}${w.handName ? ' — ' + w.handName : ''}`).join('   ·   ');
+    banner.style.display = '';
+  } else banner.style.display = 'none';
+}
+async function tick() {
+  try {
+    const r = await fetch(`/api/state/${tableId}`, { cache: 'no-store' });
+    if (r.ok) render(await r.json());
+  } catch {}
+  setTimeout(tick, 1000);
+}
+tick();
+</script>
+</body>
+</html>

@@ -53,7 +53,9 @@ import { TournamentSchedulerService } from './services/tournament-scheduler.serv
 import { WebSocketService } from './services/websocket.service';
 import { PokerGameService } from './services/poker-game.service';
 import { PokerTournamentService } from './services/poker-tournament.service';
+import { PokerBotScheduleService, readBotScheduleConfig } from './services/poker-bot-schedule.service';
 import { chipsToWei } from './lib/poker-chip-scale';
+import { loadPokerBotRegistry, syncPokerBotProfiles } from './lib/poker-bot-registry';
 import { applyPokerChipDelta, getPokerChipBalance, setWeeklyDropWagerHook, setWeeklyDropRefundHook } from './services/poker-chip-wallet';
 import { WeeklyDropService } from './services/weekly-drop.service';
 import { registerDropRoutes } from './routes/drop.routes';
@@ -453,6 +455,27 @@ async function initializeServices() {
     // the gap shows up in the deploy log rather than in someone's console.
     await warnOnMissingGameTables(dbService);
 
+    // In-house poker bots: load `poker_bot_accounts` into the registry BEFORE
+    // the WS server exists — bot-token auth, tournament bot ticks and the
+    // Weekly Drop exclusion all read it synchronously. Fails the boot (no
+    // env fallback) if migration 200 hasn't run, so the gap is in the deploy
+    // log rather than a silent "bots never show up".
+    let pokerBots;
+    try {
+      pokerBots = await loadPokerBotRegistry(dbService.getPool());
+    } catch (err) {
+      throw new Error(
+        `poker_bot_accounts registry failed to load — run migrations/200_poker_bot_accounts.sql: ${(err as Error).message}`,
+      );
+    }
+    await syncPokerBotProfiles(dbService.getPool());
+    logger.info('Poker bot registry loaded', { count: pokerBots.length, bots: pokerBots.map((b) => b.displayName) });
+    setInterval(() => {
+      loadPokerBotRegistry(dbService.getPool()).catch((err) =>
+        logger.error('Poker bot registry refresh failed', { error: (err as Error).message }),
+      );
+    }, 60_000).unref();
+
     // Initialize WebSocket service. authService is passed last so WS upgrades
     // can read the SIWE session cookie and skip the EIP-712 challenge for
     // already-signed-in users (eliminates the second in-game wallet popup).
@@ -518,6 +541,50 @@ async function initializeServices() {
     freerollScheduler = new FreerollSchedulerService(dbService.getPool(), tournamentService);
     freerollScheduler.setPokerTournamentService(pokerTournamentService);
     freerollScheduler.start();
+
+    // Scheduled "Beat the Bots" games (POKER_BOT_SCHEDULE_ENABLED=true; see poker-bot-schedule.service.ts)
+    pokerBotScheduler = new PokerBotScheduleService(dbService.getPool(), pokerTournamentService, pokerGameService);
+    pokerBotScheduler.start();
+    const botSchedulerRef = pokerBotScheduler;
+    app.get('/api/poker/bot-schedule', async (_req, res) => {
+      try {
+        const cfg = readBotScheduleConfig();
+        const games = await botSchedulerRef.listRecent(12);
+        res.json({
+          enabled: cfg.enabled,
+          times: cfg.times.map((t) => t.label),
+          timeZone: cfg.timeZone,
+          bots: cfg.bots,
+          seats: cfg.seats,
+          buyIn: cfg.buyIn.toString(),
+          games,
+        });
+      } catch (err) {
+        logger.error('GET /api/poker/bot-schedule failed', { error: (err as Error)?.message });
+        res.status(500).json({ error: 'Failed to load bot schedule' });
+      }
+    });
+    // Public, read-only table snapshot for the X stream renderer (stream/ service).
+    // Only tables of scheduled bot games; hole cards are never included (viewer = null),
+    // showdown cards appear only once the hand is shown down — same as any seat sees.
+    app.get('/api/poker/bot-schedule/table/:tableId/state', async (req, res) => {
+      try {
+        const tableId = String(req.params.tableId || '');
+        if (!/^[0-9a-f-]{36}$/i.test(tableId)) return res.status(400).json({ error: 'bad tableId' });
+        const ok = await dbService.getPool().query(
+          `SELECT 1 FROM poker_tables pt
+             JOIN poker_bot_scheduled_games g ON g.tournament_id = pt.tournament_id
+            WHERE pt.id = $1 LIMIT 1`,
+          [tableId],
+        );
+        if (ok.rows.length === 0) return res.status(404).json({ error: 'not a scheduled bot game table' });
+        const state = await pokerGameService.getTableState(tableId, null);
+        res.set('Cache-Control', 'no-store');
+        res.json({ ...state, myHoleCards: null });
+      } catch (err) {
+        res.status(500).json({ error: (err as Error)?.message || 'failed' });
+      }
+    });
 
     // Tournament scheduler (time-expired buy-in tournaments, stuck-tournament recovery)
     tournamentScheduler = new TournamentSchedulerService(dbService.getPool(), tournamentService);
@@ -5116,6 +5183,7 @@ async function initializeServices() {
 
 // Graceful shutdown (schedulers ref set in initializeServices)
 let freerollScheduler: FreerollSchedulerService | null = null;
+let pokerBotScheduler: PokerBotScheduleService | null = null;
 let tournamentScheduler: TournamentSchedulerService | null = null;
 let holderChipRewardsServiceRef: HolderChipRewardsService | null = null;
 let merkleDropsService: MerkleDropsService | null = null;
@@ -5150,6 +5218,7 @@ process.on('unhandledRejection', (reason) => {
 process.on('SIGTERM', () => {
   logger.info('SIGTERM received, shutting down gracefully');
   freerollScheduler?.stop();
+  pokerBotScheduler?.stop();
   tournamentScheduler?.stop();
   merkleDropsService?.stopCron();
   merkleDropsLPService?.stopCron();
@@ -5163,6 +5232,7 @@ process.on('SIGTERM', () => {
 process.on('SIGINT', () => {
   logger.info('SIGINT received, shutting down gracefully');
   freerollScheduler?.stop();
+  pokerBotScheduler?.stop();
   tournamentScheduler?.stop();
   merkleDropsService?.stopCron();
   merkleDropsLPService?.stopCron();

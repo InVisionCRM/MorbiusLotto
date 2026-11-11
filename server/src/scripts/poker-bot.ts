@@ -20,19 +20,15 @@
  *
  * Env:
  *   NEXT_PUBLIC_WEBSOCKET_URL or WS_URL - WebSocket URL
- *   DATABASE_URL - Required (unless POKER_BOT_SKIP_DB=1). Same DB as the server: upserts each bot into
- *     `players` with balance at least the needed buy-in floor, and ensures a placeholder `chat_display_names` row.
- *     Cash and tournament modes use the same POKER_BOT_ADDRESSES list — no separate tournament wallets.
- *   POKER_BOT_SKIP_DB - If 1/true, skip all DB writes (you must already have players + balance).
- *   POKER_BOT_BUY_IN - Buy-in amount in human chips (default: 1000)
- *   POKER_BOT_ADDRESSES - Comma-separated bot wallet addresses. Server uses the same env var as an
- *     allowlist for the bot-token auth path, so the value MUST match what's set server-side.
+ *   DATABASE_URL - Required. Same DB as the server. Bot identities come from `poker_bot_accounts`
+ *     (migration 200) and bot chips are funded through the ledger from POKER_BOT_BANKROLL_WALLET
+ *     (lib/poker-bot-bankroll.ts) — nothing is minted.
+ *   POKER_BOT_BANKROLL_WALLET - House wallet debited to fund bot buy-ins (must hold enough chips).
+ *   POKER_BOT_BUY_IN - Buy-in amount in human chips (default: 80 BB, clamped to table bounds)
  *   POKER_BOT_AUTH_TOKEN - Shared secret. Sent as `x-bot-auth-token` on the WS upgrade. Server must
- *     have the same value in its env, plus the bot's wallet in POKER_BOT_ADDRESSES. Without this,
- *     bots can't connect to a server running with SIWE / REQUIRE_WS_AUTH (i.e. any prod-like setup).
+ *     have the same value in its env; the bot's wallet must be an active `poker_bot_accounts` row.
  *   POKER_BOT_TOURNAMENT_ID - UUID of poker tournament (alternative to --tournament)
  *   POKER_BOT_TOURNAMENT_PIN - PIN for private tournaments
- *   CYPRESS_POKER_TEST_PLAYERS / POKER_TEST_PLAYERS - fallback wallet list
  */
 
 import path from 'path';
@@ -44,9 +40,9 @@ dotenv.config();
 
 import WebSocket from 'ws';
 import { Pool } from 'pg';
-import { randomPlaceholderConfig } from '../lib/cosmetics-catalog';
 import { decidePokerBotAction } from '../lib/poker-bot-ai';
-import { getPokerBotWalletAddressList } from '../lib/poker-bot-wallet-pool';
+import { loadPokerBotRegistry, syncPokerBotProfiles, listPokerBotAccounts } from '../lib/poker-bot-registry';
+import { fundPokerBotToBalance } from '../lib/poker-bot-bankroll';
 
 // --------------- Config ---------------
 
@@ -59,29 +55,8 @@ const DATABASE_URL = process.env.DATABASE_URL;
 
 const MAX_BOTS = 10;
 
-const BOT_ADDRESSES = getPokerBotWalletAddressList({ server: false });
-
-const BOT_DISPLAY_NAMES = [
-  'Brunson',
-  'Hellmuth',
-  'Negreanu',
-  'Ivey',
-  'Ungar',
-  'Moss',
-  'Chan',
-  'Dwan',
-  'Seidel',
-  'Antonius',
-  'Esfandiari',
-  'Selbst',
-];
-
-function botDisplayNameFor(address: string): string {
-  const normalized = address.toLowerCase();
-  const idx = BOT_ADDRESSES.indexOf(normalized);
-  if (idx >= 0 && idx < BOT_DISPLAY_NAMES.length) return BOT_DISPLAY_NAMES[idx];
-  return `Bot ${normalized.slice(2, 6)}${normalized.slice(-2)}`.toUpperCase();
-}
+/** Filled by `initBotRegistry()` from `poker_bot_accounts` — lowercase addresses in table order. */
+let BOT_ADDRESSES: string[] = [];
 
 const POKER_CASH_MIN_BUY_IN_BB = 40;
 const POKER_CASH_MAX_BUY_IN_BB = 100;
@@ -134,7 +109,7 @@ function createWsClient(address: string): Promise<WebSocket> {
   const withAuth = `${url}${url.includes('?') ? '&' : '?'}address=${address.toLowerCase()}`;
   // Send the bot-auth shared secret if configured. Server bypasses SIWE /
   // EIP-712 for upgrade requests that present a matching token AND a
-  // claimed address that's in POKER_BOT_ADDRESSES on the server side.
+  // claimed address that is an active poker_bot_accounts row on the server side.
   // Browsers can't set custom headers on WS upgrades, so this is safe to
   // ship alongside SIWE without weakening browser auth.
   const botToken = process.env.POKER_BOT_AUTH_TOKEN?.trim();
@@ -185,9 +160,9 @@ function waitForAuth(ws: WebSocket): Promise<void> {
           ws.removeListener('message', handler);
           reject(new Error(
             'Server is asking for an EIP-712 signed auth challenge — bots have no private key. '
-            + 'Configure POKER_BOT_AUTH_TOKEN on the server AND POKER_BOT_ADDRESSES with this bot wallet, '
-            + 'then set the same POKER_BOT_AUTH_TOKEN in the bot script env. (For pure local testing without '
-            + 'tokens, DISABLE_WS_AUTH=true on the server still works.)'
+            + 'Configure POKER_BOT_AUTH_TOKEN on the server and make sure this wallet is an active '
+            + 'poker_bot_accounts row, then set the same POKER_BOT_AUTH_TOKEN in the bot script env. '
+            + '(For pure local testing without tokens, DISABLE_WS_AUTH=true on the server still works.)'
           ));
         }
         if (msg.type === 'siwe_required') {
@@ -195,7 +170,7 @@ function waitForAuth(ws: WebSocket): Promise<void> {
           ws.removeListener('message', handler);
           reject(new Error(
             'Server is asking for SIWE sign-in — bots cannot sign. This usually means POKER_BOT_AUTH_TOKEN '
-            + 'is missing or mismatched, OR this bot address is not in the server-side POKER_BOT_ADDRESSES list. '
+            + 'is missing or mismatched, OR this bot address is not an active poker_bot_accounts row. '
             + '(Note: the server only takes the SIWE-required path when it sees an Origin header, so if you see '
             + 'this from a Node bot something is setting Origin on the upgrade.)'
           ));
@@ -301,11 +276,20 @@ function actionDecisionKey(state: BotState): string {
   return `${state.handId}:${state.street}:${state.actingPosition}:${t}:${state.toCall}`;
 }
 
-// --------------- Database: players row + minimum balance ---------------
+// --------------- Database: bot registry + ledgered bankroll ---------------
 
-const POKER_BOT_SKIP_DB = ['1', 'true', 'yes'].includes(
-  String(process.env.POKER_BOT_SKIP_DB ?? '').toLowerCase(),
-);
+function openPool(): Pool {
+  if (!DATABASE_URL) {
+    throw new Error(
+      'DATABASE_URL is required: bot identities live in poker_bot_accounts and bot chips are funded ' +
+        'through the ledger. Point it at the same Postgres as the server (e.g. server/.env).',
+    );
+  }
+  return new Pool({
+    connectionString: DATABASE_URL,
+    ssl: DATABASE_URL.includes('neon') ? { rejectUnauthorized: false } : undefined,
+  });
+}
 
 function computeBuyInChips(bigBlindChips: bigint): bigint {
   const envBuyIn = process.env.POKER_BOT_BUY_IN;
@@ -319,60 +303,42 @@ function computeBuyInChips(bigBlindChips: bigint): bigint {
   return bigBlindChips * BigInt(DEFAULT_BUY_IN_BB);
 }
 
+/** Load `poker_bot_accounts` into the registry and sync bot profiles. Throws if no bots exist. */
+async function initBotRegistry(): Promise<void> {
+  const pool = openPool();
+  try {
+    const bots = await loadPokerBotRegistry(pool);
+    if (bots.length === 0) {
+      throw new Error('poker_bot_accounts has no active bots — insert rows (see migrations/200_poker_bot_accounts.sql).');
+    }
+    await syncPokerBotProfiles(pool);
+    BOT_ADDRESSES = listPokerBotAccounts().map((b) => b.walletAddress);
+    console.log(`[Bot] Registry: ${bots.map((b) => `${b.displayName} (${b.walletAddress.slice(-4)})`).join(', ')}`);
+  } finally {
+    await pool.end();
+  }
+}
+
 /**
- * Ensures each bot has `player_poker_chips.balance` >= minChips (cash join / tournament buy-in debit).
- * Also ensures `players` row + display name for WS auth. Skips if POKER_BOT_SKIP_DB is set.
+ * Top each bot up to exactly `targetChips` from POKER_BOT_BANKROLL_WALLET through the chip ledger
+ * (reason `bot_bankroll_fund`). One transaction per bot; throws if the bankroll can't cover it.
  */
-async function ensureBotChipBalances(addresses: string[], minChips: bigint): Promise<void> {
-  if (POKER_BOT_SKIP_DB) {
-    console.log(
-      '[Bot] POKER_BOT_SKIP_DB is set — skipping DB provisioning. Confirm player_poker_chips + players yourself.',
-    );
-    return;
-  }
-  if (!DATABASE_URL) {
-    throw new Error(
-      'DATABASE_URL is required so bots get poker chip balances. ' +
-        'Point it at the same Postgres as the server (e.g. server/.env). ' +
-        'If you already seeded manually, set POKER_BOT_SKIP_DB=1.',
-    );
-  }
-  const pool = new Pool({
-    connectionString: DATABASE_URL,
-    ssl: DATABASE_URL.includes('neon') ? { rejectUnauthorized: false } : undefined,
-  });
+async function fundBots(addresses: string[], targetChips: bigint): Promise<void> {
+  const pool = openPool();
   try {
     for (const addr of addresses) {
-      const normalized = addr.toLowerCase();
-      await pool.query(
-        `INSERT INTO players (wallet_address, balance)
-         VALUES ($1, '0')
-         ON CONFLICT (wallet_address) DO UPDATE SET last_seen = NOW()`,
-        [normalized],
-      );
-
-      await pool.query(
-        `INSERT INTO player_poker_chips (wallet_address, balance)
-         VALUES ($1, $2::NUMERIC)
-         ON CONFLICT (wallet_address)
-         DO UPDATE SET balance = GREATEST(player_poker_chips.balance, EXCLUDED.balance), updated_at = NOW()`,
-        [normalized, minChips.toString()],
-      );
-
-      const botName = botDisplayNameFor(normalized);
-      const avatarConfig = randomPlaceholderConfig(new Set());
-      await pool.query(
-        `INSERT INTO chat_display_names (wallet_address, display_name, profile_image_url, avatar_config, bio, x_handle, tg_handle)
-         VALUES ($1, $2, NULL, $3::jsonb, NULL, NULL, NULL)
-         ON CONFLICT (wallet_address)
-         DO UPDATE SET
-           display_name = EXCLUDED.display_name,
-           avatar_config = COALESCE(chat_display_names.avatar_config, EXCLUDED.avatar_config),
-           updated_at = NOW()`,
-        [normalized, botName, JSON.stringify(avatarConfig)],
-      );
-
-      console.log(`[Bot] Ensured poker chips >= ${minChips.toString()} for ${normalized}`);
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        const { funded, balance } = await fundPokerBotToBalance(client, addr, targetChips);
+        await client.query('COMMIT');
+        console.log(`[Bot] ${addr.slice(-4)} funded +${funded.toString()} → balance ${balance.toString()} chips`);
+      } catch (err) {
+        await client.query('ROLLBACK').catch(() => undefined);
+        throw err;
+      } finally {
+        client.release();
+      }
     }
   } finally {
     await pool.end();
@@ -393,9 +359,6 @@ interface TableSummary {
 
 /** Connect with one bot, list tables (or create one), return tableId, then disconnect. */
 async function discoverOrCreateTable(): Promise<string> {
-  if (BOT_ADDRESSES.length === 0) {
-    throw new Error('No valid bot addresses configured. Set POKER_BOT_ADDRESSES.');
-  }
   const scoutAddr = BOT_ADDRESSES[0];
   const ws = await createWsClient(scoutAddr);
   await waitForAuth(ws);
@@ -438,7 +401,6 @@ const TOURNAMENT_TABLE_WAIT_MS = 60 * 60 * 1000;
 const TOURNAMENT_POLL_MS = 2000;
 
 async function getTournamentBuyInChips(tournamentId: string): Promise<bigint> {
-  if (BOT_ADDRESSES.length === 0) throw new Error('No bot addresses configured');
   const scoutAddr = BOT_ADDRESSES[0];
   const ws = await createWsClient(scoutAddr);
   await waitForAuth(ws);
@@ -634,9 +596,7 @@ async function runBot(address: string, tableId: string, buyInChips: bigint): Pro
 // --------------- Entry point ---------------
 
 async function main() {
-  if (BOT_ADDRESSES.length === 0) {
-    throw new Error('No valid bot addresses configured. Set POKER_BOT_ADDRESSES.');
-  }
+  await initBotRegistry();
   const argv = [...process.argv.slice(2)];
   const tIdx = argv.indexOf('--tournament');
   let tournamentId: string | null = null;
@@ -668,8 +628,8 @@ async function main() {
     console.log(`Buy-in (poker chips): ${buyInChips.toString()}`);
     console.log(`WS URL: ${WS_URL}\n`);
 
-    const minChipFloor = buyInChips > 0n ? buyInChips * 20n : 1_000_000n;
-    await ensureBotChipBalances(botAddrs, minChipFloor);
+    // Fund exactly the buy-in: nothing more sits in a bot wallet than the event needs.
+    if (buyInChips > 0n) await fundBots(botAddrs, buyInChips);
 
     const promises = botAddrs.map((addr) =>
       runBotTournament(addr, tournamentId!, pinCode).catch((err) => {
@@ -724,7 +684,8 @@ async function main() {
   console.log(`Buy-in: ${buyInChips.toString()} chips (${Number(buyInChips / bigBlindChips)} BB)`);
   console.log(`WS URL: ${WS_URL}\n`);
 
-  await ensureBotChipBalances(botAddrs, buyInChips * 20n);
+  // Fund exactly the buy-in: nothing more sits in a bot wallet than the session needs.
+  await fundBots(botAddrs, buyInChips);
 
   const promises = botAddrs.map((addr) =>
     runBot(addr, tableId, buyInChips).catch((err) => {

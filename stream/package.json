@@ -1,0 +1,1 @@
+{ "name": "morbius-poker-stream", "version": "1.0.0", "private": true, "type": "module", "scripts": { "start": "node worker.mjs" }, "engines": { "node": ">=20" } }

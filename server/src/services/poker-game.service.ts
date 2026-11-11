@@ -24,7 +24,7 @@ import {
   POKER_CASH_MIN_BUY_IN_BB,
 } from '../lib/poker-cash-buy-in';
 import { decidePokerBotAction } from '../lib/poker-bot-ai';
-import { getServerPokerBotAddressSet } from '../lib/poker-server-bot-addresses';
+import { getPokerBotAccount, getPokerBotAddressSet, isPokerBotWallet } from '../lib/poker-bot-registry';
 import {
   railCashPlayerJoined,
   railCashTableCreated,
@@ -1202,7 +1202,7 @@ export class PokerGameService {
     // The Rail: announce the cash-table join to the Telegram group feed.
     // Fire-and-forget and best-effort; server bots are skipped so they don't
     // flood the feed, and railCashPlayerJoined rate-limits repeat joins itself.
-    if (!getServerPokerBotAddressSet().has(normalized)) {
+    if (!isPokerBotWallet(normalized)) {
       void railCashPlayerJoined(this.getPool(), tableId, normalized);
     }
 
@@ -3384,9 +3384,8 @@ export class PokerGameService {
   // tickServerTournamentBots
   // ---------------------------------------------------------------------------
   //
-  // Tournament "bots": in-process actions for seats whose address is in the same wallet pool as
-  // CLI `poker-bot.ts` — POKER_BOT_ADDRESSES, then CYPRESS/POKER_TEST_PLAYERS, then built-in defaults.
-  // Optional: POKER_SERVER_BOT_STRICT_ADDRESSES=true to require explicit POKER_BOT_ADDRESSES only.
+  // Tournament "bots": in-process actions for seats whose address is an active row in
+  // `poker_bot_accounts` (lib/poker-bot-registry.ts — loaded at startup, no env fallback).
   //
   // Disable: POKER_SERVER_TOURNAMENT_BOTS=false
   // Think delay (ms): POKER_SERVER_BOT_THINK_MS (default 1200, clamped 200–10000)
@@ -3395,7 +3394,7 @@ export class PokerGameService {
     const off = String(process.env.POKER_SERVER_TOURNAMENT_BOTS ?? '').toLowerCase();
     if (off === 'false' || off === '0' || off === 'no') return;
 
-    const botSet = getServerPokerBotAddressSet();
+    const botSet = getPokerBotAddressSet();
     if (botSet.size === 0) return;
 
     let thinkMs = 1200;
@@ -3444,6 +3443,14 @@ export class PokerGameService {
         const mySeat = state.seats.find(
           (s) => s.playerAddress && this.normalizeAddress(s.playerAddress) === addr
         );
+        const liveOpponents = state.seats.filter(
+          (s) =>
+            s.playerAddress &&
+            this.normalizeAddress(String(s.playerAddress)) !== addr &&
+            !s.folded &&
+            s.status !== 'sitting_out' &&
+            s.status !== 'busted',
+        ).length;
         const decision = decidePokerBotAction({
           street: hand.street,
           pot: hand.pot,
@@ -3451,6 +3458,11 @@ export class PokerGameService {
           minRaise: hand.minRaise,
           myStack: mySeat?.stack ?? '0',
           myHoleCards: state.myHoleCards,
+          communityCards: hand.communityCards,
+          numOpponents: Math.max(1, liveOpponents),
+          bigBlind: state.bigBlind,
+          myBet: mySeat?.currentBet ?? '0',
+          personality: getPokerBotAccount(addr)?.personality ?? null,
         });
 
         await this.playerAction(row.table_id, row.hand_id, addr, decision.action, decision.amount);
