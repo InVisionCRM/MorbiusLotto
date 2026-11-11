@@ -37,12 +37,31 @@ COMMENT ON TABLE poker_bot_accounts IS
 COMMENT ON COLUMN poker_bot_accounts.personality IS
   'Bot AI tuning (tight/loose, passive/aggro, bluff rate). Read by poker-bot-ai once personalities ship.';
 
--- Launch roster: 3 bots for the nightly "Beat the Bots" SNG.
-INSERT INTO poker_bot_accounts (wallet_address, display_name) VALUES
-  ('0x000000000000000000000000000000000000b071', 'Brunson_bot'),
-  ('0x000000000000000000000000000000000000b072', 'Hellmuth_bot'),
-  ('0x000000000000000000000000000000000000b073', 'Negreanu_bot')
+-- Launch roster: 7 bots for the "Beat the Bots" SNG (10 seats: 7 bots + 3 open seats).
+-- personality: tightness / aggression in [0,1], bluff = bluff frequency (lib/poker-bot-ai.ts).
+INSERT INTO poker_bot_accounts (wallet_address, display_name, personality) VALUES
+  ('0x000000000000000000000000000000000000b071', 'Brunson_bot',  '{"tightness":0.35,"aggression":0.85,"bluff":0.10}'),
+  ('0x000000000000000000000000000000000000b072', 'Hellmuth_bot', '{"tightness":0.75,"aggression":0.45,"bluff":0.03}'),
+  ('0x000000000000000000000000000000000000b073', 'Negreanu_bot', '{"tightness":0.45,"aggression":0.55,"bluff":0.07}'),
+  ('0x000000000000000000000000000000000000b074', 'Ivey_bot',     '{"tightness":0.50,"aggression":0.75,"bluff":0.08}'),
+  ('0x000000000000000000000000000000000000b075', 'Dwan_bot',     '{"tightness":0.25,"aggression":0.95,"bluff":0.14}'),
+  ('0x000000000000000000000000000000000000b076', 'Polk_bot',     '{"tightness":0.60,"aggression":0.60,"bluff":0.05}'),
+  ('0x000000000000000000000000000000000000b077', 'Selbst_bot',   '{"tightness":0.55,"aggression":0.70,"bluff":0.06}')
 ON CONFLICT (wallet_address) DO NOTHING;
+
+-- Idempotency for the scheduled bot games (services/poker-bot-schedule.service.ts):
+-- one row per (local date, slot time); claimed with INSERT … ON CONFLICT DO NOTHING
+-- so two server instances can never create the same game twice.
+CREATE TABLE IF NOT EXISTS poker_bot_scheduled_games (
+  slot_key      VARCHAR(64) PRIMARY KEY,
+  scheduled_at  TIMESTAMPTZ NOT NULL,
+  tournament_id UUID,
+  status        VARCHAR(16) NOT NULL DEFAULT 'claimed',
+  error         TEXT,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_poker_bot_scheduled_games_at ON poker_bot_scheduled_games (scheduled_at DESC);
 
 -- Bots need a players row (WS auth getOrCreatePlayer) and a chip row (ledger).
 INSERT INTO players (wallet_address, balance)

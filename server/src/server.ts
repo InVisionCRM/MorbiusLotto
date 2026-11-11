@@ -53,6 +53,7 @@ import { TournamentSchedulerService } from './services/tournament-scheduler.serv
 import { WebSocketService } from './services/websocket.service';
 import { PokerGameService } from './services/poker-game.service';
 import { PokerTournamentService } from './services/poker-tournament.service';
+import { PokerBotScheduleService, readBotScheduleConfig } from './services/poker-bot-schedule.service';
 import { chipsToWei } from './lib/poker-chip-scale';
 import { loadPokerBotRegistry, syncPokerBotProfiles } from './lib/poker-bot-registry';
 import { applyPokerChipDelta, getPokerChipBalance, setWeeklyDropWagerHook, setWeeklyDropRefundHook } from './services/poker-chip-wallet';
@@ -540,6 +541,29 @@ async function initializeServices() {
     freerollScheduler = new FreerollSchedulerService(dbService.getPool(), tournamentService);
     freerollScheduler.setPokerTournamentService(pokerTournamentService);
     freerollScheduler.start();
+
+    // Scheduled "Beat the Bots" games (POKER_BOT_SCHEDULE_ENABLED=true; see poker-bot-schedule.service.ts)
+    pokerBotScheduler = new PokerBotScheduleService(dbService.getPool(), pokerTournamentService);
+    pokerBotScheduler.start();
+    const botSchedulerRef = pokerBotScheduler;
+    app.get('/api/poker/bot-schedule', async (_req, res) => {
+      try {
+        const cfg = readBotScheduleConfig();
+        const games = await botSchedulerRef.listRecent(12);
+        res.json({
+          enabled: cfg.enabled,
+          times: cfg.times.map((t) => t.label),
+          timeZone: cfg.timeZone,
+          bots: cfg.bots,
+          seats: cfg.seats,
+          buyIn: cfg.buyIn.toString(),
+          games,
+        });
+      } catch (err) {
+        logger.error('GET /api/poker/bot-schedule failed', { error: (err as Error)?.message });
+        res.status(500).json({ error: 'Failed to load bot schedule' });
+      }
+    });
 
     // Tournament scheduler (time-expired buy-in tournaments, stuck-tournament recovery)
     tournamentScheduler = new TournamentSchedulerService(dbService.getPool(), tournamentService);
@@ -5138,6 +5162,7 @@ async function initializeServices() {
 
 // Graceful shutdown (schedulers ref set in initializeServices)
 let freerollScheduler: FreerollSchedulerService | null = null;
+let pokerBotScheduler: PokerBotScheduleService | null = null;
 let tournamentScheduler: TournamentSchedulerService | null = null;
 let holderChipRewardsServiceRef: HolderChipRewardsService | null = null;
 let merkleDropsService: MerkleDropsService | null = null;
@@ -5172,6 +5197,7 @@ process.on('unhandledRejection', (reason) => {
 process.on('SIGTERM', () => {
   logger.info('SIGTERM received, shutting down gracefully');
   freerollScheduler?.stop();
+  pokerBotScheduler?.stop();
   tournamentScheduler?.stop();
   merkleDropsService?.stopCron();
   merkleDropsLPService?.stopCron();
@@ -5185,6 +5211,7 @@ process.on('SIGTERM', () => {
 process.on('SIGINT', () => {
   logger.info('SIGINT received, shutting down gracefully');
   freerollScheduler?.stop();
+  pokerBotScheduler?.stop();
   tournamentScheduler?.stop();
   merkleDropsService?.stopCron();
   merkleDropsLPService?.stopCron();

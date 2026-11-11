@@ -119,9 +119,9 @@ describe('poker-bot-bankroll wallet config (unit)', () => {
     setPokerBotRegistryForTesting(null);
   });
 
-  it('throws when POKER_BOT_BANKROLL_WALLET is unset', () => {
+  it('returns null (self-funded bots) when POKER_BOT_BANKROLL_WALLET is unset', () => {
     delete process.env.POKER_BOT_BANKROLL_WALLET;
-    expect(() => getPokerBotBankrollWallet()).toThrow(/POKER_BOT_BANKROLL_WALLET/);
+    expect(getPokerBotBankrollWallet()).toBeNull();
   });
 
   it('throws when POKER_BOT_BANKROLL_WALLET is not an address', () => {

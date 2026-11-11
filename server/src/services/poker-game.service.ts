@@ -24,7 +24,7 @@ import {
   POKER_CASH_MIN_BUY_IN_BB,
 } from '../lib/poker-cash-buy-in';
 import { decidePokerBotAction } from '../lib/poker-bot-ai';
-import { getPokerBotAddressSet, isPokerBotWallet } from '../lib/poker-bot-registry';
+import { getPokerBotAccount, getPokerBotAddressSet, isPokerBotWallet } from '../lib/poker-bot-registry';
 import {
   railCashPlayerJoined,
   railCashTableCreated,
@@ -3443,6 +3443,14 @@ export class PokerGameService {
         const mySeat = state.seats.find(
           (s) => s.playerAddress && this.normalizeAddress(s.playerAddress) === addr
         );
+        const liveOpponents = state.seats.filter(
+          (s) =>
+            s.playerAddress &&
+            this.normalizeAddress(String(s.playerAddress)) !== addr &&
+            !s.folded &&
+            s.status !== 'sitting_out' &&
+            s.status !== 'busted',
+        ).length;
         const decision = decidePokerBotAction({
           street: hand.street,
           pot: hand.pot,
@@ -3450,6 +3458,11 @@ export class PokerGameService {
           minRaise: hand.minRaise,
           myStack: mySeat?.stack ?? '0',
           myHoleCards: state.myHoleCards,
+          communityCards: hand.communityCards,
+          numOpponents: Math.max(1, liveOpponents),
+          bigBlind: state.bigBlind,
+          myBet: mySeat?.currentBet ?? '0',
+          personality: getPokerBotAccount(addr)?.personality ?? null,
         });
 
         await this.playerAction(row.table_id, row.hand_id, addr, decision.action, decision.amount);
