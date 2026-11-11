@@ -3879,6 +3879,16 @@ export class PokerGameService {
   // tryStartNextHand
   // ---------------------------------------------------------------------------
 
+  /**
+   * Restart dealing at an idle cash table (e.g. after a server restart voided the in-progress
+   * hand — boot clears stale hands but nothing re-deals until someone joins). No-op when a hand
+   * is running or a next-hand timer is already pending.
+   */
+  async ensureHandRunning(tableId: string): Promise<void> {
+    if (this.nextHandTimers.has(tableId) || this.runoutInFlight.has(tableId)) return;
+    await this.tryStartNextHand(tableId);
+  }
+
   private async tryStartNextHand(tableId: string): Promise<void> {
     this.clearScheduledNextHand(tableId);
     return this.withTableLock(tableId, async () => {

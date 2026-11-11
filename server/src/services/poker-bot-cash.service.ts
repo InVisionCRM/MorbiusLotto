@@ -115,6 +115,7 @@ export interface CashGameOps {
   createTable(sb: number, bb: number, maxSeats: number, pin?: string, creator?: string | null): Promise<string>;
   joinTable(tableId: string, addr: string, buyInChips: string): Promise<unknown>;
   leaveTable(tableId: string, addr: string): Promise<unknown>;
+  ensureHandRunning?(tableId: string): Promise<void>;
 }
 
 export class PokerBotCashService {
@@ -213,7 +214,10 @@ export class PokerBotCashService {
       }
     }
 
-    if (plan.sit <= 0) return;
+    if (plan.sit <= 0) {
+      await this.kick(tableId, active.rows.length > 0);
+      return;
+    }
     // Bots already seated at ANY bot cash table are unavailable.
     const busy = await this.pool.query(
       `SELECT LOWER(s.player_address) AS addr FROM poker_seats s
@@ -229,6 +233,17 @@ export class PokerBotCashService {
     for (const bot of candidates) {
       if (sat >= plan.sit) break;
       if (await this.seatBot(tableId, bot, cfg)) sat++;
+    }
+    await this.kick(tableId, active.rows.length > 0);
+  }
+
+  /** Re-deal if the table sits idle with 2+ stacked players (e.g. after a restart). */
+  private async kick(tableId: string, handActive: boolean): Promise<void> {
+    if (handActive || !this.game.ensureHandRunning) return;
+    try {
+      await this.game.ensureHandRunning(tableId);
+    } catch (err) {
+      logger.warn('[bot-cash] re-deal failed', { tableId, error: (err as Error)?.message });
     }
   }
 

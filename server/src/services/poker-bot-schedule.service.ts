@@ -26,6 +26,7 @@
  *   POKER_BOT_SCHEDULE_CREATOR=0x…         creator wallet (default: first bot). Never a rake/fee wallet.
  *   POKER_BOT_SCHEDULE_CREATOR_FEE=0       creator fee percent
  *   POKER_BOT_SCHEDULE_NAME=Beat the Bots
+ *   POKER_BOT_SCHEDULE_LATE_REG_MINUTES=30 humans can still join this long after the start
  */
 
 import type { Pool } from 'pg';
@@ -47,6 +48,7 @@ export interface BotScheduleConfig {
   startingStack: number;
   blindMinutes: number;
   actionSeconds: number;
+  lateRegMinutes: number;
   prize: string;
   creator: string | null;
   creatorFee: number;
@@ -96,6 +98,8 @@ export function readBotScheduleConfig(): BotScheduleConfig {
     startingStack: intEnv('POKER_BOT_SCHEDULE_STARTING_STACK', 5000, 100, 10_000_000),
     blindMinutes: intEnv('POKER_BOT_SCHEDULE_BLIND_MINUTES', 5, 1, 60),
     actionSeconds: intEnv('POKER_BOT_SCHEDULE_ACTION_SECONDS', 30, 10, 120),
+    // Humans may still buy in this long after the start (a seat must be free).
+    lateRegMinutes: intEnv('POKER_BOT_SCHEDULE_LATE_REG_MINUTES', 30, 0, 120),
     prize: process.env.POKER_BOT_SCHEDULE_PRIZE?.trim() || 'top_3',
     creator: creatorRaw && /^0x[0-9a-fA-F]{40}$/.test(creatorRaw) ? creatorRaw.toLowerCase() : null,
     creatorFee: intEnv('POKER_BOT_SCHEDULE_CREATOR_FEE', 0, 0, 15),
@@ -265,6 +269,7 @@ export class PokerBotScheduleService {
           blindIncreaseMode: 'by_time',
           blindIntervalMinutes: cfg.blindMinutes,
           startMode: 'time',
+          lateRegMinutes: cfg.lateRegMinutes,
         },
         isPrivate: false,
         scheduledStartAt: slot.at,
