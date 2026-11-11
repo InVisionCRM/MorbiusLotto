@@ -47,15 +47,15 @@ afterAll(async () => {
 });
 
 describe('poker_bot_accounts registry (migration 200)', () => {
-  it('seeds the launch roster with _bot names and b07x addresses', () => {
+  it('seeds the launch roster (plain names since migration 201) and b07x addresses', () => {
     const bots = listPokerBotAccounts();
     expect(bots.length).toBeGreaterThanOrEqual(3);
     for (const b of bots) {
-      expect(b.displayName.endsWith('_bot')).toBe(true);
+      expect(b.displayName.endsWith('_bot')).toBe(false);
       expect(b.walletAddress).toMatch(/^0x[0-9a-f]{40}$/);
     }
     expect(isPokerBotWallet(BOT_1)).toBe(true);
-    expect(getPokerBotAccount(BOT_1)?.displayName).toBe('Brunson_bot');
+    expect(getPokerBotAccount(BOT_1)?.displayName).toBe('Brunson');
     expect(isPokerBotWallet(HUMAN)).toBe(false);
   });
 

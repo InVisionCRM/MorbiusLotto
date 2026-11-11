@@ -2776,8 +2776,16 @@ export class PokerGameService {
       }
     } else {
       const pct = BigInt(RAKE_PERCENT);
+      // Bot cash-table winners pay no rake: their chips are bankroll-funded, so raking them
+      // would turn minted bot chips into house revenue. Humans are raked as usual.
+      let rakeFreeBots: Set<string>;
+      try {
+        rakeFreeBots = getPokerBotAddressSet();
+      } catch {
+        rakeFreeBots = new Set();
+      }
       for (const [addr, ch] of winnerChips) {
-        const rakeChips = (ch * pct) / 100n;
+        const rakeChips = rakeFreeBots.has(this.normalizeAddress(addr)) ? 0n : (ch * pct) / 100n;
         rakedWinnerAmounts.set(addr, ch - rakeChips);
         rakeByAddr.set(addr, rakeChips);
         totalRakeChips += rakeChips;
@@ -3411,7 +3419,8 @@ export class PokerGameService {
        INNER JOIN poker_tables pt ON pt.id = h.table_id
        WHERE h.completed_at IS NULL
          AND h.acting_position IS NOT NULL
-         AND pt.tournament_id IS NOT NULL
+         AND (pt.tournament_id IS NOT NULL
+              OR EXISTS (SELECT 1 FROM poker_bot_cash_tables bct WHERE bct.table_id = pt.id))
          AND h.turn_started_at IS NOT NULL
          AND h.turn_started_at < NOW() - ($1 * INTERVAL '1 millisecond')`,
       [thinkMs]

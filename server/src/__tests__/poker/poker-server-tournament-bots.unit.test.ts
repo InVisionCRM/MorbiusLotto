@@ -70,8 +70,8 @@ describe('poker-bot-registry (unit)', () => {
 
   it('recognises registered bots case-insensitively and rejects humans', () => {
     setPokerBotRegistryForTesting([
-      { walletAddress: BOT_1, displayName: 'Brunson_bot', personality: {} },
-      { walletAddress: BOT_2, displayName: 'Hellmuth_bot', personality: { aggro: 0.7 } },
+      { walletAddress: BOT_1, displayName: 'Brunson', personality: {} },
+      { walletAddress: BOT_2, displayName: 'Hellmuth', personality: { aggro: 0.7 } },
     ]);
     expect(isPokerBotWallet(BOT_1)).toBe(true);
     expect(isPokerBotWallet(BOT_2)).toBe(true);
@@ -83,7 +83,7 @@ describe('poker-bot-registry (unit)', () => {
     expect(set.has(BOT_2.toLowerCase())).toBe(true);
     expect(set.has(BOT_2)).toBe(false); // always lowercase
 
-    expect(getPokerBotAccount(BOT_2)?.displayName).toBe('Hellmuth_bot');
+    expect(getPokerBotAccount(BOT_2)?.displayName).toBe('Hellmuth');
     expect(getPokerBotAccount(BOT_2)?.personality).toEqual({ aggro: 0.7 });
     expect(getPokerBotAccount(HUMAN)).toBeNull();
   });
@@ -94,15 +94,28 @@ describe('poker-bot-registry (unit)', () => {
     expect(getPokerBotAddressSet().size).toBe(0);
   });
 
-  it('rejects display names without the _bot suffix', () => {
+  it('accepts plain display names (no _bot suffix since migration 201) and rejects empty ones', () => {
+    setPokerBotRegistryForTesting([{ walletAddress: BOT_1, displayName: 'Brunson', personality: {} }]);
+    expect(getPokerBotAccount(BOT_1)?.displayName).toBe('Brunson');
+    expect(getPokerBotAccount(BOT_1)?.role).toBe('tournament');
     expect(() =>
-      setPokerBotRegistryForTesting([{ walletAddress: BOT_1, displayName: 'Brunson', personality: {} }]),
-    ).toThrow(/_bot/);
+      setPokerBotRegistryForTesting([{ walletAddress: BOT_1, displayName: '  ', personality: {} }]),
+    ).toThrow(/display_name/);
+  });
+
+  it('filters by role', () => {
+    setPokerBotRegistryForTesting([
+      { walletAddress: BOT_1, displayName: 'Brunson', personality: {} },
+      { walletAddress: BOT_2, displayName: 'Chan', personality: {}, role: 'cash' },
+    ]);
+    expect(listPokerBotAccounts('tournament').map((b) => b.displayName)).toEqual(['Brunson']);
+    expect(listPokerBotAccounts('cash').map((b) => b.displayName)).toEqual(['Chan']);
+    expect(listPokerBotAccounts()).toHaveLength(2);
   });
 
   it('rejects malformed addresses', () => {
     expect(() =>
-      setPokerBotRegistryForTesting([{ walletAddress: '0x1234', displayName: 'Short_bot', personality: {} }]),
+      setPokerBotRegistryForTesting([{ walletAddress: '0x1234', displayName: 'Short', personality: {} }]),
     ).toThrow(/wallet_address/);
   });
 });
@@ -111,7 +124,7 @@ describe('poker-bot-bankroll wallet config (unit)', () => {
   let prev: string | undefined;
   beforeEach(() => {
     prev = process.env.POKER_BOT_BANKROLL_WALLET;
-    setPokerBotRegistryForTesting([{ walletAddress: BOT_1, displayName: 'Brunson_bot', personality: {} }]);
+    setPokerBotRegistryForTesting([{ walletAddress: BOT_1, displayName: 'Brunson', personality: {} }]);
   });
   afterEach(() => {
     if (prev === undefined) delete process.env.POKER_BOT_BANKROLL_WALLET;
