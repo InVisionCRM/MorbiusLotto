@@ -140,3 +140,41 @@ describe('normalizePersonality', () => {
     expect(normalizePersonality(null)).toEqual({ tightness: 0.5, aggression: 0.5, bluff: 0.05 });
   });
 });
+
+describe('preflop frequencies (7-handed, unopened pot)', () => {
+  const base = {
+    street: 'preflop',
+    pot: '150',
+    toCall: '100',
+    minRaise: '200',
+    myStack: '5000',
+    myBet: '0',
+    bigBlind: '100',
+    communityCards: [],
+    numOpponents: 6,
+  };
+  it('plays a sane share of hands (not a nit, not a maniac)', () => {
+    const rng = seeded(7);
+    let played = 0;
+    const N = 4000;
+    for (let i = 0; i < N; i++) {
+      const a = Math.floor(rng() * 52);
+      let b = Math.floor(rng() * 52);
+      while (b === a) b = Math.floor(rng() * 52);
+      const d = decidePokerBotAction({ ...base, myHoleCards: [a, b], personality: neutral, rng } as any);
+      if (d.action !== 'fold') played++;
+    }
+    const vpip = played / N;
+    expect(vpip).toBeGreaterThan(0.12);
+    expect(vpip).toBeLessThan(0.35);
+  });
+  it('short stack jams a decent hand instead of blinding out', () => {
+    const d = decidePokerBotAction({ ...base, myStack: '800', myHoleCards: cards('As 9d'), personality: neutral, rng: seeded(3) } as any);
+    expect(d.action).toBe('raise');
+    expect(d.amount).toBe('800');
+  });
+  it('short stack folds trash', () => {
+    const d = decidePokerBotAction({ ...base, myStack: '800', myHoleCards: cards('7c 2d'), personality: neutral, rng: seeded(3) } as any);
+    expect(d.action).toBe('fold');
+  });
+});

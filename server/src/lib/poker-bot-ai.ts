@@ -235,13 +235,24 @@ export function decidePokerBotAction(state: PokerBotDecisionInput): PokerBotDeci
   if (state.street === 'preflop' || board.length < 3) {
     const strength = hole.length === 2 ? preflopStrength(hole) : 0.3;
     // Thresholds rise with field size and tightness.
-    const fieldAdj = Math.min(0.12, 0.02 * (opp - 1));
-    const tightAdj = (p.tightness - 0.5) * 0.15;
-    const raiseT = 0.6 + fieldAdj + tightAdj; // ≈ 77s+/AJs+/KQs/TT+ heads-up-ish
-    const premiumT = 0.75 + tightAdj / 2; // QQ+/AKs-ish
-    const playT = 0.42 + fieldAdj + tightAdj;
+    // Tuned from a 7-bot dry run: the first cut folded ~90% preflop and blinded out.
+    // Chen score → threshold: 0.33 ≈ score 6 (66, A9s, KTs, QJs, JTs …, ~20% of hands
+    // at a full table), 0.45 ≈ score 8.5 (TT, AQs, AKo …), 0.6 ≈ JJ+/AKs.
+    const fieldAdj = Math.min(0.06, 0.01 * (opp - 1));
+    const tightAdj = (p.tightness - 0.5) * 0.12;
+    const raiseT = 0.45 + fieldAdj + tightAdj;
+    const premiumT = 0.6 + tightAdj / 2;
+    const playT = 0.33 + fieldAdj + tightAdj;
     const bb = bigBlind;
     const facingRaise = toCall > bb; // more than just the blind to call
+
+    // Short stack (≤ 10 BB): push/fold instead of bleeding out to the blinds.
+    if (stack + myBet <= bb * 10n) {
+      if (strength >= playT - 0.06 || (!facingRaise && strength >= playT - 0.12 && rng() < 0.5 + 0.4 * p.aggression)) {
+        return raiseTo(stack + myBet);
+      }
+      return canCheck ? { action: 'check' } : { action: 'fold' };
+    }
 
     if (strength >= premiumT) {
       // 3-bet / open big; jam when short.
