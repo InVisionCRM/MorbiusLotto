@@ -131,6 +131,7 @@ const OTHER_GAMES: readonly OtherGameNavItem[] = [
   { label: 'Plinko', href: '/plinko2', icon: 'plinko' },
   { label: 'Blackjack', href: '/BLACKJACK', icon: 'blackjack' },
   { label: 'Multiplayer BJ', href: '/blackjack-multi', icon: 'users' },
+  { label: "Ruby's Table", href: '/ruby', icon: 'blackjack' },
   { label: 'Poker', href: '/poker', icon: 'cards' },
   { label: 'Video Poker', href: '/video-poker', icon: 'videopoker' },
   { label: 'Keno', href: '/keno2', icon: 'grid' },

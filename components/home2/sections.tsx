@@ -588,7 +588,7 @@ type FloorFamily = FloorGame['family'];
    shows just that shelf. Order runs card games first, then table, then the
    originals — biggest draw to deepest cut. */
 const FLOOR_FAMILIES: { f: FloorFamily; label: string; sub: string }[] = [
-  { f: 'blackjack', label: 'Blackjack', sub: 'six ways to make 21' },
+  { f: 'blackjack', label: 'Blackjack', sub: 'seven ways to make 21' },
   { f: 'poker', label: 'Poker', sub: "hold'em, stud & the dealer duels" },
   { f: 'table', label: 'Casino Table', sub: 'the classics, one chip' },
   { f: 'arcade', label: 'Arcade', sub: 'fast originals, instant settle' },
@@ -1071,6 +1071,7 @@ const FOOTER_COLUMNS: Array<{
     links: [
       { label: 'Plinko', href: '/plinko2' },
       { label: 'Blackjack', href: '/BLACKJACK' },
+      { label: "Ruby's Table", href: '/ruby' },
       { label: 'Poker', href: '/poker' },
       { label: 'Keno', href: '/keno' },
       { label: 'Crash', href: '/crash' },

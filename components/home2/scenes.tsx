@@ -1101,6 +1101,7 @@ export type FloorGame = {
 
 export const FLOOR_GAMES: FloorGame[] = [
   { key: "blackjack", name: "BLACKJACK", family: "blackjack", addedAt: "2026-07-22", cat: "cards", blurb: "Single + multiplayer", href: "/BLACKJACK", badge: { kind: "live", label: "3 Seats Live" } },
+  { key: "ruby", name: "RUBY'S TABLE", family: "blackjack", addedAt: "2026-11-11", cat: "cards", blurb: "Live AI dealer blackjack", href: "/ruby", badge: { kind: "live", label: "AI Live Dealer" } },
   { key: "poker", name: "POKER", family: "poker", addedAt: "2026-07-22", cat: "cards", blurb: "Hold'em cash tables", href: "/poker", badge: { kind: "live", label: "2 Tables" } },
   { key: "keno", name: "KENO", family: "arcade", addedAt: "2026-07-22", cat: "orig", blurb: "Pick 10 · ×100 top hit", href: "/keno2", badge: { kind: "exclusive", label: "Exclusive" } },
   { key: "dice", name: "DICE", family: "arcade", addedAt: "2026-07-22", cat: "orig", blurb: "99% RTP · instant", href: "/dice2", badge: { kind: "exclusive", label: "Exclusive" } },

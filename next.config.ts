@@ -14,6 +14,9 @@ const nextConfig: NextConfig = {
   async redirects() {
     return [
       { source: "/staking", destination: "/claim", permanent: true },
+      // Ruby's Table aliases (non-permanent so they stay easy to repoint).
+      { source: "/rubys-table", destination: "/ruby", permanent: false },
+      { source: "/blackjack-ai", destination: "/ruby", permanent: false },
     ]
   },
   // Empty turbopack config to satisfy Next.js requirement (we use webpack)

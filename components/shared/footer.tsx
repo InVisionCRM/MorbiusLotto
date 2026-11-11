@@ -64,6 +64,9 @@ export function Footer() {
               <Link href="/blackjack-multi" className="text-white/90 hover:text-cyan-500/80 transition-colors">
                 Multiplayer BJ
               </Link>
+              <Link href="/ruby" className="text-white/90 hover:text-cyan-500/80 transition-colors">
+                Ruby&apos;s Table
+              </Link>
               <Link href="/swap" className="text-white/90 hover:text-cyan-500/80 transition-colors">
                 Buy Morbius
               </Link>
