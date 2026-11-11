@@ -6,9 +6,13 @@ import './ruby.css'
 
 /**
  * /ruby — landing page for Ruby's Table, the private-beta AI live-dealer
- * blackjack game. The game itself is a separate app with its own password
- * gate; its session cookie is SameSite=Lax, so it can't run in a cross-site
- * iframe on iOS Safari. This page links out to it in the same tab instead.
+ * blackjack game. Port of the approved "Take a seat" intro screen
+ * (Ruby's Table v7 mockups, 06-intro): Ruby full-bleed, her greeting bubble,
+ * and the ruby-glass card with the gold Take a seat CTA.
+ *
+ * The game is a separate app behind its own password gate; its session
+ * cookie is SameSite=Lax, so it can't run in a cross-site iframe on iOS
+ * Safari. The CTA links out to it in the same tab instead.
  *
  * Server component: static markup only, no page-specific client JS. Styles
  * reuse the home2 tokens (scoped under .home2) plus ./ruby.css.
@@ -18,7 +22,7 @@ const RUBY_URL = 'https://rubys-table.vercel.app/?from=morbius'
 
 const TITLE = "Ruby's Table — Live AI Dealer Blackjack"
 const DESCRIPTION =
-  'Sit down with Ruby, a filmed live dealer with an AI voice. Talk to her, ask her to wave, shuffle or blow a kiss, and play blackjack one-on-one. Private beta.'
+  'Blackjack with a real, filmed dealer who talks back. Talk to Ruby, ask her for a wink, a shuffle or a blown kiss, and take a seat at her private table.'
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://morbius.io'),
@@ -42,76 +46,91 @@ export const metadata: Metadata = {
 }
 
 const FEATS = [
-  { ic: '🎙️', t: 'Talk to her', d: 'hold the mic and chat, she answers out loud' },
-  { ic: '👋', t: 'Ask for a move', d: 'wave, shuffle or blow you a kiss' },
-  { ic: '🎥', t: 'Real filmed dealer', d: 'photoreal video, not a cartoon' },
-  { ic: '🃏', t: 'One-on-one blackjack', d: 'hit, stand, double & split' },
+  { e: '🎙️', t: 'Talk', d: 'Voice · text' },
+  { e: '💋', t: '53 moves', d: 'Just ask' },
+  { e: '🃏', t: 'Side bets', d: 'PP · 21+3' },
 ]
+
+const CHIPS = ['red', 'green', 'black', 'blue']
 
 export default function RubyPage() {
   return (
     <GlobalMainNav>
       <div className="home2 ruby-page">
-        <section className="zone ruby-zone">
-          <div className="ruby-panel">
-            <div className="ruby-shot">
-              <img
-                src="/ruby/ruby-hero.webp"
-                alt="Ruby standing behind the blackjack table, smiling, chips in the tray"
-                width={1280}
-                height={720}
-                fetchPriority="high"
-                decoding="async"
-              />
-              <div className="ruby-tags">
-                <span className="ruby-tag new">New</span>
-                <span className="ruby-tag live">
-                  <i aria-hidden="true" /> AI Live Dealer
-                </span>
+        <main className="rb-stage">
+          <div className="rb-hero">
+            <img
+              className="rb-photo"
+              src="/ruby/ruby-hero.webp"
+              alt="Ruby standing behind her blackjack table, smiling"
+              width={1280}
+              height={720}
+              fetchPriority="high"
+              decoding="async"
+            />
+            <div className="rb-shade" aria-hidden="true" />
+            <div className="rb-greet">
+              <div className="rb-who">
+                <i aria-hidden="true" />
+                Ruby
               </div>
-            </div>
-
-            <div className="ruby-copy">
-              <div className="ruby-kicker">BLACKJACK &middot; PRIVATE BETA</div>
-              <h1>
-                Ruby&rsquo;s <em>Table</em>
-              </h1>
-              <p className="ruby-tagline">Live AI dealer blackjack</p>
-              <p className="ruby-lede">
-                Ruby deals, reacts and talks back. Ask her how her night is going,
-                tell her to shuffle up, or just play your hand &mdash; she&rsquo;s{' '}
-                <b>listening</b>.
-              </p>
-
-              <ul className="ruby-feats">
-                {FEATS.map((f) => (
-                  <li key={f.t}>
-                    <span className="fi" aria-hidden="true">
-                      {f.ic}
-                    </span>
-                    <span className="ft">
-                      <b>{f.t}</b>
-                      <i>{f.d}</i>
-                    </span>
-                  </li>
-                ))}
-              </ul>
-
-              <div className="ruby-cta-row">
-                <a className="ruby-cta" href={RUBY_URL}>
-                  Take a seat <span aria-hidden="true">→</span>
-                </a>
-                <p className="ruby-note">
-                  <span aria-hidden="true">🔒</span>
-                  <span>
-                    <b>Private beta &middot; password required.</b> Ruby&rsquo;s Table
-                    opens in its own lobby. Best with sound on and the mic allowed.
-                  </span>
-                </p>
-              </div>
+              Hey, you. I saved you the best seat in the house.
             </div>
           </div>
-        </section>
+
+          <section className="rb-card" aria-labelledby="rb-title">
+            <span className="rb-eyebrow">
+              <i aria-hidden="true" />
+              Live AI dealer · private table
+            </span>
+            <h1 id="rb-title">
+              Ruby&rsquo;s <span>Table</span>
+            </h1>
+            <p className="rb-lead">
+              Blackjack with a real, filmed dealer who talks back. Ask her for a wink, a shuffle, a
+              little dance&hellip;
+            </p>
+
+            <ul className="rb-feats">
+              {FEATS.map((f) => (
+                <li key={f.t}>
+                  <span className="rb-e" aria-hidden="true">
+                    {f.e}
+                  </span>
+                  <span>
+                    <b>{f.t}</b>
+                    <small>{f.d}</small>
+                  </span>
+                </li>
+              ))}
+            </ul>
+
+            <div className="rb-limits">
+              <span>6 decks · S17 · BJ pays 3:2</span>
+              <span className="rb-chips" aria-hidden="true">
+                {CHIPS.map((c) => (
+                  <img key={c} src={`/ruby/chip-${c}.webp`} alt="" width={26} height={26} />
+                ))}
+              </span>
+            </div>
+
+            <a className="rb-cta" href={RUBY_URL}>
+              Take a seat
+            </a>
+
+            <p className="rb-fine">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M11 4.7 6.6 8.3a2 2 0 0 1-1.3.5H3.5a1 1 0 0 0-1 1v4.4a1 1 0 0 0 1 1h1.8a2 2 0 0 1 1.3.5L11 19.3a.6.6 0 0 0 1-.4V5.1a.6.6 0 0 0-1-.4Z" />
+                <path d="M16 9a5 5 0 0 1 0 6" />
+                <path d="M19.4 18.4a9 9 0 0 0 0-12.8" />
+              </svg>
+              Sound on — Ruby talks. Hold the chip to talk back.
+            </p>
+            <p className="rb-beta">
+              <span aria-hidden="true">🔒</span> Private beta · password required
+            </p>
+          </section>
+        </main>
         <Footer />
       </div>
     </GlobalMainNav>
