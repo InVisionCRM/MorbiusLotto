@@ -13,7 +13,7 @@ export interface StreamPayout {
   percent: number;
 }
 
-/** Same math as tournament settlement: pool minus platform + creator fee, split by percentages. */
+/** Pool minus fees, split by percentages, floored (matches calculate_tournament_prizes). */
 export function computeStreamPayouts(
   prizePool: number,
   percentages: number[],
@@ -95,7 +95,9 @@ export async function loadStreamMeta(pool: Pool, tableId: string, nowMs = Date.n
       entrants: row.entrants,
       playersLeft: row.alive,
       prizePool: num(row.prize_pool),
-      payouts: computeStreamPayouts(num(row.prize_pool), pcts, Number(row.platform_fee_percent ?? 3), Number(row.creator_fee_percent ?? 0)),
+      // calculate_tournament_prizes() (migration 127) always distributes 95% of the pool
+      // (hard-coded 3% protocol + 2% creator), whatever creator_fee_percent says.
+      payouts: computeStreamPayouts(num(row.prize_pool), pcts, 5, 0),
       blinds: computeBlindInfo(
         cfg,
         Math.max(1, Number(row.current_blind_level ?? 1)),

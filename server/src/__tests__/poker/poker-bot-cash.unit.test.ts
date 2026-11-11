@@ -110,11 +110,11 @@ describe('PokerBotCashService.tick', () => {
 });
 
 describe('stream meta helpers', () => {
-  it('payouts follow settlement math (3% platform fee)', () => {
-    expect(computeStreamPayouts(3500, [50, 30, 20], 3, 0)).toEqual([
-      { place: 1, percent: 50, amount: 1697 },
-      { place: 2, percent: 30, amount: 1018 },
-      { place: 3, percent: 20, amount: 679 },
+  it('payouts match calculate_tournament_prizes (95% of pool) — test game paid 1662/997/665', () => {
+    expect(computeStreamPayouts(3500, [50, 30, 20], 5, 0)).toEqual([
+      { place: 1, percent: 50, amount: 1662 },
+      { place: 2, percent: 30, amount: 997 },
+      { place: 3, percent: 20, amount: 665 },
     ]);
   });
 
