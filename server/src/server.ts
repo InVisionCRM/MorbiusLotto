@@ -564,6 +564,29 @@ async function initializeServices() {
         res.status(500).json({ error: 'Failed to load bot schedule' });
       }
     });
+    // Admin: run a one-off scheduled bot game now (same config as the daily slots).
+    // Auth: header x-admin-token must equal POKER_BOT_ADMIN_TOKEN (endpoint disabled when unset).
+    app.post('/api/poker/bot-schedule/run-now', express.json(), async (req, res) => {
+      const expected = (process.env.POKER_BOT_ADMIN_TOKEN || '').trim();
+      const given = String(req.headers['x-admin-token'] || '');
+      if (!expected || expected.length < 16 || given !== expected) return res.status(403).json({ error: 'forbidden' });
+      try {
+        const cfg = readBotScheduleConfig();
+        const mins = Math.min(120, Math.max(3, Number(req.body?.startInMinutes ?? 5) || 5));
+        const at = new Date(Math.ceil((Date.now() + mins * 60_000) / 60_000) * 60_000);
+        const parts = new Intl.DateTimeFormat('en-CA', {
+          timeZone: cfg.timeZone, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+        }).formatToParts(at);
+        const g = (t: string) => parts.find((p) => p.type === t)?.value ?? '';
+        const slot = { slotKey: `${g('year')}-${g('month')}-${g('day')} ${g('hour')}:${g('minute')} ${cfg.timeZone}`, at };
+        const tournamentId = await botSchedulerRef.createSlotGame(slot as any, cfg);
+        if (!tournamentId) return res.status(409).json({ error: 'slot already exists', slotKey: slot.slotKey });
+        res.json({ tournamentId, slotKey: slot.slotKey, startsAt: at.toISOString() });
+      } catch (err) {
+        res.status(500).json({ error: (err as Error)?.message || 'failed' });
+      }
+    });
+
     // Public, read-only table snapshot for the X stream renderer (stream/ service).
     // Only tables of scheduled bot games; hole cards are never included (viewer = null),
     // showdown cards appear only once the hand is shown down — same as any seat sees.
