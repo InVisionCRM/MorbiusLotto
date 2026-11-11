@@ -82,6 +82,7 @@ const ORIGINALS_LINKS: SbLinkItem[] = [
 const CARDS_TABLE_LINKS: SbLinkItem[] = [
   { icon: '🂡', label: 'Blackjack', href: '/BLACKJACK', badge: { kind: 'live', text: '3' } },
   { icon: '🃟', label: 'Multiplayer BJ', href: '/blackjack-multi' },
+  { icon: '💋', label: "Ruby's Table", href: '/ruby', badge: { kind: 'hot', text: 'NEW' } },
   { icon: '♠', label: 'Poker', href: '/poker', badge: { kind: 'live', text: '2' } },
   { icon: '🎡', label: 'Roulette', href: '/roulette2' },
   { icon: '🀄', label: 'Baccarat', href: '/baccarat' },

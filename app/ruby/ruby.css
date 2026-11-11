@@ -1,0 +1,112 @@
+/* ============================================================
+   /ruby — Ruby's Table landing page.
+   Port of the approved v7 "Take a seat" intro (mockups/blackjack/06-intro):
+   Ruby full-bleed, her greeting bubble, and the ruby-glass card with the
+   gold hero CTA. Built on the home2 tokens (app/home2.css, scoped under
+   .home2). Every selector is scoped under `.home2.ruby-page` and uses an
+   rb- prefix so nothing leaks.
+   ============================================================ */
+.home2.ruby-page{
+  --ruby:#e11d48; --ruby-soft:#fb7185; --ruby-dim:rgba(225,29,72,.14);
+  min-height:100vh; background:var(--bg0); overflow-x:hidden;
+}
+.home2.ruby-page .rb-stage{position:relative; display:block}
+
+/* ---- hero: Ruby, centered, full-bleed (mobile first) ---- */
+.home2.ruby-page .rb-hero{position:relative; height:min(165vw,680px); overflow:hidden; background:#0b0710}
+.home2.ruby-page .rb-photo{position:absolute; top:0; left:50%; height:100%; width:auto; max-width:none;
+  transform:translateX(-50%); display:block}
+.home2.ruby-page .rb-shade{position:absolute; inset:0; pointer-events:none;
+  background:
+    linear-gradient(180deg, rgba(4,5,10,.55) 0%, rgba(4,5,10,0) 12%, rgba(4,5,10,0) 54%, rgba(4,5,10,.86) 77%, #04050a 96%),
+    radial-gradient(900px 420px at 12% -10%, rgba(34,211,238,.13), transparent 60%)}
+
+/* her greeting: home2 dealer bubble */
+.home2.ruby-page .rb-greet{position:absolute; z-index:2; right:12px; top:36%; max-width:176px;
+  padding:9px 13px 10px; border-radius:18px 18px 18px 5px;
+  background:linear-gradient(160deg, rgba(22,34,56,.96), rgba(12,19,33,.96));
+  border:1px solid rgba(34,211,238,.28); box-shadow:0 10px 30px rgba(0,0,0,.45);
+  font:500 13.5px/1.38 var(--font); color:var(--text)}
+.home2.ruby-page .rb-who{display:flex; align-items:center; gap:6px; margin-bottom:2px;
+  font:800 8.5px var(--font); letter-spacing:.22em; text-transform:uppercase; color:var(--cyan)}
+.home2.ruby-page .rb-who i{width:7px; height:7px; border-radius:50%; background:var(--emerald);
+  box-shadow:0 0 8px var(--emerald); animation:rb-pulse 1.6s ease-in-out infinite}
+@keyframes rb-pulse{0%,100%{opacity:1} 50%{opacity:.35}}
+
+/* ---- the ruby-glass card ---- */
+.home2.ruby-page .rb-card{position:relative; z-index:3; margin:calc(-1 * min(64vw, 250px)) 14px 0;
+  padding:18px 18px 16px; border-radius:22px;
+  background:
+    radial-gradient(ellipse at 88% 8%, rgba(225,29,72,.16), transparent 55%),
+    radial-gradient(ellipse at 8% 100%, rgba(251,191,36,.08), transparent 50%),
+    linear-gradient(165deg, rgba(26,7,15,.92), rgba(8,11,20,.94) 72%);
+  border:1px solid rgba(251,113,133,.24); box-shadow:0 30px 80px rgba(0,0,0,.7);
+  -webkit-backdrop-filter:blur(14px); backdrop-filter:blur(14px)}
+.home2.ruby-page .rb-eyebrow{display:inline-flex; align-items:center; gap:8px; height:26px; padding:0 12px;
+  border-radius:99px; border:1px solid rgba(251,113,133,.35); background:var(--ruby-dim); color:var(--ruby-soft);
+  font:800 9.5px var(--font); letter-spacing:.2em; text-transform:uppercase; white-space:nowrap}
+.home2.ruby-page .rb-eyebrow i{width:7px; height:7px; border-radius:50%; background:#ff3b5c; box-shadow:0 0 8px #ff3b5c; flex:none}
+.home2.ruby-page .rb-card h1{margin:10px 0 6px; font:800 36px/1.04 var(--font); letter-spacing:-.01em; color:var(--text)}
+.home2.ruby-page .rb-card h1 span{background:linear-gradient(90deg,#fde68a,#f59e0b);
+  -webkit-background-clip:text; background-clip:text; color:transparent;
+  filter:drop-shadow(0 0 24px rgba(251,191,36,.25))}
+.home2.ruby-page .rb-lead{margin:0 0 14px; font:500 13px/1.45 var(--font); color:var(--text2)}
+
+.home2.ruby-page .rb-feats{list-style:none; margin:0 0 14px; padding:0; display:grid; grid-template-columns:repeat(3,1fr); gap:8px}
+.home2.ruby-page .rb-feats li{display:flex; align-items:center; gap:6px; padding:8px; border-radius:12px; min-width:0;
+  background:var(--panel2); border:1px solid var(--line2)}
+.home2.ruby-page .rb-e{font-size:17px; line-height:1; flex:none}
+.home2.ruby-page .rb-feats b{display:block; font:800 10.5px/1.15 var(--font); color:var(--text); white-space:nowrap}
+.home2.ruby-page .rb-feats small{display:block; font:500 9px var(--font); color:var(--muted); white-space:nowrap}
+
+.home2.ruby-page .rb-limits{display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:14px;
+  font:700 10.5px var(--font); color:var(--text2); font-variant-numeric:tabular-nums}
+.home2.ruby-page .rb-chips{display:flex; flex:none}
+.home2.ruby-page .rb-chips img{width:26px; height:26px; margin-left:-6px; filter:drop-shadow(0 4px 6px rgba(0,0,0,.55))}
+
+/* gold hero CTA (home2 btn-gold / kit .mk-btn.gold.hero) with a static sheen */
+.home2.ruby-page .rb-cta{position:relative; overflow:hidden; display:flex; align-items:center; justify-content:center;
+  width:100%; height:56px; border-radius:14px; color:#3a2503;
+  background:linear-gradient(180deg,#fcd34d,#f59e0b);
+  box-shadow:0 10px 30px rgba(245,158,11,.35), 0 0 22px rgba(251,191,36,.18), inset 0 1px 0 rgba(255,255,255,.45);
+  font:800 15px var(--font); letter-spacing:.08em; text-transform:uppercase;
+  transition:transform .25s cubic-bezier(.34,1.56,.64,1), box-shadow .2s; -webkit-tap-highlight-color:transparent}
+.home2.ruby-page .rb-cta::after{content:''; position:absolute; inset:0; pointer-events:none;
+  background:linear-gradient(105deg, transparent 40%, rgba(255,255,255,.35) 50%, transparent 60%); transform:translateX(-35%)}
+.home2.ruby-page .rb-cta:hover{box-shadow:0 16px 40px rgba(245,158,11,.5), 0 0 30px rgba(251,191,36,.28), inset 0 1px 0 rgba(255,255,255,.45)}
+.home2.ruby-page .rb-cta:active{transform:scale(.96); box-shadow:0 2px 8px rgba(245,158,11,.35), inset 0 2px 5px rgba(0,0,0,.25)}
+.home2.ruby-page .rb-cta:focus-visible{outline:2px solid var(--cyan); outline-offset:3px}
+
+.home2.ruby-page .rb-fine{display:flex; align-items:center; justify-content:center; gap:6px; margin:11px 0 0;
+  font:600 10.5px var(--font); color:var(--muted); text-align:center}
+.home2.ruby-page .rb-fine svg{width:14px; height:14px; flex:none; fill:none; stroke:var(--rose); stroke-width:2;
+  stroke-linecap:round; stroke-linejoin:round}
+.home2.ruby-page .rb-beta{display:flex; align-items:center; justify-content:center; gap:6px; margin:8px 0 0;
+  font:800 9px var(--font); letter-spacing:.16em; text-transform:uppercase; color:var(--ruby-soft)}
+
+/* ---- tablet: same stack, card capped and centered ---- */
+@media (min-width:600px){
+  .home2.ruby-page .rb-card{max-width:520px; margin-left:auto; margin-right:auto}
+}
+
+/* ---- desktop: Ruby's full 16:9 frame, card floats on the left ---- */
+@media (min-width:1024px){
+  .home2.ruby-page .rb-stage{max-width:1180px; margin:28px auto 0; padding:0 28px}
+  .home2.ruby-page .rb-hero{height:auto; aspect-ratio:16 / 9; min-height:600px; border-radius:22px;
+    border:1px solid var(--line2); box-shadow:0 30px 80px rgba(0,0,0,.55), 0 0 60px rgba(225,29,72,.08)}
+  .home2.ruby-page .rb-photo{left:0; width:100%; height:100%; transform:none; object-fit:cover; object-position:58% 30%}
+  .home2.ruby-page .rb-shade{background:
+    linear-gradient(90deg, rgba(4,5,10,.88) 0%, rgba(4,5,10,.55) 26%, rgba(4,5,10,0) 46%),
+    linear-gradient(180deg, rgba(4,5,10,0) 70%, rgba(4,5,10,.6) 100%),
+    radial-gradient(900px 420px at 12% -10%, rgba(34,211,238,.13), transparent 60%)}
+  .home2.ruby-page .rb-greet{right:10%; top:30%; max-width:200px}
+  .home2.ruby-page .rb-card{position:absolute; left:56px; top:50%; transform:translateY(-50%);
+    width:430px; max-width:none; margin:0; padding:22px 22px 18px}
+  .home2.ruby-page .rb-card h1{font-size:44px}
+  .home2.ruby-page .rb-lead{font-size:14px}
+}
+
+@media (prefers-reduced-motion:reduce){
+  .home2.ruby-page .rb-who i{animation:none}
+  .home2.ruby-page .rb-cta{transition:none}
+}
