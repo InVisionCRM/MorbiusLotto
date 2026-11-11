@@ -150,8 +150,30 @@ function startStream(game) {
       const s = String(d).replace(/rtmps?:\/\/\S+/g, '<rtmp>');
       log('ffmpeg', { line: s.trim().slice(0, 300) });
     });
+    const spawnedAt = Date.now();
     ff.proc.on('exit', (code) => {
       log('ffmpeg exited', { code });
+      // Safety net: if ffmpeg dies right away while music is on, retry once with silence
+      // so a bad track / demuxer problem can never take the broadcast down.
+      if (audio.music && !ff.retried && Date.now() - spawnedAt < 30_000 &&
+          state.current && state.current.tournamentId === game.tournamentId && !state.current.stopping) {
+        ff.retried = true;
+        log('ffmpeg failed early with music; retrying with silence');
+        const silent = musicInputArgs({ enabled: false });
+        const args = [...ffArgs];
+        args.splice(ffArgs.indexOf(audio.args[0]), audio.args.length, ...silent.args);
+        const ai = args.indexOf('-af'); if (ai >= 0) args.splice(ai, 2);
+        ff.proc = spawn('ffmpeg', args, { env: { ...process.env, DISPLAY }, stdio: ['ignore', 'ignore', 'pipe'] });
+        ff.proc.stderr.on('data', (d) => log('ffmpeg', { line: String(d).replace(/rtmps?:\/\/\S+/g, '<rtmp>').trim().slice(0, 300) }));
+        ff.proc.on('exit', (c2) => {
+          log('ffmpeg exited', { code: c2 });
+          if (state.current && state.current.tournamentId === game.tournamentId && !state.current.stopping) {
+            state.lastError = `ffmpeg exited ${c2}`;
+            stopStream('ffmpeg exited');
+          }
+        });
+        return;
+      }
       if (state.current && state.current.tournamentId === game.tournamentId && !state.current.stopping) {
         state.lastError = `ffmpeg exited ${code}`;
         stopStream('ffmpeg exited');

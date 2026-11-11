@@ -105,7 +105,7 @@
       <ol class="join">
         <li>Go to <b>morbius.io/poker</b></li>
         <li>Connect a wallet &amp; grab chips</li>
-        <li>Take a seat at the <b>cash table</b> anytime</li>
+        <li id="joinCash">Take a seat at the <b>cash table</b> anytime</li>
         <li id="joinNext">Or enter the next <b>Beat the Bots</b></li>
       </ol></div>
   </div>
@@ -231,6 +231,7 @@ function renderOverlay(meta, st) {
   $('cashV').textContent = cash ? `Blinds ${fmt(cash.smallBlind)}/${fmt(cash.bigBlind)} · vs bots` : 'Open tables in lobby';
   const ng = meta?.nextGame;
   $('nextV').textContent = ng ? `${etTime(ng.at)} · ${fmt(ng.buyIn)} buy-in` : '1 PM · 5 PM · 9 PM ET';
+  $('joinCash').innerHTML = cash ? 'Take a seat at the <b>cash table</b> anytime' : 'Or join an open <b>cash table</b> in the lobby';
   if (ng) $('joinNext').innerHTML = `Or enter <b>Beat the Bots</b> at ${etTime(ng.at)}`;
 }
 
