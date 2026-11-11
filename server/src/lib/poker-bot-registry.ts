@@ -19,13 +19,15 @@ import { randomPlaceholderConfig } from './cosmetics-catalog';
 import { logger } from '../utils/logger';
 
 const ADDRESS_RE = /^0x[0-9a-f]{40}$/;
-const DISPLAY_NAME_SUFFIX = '_bot';
+export type PokerBotRole = 'tournament' | 'cash';
 
 export interface PokerBotAccount {
   /** Lowercase 0x address (synthetic — keyless). */
   walletAddress: string;
-  /** Always ends in `_bot`. */
+  /** Seat name shown to players (no "_bot" suffix since migration 201). */
   displayName: string;
+  /** 'tournament' = scheduled Beat-the-Bots games, 'cash' = bot cash table. */
+  role: PokerBotRole;
   /** AI tuning knobs; `{}` until personalities ship. */
   personality: Record<string, unknown>;
 }
@@ -44,20 +46,21 @@ function requireLoaded(): Map<string, PokerBotAccount> {
   return accounts;
 }
 
-function toAccount(row: { wallet_address: string; display_name: string; personality: unknown }): PokerBotAccount {
+function toAccount(row: { wallet_address: string; display_name: string; personality: unknown; role?: unknown }): PokerBotAccount {
   const walletAddress = String(row.wallet_address);
   if (!ADDRESS_RE.test(walletAddress)) {
     throw new Error(`poker_bot_accounts: invalid wallet_address "${walletAddress}" (must be lowercase 0x + 40 hex)`);
   }
   const displayName = String(row.display_name);
-  if (!displayName.endsWith(DISPLAY_NAME_SUFFIX)) {
-    throw new Error(`poker_bot_accounts: display_name "${displayName}" must end with "${DISPLAY_NAME_SUFFIX}"`);
+  if (!displayName.trim()) {
+    throw new Error(`poker_bot_accounts: empty display_name for ${walletAddress}`);
   }
+  const role: PokerBotRole = row.role === 'cash' ? 'cash' : 'tournament';
   const personality =
     row.personality && typeof row.personality === 'object' && !Array.isArray(row.personality)
       ? (row.personality as Record<string, unknown>)
       : {};
-  return { walletAddress, displayName, personality };
+  return { walletAddress, displayName, personality, role };
 }
 
 /**
@@ -65,8 +68,8 @@ function toAccount(row: { wallet_address: string; display_name: string; personal
  * Throws on DB error or malformed rows; on success replaces the cache atomically.
  */
 export async function loadPokerBotRegistry(db: Pool | PoolClient): Promise<PokerBotAccount[]> {
-  const r = await db.query<{ wallet_address: string; display_name: string; personality: unknown }>(
-    `SELECT wallet_address, display_name, personality
+  const r = await db.query<{ wallet_address: string; display_name: string; personality: unknown; role: unknown }>(
+    `SELECT wallet_address, display_name, personality, role
        FROM poker_bot_accounts
       WHERE active = TRUE
       ORDER BY wallet_address ASC`,
@@ -94,14 +97,15 @@ export function getPokerBotAccount(address: string): PokerBotAccount | null {
   return requireLoaded().get(address.trim().toLowerCase()) ?? null;
 }
 
-export function listPokerBotAccounts(): PokerBotAccount[] {
-  return [...requireLoaded().values()];
+export function listPokerBotAccounts(role?: PokerBotRole): PokerBotAccount[] {
+  const all = [...requireLoaded().values()];
+  return role ? all.filter((a) => a.role === role) : all;
 }
 
 /**
  * Ensure each bot has the rows the table + auth paths expect:
  * `players`, `player_poker_chips`, and a `chat_display_names` row carrying
- * the `_bot` display name with a placeholder avatar (kept if already set).
+ * the bot's display name with a placeholder avatar (kept if already set).
  * Idempotent; run at startup after `loadPokerBotRegistry`.
  */
 export async function syncPokerBotProfiles(db: Pool | PoolClient): Promise<void> {
@@ -134,7 +138,9 @@ export async function syncPokerBotProfiles(db: Pool | PoolClient): Promise<void>
  * Unit-test seam: install a registry without a DB. Pass `null` to reset to
  * the not-loaded state. Never call from production code.
  */
-export function setPokerBotRegistryForTesting(list: PokerBotAccount[] | null): void {
+export function setPokerBotRegistryForTesting(
+  list: Array<Omit<PokerBotAccount, 'role'> & { role?: PokerBotRole }> | null,
+): void {
   if (list === null) {
     accounts = null;
     return;
@@ -145,6 +151,7 @@ export function setPokerBotRegistryForTesting(list: PokerBotAccount[] | null): v
       wallet_address: acct.walletAddress.toLowerCase(),
       display_name: acct.displayName,
       personality: acct.personality,
+      role: acct.role,
     });
     next.set(normalized.walletAddress, normalized);
   }

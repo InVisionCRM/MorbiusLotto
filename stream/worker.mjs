@@ -24,6 +24,11 @@
  *                                          table exists
  *   STREAM_WIDTH=1280 STREAM_HEIGHT=720 STREAM_FPS=30 STREAM_VIDEO_KBPS=3500
  *   PORT=8080                              /health and /status
+ *   MUSIC_ENABLED=1                        background music on the stream (default on)
+ *   MUSIC_DIR=/app/music                   folder of .mp3/.m4a/.wav tracks, shuffled + looped
+ *                                          (ships with Kyle's own Suno tracks, see music/SOURCE.md)
+ *   MUSIC_URL=https://…/track.mp3          optional single track/stream URL, looped (overrides MUSIC_DIR)
+ *   MUSIC_VOLUME=0.18                      0–1 gain applied to the music (low background level)
  *
  * Never logs the RTMP URL or key.
  */
@@ -48,6 +53,10 @@ const DISPLAY = env('STREAM_DISPLAY', ':99');
 const POLL_MS = 20_000;
 const PORT = Number(env('PORT', '8080'));
 const PREROLL_MS = Number(env('STREAM_PREROLL_SECONDS', '120')) * 1000;
+const MUSIC_ENABLED = !['0', 'false', 'no', 'off'].includes(env('MUSIC_ENABLED', '1').toLowerCase());
+const MUSIC_DIR = env('MUSIC_DIR', path.join(path.dirname(fileURLToPath(import.meta.url)), 'music'));
+const MUSIC_URL = env('MUSIC_URL', '');
+const MUSIC_VOLUME = Math.min(1, Math.max(0, Number(env('MUSIC_VOLUME', '0.18')) || 0.18));
 
 const state = { current: null, lastPoll: null, lastError: null, history: [] };
 const log = (msg, extra = {}) => console.log(JSON.stringify({ t: new Date().toISOString(), msg, ...extra }));
@@ -67,6 +76,37 @@ function ensureXvfb() {
   if (xvfb && xvfb.exitCode == null) return;
   xvfb = spawn('Xvfb', [DISPLAY, '-screen', '0', `${W}x${H}x24`, '-nolisten', 'tcp'], { stdio: 'ignore' });
   xvfb.on('exit', (c) => log('xvfb exited', { code: c }));
+}
+
+/**
+ * ffmpeg audio input args. Music: a shuffled playlist (concat demuxer) repeated enough
+ * times to outlast STREAM_MAX_MINUTES, read in real time (-re). Falls back to silence.
+ */
+export function musicInputArgs({ enabled = MUSIC_ENABLED, dir = MUSIC_DIR, url = MUSIC_URL, maxMin = MAX_MIN, rng = Math.random } = {}) {
+  const silence = { args: ['-f', 'lavfi', '-i', 'anullsrc=channel_layout=stereo:sample_rate=44100'], music: false, tracks: 0 };
+  if (!enabled) return silence;
+  if (url) return { args: ['-re', '-stream_loop', '-1', '-i', url], music: true, tracks: 1 };
+  let files = [];
+  try {
+    files = fs.readdirSync(dir).filter((f) => /\.(mp3|m4a|aac|wav|ogg|flac)$/i.test(f)).map((f) => path.join(dir, f));
+  } catch {
+    return silence;
+  }
+  if (files.length === 0) return silence;
+  // ~3 min per track; repeat the shuffled set until it covers the max stream length + margin
+  const rounds = Math.max(2, Math.ceil(((maxMin + 30) * 60) / (files.length * 150)));
+  const lines = [];
+  for (let r = 0; r < rounds; r++) {
+    const order = [...files];
+    for (let i = order.length - 1; i > 0; i--) {
+      const j = Math.floor(rng() * (i + 1));
+      [order[i], order[j]] = [order[j], order[i]];
+    }
+    for (const f of order) lines.push(`file '${f.replace(/'/g, "'\\''")}'`);
+  }
+  const list = path.join(process.env.TMPDIR || '/tmp', `morbius-music-${process.pid}.txt`);
+  fs.writeFileSync(list, lines.join('\n') + '\n');
+  return { args: ['-re', '-f', 'concat', '-safe', '0', '-i', list], music: true, tracks: files.length };
 }
 
 function startStream(game) {
@@ -89,10 +129,14 @@ function startStream(game) {
     { env: { ...process.env, DISPLAY }, stdio: 'ignore' },
   );
   const isFile = !ENABLED;
+  const audio = musicInputArgs();
+  log('audio', { music: audio.music, tracks: audio.tracks, volume: audio.music ? MUSIC_VOLUME : 0 });
   const ffArgs = [
     '-hide_banner', '-loglevel', 'warning',
     '-f', 'x11grab', '-draw_mouse', '0', '-video_size', `${W}x${H}`, '-framerate', String(FPS), '-i', `${DISPLAY}.0`,
-    '-f', 'lavfi', '-i', 'anullsrc=channel_layout=stereo:sample_rate=44100',
+    ...audio.args,
+    '-map', '0:v:0', '-map', '1:a:0',
+    ...(audio.music ? ['-af', `volume=${MUSIC_VOLUME},aresample=44100:async=1`] : []),
     '-c:v', 'libx264', '-preset', 'veryfast', '-tune', 'zerolatency', '-pix_fmt', 'yuv420p',
     '-b:v', `${KBPS}k`, '-maxrate', `${KBPS}k`, '-bufsize', `${KBPS * 2}k`, '-g', String(FPS * 2),
     '-c:a', 'aac', '-b:a', '128k', '-ar', '44100',
@@ -137,6 +181,7 @@ async function poll() {
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     const body = await r.json();
     state.lastPoll = new Date().toISOString();
+    state.buyIn = body.buyIn ?? state.buyIn ?? null;
     state.lastError = null;
     const games = Array.isArray(body.games) ? body.games : [];
     const cur = state.current;
@@ -169,15 +214,31 @@ async function poll() {
   }
 }
 
-http
+const isMain = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+if (isMain) http
   .createServer((req, res) => {
     const viewM = /^\/view(\?.*)?$/i.exec(req.url || '');
     if (viewM) { res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' }); return res.end(VIEW_HTML); }
     if (req.url === '/api/current') {
       const c = state.current;
       if (!c || !c.tableId) {
-        res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
-        return res.end(JSON.stringify({ pending: true, scheduledAt: c?.scheduledAt ?? null }));
+        // "starting soon": overlay still shows open cash seats + the game time
+        fetch(`${API_BASE}/api/poker/bot-cash`, { signal: AbortSignal.timeout(5000) })
+          .then((r) => (r.ok ? r.json() : null))
+          .catch(() => null)
+          .then((cash) => {
+            res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
+            res.end(JSON.stringify({
+              pending: true,
+              scheduledAt: c?.scheduledAt ?? null,
+              meta: {
+                kind: 'pending',
+                cashTables: Array.isArray(cash?.tables) ? cash.tables : [],
+                nextGame: c?.scheduledAt ? { at: c.scheduledAt, buyIn: state.buyIn } : null,
+              },
+            }));
+          });
+        return;
       }
       fetch(`${API_BASE}/api/poker/bot-schedule/table/${c.tableId}/state`, { signal: AbortSignal.timeout(8000) })
         .then(async (r) => { res.writeHead(r.status, { 'content-type': 'application/json', 'cache-control': 'no-store' }); res.end(await r.text()); })
@@ -202,6 +263,8 @@ http
   })
   .listen(PORT, () => log('stream worker up', { enabled: ENABLED, apiBase: API_BASE, siteUrl: SITE_URL }));
 
-process.on('SIGTERM', () => { stopStream('shutdown'); try { xvfb?.kill(); } catch {} process.exit(0); });
-setInterval(poll, POLL_MS);
-poll();
+if (isMain) {
+  process.on('SIGTERM', () => { stopStream('shutdown'); try { xvfb?.kill(); } catch {} process.exit(0); });
+  setInterval(poll, POLL_MS);
+  poll();
+}

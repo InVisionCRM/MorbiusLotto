@@ -242,7 +242,7 @@ export class PokerBotScheduleService {
     );
     if (claim.rows.length === 0) return null; // already handled (this or another instance)
 
-    const bots = listPokerBotAccounts().map((b) => b.walletAddress);
+    const bots = listPokerBotAccounts('tournament').map((b) => b.walletAddress);
     if (bots.length === 0) {
       await this.markSlot(slot.slotKey, null, 'error', 'no active bots in poker_bot_accounts');
       return null;

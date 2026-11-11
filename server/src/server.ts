@@ -54,6 +54,8 @@ import { WebSocketService } from './services/websocket.service';
 import { PokerGameService } from './services/poker-game.service';
 import { PokerTournamentService } from './services/poker-tournament.service';
 import { PokerBotScheduleService, readBotScheduleConfig } from './services/poker-bot-schedule.service';
+import { PokerBotCashService, readBotCashConfig } from './services/poker-bot-cash.service';
+import { loadStreamMeta } from './services/poker-bot-stream-meta';
 import { chipsToWei } from './lib/poker-chip-scale';
 import { loadPokerBotRegistry, syncPokerBotProfiles } from './lib/poker-bot-registry';
 import { applyPokerChipDelta, getPokerChipBalance, setWeeklyDropWagerHook, setWeeklyDropRefundHook } from './services/poker-chip-wallet';
@@ -574,15 +576,58 @@ async function initializeServices() {
         const ok = await dbService.getPool().query(
           `SELECT 1 FROM poker_tables pt
              JOIN poker_bot_scheduled_games g ON g.tournament_id = pt.tournament_id
-            WHERE pt.id = $1 LIMIT 1`,
+            WHERE pt.id = $1
+           UNION ALL
+           SELECT 1 FROM poker_bot_cash_tables c WHERE c.table_id = $1
+           LIMIT 1`,
           [tableId],
         );
         if (ok.rows.length === 0) return res.status(404).json({ error: 'not a scheduled bot game table' });
         const state = await pokerGameService.getTableState(tableId, null);
+        const meta = await loadStreamMeta(dbService.getPool(), tableId).catch((err) => {
+          logger.warn('stream meta failed', { tableId, error: (err as Error)?.message });
+          return null;
+        });
         res.set('Cache-Control', 'no-store');
-        res.json({ ...state, myHoleCards: null });
+        res.json({ ...state, myHoleCards: null, meta });
       } catch (err) {
         res.status(500).json({ error: (err as Error)?.message || 'failed' });
+      }
+    });
+
+    // Always-open bot cash table(s) (POKER_BOT_CASH_ENABLED=true; see poker-bot-cash.service.ts)
+    pokerBotCash = new PokerBotCashService(dbService.getPool(), pokerGameService);
+    pokerBotCash.start();
+    const botCashRef = pokerBotCash;
+    // Public: the bot cash tables (for the stream overlay / "play now" links).
+    app.get('/api/poker/bot-cash', async (_req, res) => {
+      try {
+        const cfg = readBotCashConfig();
+        const ids = cfg.enabled ? await botCashRef.listTables() : [];
+        const r = ids.length
+          ? await dbService.getPool().query(
+              `SELECT pt.id, pt.small_blind::TEXT AS sb, pt.big_blind::TEXT AS bb, pt.max_seats,
+                      (SELECT COUNT(*) FROM poker_seats s WHERE s.table_id = pt.id AND s.player_address IS NOT NULL)::int AS seated
+                 FROM poker_tables pt WHERE pt.id = ANY($1::uuid[])`,
+              [ids],
+            )
+          : { rows: [] as any[] };
+        res.set('Cache-Control', 'no-store');
+        res.json({
+          enabled: cfg.enabled,
+          buyInBots: cfg.buyIn,
+          tables: r.rows.map((x: any) => ({
+            tableId: String(x.id),
+            smallBlind: Number(x.sb),
+            bigBlind: Number(x.bb),
+            maxSeats: Number(x.max_seats),
+            seated: Number(x.seated),
+            seatsOpen: Math.max(0, Number(x.max_seats) - Number(x.seated)),
+          })),
+        });
+      } catch (err) {
+        logger.error('GET /api/poker/bot-cash failed', { error: (err as Error)?.message });
+        res.status(500).json({ error: 'Failed to load bot cash tables' });
       }
     });
 
@@ -5184,6 +5229,7 @@ async function initializeServices() {
 // Graceful shutdown (schedulers ref set in initializeServices)
 let freerollScheduler: FreerollSchedulerService | null = null;
 let pokerBotScheduler: PokerBotScheduleService | null = null;
+let pokerBotCash: PokerBotCashService | null = null;
 let tournamentScheduler: TournamentSchedulerService | null = null;
 let holderChipRewardsServiceRef: HolderChipRewardsService | null = null;
 let merkleDropsService: MerkleDropsService | null = null;
@@ -5219,6 +5265,7 @@ process.on('SIGTERM', () => {
   logger.info('SIGTERM received, shutting down gracefully');
   freerollScheduler?.stop();
   pokerBotScheduler?.stop();
+  pokerBotCash?.stop();
   tournamentScheduler?.stop();
   merkleDropsService?.stopCron();
   merkleDropsLPService?.stopCron();
@@ -5233,6 +5280,7 @@ process.on('SIGINT', () => {
   logger.info('SIGINT received, shutting down gracefully');
   freerollScheduler?.stop();
   pokerBotScheduler?.stop();
+  pokerBotCash?.stop();
   tournamentScheduler?.stop();
   merkleDropsService?.stopCron();
   merkleDropsLPService?.stopCron();
