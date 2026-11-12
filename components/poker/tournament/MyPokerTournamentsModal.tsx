@@ -178,6 +178,7 @@ export function MyPokerTournamentsModal({
           onClose={() => setShareTournament(null)}
           tournamentName={shareSnapshot.tournamentName}
           isFreeroll={shareSnapshot.isFreeroll}
+          fundingLabel={shareSnapshot.fundingLabel}
           scheduleLine={shareSnapshot.scheduleLine}
           prizeLine={shareSnapshot.prizeLine}
           payoutLine={shareSnapshot.payoutLine}

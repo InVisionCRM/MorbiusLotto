@@ -21,6 +21,7 @@ import { TOURNAMENT_PRIZE_ESCROW_ADDRESS } from '@/lib/contracts';
 import { tournamentPrizeEscrowV6Abi } from '@/abi/tournament-prize-escrow-v6';
 import { tournamentIdToBytes32 } from '@/lib/tournament-id-bytes32';
 import type { BlackjackWebSocketClient } from '@/lib/websocket-client';
+import { readPendingJoin, clearPendingJoin } from '@/components/poker/PublicLobbyGames';
 import { isAdminWallet } from '@/lib/admin';
 import { PokerTournamentCreator } from './PokerTournamentCreator';
 import { PokerTournamentInfoModal } from './PokerTournamentInfoModal';
@@ -445,6 +446,23 @@ export function PokerTournamentLobby({
       setJoiningId(null);
     }
   };
+
+  // Signed-out visitor clicked "Connect wallet & join" on the public list: register once connected.
+  const pendingJoinDoneRef = useRef(false);
+  useEffect(() => {
+    if (pendingJoinDoneRef.current || !myAddress || !wsClient || isLoadingTournaments) return;
+    const pending = readPendingJoin();
+    if (!pending || pending.kind !== 'tournament') return;
+    pendingJoinDoneRef.current = true;
+    clearPendingJoin();
+    const t = openTournaments.find((x) => x.tournamentId === pending.tournamentId);
+    if (t?.isRegistered) {
+      setJoinSuccess("You're already registered for this tournament.");
+      return;
+    }
+    void handleJoin(pending.tournamentId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [myAddress, wsClient, isLoadingTournaments, openTournaments]);
 
   const handleLeaveRegistration = async (tournamentId: string) => {
     if (leavingRegId) return;
@@ -1184,6 +1202,7 @@ function ShareModalForLobby({
       onClose={onClose}
       tournamentName={snapshot.tournamentName}
       isFreeroll={snapshot.isFreeroll}
+      fundingLabel={snapshot.fundingLabel}
       scheduleLine={snapshot.scheduleLine}
       prizeLine={snapshot.prizeLine}
       payoutLine={snapshot.payoutLine}
