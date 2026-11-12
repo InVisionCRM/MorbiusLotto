@@ -65,6 +65,17 @@ const num = (v: unknown) => {
 export async function loadStreamMeta(pool: Pool, tableId: string, nowMs = Date.now()) {
   const sched = readBotScheduleConfig();
   const nextSlot = upcomingSlots(nowMs, sched, 36 * 3600_000).find((s) => s.at.getTime() > nowMs) ?? null;
+  let nextRegOpen = false;
+  if (nextSlot) {
+    const r = await pool
+      .query(
+        `SELECT 1 FROM poker_bot_scheduled_games g JOIN tournaments t ON t.id = g.tournament_id
+          WHERE g.slot_key = $1 AND t.status = 'registration' LIMIT 1`,
+        [nextSlot.slotKey],
+      )
+      .catch(() => ({ rows: [] as unknown[] }));
+    nextRegOpen = r.rows.length > 0;
+  }
 
   const t = await pool.query(
     `SELECT pt.max_seats, pt.small_blind, pt.big_blind, pt.current_blind_level, pt.current_blind_level_started_at,
@@ -154,7 +165,7 @@ export async function loadStreamMeta(pool: Pool, tableId: string, nowMs = Date.n
     tournament,
     cashTables,
     nextGame: nextSlot
-      ? { at: nextSlot.at.toISOString(), label: nextSlot.slotKey.split(' ')[1] ?? '', timeZone: sched.timeZone, buyIn: sched.buyIn.toString(), freeEntry: sched.freeEntry }
+      ? { at: nextSlot.at.toISOString(), label: nextSlot.slotKey.split(' ')[1] ?? '', timeZone: sched.timeZone, buyIn: sched.buyIn.toString(), freeEntry: sched.freeEntry, registrationOpen: nextRegOpen }
       : null,
   };
 }

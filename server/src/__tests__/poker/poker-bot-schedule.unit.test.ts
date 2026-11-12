@@ -46,3 +46,22 @@ describe('poker bot schedule helpers', () => {
     }
   });
 });
+
+describe('early registration lead', () => {
+  const cfg = { times: parseScheduleTimes('13:00,17:00,21:00'), timeZone: 'America/New_York' };
+  it('allows up to 24h lead and a 900-min lead opens the whole day plus next 1 PM the night before', () => {
+    const prev = process.env.POKER_BOT_SCHEDULE_LEAD_MINUTES;
+    process.env.POKER_BOT_SCHEDULE_LEAD_MINUTES = '900';
+    expect(readBotScheduleConfig().leadMinutes).toBe(900);
+    process.env.POKER_BOT_SCHEDULE_LEAD_MINUTES = '5000';
+    expect(readBotScheduleConfig().leadMinutes).toBe(1440);
+    if (prev === undefined) delete process.env.POKER_BOT_SCHEDULE_LEAD_MINUTES;
+    else process.env.POKER_BOT_SCHEDULE_LEAD_MINUTES = prev;
+    // 11:50 ET on 2026-11-12: 1, 5 and 9 PM today are all inside a 900-min window.
+    const now = zonedToUtc(2026, 11, 12, 11, 50, 'America/New_York').getTime();
+    expect(upcomingSlots(now, cfg, 900 * 60_000).map((s) => s.slotKey.split(' ')[1])).toEqual(['13:00', '17:00', '21:00']);
+    // 22:05 ET: tomorrow's 1 PM opens (14h55m ahead).
+    const night = zonedToUtc(2026, 11, 12, 22, 5, 'America/New_York').getTime();
+    expect(upcomingSlots(night, cfg, 900 * 60_000).map((s) => s.slotKey)).toEqual(['2026-11-13 13:00 America/New_York']);
+  });
+});

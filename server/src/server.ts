@@ -478,6 +478,14 @@ async function initializeServices() {
       );
     }, 60_000).unref();
 
+    // Cash games: remove players who have sat out >= 15 min (stack credited back to their balance).
+    // sit_out_since is persisted, so the sweep picks up long sit-outs after a restart. This interval
+    // used to live only in runtime/service-registry.ts, which server.ts never runs, so it never fired.
+    const sweepSitOuts = () =>
+      pokerGameService.kickStaleSitOuts().catch((err) => logger.warn('Sit-out timeout sweep error', { error: (err as Error)?.message }));
+    setTimeout(sweepSitOuts, 20_000).unref();
+    setInterval(sweepSitOuts, 60_000).unref();
+
     // Initialize WebSocket service. authService is passed last so WS upgrades
     // can read the SIWE session cookie and skip the EIP-712 challenge for
     // already-signed-in users (eliminates the second in-game wallet popup).

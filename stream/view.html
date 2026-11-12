@@ -357,14 +357,14 @@ function renderOverlay(meta, st) {
   $('cashV').textContent = cash ? `Blinds ${fmt(cash.smallBlind)}/${fmt(cash.bigBlind)} · vs bots` : 'Open tables in lobby';
   const ng = meta?.nextGame;
   const free = Boolean(ng?.freeEntry || meta?.freeEntry || meta?.tournament?.freeEntry);
-  $('nextV').textContent = ng ? `${etTime(ng.at)} · ${ng.freeEntry ? 'FREE ENTRY' : fmt(ng.buyIn) + ' buy-in'}` : '1 PM · 5 PM · 9 PM ET';
+  $('nextV').textContent = ng ? `${etTime(ng.at)} · ${ng.freeEntry ? 'FREE ENTRY' : fmt(ng.buyIn) + ' buy-in'}${ng.registrationOpen ? ' · REG OPEN' : ''}` : '1 PM · 5 PM · 9 PM ET';
   $('freeTop').style.display = (meta?.kind === 'cash' ? false : (meta?.tournament ? meta.tournament.freeEntry : free)) ? '' : 'none'; // cash table costs chips
   $('joinWallet').innerHTML = free ? 'Connect a wallet (<b>no chips needed</b> for Beat the Bots)' : 'Connect a wallet &amp; grab chips';
   $('joinCash').innerHTML = cash ? 'Take a seat at the <b>cash table</b> anytime' : 'Or join an open <b>cash table</b> in the lobby';
   if (meta?.tournament?.freeEntry && meta.tournament.lateRegMinutes && meta.tournament.startedAt &&
       Date.now() < Date.parse(meta.tournament.startedAt) + meta.tournament.lateRegMinutes * 60_000) {
     $('joinNext').innerHTML = `<b>Late entry open</b> · FREE for ${mmss(Date.parse(meta.tournament.startedAt) + meta.tournament.lateRegMinutes * 60_000 - Date.now())}`;
-  } else if (ng) $('joinNext').innerHTML = `Or enter <b>Beat the Bots</b> at ${etTime(ng.at)}${ng.freeEntry ? ' · <b>FREE</b>' : ''}`;
+  } else if (ng) $('joinNext').innerHTML = `Or enter <b>Beat the Bots</b> at ${etTime(ng.at)}${ng.freeEntry ? ' · <b>FREE</b>' : ''}${ng.registrationOpen ? ' · <b>Registration open</b>' : ''}`;
 }
 
 function render(st) {
