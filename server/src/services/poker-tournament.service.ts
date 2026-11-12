@@ -1139,6 +1139,10 @@ export class PokerTournamentService {
     const fastCheck = await this.pool.query(
       `SELECT te.id AS entry_id, te.status AS entry_status,
               t.status AS tournament_status, t.is_private, t.pin_code,
+              /* Legacy unregister marker: busted with no rank and never seated. */
+              (te.status = 'busted' AND te.final_rank IS NULL AND NOT EXISTS (
+                 SELECT 1 FROM poker_tournament_seats pts WHERE pts.entry_id = te.id
+              )) AS was_unregistered,
               /* MTT: prefer the caller's actual seat table over the lowest-seq table.
                  Falls back to the lowest-seq table for spectators / pre-activation. */
               COALESCE(
@@ -1159,7 +1163,7 @@ export class PokerTournamentService {
         LIMIT 1`,
       [tournamentId, normalized]
     );
-    if (fastCheck.rows.length > 0) {
+    if (fastCheck.rows.length > 0 && !fastCheck.rows[0].was_unregistered) {
       const row = fastCheck.rows[0];
       const status = String(row.tournament_status ?? '');
       const entryStatus = String(row.entry_status ?? '');
@@ -1250,6 +1254,16 @@ export class PokerTournamentService {
         return { entryId, autoStarted: !!tableId, tableId };
       }
 
+      // Legacy rows from the old unregister path (status busted, no rank, never seated) are
+      // not real eliminations — clear them so the player can register / late-register again.
+      await client.query(
+        `DELETE FROM tournament_entries te
+          WHERE te.tournament_id = $1 AND LOWER(te.player_address) = $2
+            AND te.status = 'busted' AND te.final_rank IS NULL
+            AND NOT EXISTS (SELECT 1 FROM poker_tournament_seats pts WHERE pts.entry_id = te.id)`,
+        [tournamentId, normalized],
+      );
+
       const config = this.parsePokerConfig(tournament.poker_config);
 
       // Late registration: a still-`active` tournament accepts new buy-ins for
@@ -1311,7 +1325,8 @@ export class PokerTournamentService {
       // Free-entry promo (chip games only): humans pay nothing, bots still fund the pool.
       const chargedBuyIn = isEscrowBuyIn ? buyIn : this.entryBuyInFor(config, normalized, buyIn);
       if (!isEscrowBuyIn && chargedBuyIn === 0n && buyIn > 0n) {
-        // One free seat per wallet per game: any earlier entry (even busted/unregistered) blocks it.
+        // One free seat per wallet per game: an earlier real entry (even a busted one) blocks it.
+        // Unregistered entries are deleted above / on leave, so leaving and rejoining is allowed.
         const prior = await client.query(
           `SELECT 1 FROM tournament_entries WHERE tournament_id = $1 AND LOWER(player_address) = $2 LIMIT 1`,
           [tournamentId, normalized],
@@ -1600,10 +1615,9 @@ export class PokerTournamentService {
       const client = await this.pool.connect();
       try {
         await client.query('BEGIN');
-        await client.query(
-          `UPDATE tournament_entries SET status = 'busted', finished_at = NOW() WHERE id = $1`,
-          [entryRow.rows[0].id],
-        );
+        // Delete (not "bust") the entry: a busted row would block re-registering
+        // (UNIQUE (tournament_id, player_address) + the join fast path treats it as a spectator).
+        await client.query(`DELETE FROM tournament_entries WHERE id = $1`, [entryRow.rows[0].id]);
         await client.query(
           `UPDATE tournaments SET prize_pool = GREATEST(prize_pool - $1::NUMERIC, 0) WHERE id = $2`,
           [buyIn.toString(), tournamentId],
@@ -1644,10 +1658,11 @@ export class PokerTournamentService {
         if (liveEntry.rows.length === 0) {
           throw new Error('You are not registered for this tournament');
         }
-        await client.query(
-          `UPDATE tournament_entries SET status = 'busted', finished_at = NOW() WHERE id = $1`,
-          [liveEntry.rows[0].id],
-        );
+        // Delete (not "bust") the entry so the player can register again later. A busted row
+        // looked like an elimination: the join fast path returned it as a spectator entry and
+        // UNIQUE (tournament_id, player_address) blocked a fresh one, so one mis-click on
+        // "Leave" locked the wallet out of the game for good (Beat the Bots, Nov 12 2026).
+        await client.query(`DELETE FROM tournament_entries WHERE id = $1`, [liveEntry.rows[0].id]);
         if (buyIn > 0n) {
           // Chip buy-in — credit the chips straight back and unwind the pool.
           await applyPokerChipDelta(
@@ -2282,6 +2297,9 @@ export class PokerTournamentService {
     }
 
     // Check if tournament is over (≤1 active player)
+    // Bust any 'playing' entry whose seat is gone (left the table mid-hand) before counting,
+    // otherwise the ghost entry keeps the tournament from ever completing.
+    await this.bustOrphanedTournamentEntries(tournamentId);
     const activePlayers = await this.pool.query(
       `SELECT COUNT(*) AS c FROM tournament_entries WHERE tournament_id = $1 AND status = 'playing'`,
       [tournamentId]
@@ -2392,6 +2410,9 @@ export class PokerTournamentService {
       }
     }
 
+    // Bust any 'playing' entry whose seat is gone (left the table mid-hand) before counting,
+    // otherwise the ghost entry keeps the tournament from ever completing.
+    await this.bustOrphanedTournamentEntries(tournamentId);
     const activePlayers = await this.pool.query(
       `SELECT COUNT(*) AS c FROM tournament_entries WHERE tournament_id = $1 AND status = 'playing'`,
       [tournamentId]
@@ -2503,6 +2524,9 @@ export class PokerTournamentService {
       }
     }
 
+    // Bust any 'playing' entry whose seat is gone (left the table mid-hand) before counting,
+    // otherwise the ghost entry keeps the tournament from ever completing.
+    await this.bustOrphanedTournamentEntries(tournamentId);
     const activePlayers = await this.pool.query(
       `SELECT COUNT(*) AS c FROM tournament_entries WHERE tournament_id = $1 AND status = 'playing'`,
       [tournamentId]
@@ -2648,12 +2672,166 @@ export class PokerTournamentService {
       }
     }
 
+    // Bust any 'playing' entry whose seat is gone (left the table mid-hand) before counting,
+    // otherwise the ghost entry keeps the tournament from ever completing.
+    await this.bustOrphanedTournamentEntries(tournamentId);
     const activePlayers = await this.pool.query(
       `SELECT COUNT(*) AS c FROM tournament_entries WHERE tournament_id = $1 AND status = 'playing'`,
       [tournamentId]
     );
     if (Number(activePlayers.rows[0].c) <= 1) {
       await this.completeTournament(tournamentId, tableId);
+    }
+  }
+
+  /**
+   * Bust tournament entries that are still `playing` but no longer hold a seat at any of the
+   * tournament's tables. This happens when a player taps "Leave" on a tournament table (the
+   * seat row is deleted without touching the entry) — e.g. Snev left the 2026-11-12 1 PM
+   * Beat-the-Bots game mid-hand, the post-hand sync never saw his 0-chip seat, and his ghost
+   * `playing` entry kept the "≤1 player left" check at 2 forever (game never ended, blinds
+   * climbed to level 57).
+   *
+   * Each orphan is busted with `finished_at` = completion time of the last hand they were dealt
+   * into (falls back to NOW()), so `calculate_tournament_prizes` (busted ranked by finished_at)
+   * places them where they actually went out instead of ahead of later busts. The 60s grace on
+   * activation / buy-in avoids racing the seating of new or late-registered entries.
+   *
+   * Returns the number of entries busted.
+   */
+  async bustOrphanedTournamentEntries(tournamentId: string): Promise<number> {
+    let orphans: Array<{ id: string; player_address: string; left_at: Date }>;
+    try {
+      const res = await this.pool.query<{ id: string; player_address: string; left_at: Date }>(
+        `SELECT te.id, te.player_address,
+                COALESCE(
+                  (SELECT MAX(h.completed_at)
+                     FROM poker_hand_players hp
+                     JOIN poker_hands h ON h.id = hp.hand_id
+                    WHERE h.tournament_id = te.tournament_id
+                      AND LOWER(hp.player_address) = LOWER(te.player_address)
+                      AND h.completed_at IS NOT NULL),
+                  NOW()
+                ) AS left_at
+           FROM tournament_entries te
+           JOIN tournaments t ON t.id = te.tournament_id
+          WHERE te.tournament_id = $1
+            AND t.status = 'active'
+            AND t.game_type = 'poker'
+            AND te.status = 'playing'
+            AND COALESCE(t.activated_at, NOW()) < NOW() - INTERVAL '60 seconds'
+            AND te.bought_in_at < NOW() - INTERVAL '60 seconds'
+            AND EXISTS (SELECT 1 FROM poker_tables pt0 WHERE pt0.tournament_id = te.tournament_id)
+            AND NOT EXISTS (
+              SELECT 1 FROM poker_seats ps
+                JOIN poker_tables pt ON pt.id = ps.table_id
+               WHERE pt.tournament_id = te.tournament_id
+                 AND LOWER(ps.player_address) = LOWER(te.player_address)
+            )
+          ORDER BY left_at DESC`,
+        [tournamentId],
+      );
+      orphans = res.rows;
+    } catch (err) {
+      logger.error('bustOrphanedTournamentEntries: query failed', { tournamentId, err });
+      return 0;
+    }
+    if (orphans.length === 0) return 0;
+
+    const orphanIds = orphans.map((o) => o.id);
+    const stillPlayingRes = await this.pool.query<{ c: string }>(
+      `SELECT COUNT(*)::text AS c FROM tournament_entries
+        WHERE tournament_id = $1 AND status = 'playing' AND NOT (id = ANY($2::uuid[]))`,
+      [tournamentId, orphanIds],
+    );
+    const stillPlaying = Number(stillPlayingRes.rows[0]?.c ?? 0);
+
+    let busted = 0;
+    for (const o of orphans) {
+      const leftAt = o.left_at instanceof Date ? o.left_at : new Date(o.left_at);
+      // Rank = everyone still playing + everyone who went out after this player, + 1.
+      const laterRes = await this.pool.query<{ c: string }>(
+        `SELECT COUNT(*)::text AS c FROM tournament_entries
+          WHERE tournament_id = $1 AND status = 'busted' AND finished_at > $2`,
+        [tournamentId, leftAt],
+      );
+      const rank = stillPlaying + Number(laterRes.rows[0]?.c ?? 0) + 1;
+      const upd = await this.pool.query(
+        `UPDATE tournament_entries
+            SET status = 'busted', chips_remaining = 0, finished_at = $2, final_rank = $3
+          WHERE id = $1 AND status = 'playing'`,
+        [o.id, leftAt, rank],
+      );
+      if ((upd.rowCount ?? 0) === 0) continue;
+      await this.pool.query(
+        `UPDATE poker_tournament_seats SET eliminated_at = COALESCE(eliminated_at, $2), final_rank = $3
+          WHERE entry_id = $1`,
+        [o.id, leftAt, rank],
+      );
+      busted++;
+      logger.warn('Poker tournament: busted orphaned entry (no seat at any table)', {
+        tournamentId,
+        playerAddress: o.player_address,
+        rank,
+        leftAt: leftAt.toISOString(),
+      });
+      this.broadcast(`poker_tournament:${tournamentId}`, 'poker_tournament_player_eliminated', {
+        tournamentId,
+        playerAddress: o.player_address,
+        finalRank: rank,
+        handNumber: null,
+      });
+    }
+    return busted;
+  }
+
+  /**
+   * Scheduler sweep: an active tournament table that has fewer than two stacked seats and no hand
+   * in progress can never deal again, and nothing re-triggers `tryStartNextHand` after a restart
+   * (post-hand work is already marked processed). Bust orphaned entries and complete the
+   * tournament when ≤1 player remains. Runs on the freeroll scheduler poll.
+   */
+  async sweepStalledTournaments(): Promise<void> {
+    let rows: Array<{ tournament_id: string; table_id: string }>;
+    try {
+      const res = await this.pool.query<{ tournament_id: string; table_id: string }>(
+        `SELECT pt.tournament_id, pt.id AS table_id
+           FROM poker_tables pt
+           JOIN tournaments t ON t.id = pt.tournament_id
+          WHERE pt.tournament_mode = TRUE
+            AND t.status = 'active'
+            AND t.game_type = 'poker'
+            AND COALESCE(t.activated_at, NOW()) < NOW() - INTERVAL '60 seconds'
+            AND NOT EXISTS (SELECT 1 FROM poker_hands h WHERE h.table_id = pt.id AND h.completed_at IS NULL)
+            AND (SELECT COUNT(*) FROM poker_seats ps
+                  WHERE ps.table_id = pt.id AND ps.player_address IS NOT NULL
+                    AND COALESCE(ps.stack, 0) > 0) < 2`,
+      );
+      rows = res.rows;
+    } catch (err) {
+      logger.error('sweepStalledTournaments: query failed', { err });
+      return;
+    }
+    const seen = new Set<string>();
+    for (const r of rows) {
+      if (seen.has(r.tournament_id)) continue;
+      seen.add(r.tournament_id);
+      try {
+        await this.bustOrphanedTournamentEntries(r.tournament_id);
+        const active = await this.pool.query<{ c: string }>(
+          `SELECT COUNT(*)::text AS c FROM tournament_entries WHERE tournament_id = $1 AND status = 'playing'`,
+          [r.tournament_id],
+        );
+        if (Number(active.rows[0]?.c ?? 0) <= 1) {
+          logger.warn('sweepStalledTournaments: completing stalled tournament', {
+            tournamentId: r.tournament_id,
+            tableId: r.table_id,
+          });
+          await this.completeTournament(r.tournament_id, r.table_id);
+        }
+      } catch (err) {
+        logger.error('sweepStalledTournaments: tournament failed', { tournamentId: r.tournament_id, err });
+      }
     }
   }
 
