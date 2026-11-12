@@ -275,6 +275,8 @@ export class PokerBotScheduleService {
           lateRegMinutes: cfg.lateRegMinutes,
         },
         internalHumanFreeEntry: cfg.freeEntry,
+        // Heads-up / bot-only end game gets shorter blind levels so games can't drag on.
+        internalFastEndgame: true,
         isPrivate: false,
         scheduledStartAt: slot.at,
         creatorFeePercent: cfg.creatorFee,

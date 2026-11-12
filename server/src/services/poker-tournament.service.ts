@@ -92,6 +92,25 @@ export interface PokerTournamentConfig {
    * Server-set only (scheduler) — stripped from user-created tournaments.
    */
   humanFreeEntry?: boolean;
+  /**
+   * Scheduled bot games: shorten `by_time` levels in the end game so heads-up / bot-only play
+   * can't drag on (see `endgameBlindIntervalMinutes`). Server-set only.
+   */
+  fastEndgame?: boolean;
+}
+
+/**
+ * Effective `by_time` level length for `fastEndgame` tournaments: heads-up (<= 2 players with
+ * chips) -> at most 2 min; no human left with chips once late registration has closed -> 1 min.
+ */
+export function endgameBlindIntervalMinutes(
+  baseMinutes: number,
+  opts: { fastEndgame?: boolean; alive: number; humansAlive: number; lateRegOpen: boolean },
+): number {
+  if (!opts.fastEndgame) return baseMinutes;
+  if (opts.humansAlive <= 0 && !opts.lateRegOpen) return Math.min(baseMinutes, 1);
+  if (opts.alive <= 2) return Math.min(baseMinutes, 2);
+  return baseMinutes;
 }
 
 export const DEFAULT_BLIND_SCHEDULE: BlindLevel[] = [
@@ -298,6 +317,8 @@ export interface CreatePokerTournamentParams {
   config: PokerTournamentConfig;
   /** Server-only (bot scheduler): humans join free, bots pay. Ignored unless exactly `true`. */
   internalHumanFreeEntry?: boolean;
+  /** Server-only (bot scheduler): faster blind levels in the end game. */
+  internalFastEndgame?: boolean;
   isPrivate?: boolean;
   pinCode?: string | null;
   /**
@@ -613,6 +634,7 @@ export class PokerTournamentService {
         return v > 0 ? { lateRegMinutes: v } : {};
       })()),
       ...(obj.humanFreeEntry === true ? { humanFreeEntry: true } : {}),
+      ...(obj.fastEndgame === true ? { fastEndgame: true } : {}),
     };
   }
 
@@ -939,6 +961,11 @@ export class PokerTournamentService {
       configForDb.humanFreeEntry = true;
     } else {
       delete (configForDb as Partial<PokerTournamentConfig>).humanFreeEntry;
+    }
+    if (params.internalFastEndgame === true) {
+      configForDb.fastEndgame = true;
+    } else {
+      delete (configForDb as Partial<PokerTournamentConfig>).fastEndgame;
     }
 
     // Per-turn action clock (seconds). NULL when unset → auto-fold sweep falls back to 60s.
@@ -2657,6 +2684,8 @@ export class PokerTournamentService {
       small_blind: unknown;
       big_blind: unknown;
       hand_number: number | null;
+      activated_at: Date | null;
+      alive_addrs: string[] | null;
     }>;
     try {
       const res = await this.pool.query(
@@ -2667,7 +2696,11 @@ export class PokerTournamentService {
                 pt.current_blind_level_started_at,
                 pt.small_blind,
                 pt.big_blind,
-                pt.hand_number
+                pt.hand_number,
+                t.activated_at,
+                (SELECT array_agg(LOWER(ps.player_address)) FROM poker_seats ps
+                  WHERE ps.table_id = pt.id AND ps.player_address IS NOT NULL
+                    AND COALESCE(ps.stack, 0) > 0) AS alive_addrs
          FROM poker_tables pt
          JOIN tournaments t ON t.id = pt.tournament_id
          WHERE pt.tournament_mode = TRUE
@@ -2686,8 +2719,22 @@ export class PokerTournamentService {
         const config = this.parsePokerConfig(row.poker_config);
         if (this.getBlindIncreaseMode(config) !== 'by_time') continue;
 
-        const interval = this.normalizeBlindIntervalMinutes(config.blindIntervalMinutes);
-        if (!interval) continue;
+        const baseInterval = this.normalizeBlindIntervalMinutes(config.blindIntervalMinutes);
+        if (!baseInterval) continue;
+        let interval: number = baseInterval;
+        if (config.fastEndgame) {
+          const alive = (row.alive_addrs ?? []).filter(Boolean);
+          let botSet: Set<string> | null = null;
+          try { botSet = getPokerBotAddressSet(); } catch { botSet = null; }
+          // Registry missing -> can't tell humans apart; assume humans remain (no bot-only speed-up).
+          const humansAlive = botSet ? alive.filter((a) => !botSet!.has(a)).length : alive.length;
+          const lateRegMs = (config.lateRegMinutes ?? 0) * 60_000;
+          const activatedMs = row.activated_at ? new Date(row.activated_at).getTime() : null;
+          const lateRegOpen = lateRegMs > 0 && (activatedMs == null || Date.now() < activatedMs + lateRegMs);
+          interval = endgameBlindIntervalMinutes(baseInterval, {
+            fastEndgame: true, alive: alive.length, humansAlive, lateRegOpen,
+          });
+        }
 
         const startedAt = row.current_blind_level_started_at;
         if (!(startedAt instanceof Date) || Number.isNaN(startedAt.getTime())) continue;

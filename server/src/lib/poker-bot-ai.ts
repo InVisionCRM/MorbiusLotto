@@ -240,15 +240,22 @@ export function decidePokerBotAction(state: PokerBotDecisionInput): PokerBotDeci
     // at a full table), 0.45 ≈ score 8.5 (TT, AQs, AKo …), 0.6 ≈ JJ+/AKs.
     const fieldAdj = Math.min(0.06, 0.01 * (opp - 1));
     const tightAdj = (p.tightness - 0.5) * 0.12;
-    const raiseT = 0.45 + fieldAdj + tightAdj;
-    const premiumT = 0.6 + tightAdj / 2;
-    const playT = 0.33 + fieldAdj + tightAdj;
+    // Heads-up / short-handed ranges widen a lot. Without this the heads-up small blind folded
+    // ~80% of hands (60 of 65 heads-up hands in one game were blind walks), so the end game
+    // just traded blinds for 20+ minutes. HU ≈ top 75% playable, 3-4 handed ≈ top 40%.
+    const headsUp = opp === 1;
+    const shortHanded = opp <= 3;
+    const raiseT = headsUp ? 0.28 + tightAdj / 2 : 0.45 + fieldAdj + tightAdj - (shortHanded ? 0.05 : 0);
+    const premiumT = (headsUp ? 0.5 : 0.6) + tightAdj / 2;
+    const playT = headsUp ? 0.1 + tightAdj / 2 : 0.33 + fieldAdj + tightAdj - (shortHanded ? 0.08 : 0);
     const bb = bigBlind;
     const facingRaise = toCall > bb; // more than just the blind to call
 
-    // Short stack (≤ 10 BB): push/fold instead of bleeding out to the blinds.
-    if (stack + myBet <= bb * 10n) {
-      if (strength >= playT - 0.06 || (!facingRaise && strength >= playT - 0.12 && rng() < 0.5 + 0.4 * p.aggression)) {
+    // Short stack: push/fold instead of bleeding out. Deeper when fewer players remain.
+    const pushBB = headsUp ? 15n : shortHanded ? 12n : 10n;
+    if (stack + myBet <= bb * pushBB) {
+      const pushT = headsUp ? 0.2 + tightAdj / 2 : playT - 0.06; // HU ≈ top 55% shoves
+      if (strength >= pushT || (!facingRaise && strength >= pushT - 0.06 && rng() < 0.5 + 0.4 * p.aggression)) {
         return raiseTo(stack + myBet);
       }
       return canCheck ? { action: 'check' } : { action: 'fold' };
@@ -266,13 +273,19 @@ export function decidePokerBotAction(state: PokerBotDecisionInput): PokerBotDeci
       // facing a raise: call if price is reasonable, otherwise fold
       return toCall <= stack / 8n || callPriceRatio(toCall, pot) < 0.35 ? { action: 'call' } : { action: 'fold' };
     }
+    // Pot-odds floor: don't fold a hand that is cheaply priced in (HU small blind completing,
+    // big blind defending a min-raise).
+    if (!canCheck && toCall <= bb * 2n && toCall <= stack / 10n &&
+        (headsUp ? strength >= 0.12 : callPriceRatio(toCall, pot) < 0.25 && strength >= playT - 0.08)) {
+      return { action: 'call' };
+    }
     if (strength >= playT) {
-      if (canCheck) return rng() < 0.15 * p.aggression ? betOf(bb * 3n) : { action: 'check' };
+      if (canCheck) return rng() < 0.15 * p.aggression + (headsUp ? 0.2 : 0) ? betOf(bb * 3n) : { action: 'check' };
       if (!facingRaise) return { action: 'call' };
       return toCall <= bb * 3n && toCall <= stack / 15n ? { action: 'call' } : { action: 'fold' };
     }
     if (canCheck) return { action: 'check' };
-    if (!facingRaise && rng() < p.bluff) return raiseTo(bb * 3n); // occasional steal
+    if (!facingRaise && rng() < (headsUp ? 0.35 : p.bluff)) return raiseTo(bb * 3n); // steal (HU: often)
     return { action: 'fold' };
   }
 
