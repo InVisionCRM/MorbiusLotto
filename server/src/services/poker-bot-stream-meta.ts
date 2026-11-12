@@ -6,6 +6,8 @@
 import type { Pool } from 'pg';
 import { readBotScheduleConfig, upcomingSlots } from './poker-bot-schedule.service';
 import { readBotCashConfig } from './poker-bot-cash.service';
+import { endgameBlindIntervalMinutes } from './poker-tournament.service';
+import { getPokerBotAddressSet } from '../lib/poker-bot-registry';
 
 export interface StreamPayout {
   place: number;
@@ -71,7 +73,9 @@ export async function loadStreamMeta(pool: Pool, tableId: string, nowMs = Date.n
             (SELECT COUNT(*) FROM tournament_entries e WHERE e.tournament_id = t.id)::int AS entrants,
             (SELECT COUNT(*) FROM poker_seats s WHERE s.table_id = pt.id AND s.player_address IS NOT NULL
                 AND COALESCE(s.stack, 0) > 0)::int AS alive,
-            (SELECT COUNT(*) FROM poker_seats s WHERE s.table_id = pt.id AND s.player_address IS NOT NULL)::int AS seated
+            (SELECT COUNT(*) FROM poker_seats s WHERE s.table_id = pt.id AND s.player_address IS NOT NULL)::int AS seated,
+            (SELECT array_agg(LOWER(s.player_address)) FROM poker_seats s WHERE s.table_id = pt.id
+                AND s.player_address IS NOT NULL AND COALESCE(s.stack, 0) > 0) AS alive_addrs
        FROM poker_tables pt
        LEFT JOIN tournaments t ON t.id = pt.tournament_id
       WHERE pt.id = $1`,
@@ -81,7 +85,21 @@ export async function loadStreamMeta(pool: Pool, tableId: string, nowMs = Date.n
 
   let tournament: Record<string, unknown> | null = null;
   if (row?.tournament_id) {
-    const cfg = typeof row.poker_config === 'string' ? JSON.parse(row.poker_config) : row.poker_config;
+    const rawCfg = typeof row.poker_config === 'string' ? JSON.parse(row.poker_config) : row.poker_config;
+    // Mirror the fast-endgame level length so the on-stream countdown matches the server.
+    let cfg = rawCfg;
+    if (rawCfg?.fastEndgame === true && Number(rawCfg?.blindIntervalMinutes) > 0) {
+      const alive: string[] = (row.alive_addrs ?? []).filter(Boolean);
+      let bots: Set<string> | null = null;
+      try { bots = getPokerBotAddressSet(); } catch { bots = null; }
+      const humansAlive = bots ? alive.filter((a) => !bots!.has(a)).length : alive.length;
+      const lateRegMs = (Number(rawCfg.lateRegMinutes) || 0) * 60_000;
+      const actMs = row.activated_at ? new Date(row.activated_at).getTime() : null;
+      const lateRegOpen = lateRegMs > 0 && (actMs == null || nowMs < actMs + lateRegMs);
+      cfg = { ...rawCfg, blindIntervalMinutes: endgameBlindIntervalMinutes(Number(rawCfg.blindIntervalMinutes), {
+        fastEndgame: true, alive: alive.length, humansAlive, lateRegOpen,
+      }) };
+    }
     const pcts: number[] = (Array.isArray(row.prize_percentages)
       ? row.prize_percentages
       : typeof row.prize_percentages === 'string'
