@@ -2902,6 +2902,13 @@ async function initializeServices() {
           res.status(gate.status).json({ error: gate.error });
           return;
         }
+        // The always-open bot cash tables manage their own bots (PokerBotCashService). Script bots there
+        // die with the server process on every deploy and are left seated as un-driven squatters.
+        const managed = await dbService.getPool().query(`SELECT 1 FROM poker_bot_cash_tables WHERE table_id = $1`, [tableId]);
+        if (managed.rows.length > 0) {
+          res.status(409).json({ error: 'This table already has house bots; they are managed automatically' });
+          return;
+        }
 
         const existingJob = pokerBotJobs.get(tableId);
         if (existingJob && !existingJob.process.killed) {

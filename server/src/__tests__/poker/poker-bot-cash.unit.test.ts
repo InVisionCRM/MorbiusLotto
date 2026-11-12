@@ -130,3 +130,20 @@ describe('stream meta helpers', () => {
     expect(info).toEqual({ level: 1, smallBlind: 25, bigBlind: 50, nextLevelAt: '2026-11-11T09:05:00.000Z', nextSmallBlind: 50, nextBigBlind: 100 });
   });
 });
+
+describe('planCashTable: stray bots and max stack', () => {
+  const cfg7 = { seats: 10, bigBlind: 10, minBots: 7, openSeats: 0, refill: true, maxStack: 5000 };
+  const cash = (a: string, stack: number) => ({ address: a, stack, isBot: true });
+  const foreign = (a: string, stack: number) => ({ address: a, stack, isBot: true, foreign: true });
+  it('tournament bots (busted or not) leave between hands and cash bots refill to 7', () => {
+    const seats = [cash('c1', 38490), cash('c2', 1397), foreign('t1', 0), foreign('t2', 0), foreign('t3', 970), foreign('t4', 0), { address: 'h', stack: 995, isBot: false }];
+    expect(planCashTable(seats, cfg7, false)).toEqual({ leave: ['c1', 't1', 't2', 't3', 't4'], sit: 6 });
+  });
+  it('7 bots max with openSeats 0 leaves 3 seats for humans', () => {
+    const seats = Array.from({ length: 7 }, (_, i) => cash(`c${i}`, 500));
+    expect(planCashTable(seats, cfg7, false)).toEqual({ leave: [], sit: 0 });
+  });
+  it('nothing leaves mid-hand', () => {
+    expect(planCashTable([foreign('t1', 0), cash('c1', 99999)], cfg7, true).leave).toEqual([]);
+  });
+});

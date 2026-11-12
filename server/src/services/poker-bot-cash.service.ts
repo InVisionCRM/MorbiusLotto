@@ -27,10 +27,15 @@
  *   POKER_BOT_CASH_REFILL             seat a fresh bot after one leaves (default true)
  *   POKER_BOT_CASH_REBUY              busted bot re-buys instead of leaving (default false)
  *   POKER_BOT_CASH_REJOIN_COOLDOWN_MIN minutes before a busted bot may sit again (default 20)
+ *   POKER_BOT_CASH_MAX_STACK          a cash bot whose stack exceeds this many chips cashes out between
+ *                                     hands and a fresh bot sits with the normal buy-in (default 0 = off)
+ *
+ * Bots of any other role (e.g. tournament bots added by the "add bots" script) are not managed here:
+ * they leave the table between hands (cashing out whatever they hold) and are replaced by cash bots.
  */
 import type { Pool } from 'pg';
 import { logger } from '../utils/logger';
-import { listPokerBotAccounts } from '../lib/poker-bot-registry';
+import { listPokerBotAccounts, getPokerBotAddressSet } from '../lib/poker-bot-registry';
 import { fundPokerBotToBalance } from '../lib/poker-bot-bankroll';
 
 const POLL_MS = 7_000;
@@ -47,6 +52,7 @@ export interface BotCashConfig {
   refill: boolean;
   rebuy: boolean;
   cooldownMs: number;
+  maxStack: number;
 }
 
 function intEnv(name: string, dflt: number, min: number, max: number): number {
@@ -78,6 +84,7 @@ export function readBotCashConfig(): BotCashConfig {
     refill: boolEnv('POKER_BOT_CASH_REFILL', true),
     rebuy: boolEnv('POKER_BOT_CASH_REBUY', false),
     cooldownMs: intEnv('POKER_BOT_CASH_REJOIN_COOLDOWN_MIN', 20, 0, 24 * 60) * 60_000,
+    maxStack: intEnv('POKER_BOT_CASH_MAX_STACK', 0, 0, 1_000_000_000),
   };
 }
 
@@ -85,6 +92,8 @@ export interface CashSeat {
   address: string;
   stack: number;
   isBot: boolean;
+  /** A registry bot that is not a cash-role bot (e.g. tournament bot): leaves between hands. */
+  foreign?: boolean;
 }
 
 /**
@@ -94,12 +103,15 @@ export interface CashSeat {
  */
 export function planCashTable(
   seats: CashSeat[],
-  cfg: Pick<BotCashConfig, 'seats' | 'bigBlind' | 'minBots' | 'openSeats' | 'refill'>,
+  cfg: Pick<BotCashConfig, 'seats' | 'bigBlind' | 'minBots' | 'openSeats' | 'refill'> & { maxStack?: number },
   handActive: boolean,
 ): { leave: string[]; sit: number } {
+  const maxStack = cfg.maxStack ?? 0;
   const leave = handActive
     ? []
-    : seats.filter((s) => s.isBot && s.stack < cfg.bigBlind).map((s) => s.address);
+    : seats
+        .filter((s) => s.isBot && (s.foreign || s.stack < cfg.bigBlind || (maxStack > 0 && s.stack > maxStack)))
+        .map((s) => s.address);
   const remaining = seats.filter((s) => !leave.includes(s.address));
   const botsSeated = remaining.filter((s) => s.isBot).length;
   const free = cfg.seats - remaining.length;
@@ -184,6 +196,8 @@ export class PokerBotCashService {
   private async manageTable(tableId: string, cfg: BotCashConfig, nowMs: number): Promise<void> {
     const bots = listPokerBotAccounts('cash');
     const botSet = new Set(bots.map((b) => b.walletAddress));
+    // Every registry bot counts as a bot here, so a busted / stray bot of another role can't squat a seat.
+    const anyBot = getPokerBotAddressSet();
     const seatRows = await this.pool.query(
       `SELECT LOWER(player_address) AS addr, COALESCE(stack, 0)::TEXT AS stack
          FROM poker_seats WHERE table_id = $1 AND player_address IS NOT NULL`,
@@ -192,7 +206,8 @@ export class PokerBotCashService {
     const seats: CashSeat[] = seatRows.rows.map((r) => ({
       address: String(r.addr),
       stack: Number(String(r.stack).split('.')[0]) || 0,
-      isBot: botSet.has(String(r.addr)),
+      isBot: botSet.has(String(r.addr)) || anyBot.has(String(r.addr)),
+      foreign: !botSet.has(String(r.addr)) && anyBot.has(String(r.addr)),
     }));
     const active = await this.pool.query(
       `SELECT 1 FROM poker_hands WHERE table_id = $1 AND completed_at IS NULL LIMIT 1`,
@@ -203,7 +218,10 @@ export class PokerBotCashService {
     for (const addr of plan.leave) {
       try {
         await this.game.leaveTable(tableId, addr);
-        logger.info('[bot-cash] bot left (out of buy-in)', { tableId, bot: addr });
+        const seat = seats.find((x) => x.address === addr);
+        const why = seat?.foreign ? 'not a cash bot' : (seat && seat.stack >= cfg.bigBlind ? 'max stack' : 'out of buy-in');
+        logger.info('[bot-cash] bot left', { tableId, bot: addr, reason: why, stack: seat?.stack });
+        if (why !== 'out of buy-in') continue; // cashed out with chips: may sit again with a fresh buy-in
         if (cfg.rebuy) {
           await this.seatBot(tableId, addr, cfg);
         } else {
