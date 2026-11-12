@@ -81,6 +81,13 @@ export class FreerollSchedulerService {
       } catch (err) {
         logger.error('FreerollSchedulerService: poker by_time tick error: %s', err);
       }
+      // Finish tournaments whose table can no longer deal (≤1 stacked seat) — e.g. a player
+      // left mid-hand and their entry was never busted, so the game never ended.
+      try {
+        await this.pokerTournamentService.sweepStalledTournaments();
+      } catch (err) {
+        logger.error('FreerollSchedulerService: stalled tournament sweep error: %s', err);
+      }
     }
 
     // Telegram "starting soon" notifications for poker tournaments approaching
