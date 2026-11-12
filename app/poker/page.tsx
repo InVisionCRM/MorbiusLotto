@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { PublicLobbyGames, readPendingJoin, clearPendingJoin } from '@/components/poker/PublicLobbyGames';
 import { useAccount, useSignTypedData } from 'wagmi';
 import { sanitizeDecimalStringForParseEther } from '@/lib/sanitize-decimal-input';
 import { getApiUrlOptional, getWebSocketUrlOptional } from '@/lib/api-urls';
@@ -160,6 +161,23 @@ export default function PokerLobbyPage() {
   const [showOnboardingWizard, setShowOnboardingWizard] = useState(false);
   const [showCreatePicker, setShowCreatePicker] = useState(false);
   const lobbyRef = useRef<HTMLDivElement>(null);
+
+  // Signed-out visitor clicked "Connect wallet & sit" on the public list: open the buy-in once connected.
+  useEffect(() => {
+    if (!isConnected || !address) return;
+    const pending = readPendingJoin();
+    if (!pending || pending.kind !== 'cash') return;
+    clearPendingJoin();
+    try {
+      const bb = BigInt(Math.max(1, Math.floor(pending.bigBlind)));
+      const { maxChips } = getCashBuyInBoundsChips(bb);
+      setBuyIn(maxChips.toString());
+      setJoinPin('');
+      setJoinModal({ tableId: pending.tableId, hasPin: false, bigBlindChips: bb.toString() });
+    } catch {
+      /* ignore malformed intent */
+    }
+  }, [isConnected, address]);
 
   const onboarding = usePokerOnboarding({
     address: address as `0x${string}` | undefined,
@@ -827,9 +845,12 @@ export default function PokerLobbyPage() {
                 >
                   <div className="w-full max-w-full">
                     {!isConnected && (
-                      <p className="text-sm text-cyan-200/80 mb-4 rounded-lg border border-white/20 bg-cyan-500/5 px-3 py-2">
-                        Connect your wallet to create or join Sit &amp; Go tournaments.
-                      </p>
+                      <div className="mb-4">
+                        <p className="text-sm text-cyan-200/80 mb-3 rounded-lg border border-white/20 bg-cyan-500/5 px-3 py-2">
+                          Open games are listed below. Connect your wallet to join, or to create your own Sit &amp; Go.
+                        </p>
+                        <PublicLobbyGames />
+                      </div>
                     )}
                     {isConnected && address && (
                       <div className="mb-4">

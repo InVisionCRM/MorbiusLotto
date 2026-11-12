@@ -29,6 +29,8 @@ import type { PokerTournamentSummary } from '@/hooks/use-poker-tournament';
 export interface PokerShareSnapshot {
   tournamentName: string;
   isFreeroll: boolean;
+  /** Overlay funding pill override (e.g. "Free entry" for bot-funded promo games). */
+  fundingLabel?: string;
   /** e.g. "Tue, May 13, 2026 · 3:00 PM EDT" or "Start time TBD". */
   scheduleLine: string;
   /** Mirrors the creator's prize line as closely as practical. */
@@ -74,6 +76,11 @@ function isCustomTokenSummary(t: PokerTournamentSummary): boolean {
   return !!t.prizeTokenAddress?.trim();
 }
 
+/** Promo games (e.g. Beat the Bots): humans join free, the bots' buy-ins fund the pool. */
+function isHumanFreeEntrySummary(t: PokerTournamentSummary): boolean {
+  return t.humanFreeEntry === true && !isCustomTokenSummary(t);
+}
+
 /** Snake/lower-cased preset IDs → "Title cased label". `custom` → `Custom`. */
 function humanizeDistributionType(raw: string): string {
   const cleaned = raw.trim();
@@ -98,6 +105,10 @@ function buildPrizeLine(t: PokerTournamentSummary): string {
   const customToken = isCustomTokenSummary(t);
 
   if (!customToken) {
+    if (isHumanFreeEntrySummary(t)) {
+      const pool = safeBigInt(t.prizePool);
+      return pool > 0n ? `${formatChips(pool)} MORBIUS prize pool` : 'MORBIUS prize pool';
+    }
     if (freeroll) {
       const pool = safeBigInt(t.prizePool);
       return pool > 0n ? `${formatChips(pool)} MORBIUS` : 'MORBIUS pool';
@@ -157,6 +168,7 @@ export function derivePokerShareSnapshotFromSummary(t: PokerTournamentSummary): 
   return {
     tournamentName: (t.name?.trim() || 'My tournament'),
     isFreeroll: isFreerollSummary(t),
+    fundingLabel: isHumanFreeEntrySummary(t) ? 'Free entry' : undefined,
     scheduleLine: buildScheduleLine(t),
     prizeLine: buildPrizeLine(t),
     payoutLine: buildPayoutLine(t),

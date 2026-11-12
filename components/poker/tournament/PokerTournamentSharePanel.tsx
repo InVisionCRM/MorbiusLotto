@@ -33,6 +33,8 @@ function revokeIfBlobUrl(url: string | null): void {
 export type PokerTournamentSharePanelProps = {
   tournamentName: string;
   isFreeroll: boolean;
+  /** Overrides the funding pill ("Freeroll" / "Buy-in"), e.g. "Free entry". */
+  fundingLabel?: string;
   /** Shown on overlays (e.g. site + chain). */
   siteLine?: string;
   scheduleLine: string;
@@ -47,6 +49,7 @@ export type PokerTournamentSharePanelProps = {
 export function PokerTournamentSharePanel({
   tournamentName,
   isFreeroll,
+  fundingLabel: fundingLabelOverride,
   siteLine = 'Morbius.io · PulseChain',
   scheduleLine,
   prizeLine,
@@ -91,7 +94,7 @@ export function PokerTournamentSharePanel({
     };
   }, []);
 
-  const fundingLabel = isFreeroll ? 'Freeroll' : 'Buy-in';
+  const fundingLabel = fundingLabelOverride?.trim() || (isFreeroll ? 'Freeroll' : 'Buy-in');
 
   const onPickFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
