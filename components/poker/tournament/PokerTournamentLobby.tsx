@@ -735,7 +735,7 @@ export function PokerTournamentLobby({
 
       {isLoadingTournaments ? (
         <div className="text-center text-slate-500 text-sm py-8">Loading tournaments…</div>
-      ) : openTournaments.length === 0 ? (
+      ) : openTournaments.length === 0 && !myAddress ? null : openTournaments.length === 0 ? (
         <div className="text-center text-slate-500 text-sm py-8">
           No open poker tournaments. <span className="text-slate-600">Create one to get started.</span>
         </div>
