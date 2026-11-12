@@ -358,7 +358,7 @@ function renderOverlay(meta, st) {
   const ng = meta?.nextGame;
   const free = Boolean(ng?.freeEntry || meta?.freeEntry || meta?.tournament?.freeEntry);
   $('nextV').textContent = ng ? `${etTime(ng.at)} · ${ng.freeEntry ? 'FREE ENTRY' : fmt(ng.buyIn) + ' buy-in'}` : '1 PM · 5 PM · 9 PM ET';
-  $('freeTop').style.display = (meta?.tournament ? meta.tournament.freeEntry : free) ? '' : 'none';
+  $('freeTop').style.display = (meta?.kind === 'cash' ? false : (meta?.tournament ? meta.tournament.freeEntry : free)) ? '' : 'none'; // cash table costs chips
   $('joinWallet').innerHTML = free ? 'Connect a wallet (<b>no chips needed</b> for Beat the Bots)' : 'Connect a wallet &amp; grab chips';
   $('joinCash').innerHTML = cash ? 'Take a seat at the <b>cash table</b> anytime' : 'Or join an open <b>cash table</b> in the lobby';
   if (meta?.tournament?.freeEntry && meta.tournament.lateRegMinutes && meta.tournament.startedAt &&

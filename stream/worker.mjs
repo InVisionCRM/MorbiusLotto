@@ -32,6 +32,18 @@
  *   STREAM_OUTRO_SECONDS=90                after the game ends keep the broadcast up this long with the
  *                                          intermission screen (promo loop + countdown to the next game)
  *
+ *   STREAM_MODE=tournament|cash            cash = always stream STREAM_TABLE_ID (the 24/7 cash table): starts at
+ *                                          boot, never stops, no STREAM_MAX_MINUTES cap, restarts the push if
+ *                                          ffmpeg/the page dies. Default tournament (scheduled 1/5/9 PM games).
+ *   STREAM_TABLE_ID=<uuid>                 table for cash mode
+ *   STREAM_NAME="Morbius Poker Cash Game"  top-bar title in cash mode
+ *   STREAM_CAPTURE=x11|cdp                 x11 = Xvfb + kiosk Chromium + x11grab (Linux/Railway, default);
+ *                                          cdp = headless Chromium via playwright-core, CDP screencast frames
+ *                                          piped to ffmpeg at a fixed rate (macOS / no X server)
+ *   STREAM_VCODEC=libx264|h264_videotoolbox  video encoder (videotoolbox = Apple hardware encoder)
+ *   CHROMIUM_BIN=…                          browser binary (cdp: optional, else playwright's chromium)
+ *   POST /push/restart?gap=20 (127.0.0.1)   stop the push for `gap` seconds and start again (broadcast rollover)
+ *
  * Promos: /promos/* serves promos/ (promos.json + .webm/.mp4 clips) to view.html.
  *
  * Never logs the RTMP URL or key.
@@ -62,6 +74,11 @@ const MUSIC_DIR = env('MUSIC_DIR', path.join(path.dirname(fileURLToPath(import.m
 const MUSIC_URL = env('MUSIC_URL', '');
 const MUSIC_VOLUME = Math.min(1, Math.max(0, Number(env('MUSIC_VOLUME', '0.18')) || 0.18));
 const OUTRO_MS = Math.max(0, Number(env('STREAM_OUTRO_SECONDS', '90')) || 0) * 1000;
+const MODE = env('STREAM_MODE', 'tournament').toLowerCase() === 'cash' ? 'cash' : 'tournament';
+const CASH_TABLE_ID = env('STREAM_TABLE_ID', '');
+const STREAM_NAME = env('STREAM_NAME', 'Morbius Poker Cash Game');
+const CAPTURE = env('STREAM_CAPTURE', 'x11').toLowerCase() === 'cdp' ? 'cdp' : 'x11';
+const VCODEC = env('STREAM_VCODEC', 'libx264');
 const PROMO_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), 'promos');
 const PROMO_TYPES = { '.json': 'application/json', '.webm': 'video/webm', '.mp4': 'video/mp4', '.png': 'image/png', '.jpg': 'image/jpeg' };
 
@@ -116,7 +133,7 @@ function ensureXvfb() {
  * ffmpeg audio input args. Music: a shuffled playlist (concat demuxer) repeated enough
  * times to outlast STREAM_MAX_MINUTES, read in real time (-re). Falls back to silence.
  */
-export function musicInputArgs({ enabled = MUSIC_ENABLED, dir = MUSIC_DIR, url = MUSIC_URL, maxMin = MAX_MIN, rng = Math.random } = {}) {
+export function musicInputArgs({ enabled = MUSIC_ENABLED, dir = MUSIC_DIR, url = MUSIC_URL, maxMin = MAX_MIN, rng = Math.random, loop = MODE === 'cash' } = {}) {
   const silence = { args: ['-f', 'lavfi', '-i', 'anullsrc=channel_layout=stereo:sample_rate=44100'], music: false, tracks: 0 };
   if (!enabled) return silence;
   if (url) return { args: ['-re', '-stream_loop', '-1', '-i', url], music: true, tracks: 1 };
@@ -127,6 +144,14 @@ export function musicInputArgs({ enabled = MUSIC_ENABLED, dir = MUSIC_DIR, url =
     return silence;
   }
   if (files.length === 0) return silence;
+  if (loop) {
+    // 24/7: one shuffled round, looped by the concat demuxer forever
+    const order = [...files];
+    for (let i = order.length - 1; i > 0; i--) { const j = Math.floor(rng() * (i + 1)); [order[i], order[j]] = [order[j], order[i]]; }
+    const list = path.join(process.env.TMPDIR || '/tmp', `morbius-music-${process.pid}.txt`);
+    fs.writeFileSync(list, order.map((f) => `file '${f.replace(/'/g, "'\\''")}'`).join('\n') + '\n');
+    return { args: ['-re', '-stream_loop', '-1', '-f', 'concat', '-safe', '0', '-i', list], music: true, tracks: files.length };
+  }
   // ~3 min per track; repeat the shuffled set until it covers the max stream length + margin
   const rounds = Math.max(2, Math.ceil(((maxMin + 30) * 60) / (files.length * 150)));
   const lines = [];
@@ -143,79 +168,159 @@ export function musicInputArgs({ enabled = MUSIC_ENABLED, dir = MUSIC_DIR, url =
   return { args: ['-re', '-f', 'concat', '-safe', '0', '-i', list], music: true, tracks: files.length };
 }
 
+/** Encoder args for the chosen video codec. */
+export function videoEncodeArgs({ codec = VCODEC, kbps = KBPS, fps = FPS } = {}) {
+  const rate = ['-b:v', `${kbps}k`, '-maxrate', `${kbps}k`, '-bufsize', `${kbps * 2}k`, '-g', String(fps * 2)];
+  if (codec === 'h264_videotoolbox') {
+    return ['-c:v', 'h264_videotoolbox', '-realtime', '1', '-allow_sw', '1', '-profile:v', 'high', '-pix_fmt', 'yuv420p', ...rate];
+  }
+  return ['-c:v', 'libx264', '-preset', 'veryfast', '-tune', 'zerolatency', '-pix_fmt', 'yuv420p', ...rate];
+}
+
+/**
+ * CDP capture (no X server): headless Chromium renders the view; Page.startScreencast JPEG frames
+ * are re-sent to ffmpeg's stdin at a fixed FPS (repeating the latest frame, paced by wall clock so
+ * video stays in sync with the real-time music input).
+ */
+async function startCdpCapture(cur, url) {
+  let chromium;
+  try { ({ chromium } = await import('playwright-core')); } catch { ({ chromium } = await import('playwright')); }
+  const browser = await chromium.launch({
+    headless: true,
+    ...(env('CHROMIUM_BIN', '') ? { executablePath: env('CHROMIUM_BIN', '') } : {}),
+    args: ['--autoplay-policy=no-user-gesture-required', '--disable-background-timer-throttling',
+      '--disable-renderer-backgrounding', '--disable-backgrounding-occluded-windows', '--mute-audio', '--hide-scrollbars'],
+  });
+  cur.cdpBrowser = browser;
+  browser.on('disconnected', () => { if (state.current === cur && !cur.stopping) { state.lastError = 'browser disconnected'; restartOrStop(cur, 'browser disconnected'); } });
+  const page = await browser.newPage({ viewport: { width: W, height: H } });
+  page.on('crash', () => { if (state.current === cur && !cur.stopping) restartOrStop(cur, 'page crashed'); });
+  await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30_000 });
+  const cdp = await page.context().newCDPSession(page);
+  cur.lastFrame = null;
+  cur.lastFrameAt = 0;
+  cdp.on('Page.screencastFrame', ({ data, sessionId }) => {
+    cur.lastFrame = Buffer.from(data, 'base64');
+    cur.lastFrameAt = Date.now();
+    cdp.send('Page.screencastFrameAck', { sessionId }).catch(() => {});
+  });
+  await cdp.send('Page.startScreencast', { format: 'jpeg', quality: Number(env('STREAM_JPEG_QUALITY', '85')), maxWidth: W, maxHeight: H, everyNthFrame: 1 });
+  cur.cdpPage = page;
+  // Force a repaint now and then so a static screen still yields fresh frames.
+  cur.repaint = setInterval(() => { page.evaluate(() => document.body && (document.body.style.outline = document.body.style.outline ? '' : '0 solid transparent')).catch(() => {}); }, 1000);
+}
+
+function pumpFrames(cur, proc) {
+  const t0 = Date.now();
+  let sent = 0;
+  let blocked = false;
+  proc.stdin.on('drain', () => { blocked = false; });
+  proc.stdin.on('error', () => {});
+  cur.pump = setInterval(() => {
+    if (!cur.lastFrame || blocked || proc.exitCode != null) return;
+    const due = Math.floor(((Date.now() - t0) * FPS) / 1000);
+    // never burst more than 1 s of catch-up frames
+    if (due - sent > FPS) sent = due - FPS;
+    while (sent < due) {
+      sent++;
+      if (!proc.stdin.write(cur.lastFrame)) { blocked = true; break; }
+    }
+  }, Math.max(5, Math.floor(1000 / FPS / 2)));
+}
+
+function spawnFfmpeg(cur, game, ffArgs, audio) {
+  const opts = { env: { ...process.env, DISPLAY }, stdio: [CAPTURE === 'cdp' ? 'pipe' : 'ignore', 'ignore', 'pipe'] };
+  const proc = spawn(env('FFMPEG_BIN', 'ffmpeg'), ffArgs, opts);
+  cur.ff.proc = proc;
+  if (CAPTURE === 'cdp') { clearInterval(cur.pump); pumpFrames(cur, proc); }
+  proc.stderr.on('data', (d) => log('ffmpeg', { line: String(d).replace(/rtmps?:\/\/\S+/g, '<rtmp>').trim().slice(0, 300) }));
+  const spawnedAt = Date.now();
+  proc.on('exit', (code) => {
+    log('ffmpeg exited', { code });
+    if (state.current !== cur || cur.stopping || cur.ff.proc !== proc) return;
+    // Safety net: if ffmpeg dies right away while music is on, retry once with silence
+    // so a bad track / demuxer problem can never take the broadcast down.
+    if (audio.music && !cur.ff.retried && Date.now() - spawnedAt < 30_000) {
+      cur.ff.retried = true;
+      log('ffmpeg failed early with music; retrying with silence');
+      const silent = musicInputArgs({ enabled: false });
+      const args = [...ffArgs];
+      args.splice(ffArgs.indexOf(audio.args[0]), audio.args.length, ...silent.args);
+      const ai = args.indexOf('-af'); if (ai >= 0) args.splice(ai, 2);
+      spawnFfmpeg(cur, game, args, silent);
+      return;
+    }
+    state.lastError = `ffmpeg exited ${code}`;
+    restartOrStop(cur, 'ffmpeg exited');
+  });
+}
+
+/** Cash mode keeps the stream up forever: tear down and start again after a short pause. */
+function restartOrStop(cur, reason, gapMs = 5000) {
+  if (state.current !== cur) return;
+  stopStream(reason);
+  if (MODE === 'cash') {
+    state.restartAt = Date.now() + gapMs;
+    setTimeout(() => { state.restartAt = null; if (!state.current) startCash(); }, gapMs);
+  }
+}
+
+function startCash() {
+  if (!CASH_TABLE_ID) { log('cash mode needs STREAM_TABLE_ID'); return; }
+  startStream({ tournamentId: null, tableId: CASH_TABLE_ID, slotKey: null, cash: true });
+}
+
 function startStream(game) {
   const target = rtmpTarget();
-  const name = slotLabel(game.slotKey);
-  const url = `http://127.0.0.1:${PORT}/view?name=${encodeURIComponent(`Beat the Bots ${name} ET`)}`;
+  const title = game.cash ? STREAM_NAME : `Beat the Bots ${slotLabel(game.slotKey)} ET`;
+  const url = `http://127.0.0.1:${PORT}/view?name=${encodeURIComponent(title)}${game.cash ? '&mode=cash' : ''}`;
   if (!target) {
-    log('dry run: would stream game (STREAM_ENABLED=0 or X_RTMP_URL/X_STREAM_KEY missing)', { tournamentId: game.tournamentId, url });
+    log('dry run: would stream game (STREAM_ENABLED=0 or X_RTMP_URL/X_STREAM_KEY missing)', { tournamentId: game.tournamentId, tableId: game.tableId, url });
     state.current = { ...game, dry: true, startedAt: Date.now(), procs: [] };
     return;
   }
-  ensureXvfb();
-  const browser = spawn(
-    env('CHROMIUM_BIN', 'chromium'),
-    [
-      '--no-sandbox', '--disable-gpu', '--disable-dev-shm-usage', '--no-first-run', '--noerrdialogs',
-      '--disable-infobars', '--autoplay-policy=no-user-gesture-required', '--kiosk',
-      `--window-size=${W},${H}`, '--window-position=0,0', url,
-    ],
-    { env: { ...process.env, DISPLAY }, stdio: 'ignore' },
-  );
   const isFile = !ENABLED;
   const audio = musicInputArgs();
   log('audio', { music: audio.music, tracks: audio.tracks, volume: audio.music ? MUSIC_VOLUME : 0 });
+  const videoIn = CAPTURE === 'cdp'
+    ? ['-f', 'image2pipe', '-c:v', 'mjpeg', '-framerate', String(FPS), '-thread_queue_size', '64', '-i', 'pipe:0']
+    : ['-f', 'x11grab', '-draw_mouse', '0', '-video_size', `${W}x${H}`, '-framerate', String(FPS), '-i', `${DISPLAY}.0`];
   const ffArgs = [
-    '-hide_banner', '-loglevel', 'warning',
-    '-f', 'x11grab', '-draw_mouse', '0', '-video_size', `${W}x${H}`, '-framerate', String(FPS), '-i', `${DISPLAY}.0`,
+    '-hide_banner', '-loglevel', 'warning', '-nostdin',
+    ...videoIn,
     ...audio.args,
     '-map', '0:v:0', '-map', '1:a:0',
     ...(audio.music ? ['-af', `volume=${MUSIC_VOLUME},aresample=44100:async=1`] : []),
-    '-c:v', 'libx264', '-preset', 'veryfast', '-tune', 'zerolatency', '-pix_fmt', 'yuv420p',
-    '-b:v', `${KBPS}k`, '-maxrate', `${KBPS}k`, '-bufsize', `${KBPS * 2}k`, '-g', String(FPS * 2),
+    ...(CAPTURE === 'cdp' ? ['-vf', `scale=${W}:${H}`, '-r', String(FPS)] : []),
+    ...videoEncodeArgs(),
     '-c:a', 'aac', '-b:a', '128k', '-ar', '44100',
     '-f', 'flv', ...(isFile ? ['-y'] : []), target,
   ];
-  // Give the page a few seconds to render before pushing.
-  const ff = { proc: null };
-  const timer = setTimeout(() => {
-    ff.proc = spawn('ffmpeg', ffArgs, { env: { ...process.env, DISPLAY }, stdio: ['ignore', 'ignore', 'pipe'] });
-    ff.proc.stderr.on('data', (d) => {
-      const s = String(d).replace(/rtmps?:\/\/\S+/g, '<rtmp>');
-      log('ffmpeg', { line: s.trim().slice(0, 300) });
-    });
-    const spawnedAt = Date.now();
-    ff.proc.on('exit', (code) => {
-      log('ffmpeg exited', { code });
-      // Safety net: if ffmpeg dies right away while music is on, retry once with silence
-      // so a bad track / demuxer problem can never take the broadcast down.
-      if (audio.music && !ff.retried && Date.now() - spawnedAt < 30_000 &&
-          state.current && state.current.tournamentId === game.tournamentId && !state.current.stopping) {
-        ff.retried = true;
-        log('ffmpeg failed early with music; retrying with silence');
-        const silent = musicInputArgs({ enabled: false });
-        const args = [...ffArgs];
-        args.splice(ffArgs.indexOf(audio.args[0]), audio.args.length, ...silent.args);
-        const ai = args.indexOf('-af'); if (ai >= 0) args.splice(ai, 2);
-        ff.proc = spawn('ffmpeg', args, { env: { ...process.env, DISPLAY }, stdio: ['ignore', 'ignore', 'pipe'] });
-        ff.proc.stderr.on('data', (d) => log('ffmpeg', { line: String(d).replace(/rtmps?:\/\/\S+/g, '<rtmp>').trim().slice(0, 300) }));
-        ff.proc.on('exit', (c2) => {
-          log('ffmpeg exited', { code: c2 });
-          if (state.current && state.current.tournamentId === game.tournamentId && !state.current.stopping) {
-            state.lastError = `ffmpeg exited ${c2}`;
-            stopStream('ffmpeg exited');
-          }
-        });
-        return;
-      }
-      if (state.current && state.current.tournamentId === game.tournamentId && !state.current.stopping) {
-        state.lastError = `ffmpeg exited ${code}`;
-        stopStream('ffmpeg exited');
-      }
-    });
-  }, 8000);
-  state.current = { ...game, dry: false, startedAt: Date.now(), browser, ff, timer, url, toFile: isFile };
-  log('stream started', { tournamentId: game.tournamentId, tableId: game.tableId, url, toFile: isFile });
+  if (CAPTURE === 'cdp') { const i = ffArgs.indexOf('-nostdin'); ffArgs.splice(i, 1); }
+  const cur = { ...game, dry: false, startedAt: Date.now(), ff: { proc: null }, url, toFile: isFile };
+  state.current = cur;
+  if (CAPTURE === 'cdp') {
+    startCdpCapture(cur, url)
+      .then(() => {
+        if (state.current !== cur || cur.stopping) return;
+        cur.timer = setTimeout(() => { if (state.current === cur && !cur.stopping) spawnFfmpeg(cur, game, ffArgs, audio); }, 4000);
+      })
+      .catch((err) => { log('cdp capture failed', { error: String(err?.message ?? err) }); state.lastError = 'cdp capture failed'; restartOrStop(cur, 'cdp capture failed', 15_000); });
+  } else {
+    ensureXvfb();
+    cur.browser = spawn(
+      env('CHROMIUM_BIN', 'chromium'),
+      [
+        '--no-sandbox', '--disable-gpu', '--disable-dev-shm-usage', '--no-first-run', '--noerrdialogs',
+        '--disable-infobars', '--autoplay-policy=no-user-gesture-required', '--kiosk',
+        `--window-size=${W},${H}`, '--window-position=0,0', url,
+      ],
+      { env: { ...process.env, DISPLAY }, stdio: 'ignore' },
+    );
+    // Give the page a few seconds to render before pushing.
+    cur.timer = setTimeout(() => { if (state.current === cur && !cur.stopping) spawnFfmpeg(cur, game, ffArgs, audio); }, 8000);
+  }
+  log('stream started', { tournamentId: game.tournamentId, tableId: game.tableId, url, toFile: isFile, capture: CAPTURE, mode: MODE });
 }
 
 function stopStream(reason) {
@@ -223,8 +328,12 @@ function stopStream(reason) {
   if (!cur) return;
   cur.stopping = true;
   clearTimeout(cur.timer);
+  clearInterval(cur.pump);
+  clearInterval(cur.repaint);
+  try { cur.ff?.proc?.stdin?.end(); } catch {}
   try { cur.ff?.proc?.kill('SIGINT'); } catch {}
   try { cur.browser?.kill('SIGTERM'); } catch {}
+  try { cur.cdpBrowser?.close().catch(() => {}); } catch {}
   state.history.unshift({ tournamentId: cur.tournamentId, slotKey: cur.slotKey, startedAt: new Date(cur.startedAt).toISOString(), stoppedAt: new Date().toISOString(), reason, dry: cur.dry });
   state.history = state.history.slice(0, 20);
   state.current = null;
@@ -242,6 +351,7 @@ async function poll() {
     state.nextSlotAt = nextSlotFrom(body);
     state.lastError = null;
     const games = Array.isArray(body.games) ? body.games : [];
+    if (MODE === 'cash') return; // cash mode: schedule info only (next game / free entry), never start/stop
     const cur = state.current;
     if (cur) {
       const g = games.find((x) => x.tournamentId === cur.tournamentId);
@@ -323,12 +433,27 @@ if (isMain) http
       res.writeHead(200, { 'content-type': pf.type, 'cache-control': 'public, max-age=3600' });
       return fs.createReadStream(pf.file).pipe(res);
     }
+    if (req.method === 'POST' && /^\/push\/restart(\?.*)?$/.test(req.url || '')) {
+      const ra = String(req.socket.remoteAddress || '');
+      if (!['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(ra)) { res.writeHead(403); return res.end(); }
+      if (MODE !== 'cash') { res.writeHead(409, { 'content-type': 'application/json' }); return res.end('{"error":"cash mode only"}'); }
+      const gap = Math.min(600, Math.max(1, Number(new URL(req.url, 'http://x').searchParams.get('gap')) || 20));
+      if (state.current) restartOrStop(state.current, 'manual restart', gap * 1000);
+      else if (!state.restartAt) setTimeout(() => { if (!state.current) startCash(); }, gap * 1000);
+      res.writeHead(200, { 'content-type': 'application/json' });
+      return res.end(JSON.stringify({ ok: true, gapSeconds: gap }));
+    }
     if (req.url === '/health') { res.writeHead(200, { 'content-type': 'text/plain' }); return res.end('ok'); }
     if (req.url === '/status') {
       const c = state.current;
       res.writeHead(200, { 'content-type': 'application/json' });
       return res.end(JSON.stringify({
         enabled: ENABLED,
+        mode: MODE,
+        capture: CAPTURE,
+        pushing: Boolean(c?.ff?.proc && c.ff.proc.exitCode == null),
+        lastFrameAgeMs: c?.lastFrameAt ? Date.now() - c.lastFrameAt : null,
+        restartAt: state.restartAt ? new Date(state.restartAt).toISOString() : null,
         hasStreamKey: Boolean(env('X_RTMP_URL', '') && env('X_STREAM_KEY', '')),
         apiBase: API_BASE,
         lastPoll: state.lastPoll,
@@ -342,7 +467,10 @@ if (isMain) http
   .listen(PORT, () => log('stream worker up', { enabled: ENABLED, apiBase: API_BASE, siteUrl: SITE_URL }));
 
 if (isMain) {
-  process.on('SIGTERM', () => { stopStream('shutdown'); try { xvfb?.kill(); } catch {} process.exit(0); });
+  const shutdown = () => { stopStream('shutdown'); try { xvfb?.kill(); } catch {} setTimeout(() => process.exit(0), 1500); };
+  process.on('SIGTERM', shutdown);
+  process.on('SIGINT', shutdown);
   setInterval(poll, POLL_MS);
   poll();
+  if (MODE === 'cash') startCash();
 }
