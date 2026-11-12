@@ -67,7 +67,7 @@ export async function loadStreamMeta(pool: Pool, tableId: string, nowMs = Date.n
   const t = await pool.query(
     `SELECT pt.max_seats, pt.small_blind, pt.big_blind, pt.current_blind_level, pt.current_blind_level_started_at,
             pt.tournament_id, t.name, t.status, t.poker_config, t.prize_pool, t.prize_percentages,
-            t.platform_fee_percent, t.creator_fee_percent, t.activated_at,
+            t.platform_fee_percent, t.creator_fee_percent, t.activated_at, t.action_timer_seconds,
             (SELECT COUNT(*) FROM tournament_entries e WHERE e.tournament_id = t.id)::int AS entrants,
             (SELECT COUNT(*) FROM poker_seats s WHERE s.table_id = pt.id AND s.player_address IS NOT NULL
                 AND COALESCE(s.stack, 0) > 0)::int AS alive,
@@ -91,6 +91,8 @@ export async function loadStreamMeta(pool: Pool, tableId: string, nowMs = Date.n
     tournament = {
       name: row.name,
       status: row.status,
+      freeEntry: cfg?.humanFreeEntry === true,
+      lateRegMinutes: Number(cfg?.lateRegMinutes) || 0,
       startedAt: row.activated_at ? new Date(row.activated_at).toISOString() : null,
       entrants: row.entrants,
       playersLeft: row.alive,
@@ -128,11 +130,13 @@ export async function loadStreamMeta(pool: Pool, tableId: string, nowMs = Date.n
   return {
     kind: row?.tournament_id ? 'tournament' : 'cash',
     playUrl: 'morbius.io/poker',
+    // Turn clock length for the on-stream action timer (same default as the auto-fold sweep).
+    actionSeconds: Number(row?.action_timer_seconds) > 0 ? Number(row.action_timer_seconds) : 60,
     seatsOpen: row ? Math.max(0, (Number(row.max_seats) || 10) - Number(row.seated || 0)) : null,
     tournament,
     cashTables,
     nextGame: nextSlot
-      ? { at: nextSlot.at.toISOString(), label: nextSlot.slotKey.split(' ')[1] ?? '', timeZone: sched.timeZone, buyIn: sched.buyIn.toString() }
+      ? { at: nextSlot.at.toISOString(), label: nextSlot.slotKey.split(' ')[1] ?? '', timeZone: sched.timeZone, buyIn: sched.buyIn.toString(), freeEntry: sched.freeEntry }
       : null,
   };
 }

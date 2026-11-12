@@ -86,6 +86,12 @@ export interface PokerTournamentConfig {
    * and be seated at a live table. Absent / 0 disables late registration.
    */
   lateRegMinutes?: number;
+  /**
+   * Promo "Beat the Bots" games: humans join for free (no chip debit, no refund) while
+   * registered house bots still pay `buy_in_amount`, so the prize pool is bot-funded.
+   * Server-set only (scheduler) — stripped from user-created tournaments.
+   */
+  humanFreeEntry?: boolean;
 }
 
 export const DEFAULT_BLIND_SCHEDULE: BlindLevel[] = [
@@ -225,6 +231,8 @@ export interface PokerTournamentSummary {
   lateRegMinutes?: number;
   /** True when the tournament is `active`, late reg is enabled, and the window has not elapsed. */
   lateRegOpen?: boolean;
+  /** Promo free-entry game: humans join for 0 chips (bots fund the prize pool). */
+  humanFreeEntry?: boolean;
 }
 
 /** Where the initial guaranteed pool is debited when buy-in is 0; `custom_token_buyin` is buy-in paid in PRC-20 via escrow. */
@@ -288,6 +296,8 @@ export interface CreatePokerTournamentParams {
   /** Required when prizeDistributionType is `custom` (one integer % per rank, length = maxPlayers, sum 100). */
   prizePercentages?: number[];
   config: PokerTournamentConfig;
+  /** Server-only (bot scheduler): humans join free, bots pay. Ignored unless exactly `true`. */
+  internalHumanFreeEntry?: boolean;
   isPrivate?: boolean;
   pinCode?: string | null;
   /**
@@ -602,7 +612,22 @@ export class PokerTournamentService {
         const v = Number.isFinite(raw) ? Math.max(0, Math.min(LATE_REG_MINUTES_MAX, Math.round(raw))) : 0;
         return v > 0 ? { lateRegMinutes: v } : {};
       })()),
+      ...(obj.humanFreeEntry === true ? { humanFreeEntry: true } : {}),
     };
+  }
+
+  /**
+   * Chips this wallet owes (or is refunded) for a seat. Free-entry promo games charge humans 0;
+   * house bots still pay. If the bot registry isn't loaded we can't tell bots from humans, so
+   * everyone pays (fail closed — never mint a free bot seat).
+   */
+  private entryBuyInFor(config: PokerTournamentConfig, address: string, buyIn: bigint): bigint {
+    if (!config.humanFreeEntry || buyIn <= 0n) return buyIn;
+    try {
+      return getPokerBotAddressSet().has(address.toLowerCase()) ? buyIn : 0n;
+    } catch {
+      return buyIn;
+    }
   }
 
   /**
@@ -909,6 +934,11 @@ export class PokerTournamentService {
     }
     if (lateRegMinutes <= 0) {
       delete (configForDb as Partial<PokerTournamentConfig>).lateRegMinutes;
+    }
+    if (params.internalHumanFreeEntry === true) {
+      configForDb.humanFreeEntry = true;
+    } else {
+      delete (configForDb as Partial<PokerTournamentConfig>).humanFreeEntry;
     }
 
     // Per-turn action clock (seconds). NULL when unset → auto-fold sweep falls back to 60s.
@@ -1251,6 +1281,18 @@ export class PokerTournamentService {
         ? String(tournament.prize_token_address).trim()
         : '';
       const isEscrowBuyIn = buyIn > 0n && prizeTokRaw.startsWith('0x');
+      // Free-entry promo (chip games only): humans pay nothing, bots still fund the pool.
+      const chargedBuyIn = isEscrowBuyIn ? buyIn : this.entryBuyInFor(config, normalized, buyIn);
+      if (!isEscrowBuyIn && chargedBuyIn === 0n && buyIn > 0n) {
+        // One free seat per wallet per game: any earlier entry (even busted/unregistered) blocks it.
+        const prior = await client.query(
+          `SELECT 1 FROM tournament_entries WHERE tournament_id = $1 AND LOWER(player_address) = $2 LIMIT 1`,
+          [tournamentId, normalized],
+        );
+        if (prior.rows.length > 0) {
+          throw new Error('Free entry is limited to one seat per wallet per game');
+        }
+      }
 
       // Registration-phase fullness is the field cap; late reg uses live seat
       // availability (already verified above) so busted-out seats can be refilled.
@@ -1299,18 +1341,18 @@ export class PokerTournamentService {
           `UPDATE tournaments SET prize_pool = prize_pool + $1::NUMERIC WHERE id = $2`,
           [buyIn.toString(), tournamentId],
         );
-      } else if (buyIn > 0n) {
+      } else if (chargedBuyIn > 0n) {
         await applyPokerChipDelta(
           client,
           normalized,
-          -buyIn,
+          -chargedBuyIn,
           'tournament_buyin',
           { type: 'tournament', id: tournamentId },
         );
 
         await client.query(
           `UPDATE tournaments SET prize_pool = prize_pool + $1::NUMERIC WHERE id = $2`,
-          [buyIn.toString(), tournamentId],
+          [chargedBuyIn.toString(), tournamentId],
         );
       }
 
@@ -1506,9 +1548,11 @@ export class PokerTournamentService {
       throw new Error('This Sit & Go is full and starting — you can no longer unregister');
     }
 
-    const buyIn = this.parseBigInt(t.buy_in_amount);
+    const rawBuyIn = this.parseBigInt(t.buy_in_amount);
     const prizeTok = t.prize_token_address ? String(t.prize_token_address).trim() : '';
-    const isEscrowBuyIn = buyIn > 0n && prizeTok.startsWith('0x');
+    const isEscrowBuyIn = rawBuyIn > 0n && prizeTok.startsWith('0x');
+    // Free-entry promo seats were never charged, so there is nothing to refund.
+    const buyIn = isEscrowBuyIn ? rawBuyIn : this.entryBuyInFor(config, normalized, rawBuyIn);
 
     const entryRow = await this.pool.query(
       `SELECT id FROM tournament_entries
@@ -1660,11 +1704,12 @@ export class PokerTournamentService {
           [tournamentId]
         );
         for (const entry of entries.rows) {
-          if (buyIn > 0n && !isEscrowBuyIn) {
+          const paid = isEscrowBuyIn ? buyIn : this.entryBuyInFor(config, String(entry.player_address), buyIn);
+          if (paid > 0n && !isEscrowBuyIn) {
             await applyPokerChipDelta(
               client,
               entry.player_address,
-              buyIn,
+              paid,
               'tournament_refund',
               { type: 'tournament', id: tournamentId },
             );
@@ -3243,6 +3288,7 @@ export class PokerTournamentService {
         creatorFeePercent:     r.creator_fee_percent != null ? Number(r.creator_fee_percent) : 2,
         ...(lateRegMinutes > 0 ? { lateRegMinutes } : {}),
         lateRegOpen,
+        ...(config.humanFreeEntry ? { humanFreeEntry: true } : {}),
       };
     });
   }
@@ -3476,6 +3522,7 @@ export class PokerTournamentService {
         ...(config.lateRegMinutes && config.lateRegMinutes > 0
           ? { lateRegMinutes: config.lateRegMinutes }
           : {}),
+        ...(config.humanFreeEntry ? { humanFreeEntry: true } : {}),
       },
       actionTimerSeconds: t.action_timer_seconds != null ? Number(t.action_timer_seconds) : null,
       prizeSplitPercentages,

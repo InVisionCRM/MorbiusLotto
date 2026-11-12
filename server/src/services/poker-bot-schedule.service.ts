@@ -49,6 +49,8 @@ export interface BotScheduleConfig {
   blindMinutes: number;
   actionSeconds: number;
   lateRegMinutes: number;
+  /** Promo: humans join free, the bots' buy-ins fund the pool (POKER_BOT_SCHEDULE_FREE_ENTRY, default on). */
+  freeEntry: boolean;
   prize: string;
   creator: string | null;
   creatorFee: number;
@@ -100,6 +102,7 @@ export function readBotScheduleConfig(): BotScheduleConfig {
     actionSeconds: intEnv('POKER_BOT_SCHEDULE_ACTION_SECONDS', 30, 10, 120),
     // Humans may still buy in this long after the start (a seat must be free).
     lateRegMinutes: intEnv('POKER_BOT_SCHEDULE_LATE_REG_MINUTES', 30, 0, 120),
+    freeEntry: (process.env.POKER_BOT_SCHEDULE_FREE_ENTRY ?? 'true').trim().toLowerCase() !== 'false',
     prize: process.env.POKER_BOT_SCHEDULE_PRIZE?.trim() || 'top_3',
     creator: creatorRaw && /^0x[0-9a-fA-F]{40}$/.test(creatorRaw) ? creatorRaw.toLowerCase() : null,
     creatorFee: intEnv('POKER_BOT_SCHEDULE_CREATOR_FEE', 0, 0, 15),
@@ -271,6 +274,7 @@ export class PokerBotScheduleService {
           startMode: 'time',
           lateRegMinutes: cfg.lateRegMinutes,
         },
+        internalHumanFreeEntry: cfg.freeEntry,
         isPrivate: false,
         scheduledStartAt: slot.at,
         creatorFeePercent: cfg.creatorFee,

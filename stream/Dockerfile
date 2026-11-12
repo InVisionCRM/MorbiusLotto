@@ -5,6 +5,7 @@ RUN apt-get update \
 WORKDIR /app
 COPY worker.mjs view.html package.json ./
 COPY music ./music
+COPY promos ./promos
 ENV NODE_ENV=production STREAM_ENABLED=0 CHROMIUM_BIN=chromium
 EXPOSE 8080
 CMD ["node", "worker.mjs"]

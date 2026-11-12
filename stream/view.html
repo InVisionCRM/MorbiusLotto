@@ -4,7 +4,7 @@
 <meta charset="utf-8" />
 <title>Morbius Poker Live</title>
 <style>
-  :root { --w: 1280px; --h: 720px; --side: 250px; --gold: #ffd36b; --mint: #bbf7d0; --line: #1c2a4a; }
+  :root { --w: 1280px; --h: 720px; --side: 250px; --gold: #ffd36b; --mint: #bbf7d0; --line: #1c2a4a; --purple: #871ee5; --purple2: #5c07bd; --violet: #b26bff; }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html, body { width: var(--w); height: var(--h); overflow: hidden; background: radial-gradient(ellipse at 50% 40%, #0d1630 0%, #05070f 70%); color: #e8eefc;
     font-family: "DejaVu Sans", "Noto Sans", Arial, sans-serif; }
@@ -83,16 +83,68 @@
   #overlay .seatsDots i { width: 10px; height: 10px; border-radius: 50%; background: #22c55e; display: inline-block; }
   #overlay .seatsDots i.t { background: #334155; }
 
-  #soon { position: absolute; left: 640px; top: 330px; transform: translate(-50%, -50%); text-align: center; z-index: 3;
-    background: rgba(0,0,0,.72); padding: 18px 30px; border-radius: 14px; border: 1px solid #22c55e55; }
+  /* FREE ENTRY pill (top bar) */
+  .free { display: inline-block; margin-left: 12px; padding: 3px 10px; border-radius: 6px; font-size: 13px; font-weight: 800; letter-spacing: 1.5px;
+    color: #04110a; background: linear-gradient(90deg, #4ade80, #22c55e); vertical-align: middle; box-shadow: 0 0 12px #22c55e88; }
+  #meta .clk { color: #fff; background: rgba(135,30,229,.35); border: 1px solid #871ee5aa; border-radius: 6px; padding: 2px 8px; margin-left: 8px; font-variant-numeric: tabular-nums; }
+  #meta .clk.low { background: rgba(225,29,72,.35); border-color: #e11d48; }
+
+  /* blind countdown (left sidebar) */
+  #lvlClock { display: flex; align-items: baseline; gap: 8px; margin-top: 4px; }
+  #lvlClock .t { font-size: 26px; font-weight: 800; color: #fff; font-variant-numeric: tabular-nums; letter-spacing: 1px; }
+  #lvlClock .t.low { color: #fb7185; }
+  #lvlClock .l { font-size: 11.5px; color: #a78bfa; letter-spacing: 1.5px; text-transform: uppercase; }
+
+  /* turn / action timer on the acting seat */
+  .seat .clock { height: 5px; border-radius: 3px; background: rgba(255,255,255,.12); margin-top: 3px; overflow: hidden; }
+  .seat .clock i { display: block; height: 100%; border-radius: 3px; background: #22c55e; transition: width 1s linear; }
+  .seat .clock.mid i { background: #facc15; } .seat .clock.low i { background: #ef4444; }
+  .seat .secs { position: absolute; top: -10px; right: -6px; min-width: 30px; height: 30px; line-height: 26px; border-radius: 50%; font-size: 13px; font-weight: 800;
+    background: #0b1224; border: 2px solid #facc15; color: #fff; font-variant-numeric: tabular-nums; box-shadow: 0 0 10px #facc1588; }
+  .seat .secs.low { border-color: #ef4444; box-shadow: 0 0 12px #ef4444; color: #fecaca; }
+
+  /* promo pop-up: slides over the right sidebar after a hand, never covers the table */
+  #promo { position: absolute; top: 60px; right: 8px; width: 234px; z-index: 6; border-radius: 14px; overflow: hidden;
+    background: linear-gradient(160deg, #1d0a3a, #0b0618 70%); border: 1px solid #871ee5; box-shadow: 0 0 28px #871ee5aa, 0 10px 30px rgba(0,0,0,.6);
+    transform: translateX(120%); opacity: 0; transition: transform .55s cubic-bezier(.2,.9,.25,1.15), opacity .4s; }
+  #promo.on { transform: translateX(0); opacity: 1; }
+  #promo .media { position: relative; width: 234px; height: 132px; background: radial-gradient(circle at 30% 30%, #5c07bd, #12052a 70%); overflow: hidden; }
+  #promo video, #inter video { width: 100%; height: 100%; object-fit: cover; display: block; }
+  #promo .media::after { content: ""; position: absolute; inset: 0; background: linear-gradient(transparent 55%, #0b0618); }
+  .pk { display: inline-block; font-size: 10.5px; font-weight: 800; letter-spacing: 1.8px; color: #fff; background: linear-gradient(90deg, #871ee5, #5c07bd); padding: 3px 8px; border-radius: 5px; }
+  #promo .body { padding: 8px 12px 12px; }
+  #promo .hl { font-size: 20px; font-weight: 800; margin: 6px 0 3px; line-height: 1.1; color: #fff; text-shadow: 0 0 14px #871ee5; }
+  #promo .sub { font-size: 12.5px; line-height: 16px; color: #d6c8f5; max-height: 48px; overflow: hidden; }
+  #promo .url { margin-top: 7px; font-size: 15px; font-weight: 800; color: var(--mint); }
+  #promo .bar { height: 3px; background: linear-gradient(90deg, #b26bff, #22c55e); width: 100%; transform-origin: left; }
+  #promo.on .bar { animation: drain var(--dur, 7s) linear forwards; }
+  @keyframes drain { to { transform: scaleX(0); } }
+
+  /* intermission / starting soon: promo loop + countdown over the centre column */
+  #inter { position: absolute; left: var(--side); right: var(--side); top: 52px; bottom: 64px; z-index: 3; display: none;
+    background: radial-gradient(ellipse at 50% 30%, #2a0c52 0%, #0a0518 70%); flex-direction: column; align-items: center; justify-content: center; gap: 14px; }
+  #inter .screen { position: relative; width: 640px; height: 360px; border-radius: 16px; overflow: hidden; border: 2px solid #871ee5;
+    box-shadow: 0 0 40px #871ee588; background: radial-gradient(circle at 30% 30%, #5c07bd, #12052a 70%); }
+  #inter .screen video { position: absolute; inset: 0; transition: opacity .6s; }
+  #inter .cap { position: absolute; left: 0; right: 0; bottom: 0; padding: 60px 24px 18px; background: linear-gradient(transparent, rgba(8,3,20,.92) 55%); }
+  #inter .cap .hl { font-size: 38px; font-weight: 800; color: #fff; text-shadow: 0 0 20px #871ee5; margin-top: 8px; line-height: 1.05; }
+  #inter .cap .sub { font-size: 17px; color: #ddd0fa; margin-top: 4px; }
+  #inter .cap .url { position: absolute; right: 22px; bottom: 18px; font-size: 22px; font-weight: 800; color: var(--mint); }
+  #inter .count { text-align: center; }
+  #inter .count .k { font-size: 13px; letter-spacing: 3px; color: #a78bfa; text-transform: uppercase; }
+  #inter .count .t { font-size: 40px; font-weight: 800; color: #fff; font-variant-numeric: tabular-nums; letter-spacing: 1px; }
+  #inter .count .s { font-size: 16px; color: var(--mint); margin-top: 2px; }
+  #inter .brand { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); font-size: 13px; letter-spacing: 4px; color: #c4a6ff; font-weight: 700; white-space: nowrap; }
+  .fadein { animation: fadein .6s ease; } @keyframes fadein { from { opacity: 0; transform: translateY(8px); } }
 </style>
 </head>
 <body>
-  <div id="top"><div id="title"><span class="live">LIVE</span><span id="tname">Morbius Poker</span></div><div id="meta"></div></div>
+  <div id="top"><div id="title"><span class="live">LIVE</span><span id="tname">Morbius Poker</span><span class="free" id="freeTop" style="display:none">FREE ENTRY</span></div><div id="meta"></div></div>
 
   <div id="left" class="side">
     <div class="panel"><h3>Blinds <span id="lvl"></span></h3>
       <div class="big" id="blinds">–</div>
+      <div id="lvlClock" style="display:none"><span class="t" id="lvlT"></span><span class="l">to next level</span></div>
       <div class="muted" id="nextLvl"></div></div>
     <div class="panel"><h3>Chip leaders <span id="left-count"></span></h3><div id="leaders"></div></div>
     <div class="panel" id="payPanel"><h3>Payouts <span id="pool"></span></h3><div id="payouts"></div></div>
@@ -104,7 +156,7 @@
     <div class="panel"><h3>How to join</h3>
       <ol class="join">
         <li>Go to <b>morbius.io/poker</b></li>
-        <li>Connect a wallet &amp; grab chips</li>
+        <li id="joinWallet">Connect a wallet &amp; grab chips</li>
         <li id="joinCash">Take a seat at the <b>cash table</b> anytime</li>
         <li id="joinNext">Or enter the next <b>Beat the Bots</b></li>
       </ol></div>
@@ -113,11 +165,15 @@
   <div id="felt"><div id="street"></div><div id="board"></div><div id="pot"></div><div class="logo">MORBIUS</div></div>
   <div id="seats"></div>
   <div id="banner" style="display:none"></div>
-  <div id="soon" style="display:none;">
-    <div style="font-size:30px; font-weight:700;">Starting soon</div>
-    <div id="soonAt" style="font-size:20px; color:#9fb3d9; margin-top:6px;"></div>
-    <div style="font-size:17px; margin-top:10px; color:#bbf7d0;">7 bots · 3 open seats · join at morbius.io/poker</div>
+  <div id="inter">
+    <div class="brand">$MORBIUS ON #PULSECHAIN</div>
+    <div class="screen" id="interScreen"><video id="interVid" muted autoplay loop playsinline></video>
+      <div class="cap" id="interCap"></div></div>
+    <div class="count"><div class="k" id="interK">Starting soon</div><div class="t" id="interT">–</div><div class="s" id="interS"></div></div>
   </div>
+  <div id="promo"><div class="media"><video id="promoVid" muted autoplay loop playsinline></video></div>
+    <div class="body"><span class="pk" id="promoK"></span><div class="hl" id="promoH"></div><div class="sub" id="promoS"></div><div class="url" id="promoU"></div></div>
+    <div class="bar"></div></div>
 
   <div id="overlay">
     <div class="cta"><div><small>PLAY NOW</small>morbius.io/poker</div></div>
@@ -136,6 +192,72 @@ const $ = (id) => document.getElementById(id);
 const short = (a) => a ? a.slice(0, 6) + '…' + a.slice(-4) : '';
 const etTime = (iso) => new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: 'America/New_York' }) + ' ET';
 const mmss = (ms) => { const s = Math.max(0, Math.round(ms / 1000)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
+const hmmss = (ms) => { const s = Math.max(0, Math.round(ms / 1000)); const h = Math.floor(s / 3600); return h > 0 ? `${h}:${String(Math.floor((s % 3600) / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}` : mmss(ms); };
+
+// ---- promos (promos.json; text drawn here, clips are text-free) ----
+const PROMO_SECONDS = Number(qs.get('promoSeconds') || 7);
+const PROMO_EVERY_HANDS = Number(qs.get('promoEvery') || 2);   // at most one pop-up every N finished hands
+const PROMO_MIN_GAP_MS = Number(qs.get('promoGap') ?? 40) * 1000; // and at least this long apart
+const INTER_SECONDS = Number(qs.get('interSeconds') || 7);
+let promos = []; let promoIdx = 0; let handsSincePromo = 0; let lastPromoAt = 0; let promoTimer = null;
+let interIdx = -1; let interAt = 0; let interOn = false;
+fetch('/promos/promos.json', { cache: 'no-store' }).then((r) => r.json()).then((j) => {
+  promos = (j.promos || []).filter((p) => p && p.headline);
+  for (let i = promos.length - 1; i > 0; i--) { const k = Math.floor(Math.random() * (i + 1)); [promos[i], promos[k]] = [promos[k], promos[i]]; }
+  const brand = promos.findIndex((p) => p.id === 'brand'); if (brand > 0) promos.unshift(promos.splice(brand, 1)[0]);
+  const force = qs.get('promo'); if (force) { const i = promos.findIndex((p) => p.id === force); if (i >= 0) { promoIdx = i; showPromo(); } }
+}).catch(() => {});
+function setVideo(el, p) {
+  const src = p.video ? `/promos/${p.video}.webm` : '';
+  if (el.dataset.src === src) return;
+  el.dataset.src = src;
+  if (!src) { el.removeAttribute('src'); el.style.display = 'none'; return; }
+  el.style.display = ''; el.src = src; el.play?.().catch(() => {});
+}
+function nextPromo(skipFree) {
+  for (let n = 0; n < promos.length; n++) {
+    const p = promos[promoIdx++ % promos.length];
+    if (skipFree && p.id === 'free') continue;
+    return p;
+  }
+  return null;
+}
+function showPromo() {
+  if (!promos.length || interOn) return;
+  const p = nextPromo(false); if (!p) return;
+  setVideo($('promoVid'), p);
+  $('promoK').textContent = p.kicker || ''; $('promoH').textContent = p.headline || '';
+  $('promoS').textContent = p.sub || ''; $('promoU').textContent = p.url || '';
+  const el = $('promo'); el.style.setProperty('--dur', PROMO_SECONDS + 's');
+  el.classList.remove('on'); void el.offsetWidth; el.classList.add('on');
+  lastPromoAt = Date.now(); handsSincePromo = 0;
+  clearTimeout(promoTimer); promoTimer = setTimeout(() => el.classList.remove('on'), PROMO_SECONDS * 1000);
+}
+function onHandFinished() {
+  handsSincePromo++;
+  if (handsSincePromo >= PROMO_EVERY_HANDS && Date.now() - lastPromoAt >= PROMO_MIN_GAP_MS) setTimeout(showPromo, 2500); // let the winner banner land first
+}
+function renderInter(kind, at, freeEntry) {
+  const box = $('inter');
+  if (!interOn) { interOn = true; box.style.display = 'flex'; $('promo').classList.remove('on'); interAt = 0; }
+  if (promos.length && Date.now() - interAt >= INTER_SECONDS * 1000) {
+    interAt = Date.now(); interIdx = (interIdx + 1) % promos.length;
+    const p = promos[interIdx];
+    setVideo($('interVid'), p);
+    $('interCap').innerHTML = `<span class="pk">${esc(p.kicker)}</span><div class="hl">${esc(p.headline)}</div><div class="sub">${esc(p.sub)}</div><div class="url">${esc(p.url)}</div>`;
+    $('interCap').classList.remove('fadein'); void $('interCap').offsetWidth; $('interCap').classList.add('fadein');
+  }
+  const ms = at ? Date.parse(at) - Date.now() : null;
+  if (kind === 'outro') {
+    $('interK').textContent = 'Thanks for watching · next Beat the Bots in';
+    $('interT').textContent = ms != null && ms > 0 ? hmmss(ms) : '1 PM · 5 PM · 9 PM ET';
+  } else {
+    $('interK').textContent = 'Starting soon · cards in the air in';
+    $('interT').textContent = ms != null ? (ms > 0 ? hmmss(ms) : 'Dealing…') : '–';
+  }
+  $('interS').textContent = `${freeEntry ? 'FREE ENTRY · ' : ''}${at ? etTime(at) + ' · ' : ''}join at morbius.io/poker`;
+}
+function hideInter() { if (!interOn) return; interOn = false; $('inter').style.display = 'none'; }
 
 function cardEl(n, opts = {}) {
   const d = document.createElement('div');
@@ -176,6 +298,7 @@ function track(st) {
     const sig = h.handId + ':' + h.winners.map((w) => w.address).join(',');
     if (sig !== lastWinSig) {
       lastWinSig = sig;
+      onHandFinished();
       for (const w of h.winners) {
         const line = `<span class="w">${nameOf(st, w.address)}</span> +${fmt(w.amount)}${w.handName ? ' · ' + esc(w.handName) : ''}`;
         winLog.unshift(line); pushAction('🏆 ' + line);
@@ -190,7 +313,10 @@ function renderSidebars(st, meta) {
   const b = t?.blinds;
   $('blinds').textContent = `${fmt(b?.smallBlind ?? st.smallBlind)} / ${fmt(b?.bigBlind ?? st.bigBlind)}`;
   $('lvl').textContent = b ? `Level ${b.level}` : (meta?.kind === 'cash' ? 'Cash' : '');
-  if (b?.nextLevelAt) $('nextLvl').textContent = `Next ${fmt(b.nextSmallBlind)}/${fmt(b.nextBigBlind)} in ${mmss(Date.parse(b.nextLevelAt) - Date.now())}`;
+  const lvlMs = b?.nextLevelAt ? Date.parse(b.nextLevelAt) - Date.now() : null;
+  $('lvlClock').style.display = lvlMs != null ? '' : 'none';
+  if (lvlMs != null) { $('lvlT').textContent = mmss(lvlMs); $('lvlT').className = 't' + (lvlMs <= 60_000 ? ' low' : ''); }
+  if (b?.nextLevelAt) $('nextLvl').textContent = `Next level ${fmt(b.nextSmallBlind)}/${fmt(b.nextBigBlind)}`;
   else if (meta?.kind === 'cash') $('nextLvl').textContent = `Buy-in ${fmt(st.bigBlind * 40)}–${fmt(st.bigBlind * 100)} chips`;
   else $('nextLvl').textContent = b?.nextBigBlind ? `Next ${fmt(b.nextSmallBlind)}/${fmt(b.nextBigBlind)}` : '';
 
@@ -230,18 +356,28 @@ function renderOverlay(meta, st) {
   } else $('seatsV').textContent = 'Join anytime';
   $('cashV').textContent = cash ? `Blinds ${fmt(cash.smallBlind)}/${fmt(cash.bigBlind)} · vs bots` : 'Open tables in lobby';
   const ng = meta?.nextGame;
-  $('nextV').textContent = ng ? `${etTime(ng.at)} · ${fmt(ng.buyIn)} buy-in` : '1 PM · 5 PM · 9 PM ET';
+  const free = Boolean(ng?.freeEntry || meta?.freeEntry || meta?.tournament?.freeEntry);
+  $('nextV').textContent = ng ? `${etTime(ng.at)} · ${ng.freeEntry ? 'FREE ENTRY' : fmt(ng.buyIn) + ' buy-in'}` : '1 PM · 5 PM · 9 PM ET';
+  $('freeTop').style.display = (meta?.tournament ? meta.tournament.freeEntry : free) ? '' : 'none';
+  $('joinWallet').innerHTML = free ? 'Connect a wallet (<b>no chips needed</b> for Beat the Bots)' : 'Connect a wallet &amp; grab chips';
   $('joinCash').innerHTML = cash ? 'Take a seat at the <b>cash table</b> anytime' : 'Or join an open <b>cash table</b> in the lobby';
-  if (ng) $('joinNext').innerHTML = `Or enter <b>Beat the Bots</b> at ${etTime(ng.at)}`;
+  if (meta?.tournament?.freeEntry && meta.tournament.lateRegMinutes && meta.tournament.startedAt &&
+      Date.now() < Date.parse(meta.tournament.startedAt) + meta.tournament.lateRegMinutes * 60_000) {
+    $('joinNext').innerHTML = `<b>Late entry open</b> · FREE for ${mmss(Date.parse(meta.tournament.startedAt) + meta.tournament.lateRegMinutes * 60_000 - Date.now())}`;
+  } else if (ng) $('joinNext').innerHTML = `Or enter <b>Beat the Bots</b> at ${etTime(ng.at)}${ng.freeEntry ? ' · <b>FREE</b>' : ''}`;
 }
 
 function render(st) {
   const meta = st.meta || null;
   const h = st.currentHand;
   track(st);
-  $('meta').innerHTML = meta?.tournament
+  const actionSecs = Number(meta?.actionSeconds) > 0 ? Number(meta.actionSeconds) : 60;
+  const turnLeft = h?.turnStartedAt && h.actingPosition != null ? actionSecs - (Date.now() - Date.parse(h.turnStartedAt)) / 1000 : null;
+  const nl = meta?.tournament?.blinds?.nextLevelAt ? Date.parse(meta.tournament.blinds.nextLevelAt) - Date.now() : null;
+  $('meta').innerHTML = (meta?.tournament
     ? `${esc(meta.tournament.playersLeft ?? '')} left · Blinds <b>${fmt(st.smallBlind)}/${fmt(st.bigBlind)}</b>${h?.handNumber ? ' · Hand #' + esc(h.handNumber) : ''}`
-    : `Cash · Blinds <b>${fmt(st.smallBlind)}/${fmt(st.bigBlind)}</b>`;
+    : `Cash · Blinds <b>${fmt(st.smallBlind)}/${fmt(st.bigBlind)}</b>`)
+    + (nl != null ? `<span class="clk${nl <= 60_000 ? ' low' : ''}">Level up ${mmss(nl)}</span>` : '');
   const board = $('board'); board.innerHTML = '';
   const cc = h?.communityCards || [];
   for (let i = 0; i < 5; i++) board.appendChild(cardEl(cc[i] ?? null));
@@ -271,6 +407,12 @@ function render(st) {
     const last = h?.streetActions?.[s.position];
     plate.innerHTML = `<div class="name">${esc(s.displayName || short(s.playerAddress))}${badges}</div>
       <div class="stack">${fmt(s.stack)}</div><div class="act">${last ? esc(last.action) + (Number(last.amount) > 0 ? ' ' + fmt(last.amount) : '') : ''}</div>`;
+    if (s.isActing && turnLeft != null) {
+      const left = Math.max(0, turnLeft); const pct = Math.max(0, Math.min(100, (left / actionSecs) * 100));
+      const lvl = left <= 5 ? ' low' : left <= actionSecs / 3 ? ' mid' : '';
+      plate.insertAdjacentHTML('beforeend', `<div class="clock${lvl}"><i style="width:${pct}%"></i></div><div class="secs${left <= 5 ? ' low' : ''}">${Math.ceil(left)}</div>`);
+      plate.style.position = 'relative';
+    }
     el.appendChild(plate);
     if (Number(s.currentBet) > 0) {
       const b = document.createElement('div'); b.className = 'bet'; b.textContent = fmt(s.currentBet);
@@ -304,17 +446,16 @@ async function tick() {
     const r = await fetch('/api/current', { cache: 'no-store' });
     if (r.ok) {
       const body = await r.json();
-      const soon = $('soon');
       if (body.pending) {
-        soon.style.display = '';
-        $('seats').innerHTML = '';
-        $('pot').textContent = '';
-        if (body.scheduledAt) {
-          const ms = Date.parse(body.scheduledAt) - Date.now();
-          $('soonAt').textContent = ms > 0 ? `Cards in the air in ${mmss(ms)}` : 'Dealing…';
+        const m = body.meta || null;
+        renderInter(body.phase === 'outro' ? 'outro' : 'preroll', body.phase === 'outro' ? m?.nextGame?.at : (body.scheduledAt || m?.nextGame?.at), Boolean(m?.freeEntry || m?.nextGame?.freeEntry));
+        renderOverlay(m, null);
+        if (lastHandId == null) { // fresh page before the first hand: friendly placeholders
+          $('blinds').textContent = '25 / 50'; $('lvl').textContent = 'Level 1'; $('nextLvl').textContent = 'Blinds rise every few minutes';
+          $('leaders').innerHTML = '<div class="muted">7 bots warming up… take a seat!</div>';
+          $('payPanel').style.display = ''; $('pool').textContent = ''; $('payouts').innerHTML = '<div class="muted">Top 3 paid from the bots\' buy-ins</div>';
         }
-        renderOverlay(body.meta || null, null);
-      } else { soon.style.display = 'none'; render(body); }
+      } else { hideInter(); render(body); }
     }
   } catch {}
   setTimeout(tick, 1000);
