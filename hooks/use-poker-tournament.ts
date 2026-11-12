@@ -62,6 +62,8 @@ export interface PokerTournamentConfig {
    * and be seated at a live table. Absent / 0 = registration closes at start.
    */
   lateRegMinutes?: number;
+  /** Promo game: humans join free (bots fund the pool). */
+  humanFreeEntry?: boolean;
 }
 
 /** Server snapshot of one poker_tables row for the tournament. */
@@ -176,6 +178,8 @@ export interface PokerTournamentSummary {
   lateRegMinutes?: number;
   /** True when the tournament is active and still inside its late-registration window. */
   lateRegOpen?: boolean;
+  /** Promo "Beat the Bots" game: humans join free; the house bots fund the prize pool. */
+  humanFreeEntry?: boolean;
 }
 
 /**

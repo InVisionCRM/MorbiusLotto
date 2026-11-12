@@ -1,0 +1,21 @@
+{
+  "note": "Promo cards for the stream (view.html). Text is rendered by the compositor, never baked into the video. Add a card: drop <id>.webm (+ .mp4) here and add an entry. 'video' may be null for a text-only card.",
+  "promos": [
+    { "id": "brand",     "video": "brand",          "kicker": "$MORBIUS ON #PULSECHAIN", "headline": "Morbius", "sub": "Games, tools & daily tournaments on PulseChain", "url": "morbius.io" },
+    { "id": "scan",      "video": "scan",           "kicker": "FREE TOOL", "headline": "Morbius Token Analyzer", "sub": "Check any PulseChain token before you buy", "url": "scan.morbius.io" },
+    { "id": "nokyc",     "video": "nokyc",          "kicker": "NO KYC", "headline": "Just connect a wallet", "sub": "No sign-up forms. No ID uploads. Play in seconds.", "url": "morbius.io" },
+    { "id": "free",      "video": "community",      "kicker": "FREE ENTRY", "headline": "Beat the Bots", "sub": "Free poker tournaments daily at 1, 5 & 9 PM ET", "url": "morbius.io/poker" },
+    { "id": "community", "video": "community",      "kicker": "PLAYERS LOVE IT", "headline": "Join the Morbius community", "sub": "Live tables, daily tournaments and real players", "url": "morbius.io" },
+    { "id": "sponsor",   "video": "sponsor",        "kicker": "SPONSORSHIPS OPEN", "headline": "Put your project here", "sub": "Stream overlay, table and promo slots for PulseChain projects", "url": "morbius.io" },
+    { "id": "crash",     "video": "game-crash",     "kicker": "MORBIUS ORIGINALS", "headline": "Crash", "sub": "Ride the multiplier, cash out in time", "url": "morbius.io/crash" },
+    { "id": "blackjack", "video": "game-blackjack", "kicker": "CARD GAME", "headline": "Blackjack", "sub": "Hit, stand, double: beat the dealer to 21", "url": "morbius.io/BLACKJACK" },
+    { "id": "plinko",    "video": "game-plinko",    "kicker": "MORBIUS ORIGINALS", "headline": "Plinko", "sub": "Drop the ball, chase the buckets", "url": "morbius.io/plinko2" },
+    { "id": "mines",     "video": "game-mines",     "kicker": "MORBIUS ORIGINALS", "headline": "Mines", "sub": "Dodge the bombs, bank your win", "url": "morbius.io/mines2" },
+    { "id": "roulette",  "video": "game-roulette",  "kicker": "TABLE GAME", "headline": "Roulette", "sub": "Pick your numbers and watch the wheel", "url": "morbius.io/roulette2" },
+    { "id": "dice",      "video": "game-dice",      "kicker": "MORBIUS ORIGINALS", "headline": "Dice", "sub": "Pick your odds, roll to win", "url": "morbius.io/dice2" },
+    { "id": "keno",      "video": "game-keno",      "kicker": "MORBIUS ORIGINALS", "headline": "Keno", "sub": "Mark your numbers, hit the draw", "url": "morbius.io/keno2" },
+    { "id": "baccarat",  "video": "game-baccarat",  "kicker": "TABLE GAME", "headline": "Baccarat", "sub": "Player or banker: call it and win", "url": "morbius.io/baccarat" },
+    { "id": "craps",     "video": "game-craps",     "kicker": "TABLE GAME", "headline": "Craps", "sub": "Roll the dice with the whole table", "url": "morbius.io/craps" },
+    { "id": "allgames",  "video": null,             "kicker": "MORE GAMES", "headline": "More on Morbius", "sub": "Chicken · Limbo · Towers · Hi-Lo · Wheel · Video Poker · Dragon Tiger · Andar Bahar · Pachinko · Cascade · Firewalk · Heist · Three Card Poker · Greed Dice · Cipher · Lottery · Live Blackjack", "url": "morbius.io" }
+  ]
+}

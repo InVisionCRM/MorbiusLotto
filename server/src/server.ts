@@ -53,7 +53,7 @@ import { TournamentSchedulerService } from './services/tournament-scheduler.serv
 import { WebSocketService } from './services/websocket.service';
 import { PokerGameService } from './services/poker-game.service';
 import { PokerTournamentService } from './services/poker-tournament.service';
-import { PokerBotScheduleService, readBotScheduleConfig } from './services/poker-bot-schedule.service';
+import { PokerBotScheduleService, readBotScheduleConfig, upcomingSlots } from './services/poker-bot-schedule.service';
 import { PokerBotCashService, readBotCashConfig } from './services/poker-bot-cash.service';
 import { loadStreamMeta } from './services/poker-bot-stream-meta';
 import { chipsToWei } from './lib/poker-chip-scale';
@@ -559,6 +559,8 @@ async function initializeServices() {
           bots: cfg.bots,
           seats: cfg.seats,
           buyIn: cfg.buyIn.toString(),
+          freeEntry: cfg.freeEntry,
+          nextSlotAt: upcomingSlots(Date.now(), cfg, 36 * 3600_000).find((sl) => sl.at.getTime() > Date.now())?.at.toISOString() ?? null,
           games,
         });
       } catch (err) {

@@ -75,6 +75,7 @@ function isCustomTokenBuyIn(t: PokerTournamentSummary): boolean {
 }
 
 function formatBuyInCell(t: PokerTournamentSummary): string {
+  if (t.humanFreeEntry) return 'FREE ENTRY';
   if (isZeroBuyInChips(t.buyInAmount)) return 'Freeroll';
   if (isCustomTokenBuyIn(t)) {
     const dec = t.prizeTokenDecimals != null ? t.prizeTokenDecimals : 18;
@@ -593,8 +594,8 @@ export function PokerTournamentLobby({
         title="Register for Tournament"
         subtitle={t.name}
         rows={[
-          { label: 'Buy-in', value: buyInDisplay, accent: 'yellow' },
-          { label: 'Prize Pool', value: prizeDisplay, accent: 'yellow' },
+          { label: 'Buy-in', value: t.humanFreeEntry ? 'FREE ENTRY (promo, 1 seat per wallet)' : buyInDisplay, accent: t.humanFreeEntry ? 'green' : 'yellow' },
+          { label: 'Prize Pool', value: t.humanFreeEntry ? `${prizeDisplay} (funded by the bots)` : prizeDisplay, accent: 'yellow' },
           { label: 'Prize Distribution', value: prizeDistLabel, accent: 'cyan' },
           { label: 'Starting Stack', value: t.startingStack.toLocaleString(), accent: 'green' },
           { label: 'Players', value: `${t.registeredCount} / ${t.maxPlayers}`, accent: 'white' },
@@ -786,7 +787,16 @@ export function PokerTournamentLobby({
                         <TournamentTimeColumn scheduledStartAt={t.scheduledStartAt} startMode={t.startMode} />
                       </td>
                       <td className={TD}>
-                        <div className="font-medium tabular-nums text-slate-100">{formatBuyInCell(t)}</div>
+                        {t.humanFreeEntry ? (
+                          <span
+                            className="inline-flex items-center rounded-md border border-emerald-400/50 bg-emerald-500/15 px-2 py-0.5 text-[11px] font-extrabold tracking-wider text-emerald-300"
+                            title="Promo game: no buy-in for players. The house bots fund the prize pool. One free seat per wallet."
+                          >
+                            FREE ENTRY
+                          </span>
+                        ) : (
+                          <div className="font-medium tabular-nums text-slate-100">{formatBuyInCell(t)}</div>
+                        )}
                       </td>
                       <td className={`${TD} whitespace-nowrap tabular-nums text-slate-300`}>
                         {formatChips(sb)} / {formatChips(bb)} · {blindModeLabel(mode)}

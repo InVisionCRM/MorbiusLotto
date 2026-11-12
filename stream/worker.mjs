@@ -29,6 +29,10 @@
  *                                          (ships with Kyle's own Suno tracks, see music/SOURCE.md)
  *   MUSIC_URL=https://…/track.mp3          optional single track/stream URL, looped (overrides MUSIC_DIR)
  *   MUSIC_VOLUME=0.18                      0–1 gain applied to the music (low background level)
+ *   STREAM_OUTRO_SECONDS=90                after the game ends keep the broadcast up this long with the
+ *                                          intermission screen (promo loop + countdown to the next game)
+ *
+ * Promos: /promos/* serves promos/ (promos.json + .webm/.mp4 clips) to view.html.
  *
  * Never logs the RTMP URL or key.
  */
@@ -57,6 +61,36 @@ const MUSIC_ENABLED = !['0', 'false', 'no', 'off'].includes(env('MUSIC_ENABLED',
 const MUSIC_DIR = env('MUSIC_DIR', path.join(path.dirname(fileURLToPath(import.meta.url)), 'music'));
 const MUSIC_URL = env('MUSIC_URL', '');
 const MUSIC_VOLUME = Math.min(1, Math.max(0, Number(env('MUSIC_VOLUME', '0.18')) || 0.18));
+const OUTRO_MS = Math.max(0, Number(env('STREAM_OUTRO_SECONDS', '90')) || 0) * 1000;
+const PROMO_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), 'promos');
+const PROMO_TYPES = { '.json': 'application/json', '.webm': 'video/webm', '.mp4': 'video/mp4', '.png': 'image/png', '.jpg': 'image/jpeg' };
+
+/** Resolve /promos/<file> to a file inside PROMO_DIR (no traversal), or null. */
+export function promoFile(urlPath, dir = PROMO_DIR) {
+  const m = /^\/promos\/([A-Za-z0-9._-]+)$/.exec(String(urlPath || '').split('?')[0]);
+  if (!m || m[1].includes('..')) return null;
+  const ext = path.extname(m[1]).toLowerCase();
+  if (!PROMO_TYPES[ext]) return null;
+  const f = path.join(dir, m[1]);
+  try { return fs.statSync(f).isFile() ? { file: f, type: PROMO_TYPES[ext] } : null; } catch { return null; }
+}
+
+/** "2026-11-12 13:00 America/New_York" -> "1 PM" (falls back to the raw hh:mm). */
+export function slotLabel(slotKey) {
+  const hm = String(slotKey || '').split(' ')[1] || '';
+  const m = /^(\d{1,2}):(\d{2})$/.exec(hm);
+  if (!m) return hm;
+  const h = Number(m[1]); const h12 = h % 12 === 0 ? 12 : h % 12;
+  return `${h12}${m[2] === '00' ? '' : ':' + m[2]} ${h < 12 ? 'AM' : 'PM'}`;
+}
+
+/** Next scheduled slot (ISO) after `now`, from the bot-schedule poll body. */
+export function nextSlotFrom(body, now = Date.now()) {
+  if (body?.nextSlotAt && Date.parse(body.nextSlotAt) > now) return body.nextSlotAt;
+  const games = Array.isArray(body?.games) ? body.games : [];
+  const up = games.map((g) => g.scheduledAt).filter((a) => a && Date.parse(a) > now).sort();
+  return up[0] ?? null;
+}
 
 const state = { current: null, lastPoll: null, lastError: null, history: [] };
 const log = (msg, extra = {}) => console.log(JSON.stringify({ t: new Date().toISOString(), msg, ...extra }));
@@ -111,7 +145,7 @@ export function musicInputArgs({ enabled = MUSIC_ENABLED, dir = MUSIC_DIR, url =
 
 function startStream(game) {
   const target = rtmpTarget();
-  const name = String(game.slotKey || '').split(' ')[1] || '';
+  const name = slotLabel(game.slotKey);
   const url = `http://127.0.0.1:${PORT}/view?name=${encodeURIComponent(`Beat the Bots ${name} ET`)}`;
   if (!target) {
     log('dry run: would stream game (STREAM_ENABLED=0 or X_RTMP_URL/X_STREAM_KEY missing)', { tournamentId: game.tournamentId, url });
@@ -204,13 +238,25 @@ async function poll() {
     const body = await r.json();
     state.lastPoll = new Date().toISOString();
     state.buyIn = body.buyIn ?? state.buyIn ?? null;
+    state.freeEntry = body.freeEntry === true;
+    state.nextSlotAt = nextSlotFrom(body);
     state.lastError = null;
     const games = Array.isArray(body.games) ? body.games : [];
     const cur = state.current;
     if (cur) {
       const g = games.find((x) => x.tournamentId === cur.tournamentId);
       const done = !g || ['completed', 'cancelled', 'finished'].includes(String(g.tournamentStatus));
-      if (done) stopStream('tournament finished');
+      if (cur.outroUntil) {
+        if (Date.now() >= cur.outroUntil) stopStream('tournament finished');
+        return;
+      }
+      if (done && OUTRO_MS > 0 && g && String(g.tournamentStatus) === 'completed') {
+        // Intermission outro: the view switches to the promo loop + next-game countdown.
+        cur.outroUntil = Date.now() + OUTRO_MS;
+        cur.tableId = null;
+        log('outro started', { tournamentId: cur.tournamentId, seconds: OUTRO_MS / 1000 });
+        setTimeout(() => { if (state.current === cur) stopStream('tournament finished'); }, OUTRO_MS + 1000);
+      } else if (done) stopStream('tournament finished');
       else if (Date.now() - cur.startedAt > MAX_MIN * 60_000) stopStream('max duration');
       else if (cur.tournamentStatus !== 'active' && g.tournamentStatus !== 'active' && Date.now() - Date.parse(g.scheduledAt) > 20 * 60_000) stopStream('never started');
       else {
@@ -250,13 +296,17 @@ if (isMain) http
           .catch(() => null)
           .then((cash) => {
             res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
+            const outro = Boolean(c?.outroUntil);
+            const nextAt = outro ? state.nextSlotAt : (c?.scheduledAt ?? state.nextSlotAt ?? null);
             res.end(JSON.stringify({
               pending: true,
-              scheduledAt: c?.scheduledAt ?? null,
+              phase: outro ? 'outro' : 'preroll',
+              scheduledAt: outro ? null : (c?.scheduledAt ?? null),
               meta: {
                 kind: 'pending',
                 cashTables: Array.isArray(cash?.tables) ? cash.tables : [],
-                nextGame: c?.scheduledAt ? { at: c.scheduledAt, buyIn: state.buyIn } : null,
+                nextGame: nextAt ? { at: nextAt, buyIn: state.buyIn, freeEntry: state.freeEntry === true } : null,
+                freeEntry: state.freeEntry === true,
               },
             }));
           });
@@ -266,6 +316,12 @@ if (isMain) http
         .then(async (r) => { res.writeHead(r.status, { 'content-type': 'application/json', 'cache-control': 'no-store' }); res.end(await r.text()); })
         .catch((e) => { res.writeHead(502, { 'content-type': 'application/json' }); res.end(JSON.stringify({ error: String(e?.message ?? e) })); });
       return;
+    }
+    if ((req.url || '').startsWith('/promos/')) {
+      const pf = promoFile(req.url);
+      if (!pf) { res.writeHead(404); return res.end(); }
+      res.writeHead(200, { 'content-type': pf.type, 'cache-control': 'public, max-age=3600' });
+      return fs.createReadStream(pf.file).pipe(res);
     }
     if (req.url === '/health') { res.writeHead(200, { 'content-type': 'text/plain' }); return res.end('ok'); }
     if (req.url === '/status') {
@@ -277,7 +333,7 @@ if (isMain) http
         apiBase: API_BASE,
         lastPoll: state.lastPoll,
         lastError: state.lastError,
-        current: c ? { tournamentId: c.tournamentId, tableId: c.tableId, slotKey: c.slotKey, startedAt: new Date(c.startedAt).toISOString(), dry: c.dry } : null,
+        current: c ? { tournamentId: c.tournamentId, tableId: c.tableId, slotKey: c.slotKey, startedAt: new Date(c.startedAt).toISOString(), dry: c.dry, outro: Boolean(c.outroUntil) } : null,
         history: state.history,
       }));
     }
