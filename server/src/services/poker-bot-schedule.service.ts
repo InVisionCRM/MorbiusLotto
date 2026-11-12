@@ -15,7 +15,8 @@
  *   POKER_BOT_SCHEDULE_ENABLED=true        turn the scheduler on (default off)
  *   POKER_BOT_SCHEDULE_TIMES=13:00,17:00,21:00
  *   POKER_BOT_SCHEDULE_TZ=America/New_York
- *   POKER_BOT_SCHEDULE_LEAD_MINUTES=30     create/open registration this long before start
+ *   POKER_BOT_SCHEDULE_LEAD_MINUTES=30     create/open registration this long before start (max 1440;
+ *                                          e.g. 900 = next day's 1 PM game opens at 10 PM the night before)
  *   POKER_BOT_SCHEDULE_BOTS=7              bots seated per game
  *   POKER_BOT_SCHEDULE_SEATS=10            table size (maxPlayers)
  *   POKER_BOT_SCHEDULE_BUY_IN=500          buy-in in chips (same for bots and humans)
@@ -93,7 +94,7 @@ export function readBotScheduleConfig(): BotScheduleConfig {
     enabled: flag === 'true' || flag === '1' || flag === 'yes',
     times: parseScheduleTimes(process.env.POKER_BOT_SCHEDULE_TIMES),
     timeZone: process.env.POKER_BOT_SCHEDULE_TZ?.trim() || 'America/New_York',
-    leadMinutes: intEnv('POKER_BOT_SCHEDULE_LEAD_MINUTES', 30, 2, 720),
+    leadMinutes: intEnv('POKER_BOT_SCHEDULE_LEAD_MINUTES', 30, 2, 1440),
     bots: Math.min(intEnv('POKER_BOT_SCHEDULE_BOTS', 7, 1, 10), seats),
     seats,
     buyIn: buyIn > 0n ? buyIn : 500n,
