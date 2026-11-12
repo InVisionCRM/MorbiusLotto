@@ -466,6 +466,13 @@ export function PokerTournamentLobby({
 
   const handleLeaveRegistration = async (tournamentId: string) => {
     if (leavingRegId) return;
+    // "Leave" sits right under "Joined" — confirm so a stray tap doesn't drop the seat.
+    if (
+      typeof window !== 'undefined' &&
+      !window.confirm('Leave this tournament? You will give up your seat (you can register again while registration is open).')
+    ) {
+      return;
+    }
     setLeavingRegId(tournamentId);
     setJoinError(null);
     try {

@@ -100,6 +100,24 @@ describe('Beat the Bots free entry', () => {
     expect(f.poolUpdates).toEqual([]);
   });
 
+  it('unregistering deletes the entry (does not mark it busted) so the wallet can rejoin', async () => {
+    const f = fakePool({ freeEntry: true, registeredFor: HUMAN });
+    await svc(f.pool).leavePokerTournamentRegistration(TID, HUMAN);
+    const flat = f.sql.map((x) => x.replace(/\s+/g, ' '));
+    expect(flat.some((x) => /DELETE FROM tournament_entries WHERE id = \$1/.test(x))).toBe(true);
+    expect(flat.some((x) => /UPDATE tournament_entries SET status = 'busted'/.test(x))).toBe(false);
+  });
+
+  it('joining clears a legacy unregistered row before the one-free-seat check', async () => {
+    const f = fakePool({ freeEntry: true });
+    await svc(f.pool).joinPokerTournament(TID, HUMAN);
+    const flat = f.sql.map((x) => x.replace(/\s+/g, ' '));
+    const del = flat.findIndex((x) => /DELETE FROM tournament_entries te/.test(x) && /final_rank IS NULL/.test(x));
+    const prior = flat.findIndex((x) => /SELECT 1 FROM tournament_entries/.test(x));
+    expect(del).toBeGreaterThanOrEqual(0);
+    expect(prior).toBeGreaterThan(del);
+  });
+
   it('unregistering a paid seat in a normal game refunds the buy-in', async () => {
     const f = fakePool({ freeEntry: false, registeredFor: HUMAN });
     await svc(f.pool).leavePokerTournamentRegistration(TID, HUMAN);

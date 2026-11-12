@@ -1139,6 +1139,10 @@ export class PokerTournamentService {
     const fastCheck = await this.pool.query(
       `SELECT te.id AS entry_id, te.status AS entry_status,
               t.status AS tournament_status, t.is_private, t.pin_code,
+              /* Legacy unregister marker: busted with no rank and never seated. */
+              (te.status = 'busted' AND te.final_rank IS NULL AND NOT EXISTS (
+                 SELECT 1 FROM poker_tournament_seats pts WHERE pts.entry_id = te.id
+              )) AS was_unregistered,
               /* MTT: prefer the caller's actual seat table over the lowest-seq table.
                  Falls back to the lowest-seq table for spectators / pre-activation. */
               COALESCE(
@@ -1159,7 +1163,7 @@ export class PokerTournamentService {
         LIMIT 1`,
       [tournamentId, normalized]
     );
-    if (fastCheck.rows.length > 0) {
+    if (fastCheck.rows.length > 0 && !fastCheck.rows[0].was_unregistered) {
       const row = fastCheck.rows[0];
       const status = String(row.tournament_status ?? '');
       const entryStatus = String(row.entry_status ?? '');
@@ -1250,6 +1254,16 @@ export class PokerTournamentService {
         return { entryId, autoStarted: !!tableId, tableId };
       }
 
+      // Legacy rows from the old unregister path (status busted, no rank, never seated) are
+      // not real eliminations — clear them so the player can register / late-register again.
+      await client.query(
+        `DELETE FROM tournament_entries te
+          WHERE te.tournament_id = $1 AND LOWER(te.player_address) = $2
+            AND te.status = 'busted' AND te.final_rank IS NULL
+            AND NOT EXISTS (SELECT 1 FROM poker_tournament_seats pts WHERE pts.entry_id = te.id)`,
+        [tournamentId, normalized],
+      );
+
       const config = this.parsePokerConfig(tournament.poker_config);
 
       // Late registration: a still-`active` tournament accepts new buy-ins for
@@ -1311,7 +1325,8 @@ export class PokerTournamentService {
       // Free-entry promo (chip games only): humans pay nothing, bots still fund the pool.
       const chargedBuyIn = isEscrowBuyIn ? buyIn : this.entryBuyInFor(config, normalized, buyIn);
       if (!isEscrowBuyIn && chargedBuyIn === 0n && buyIn > 0n) {
-        // One free seat per wallet per game: any earlier entry (even busted/unregistered) blocks it.
+        // One free seat per wallet per game: an earlier real entry (even a busted one) blocks it.
+        // Unregistered entries are deleted above / on leave, so leaving and rejoining is allowed.
         const prior = await client.query(
           `SELECT 1 FROM tournament_entries WHERE tournament_id = $1 AND LOWER(player_address) = $2 LIMIT 1`,
           [tournamentId, normalized],
@@ -1600,10 +1615,9 @@ export class PokerTournamentService {
       const client = await this.pool.connect();
       try {
         await client.query('BEGIN');
-        await client.query(
-          `UPDATE tournament_entries SET status = 'busted', finished_at = NOW() WHERE id = $1`,
-          [entryRow.rows[0].id],
-        );
+        // Delete (not "bust") the entry: a busted row would block re-registering
+        // (UNIQUE (tournament_id, player_address) + the join fast path treats it as a spectator).
+        await client.query(`DELETE FROM tournament_entries WHERE id = $1`, [entryRow.rows[0].id]);
         await client.query(
           `UPDATE tournaments SET prize_pool = GREATEST(prize_pool - $1::NUMERIC, 0) WHERE id = $2`,
           [buyIn.toString(), tournamentId],
@@ -1644,10 +1658,11 @@ export class PokerTournamentService {
         if (liveEntry.rows.length === 0) {
           throw new Error('You are not registered for this tournament');
         }
-        await client.query(
-          `UPDATE tournament_entries SET status = 'busted', finished_at = NOW() WHERE id = $1`,
-          [liveEntry.rows[0].id],
-        );
+        // Delete (not "bust") the entry so the player can register again later. A busted row
+        // looked like an elimination: the join fast path returned it as a spectator entry and
+        // UNIQUE (tournament_id, player_address) blocked a fresh one, so one mis-click on
+        // "Leave" locked the wallet out of the game for good (Beat the Bots, Nov 12 2026).
+        await client.query(`DELETE FROM tournament_entries WHERE id = $1`, [liveEntry.rows[0].id]);
         if (buyIn > 0n) {
           // Chip buy-in — credit the chips straight back and unwind the pool.
           await applyPokerChipDelta(
