@@ -26,7 +26,7 @@
  *   POKER_BOT_SCHEDULE_PRIZE=top_3         prize distribution type
  *   POKER_BOT_SCHEDULE_CREATOR=0x…         creator wallet (default: first bot). Never a rake/fee wallet.
  *   POKER_BOT_SCHEDULE_CREATOR_FEE=0       creator fee percent
- *   POKER_BOT_SCHEDULE_NAME=Beat the Bots
+ *   POKER_BOT_SCHEDULE_NAME=The Morbius Daily Freeroll
  *   POKER_BOT_SCHEDULE_LATE_REG_MINUTES=30 humans can still join this long after the start
  */
 
@@ -107,7 +107,7 @@ export function readBotScheduleConfig(): BotScheduleConfig {
     prize: process.env.POKER_BOT_SCHEDULE_PRIZE?.trim() || 'top_3',
     creator: creatorRaw && /^0x[0-9a-fA-F]{40}$/.test(creatorRaw) ? creatorRaw.toLowerCase() : null,
     creatorFee: intEnv('POKER_BOT_SCHEDULE_CREATOR_FEE', 0, 0, 15),
-    name: process.env.POKER_BOT_SCHEDULE_NAME?.trim() || 'Beat the Bots',
+    name: process.env.POKER_BOT_SCHEDULE_NAME?.trim() || 'The Morbius Daily Freeroll',
   };
 }
 

@@ -55,15 +55,15 @@
  *   (promos/poker-tile-art.webp, cropped from public/home2/tiles/poker.webp above its painted title),
  *   the tile ribbon badge with the M mark, a 3D gold title, the tile banner ribbon and the gold CTA
  *   button, in Poppins (bundled in promos/poppins-*.woff2 so the Mac renders the same font).
- *   STREAM_CASH_PROMO_KICKER="FREE · DAILY"   corner ribbon badge
- *   STREAM_CASH_PROMO_TITLE="Beat the Bots"   last word is set big ("BEAT THE" / "BOTS")
+ *   STREAM_CASH_PROMO_KICKER="FREE ENTRY"     corner ribbon badge
+ *   STREAM_CASH_PROMO_TITLE="The Morbius Daily Freeroll"   last word(s) set big ("THE MORBIUS" / "DAILY FREEROLL")
  *   STREAM_CASH_PROMO_LINES="1, 5 & 9 PM ET|3,500 prize pool"   ("|" separates; a time-like line goes in
  *                                          the top-right badge, the next line in the banner ribbon)
  *   STREAM_CASH_PROMO_CTA="Play free at" STREAM_CASH_PROMO_URL="morbius.io/poker"   gold button
  *   STREAM_CASH_PROMO_TAG="$Morbius on #PulseChain"   footer, with the PulseChain logo
  *   STREAM_CASH_PROMO_QR=1                  add the bundled QR to https://morbius.io/poker (off by default;
  *                                          or a .svg/.png file name in promos/)
- *   (a live countdown to the next Beat the Bots game / REG OPEN sits above the button)
+ *   (a live countdown to the next Daily Freeroll / REG OPEN sits above the button)
  * POST /view/reload (127.0.0.1, cdp capture) reloads the broadcast page in place — picks up view.html /
  *   promo / config changes without stopping the push. view.html is re-read on every /view request.
  *
@@ -120,8 +120,8 @@ export function promoFile(urlPath, dir = PROMO_DIR) {
 }
 
 export const DEFAULT_CASH_PROMO = Object.freeze({
-  kicker: 'FREE · DAILY',
-  title: 'Beat the Bots',
+  kicker: 'FREE ENTRY',
+  title: 'The Morbius Daily Freeroll',
   lines: ['1, 5 & 9 PM ET', '3,500 prize pool'],
   cta: 'Play free at',
   url: 'morbius.io/poker',
@@ -338,7 +338,7 @@ function startCash() {
 
 function startStream(game) {
   const target = rtmpTarget();
-  const title = game.cash ? STREAM_NAME : `Beat the Bots ${slotLabel(game.slotKey)} ET`;
+  const title = game.cash ? STREAM_NAME : `The Morbius Daily Freeroll · ${slotLabel(game.slotKey)} ET`;
   const url = `http://127.0.0.1:${PORT}/view?name=${encodeURIComponent(title)}${game.cash ? '&mode=cash' : ''}`;
   if (!target) {
     log('dry run: would stream game (STREAM_ENABLED=0 or X_RTMP_URL/X_STREAM_KEY missing)', { tournamentId: game.tournamentId, tableId: game.tableId, url });

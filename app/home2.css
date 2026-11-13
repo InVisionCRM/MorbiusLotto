@@ -1067,3 +1067,98 @@
 @media (prefers-reduced-motion:reduce){
   .home2 .hc-coin,.home2 .hc-sweep,.home2 .hc-dot.on .hc-dot-fill{animation:none}
 }
+
+/* ─────────────────────────────────────────────────────────────
+   The Morbius Daily Freeroll — feature card under the hero.
+   Built in the game-tile language (.game-tile / .gt-badge): poker tile art,
+   purple corner ribbon with the M mark, painted-style 3D gold title, banner
+   ribbon; the CTA is the homepage gold (.cta-main).
+   ───────────────────────────────────────────────────────────── */
+.home2 section.dfr-zone{padding-top:6px; padding-bottom:0}
+.home2 .dfr{position:relative; display:grid; grid-template-columns:minmax(220px,300px) 1fr minmax(250px,290px); align-items:center; gap:0 26px;
+  min-height:196px; border-radius:16px; overflow:hidden; isolation:isolate; color:#fff;
+  background:radial-gradient(120% 140% at 0% 0%, #5a2fd0 0%, #3d1c9e 40%, #251068 72%, #170a45 100%);
+  box-shadow:0 10px 24px rgba(0,0,0,.35); transition:transform .25s, box-shadow .25s}
+.home2 .dfr::after{content:''; position:absolute; inset:0; border-radius:inherit; pointer-events:none; box-shadow:inset 0 0 0 1px rgba(255,255,255,.08)}
+.home2 .dfr:hover{transform:translateY(-3px); box-shadow:0 18px 40px rgba(0,0,0,.55), 0 0 0 1px rgba(255,255,255,.1)}
+.home2 .dfr:focus-visible{outline:2px solid var(--cyan); outline-offset:3px}
+.home2 .dfr-art{align-self:stretch; position:relative; overflow:hidden}
+.home2 .dfr-art img{position:absolute; inset:0; width:100%; height:100%; object-fit:cover; object-position:50% 60%; transition:transform .6s;
+  -webkit-mask-image:linear-gradient(90deg,#000 62%,transparent 100%); mask-image:linear-gradient(90deg,#000 62%,transparent 100%)}
+.home2 .dfr:hover .dfr-art img{transform:scale(1.04)}
+.home2 .dfr-badge{position:absolute; left:0; top:0; z-index:3; height:34px; display:inline-flex; align-items:center; gap:8px; padding:0 18px 0 13px;
+  border-bottom-right-radius:16px; background:linear-gradient(90deg,#4e2ed6,#5038e2 62%,#4c26ce); box-shadow:0 2px 10px rgba(0,0,0,.3);
+  font-family:'Poppins',sans-serif; font-weight:600; font-size:15px; line-height:1; white-space:nowrap}
+.home2 .dfr-badge img{height:19px; width:auto; display:block}
+.home2 .dfr-copy{position:relative; z-index:2; padding:22px 0; min-width:0}
+.home2 .dfr-kick{font-size:10px; font-weight:800; letter-spacing:.24em; text-transform:uppercase; color:var(--cyan); margin-bottom:8px}
+.home2 .dfr-title{margin:0; font-family:'Poppins',sans-serif; font-weight:900; text-transform:uppercase; line-height:.95; letter-spacing:.01em}
+.home2 .dfr-gold{position:relative; display:block; width:max-content; max-width:100%; white-space:nowrap}
+.home2 .dfr-gold .g{position:relative; z-index:1; color:transparent; -webkit-text-stroke:.6px rgba(255,248,214,.55);
+  background:linear-gradient(180deg,#fffbe0 0%,#ffe46b 30%,#ffc02a 58%,#f59a14 82%,#ef8a0c 100%); -webkit-background-clip:text; background-clip:text}
+.home2 .dfr-gold .s{position:absolute; inset:0; z-index:0; color:#2a1272; -webkit-text-stroke:9px #2a1272;
+  text-shadow:0 2px 0 #26106a, 0 4px 0 #1f0d5a, 0 6px 0 #170848, 0 0 18px rgba(18,5,58,.85), 0 14px 20px rgba(0,0,0,.5)}
+.home2 .dfr-gold.l1{font-size:clamp(17px,1.7vw,22px)}
+.home2 .dfr-gold.l1 .s{-webkit-text-stroke-width:6px}
+.home2 .dfr-gold.l2{font-size:clamp(30px,3.6vw,46px); margin-top:3px}
+.home2 .dfr-meta{display:flex; align-items:center; gap:14px 18px; flex-wrap:wrap; margin-top:16px}
+.home2 .dfr-times{display:flex; align-items:center; gap:6px}
+.home2 .dfr-time{padding:6px 11px; border-radius:99px; background:rgba(5,8,18,.55); box-shadow:inset 0 0 0 1px rgba(255,255,255,.12);
+  font-size:12.5px; font-weight:700; color:#e2e8f0; white-space:nowrap}
+.home2 .dfr-time.on{background:rgba(251,191,36,.14); color:#fde68a; box-shadow:inset 0 0 0 1px rgba(251,191,36,.6)}
+.home2 .dfr-tz{font-size:11px; font-weight:800; letter-spacing:.16em; color:rgba(226,232,240,.7); margin-left:2px}
+.home2 .dfr-rib{position:relative; z-index:1; height:30px; display:flex; align-items:center; padding:0 18px; margin:0 12px;
+  background:linear-gradient(180deg,#9277f5 0%,#6a4ae0 52%,#5a39cf 100%); border-radius:3px;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.55), 0 3px 0 #2d1679, 0 8px 14px rgba(0,0,0,.35);
+  font-size:13px; font-weight:700; letter-spacing:.07em; text-transform:uppercase; white-space:nowrap}
+.home2 .dfr-rib::before,.home2 .dfr-rib::after{content:''; position:absolute; top:7px; width:18px; height:27px; z-index:-1; background:#3e22a6}
+.home2 .dfr-rib::before{left:-12px; clip-path:polygon(0 0,100% 0,100% 100%,0 100%,42% 50%)}
+.home2 .dfr-rib::after{right:-12px; clip-path:polygon(0 0,100% 0,58% 50%,100% 100%,0 100%)}
+.home2 .dfr-rib b{color:#ffd75a; font-weight:800; margin-right:6px}
+.home2 .dfr-side{position:relative; z-index:2; display:flex; flex-direction:column; gap:10px; padding:20px 22px 20px 0}
+.home2 .dfr-next{padding:12px 14px; border-radius:14px; background:rgba(5,8,18,.55); box-shadow:inset 0 0 0 1px rgba(255,255,255,.09)}
+.home2 .dfr-row{display:flex; align-items:center; justify-content:space-between; gap:8px}
+.home2 .dfr-state{display:inline-flex; align-items:center; gap:6px; font-size:10px; font-weight:700; letter-spacing:.18em; text-transform:uppercase; color:#a5b4fc; white-space:nowrap}
+.home2 .dfr-state.reg{color:#6ee7b7}
+.home2 .dfr-state.reg::before{content:''; width:7px; height:7px; border-radius:50%; background:#2ee59a; box-shadow:0 0 6px #2ee59a}
+.home2 .dfr-seats{font-size:10.5px; font-weight:600; color:rgba(226,232,240,.75); white-space:nowrap}
+.home2 .dfr-count{display:flex; align-items:baseline; justify-content:space-between; gap:10px; margin-top:6px}
+.home2 .dfr-at{font-size:13px; font-weight:700; color:#e2e8f0; white-space:nowrap}
+.home2 .dfr-clock{font-size:28px; font-weight:800; line-height:1; font-variant-numeric:tabular-nums; letter-spacing:.01em; white-space:nowrap}
+.home2 .dfr-cta{display:flex; align-items:center; justify-content:center; gap:8px; height:46px; border-radius:13px;
+  font-family:var(--display); font-weight:800; font-size:15px; letter-spacing:.05em; text-transform:uppercase; color:#3b2503;
+  background:linear-gradient(180deg,#fde68a,#f59e0b); box-shadow:0 6px 30px rgba(245,158,11,.4), inset 0 1px 0 rgba(255,255,255,.6); transition:transform .15s}
+.home2 .dfr:hover .dfr-cta{transform:translateY(-1px) scale(1.02)}
+
+/* tablet: the countdown column drops under the copy */
+@media (max-width:1180px){
+  .home2 .dfr{grid-template-columns:minmax(200px,260px) 1fr}
+  .home2 .dfr-art{grid-row:1 / span 2}
+  .home2 .dfr-side{grid-column:2; flex-direction:row; align-items:stretch; padding:0 22px 20px 0}
+  .home2 .dfr-next{flex:1; display:flex; align-items:center; justify-content:space-between; gap:12px; padding:10px 14px}
+  .home2 .dfr-row{flex-direction:column; align-items:flex-start; gap:3px}
+  .home2 .dfr-count{flex-direction:column; align-items:flex-end; margin:0; gap:3px}
+  .home2 .dfr-clock{font-size:24px}
+  .home2 .dfr-cta{height:auto; padding:0 22px}
+  .home2 .dfr-copy{padding:22px 22px 14px 0}
+}
+/* phones: a stacked tile — art up top with the title over it, like a game tile */
+@media (max-width:760px){
+  .home2 section.dfr-zone{padding-top:2px}
+  .home2 .dfr{grid-template-columns:1fr; min-height:0; border-radius:14px}
+  .home2 .dfr-art{grid-row:1; grid-column:1; height:178px}
+  .home2 .dfr-art img{object-position:50% 34%; -webkit-mask-image:linear-gradient(180deg,#000 55%,transparent 100%); mask-image:linear-gradient(180deg,#000 55%,transparent 100%)}
+  .home2 .dfr-badge{height:28px; font-size:13px; padding:0 14px 0 10px; border-bottom-right-radius:13px}
+  .home2 .dfr-badge img{height:16px}
+  .home2 .dfr-copy{grid-row:1; grid-column:1; align-self:start; padding:0 14px; margin-top:132px; text-align:center}
+  .home2 .dfr-kick{display:none}
+  .home2 .dfr-gold{margin-inline:auto}
+  .home2 .dfr-gold.l1{font-size:17px}
+  .home2 .dfr-gold.l2{font-size:clamp(28px,9vw,40px)}
+  .home2 .dfr-meta{flex-direction:column; gap:12px; margin-top:12px}
+  .home2 .dfr-time{padding:5px 10px; font-size:12px}
+  .home2 .dfr-side{grid-column:1; flex-direction:column; padding:14px}
+  .home2 .dfr-next{padding:9px 12px}
+  .home2 .dfr-clock{font-size:22px}
+  .home2 .dfr-cta{height:44px}
+}
