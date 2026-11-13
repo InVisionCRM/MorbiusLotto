@@ -211,6 +211,30 @@ const ROLE_CRESCENT_STYLE = {
   SB: { bg: '#1d4ed8', text: '#ffffff', rim: '#60a5fa' },
   BB: { bg: '#b45309', text: '#ffffff', rim: '#fbbf24' },
 } as const;
+// ── Compact seat avatar (mobile landscape tag) ─────────────────────────────
+// Static SVG from /api/poker/avatar/<address> (same art as the big seat avatar, rendered
+// server-side) — no per-seat animation cost on phones. Hidden if it fails to load.
+function CompactSeatAvatar({ address }: { address: string }) {
+  const [failed, setFailed] = useState(false);
+  if (failed) return null;
+  return (
+    <span
+      aria-hidden
+      className="relative shrink-0 overflow-hidden rounded-full"
+      style={{ width: 24, height: 24, background: 'radial-gradient(circle at 35% 30%, #6d28d9, #1e0b3a 75%)', boxShadow: '0 0 0 1px rgba(255,255,255,0.2)' }}
+    >
+      <img
+        src={`/api/poker/avatar/${address.toLowerCase()}`}
+        alt=""
+        loading="lazy"
+        decoding="async"
+        onError={() => setFailed(true)}
+        style={{ position: 'absolute', left: '50%', top: '-10%', width: '165%', maxWidth: 'none', transform: 'translateX(-50%)' }}
+      />
+    </span>
+  );
+}
+
 // ── Circular timer ring around avatar ──────────────────────────────────────
 
 function CircularTimerRing({ timeLeft, maxTime }: { timeLeft: number; maxTime: number }) {
@@ -1347,9 +1371,11 @@ export function PokerSeat({ seat, index, holeCards, isCurrentPlayer, showCardBac
                 ...((isCurrentPlayer || opponentTapProfile) ? { cursor: 'pointer' } : {}),
               }}
             >
-          <div className="py-1 px-2.5 flex items-center justify-center">
+          <div className={`py-1 flex items-center justify-center ${hideSeatAvatar && seat.playerAddress ? 'px-1.5 gap-1.5' : 'px-2.5'}`}>
+            {/* Compact (mobile landscape) mode hides the big animated avatar — show a small static one in the tag instead */}
+            {hideSeatAvatar && seat.playerAddress && <CompactSeatAvatar address={seat.playerAddress} />}
             <div className="flex flex-col items-center min-w-0 text-center">
-              <div className="font-bold truncate leading-tight" style={{ color: isCurrentPlayer ? '#fde68a' : '#e2e8f0', fontSize: POKER_UI_CQW.playerTagName, maxWidth: 96 }}>
+              <div className="font-bold truncate leading-tight" style={{ color: isCurrentPlayer ? '#fde68a' : '#e2e8f0', fontSize: POKER_UI_CQW.playerTagName, maxWidth: hideSeatAvatar && seat.playerAddress ? 72 : 96 }}>
                 {displayName}
               </div>
               <div

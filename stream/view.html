@@ -52,7 +52,7 @@
   .card.back { background: repeating-linear-gradient(45deg, #1d3b8f, #1d3b8f 5px, #2c55c4 5px, #2c55c4 10px); border: 2px solid #fff; }
   .card.empty { background: rgba(255,255,255,.08); box-shadow: none; border: 2px dashed rgba(255,255,255,.18); }
   .small .card { width: 30px; height: 42px; border-radius: 4px; } .small .card .r { font-size: 14px; } .small .card .s { font-size: 13px; }
-  .seat { position: absolute; width: 132px; transform: translate(-50%, -50%); text-align: center; }
+  .seat { position: absolute; width: 150px; transform: translate(-50%, -50%); text-align: center; }
   .seat .cards { display: flex; gap: 3px; justify-content: center; height: 42px; margin-bottom: 3px; }
   .seat .plate { background: rgba(10,16,32,.94); border: 2px solid #2a3b63; border-radius: 10px; padding: 3px 6px; }
   .seat .name { font-size: 13.5px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -135,6 +135,50 @@
   #inter .count .t { font-size: 40px; font-weight: 800; color: #fff; font-variant-numeric: tabular-nums; letter-spacing: 1px; }
   #inter .count .s { font-size: 16px; color: var(--mint); margin-top: 2px; }
   #inter .brand { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); font-size: 13px; letter-spacing: 4px; color: #c4a6ff; font-weight: 700; white-space: nowrap; }
+
+  /* player avatars (seat plates + chip leaders); art from the site's /api/poker/avatar/<addr> */
+  .av { position: relative; flex: none; border-radius: 50%; overflow: hidden; display: inline-flex; align-items: center; justify-content: center;
+    background: radial-gradient(circle at 35% 30%, hsl(var(--hue, 270), 70%, 52%), hsl(calc(var(--hue, 270) + 40), 70%, 22%) 75%);
+    box-shadow: 0 0 0 2px rgba(255,255,255,.18), 0 2px 6px rgba(0,0,0,.5); color: #fff; font-weight: 800; }
+  .av img { position: absolute; left: 50%; top: -10%; width: 165%; transform: translateX(-50%); }
+  .av.fb img { display: none; }
+  .av .ini { display: none; letter-spacing: .5px; }
+  .av.fb .ini { display: block; }
+  .seat .plate { position: relative; }
+  .seat.has-av .plate { padding-left: 54px; min-height: 54px; text-align: left; }
+  .seat .av.seat-av { position: absolute; left: 5px; top: 50%; transform: translateY(-50%); width: 44px; height: 44px; font-size: 15px; }
+  .seat.acting .av.seat-av { box-shadow: 0 0 0 2px #facc15, 0 0 12px #facc15; }
+  .seat.winner .av.seat-av { box-shadow: 0 0 0 2px #22c55e, 0 0 14px #22c55e; }
+  .seat.open .plate { padding-left: 6px; }
+  .row .nn { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
+  .row .av.mini { width: 18px; height: 18px; font-size: 8px; box-shadow: 0 0 0 1px rgba(255,255,255,.2); }
+
+  /* table talk: bot banter + human quick-chat bubbles, emotes and throwables flying seat → seat */
+  #fx { position: absolute; inset: 0; pointer-events: none; z-index: 5; }
+  .bubble { position: absolute; transform: translate(-50%, -100%); max-width: 230px; padding: 6px 11px; border-radius: 14px; font-size: 14px; font-weight: 700; line-height: 18px;
+    color: #10061f; background: #fff; box-shadow: 0 6px 18px rgba(0,0,0,.45), 0 0 0 2px #b26bff; white-space: normal; text-align: center; animation: bubin .25s ease-out; }
+  .bubble::after { content: ""; position: absolute; left: 50%; bottom: -7px; transform: translateX(-50%); border: 7px solid transparent; border-bottom: 0; border-top-color: #fff; }
+  .bubble.human { box-shadow: 0 6px 18px rgba(0,0,0,.45), 0 0 0 2px #22c55e; }
+  .bubble.bye { opacity: 0; transition: opacity .5s; }
+  @keyframes bubin { from { opacity: 0; transform: translate(-50%, -80%) scale(.8); } }
+  .fly { position: absolute; font-size: 34px; line-height: 1; transform: translate(-50%, -50%); filter: drop-shadow(0 3px 6px rgba(0,0,0,.6)); transition-property: left, top; transition-timing-function: cubic-bezier(.3,.1,.4,1); }
+  .boom { position: absolute; font-size: 44px; transform: translate(-50%, -50%); animation: boom .7s ease-out forwards; }
+  @keyframes boom { 0% { transform: translate(-50%, -50%) scale(.6); opacity: 1; } 60% { transform: translate(-50%, -50%) scale(1.5); opacity: 1; } 100% { transform: translate(-50%, -50%) scale(1.9); opacity: 0; } }
+  .log .talk { color: #e9d5ff; }
+
+  /* permanent cash-game promo at the bottom of the left sidebar (copy from the worker's env, /stream-config) */
+  #cashPromo { position: absolute; left: 10px; right: 10px; bottom: 10px; display: none; border-radius: 12px; padding: 10px 12px 11px; overflow: hidden;
+    background: linear-gradient(160deg, #2a0c52, #12052a 75%); border: 1px solid #871ee5; box-shadow: 0 0 22px #871ee566; }
+  #cashPromo::before { content: ""; position: absolute; inset: 0; background: radial-gradient(circle at 85% 0%, rgba(34,197,94,.22), transparent 55%); }
+  #cashPromo > * { position: relative; }
+  #cashPromo .pk { font-size: 10.5px; }
+  #cashPromo .t { font-size: 23px; font-weight: 800; color: #fff; line-height: 1.05; margin: 6px 0 4px; text-shadow: 0 0 14px #871ee5; }
+  #cashPromo .ln { font-size: 14px; line-height: 19px; color: #f1e8ff; font-weight: 700; }
+  #cashPromo .ln b { color: var(--gold); }
+  #cashPromo .cd { margin-top: 6px; font-size: 12.5px; color: #c4b5fd; }
+  #cashPromo .cd b { color: #fff; font-variant-numeric: tabular-nums; font-size: 15px; }
+  #cashPromo .url { margin-top: 5px; font-size: 17px; font-weight: 800; color: var(--mint); }
+  #cashPromo .tag { margin-top: 2px; font-size: 12px; font-weight: 700; color: #d8b4fe; letter-spacing: .3px; }
   .fadein { animation: fadein .6s ease; } @keyframes fadein { from { opacity: 0; transform: translateY(8px); } }
 </style>
 </head>
@@ -148,6 +192,8 @@
       <div class="muted" id="nextLvl"></div></div>
     <div class="panel"><h3>Chip leaders <span id="left-count"></span></h3><div id="leaders"></div></div>
     <div class="panel" id="payPanel"><h3>Payouts <span id="pool"></span></h3><div id="payouts"></div></div>
+    <div id="cashPromo"><span class="pk" id="cpK"></span><div class="t" id="cpT"></div><div id="cpL"></div>
+      <div class="cd" id="cpC"></div><div class="url" id="cpU"></div><div class="tag" id="cpG"></div></div>
   </div>
 
   <div id="right" class="side">
@@ -164,6 +210,7 @@
 
   <div id="felt"><div id="street"></div><div id="board"></div><div id="pot"></div><div class="logo">MORBIUS</div></div>
   <div id="seats"></div>
+  <div id="fx"></div>
   <div id="banner" style="display:none"></div>
   <div id="inter">
     <div class="brand">$MORBIUS ON #PULSECHAIN</div>
@@ -188,11 +235,109 @@ const RANKS = ['2','3','4','5','6','7','8','9','10','J','Q','K','A'];
 const SUITS = ['♣','♦','♥','♠'];
 const fmt = (v) => Number(v || 0).toLocaleString('en-US');
 const esc = (s) => String(s ?? '').replace(/[<>&"]/g, '');
+const escH = (s) => String(s ?? '').replace(/[<>&"']/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&#39;' }[c])); // keeps & etc. visible
 const $ = (id) => document.getElementById(id);
 const short = (a) => a ? a.slice(0, 6) + '…' + a.slice(-4) : '';
 const etTime = (iso) => new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: 'America/New_York' }) + ' ET';
 const mmss = (ms) => { const s = Math.max(0, Math.round(ms / 1000)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
 const hmmss = (ms) => { const s = Math.max(0, Math.round(ms / 1000)); const h = Math.floor(s / 3600); return h > 0 ? `${h}:${String(Math.floor((s % 3600) / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}` : mmss(ms); };
+
+
+// ---- stream config from the worker (/stream-config): avatar art base + cash promo copy ----
+const DEFAULT_CASH_PROMO = { enabled: true, kicker: 'FREE · DAILY', title: 'Beat the Bots', lines: ['1, 5 & 9 PM ET', '3,500 prize pool'], url: 'morbius.io/poker', tag: '$Morbius on #PulseChain' };
+let CFG = { avatars: true, avatarBase: qs.get('avatarBase') || 'https://morbius.io/api/poker/avatar', cashPromo: DEFAULT_CASH_PROMO };
+fetch('/stream-config', { cache: 'no-store' }).then((r) => (r.ok ? r.json() : null)).then((j) => {
+  if (j && typeof j === 'object') CFG = { ...CFG, ...j, avatarBase: qs.get('avatarBase') || j.avatarBase || CFG.avatarBase };
+}).catch(() => {});
+
+// ---- avatars: one cached element per (place, wallet) so the 1 s re-render never reloads/flickers ----
+const hueOf = (s) => { let h = 2166136261; for (const c of String(s || '').toLowerCase()) { h ^= c.charCodeAt(0); h = Math.imul(h, 16777619) >>> 0; } return h % 360; };
+const initialsOf = (name, addr) => {
+  const clean = String(name || '').replace(/[^\p{L}\p{N} ]/gu, '').trim(); const parts = clean.split(/\s+/).filter(Boolean);
+  return (parts.length >= 2 ? parts[0][0] + parts[1][0] : clean.slice(0, 2) || String(addr || '').replace(/^0x/i, '').slice(0, 2) || '?').toUpperCase();
+};
+const avCache = new Map();
+function avatarEl(addr, name, cls) {
+  const a = String(addr || '').toLowerCase(); const key = cls + ':' + a;
+  let el = avCache.get(key);
+  if (!el) {
+    el = document.createElement('span'); el.className = 'av ' + cls; el.style.setProperty('--hue', hueOf(a));
+    const ini = document.createElement('span'); ini.className = 'ini'; ini.textContent = initialsOf(name, a); el.appendChild(ini);
+    if (CFG.avatars !== false && CFG.avatarBase && /^0x[0-9a-f]{40}$/.test(a)) {
+      const img = new Image(); img.alt = ''; img.decoding = 'async';
+      img.onerror = () => el.classList.add('fb');
+      img.src = `${CFG.avatarBase.replace(/\/$/, '')}/${a}`; el.appendChild(img);
+    } else el.classList.add('fb');
+    avCache.set(key, el);
+    if (avCache.size > 400) avCache.delete(avCache.keys().next().value);
+  }
+  return el;
+}
+/** Replace <span class="avslot" data-a data-n> placeholders inside `root` with cached avatars. */
+function fillAvatars(root, cls) {
+  root.querySelectorAll('.avslot').forEach((slot) => slot.replaceWith(avatarEl(slot.dataset.a, slot.dataset.n, cls)));
+}
+
+// ---- table talk (bot banter + human quick-chat / emotes), from the snapshot's `talk` list ----
+const EMOTE_GLYPH = { haha: '😂', love: '❤️', gg: '🤝', nice: '👏', boo: '👎', fire: '🔥', dance: '🕺', money: '🤑', arrow: '🏹', snowball: '❄️', tomato: '🍅', slap: '✋' };
+const IMPACT_GLYPH = { tomato: '💥', snowball: '💨', arrow: '🎯', slap: '💢' };
+const seenTalk = new Set(); let talkBooted = false; const bubbles = new Map();
+function showBubble(pos, at, text, human) {
+  const fx = $('fx'); const old = bubbles.get(pos); if (old) old.remove();
+  const b = document.createElement('div'); b.className = 'bubble' + (human ? ' human' : ''); b.textContent = text;
+  b.style.left = at.x + 'px'; b.style.top = Math.max(60, at.y - 54) + 'px';
+  if (at.y - 54 < 60) { b.style.transform = 'translate(-50%, 0)'; b.style.top = (at.y + 56) + 'px'; }
+  fx.appendChild(b); bubbles.set(pos, b);
+  setTimeout(() => b.classList.add('bye'), 5200);
+  setTimeout(() => { b.remove(); if (bubbles.get(pos) === b) bubbles.delete(pos); }, 5800);
+}
+function throwGlyph(from, to, kind) {
+  const fx = $('fx'); const g = document.createElement('div'); g.className = 'fly'; g.textContent = EMOTE_GLYPH[kind] || '✨';
+  const projectile = Boolean(IMPACT_GLYPH[kind]); const ms = projectile ? 650 : 1100;
+  g.style.left = from.x + 'px'; g.style.top = (from.y - 10) + 'px'; g.style.transitionDuration = ms + 'ms';
+  fx.appendChild(g);
+  requestAnimationFrame(() => requestAnimationFrame(() => { g.style.left = to.x + 'px'; g.style.top = (to.y - 10) + 'px'; }));
+  setTimeout(() => {
+    g.remove();
+    const boom = document.createElement('div'); boom.className = 'boom'; boom.textContent = IMPACT_GLYPH[kind] || EMOTE_GLYPH[kind] || '✨';
+    boom.style.left = to.x + 'px'; boom.style.top = (to.y - 10) + 'px'; fx.appendChild(boom); setTimeout(() => boom.remove(), 800);
+  }, ms + 30);
+}
+function processTalk(st) {
+  const list = Array.isArray(st.talk) ? st.talk : [];
+  const n = st.maxSeats || st.seats.length;
+  for (const t of list) {
+    if (!t || seenTalk.has(t.id)) continue;
+    seenTalk.add(t.id);
+    if (!talkBooted) continue; // don't replay chatter that happened before this page loaded
+    const from = seatPos(Number(t.fromPosition), n);
+    if (t.kind === 'say' && t.text) {
+      showBubble(Number(t.fromPosition), from, String(t.text), !t.bot);
+      pushAction(`<span class="talk">💬 ${escH(t.fromName || 'Player')}: ${escH(t.text)}</span>`);
+    } else if (t.kind === 'emote' && t.toPosition != null) {
+      throwGlyph(from, seatPos(Number(t.toPosition), n), t.emote);
+      pushAction(`<span class="talk">${escH(t.fromName || 'Player')} ${EMOTE_GLYPH[t.emote] || '✨'} → ${escH(t.toName || 'Player')}</span>`);
+    }
+  }
+  talkBooted = true;
+  if (seenTalk.size > 400) { const keep = [...seenTalk].slice(-200); seenTalk.clear(); keep.forEach((k) => seenTalk.add(k)); }
+}
+
+function renderCashPromo(meta) {
+  const cp = CFG.cashPromo; const box = $('cashPromo');
+  const on = meta?.kind === 'cash' && cp && cp.enabled !== false;
+  box.style.display = on ? 'block' : 'none';
+  if (!on) return false;
+  $('cpK').textContent = cp.kicker || ''; $('cpK').style.display = cp.kicker ? '' : 'none';
+  $('cpT').textContent = cp.title || '';
+  $('cpL').innerHTML = (Array.isArray(cp.lines) ? cp.lines : []).map((l) => `<div class="ln">${escH(l)}</div>`).join('');
+  const ng = meta.nextGame; const ms = ng?.at ? Date.parse(ng.at) - Date.now() : null;
+  $('cpC').innerHTML = ms == null ? '' : ms > 0
+    ? `Next: ${escH(etTime(ng.at))}${ng.registrationOpen ? ' · <span style="color:var(--mint);font-weight:700">REG OPEN</span>' : ''}<br>Starts in <b>${hmmss(ms)}</b>`
+    : '<b>Starting now</b> · join in the lobby';
+  $('cpU').textContent = cp.url || ''; $('cpG').textContent = cp.tag || '';
+  return true;
+}
 
 // ---- promos (promos.json; text drawn here, clips are text-free) ----
 const PROMO_SECONDS = Number(qs.get('promoSeconds') || 7);
@@ -324,10 +469,13 @@ function renderSidebars(st, meta) {
   const alive = seated.filter((s) => Number(s.stack) > 0 || Number(s.currentBet) > 0);
   const sorted = [...seated].sort((a, c) => Number(c.stack) + Number(c.currentBet || 0) - (Number(a.stack) + Number(a.currentBet || 0)));
   $('left-count').textContent = t ? `${t.playersLeft ?? alive.length}/${t.entrants ?? seated.length} left` : `${seated.length} seated`;
-  $('leaders').innerHTML = sorted.slice(0, 10).map((s) => {
+  const promoOn = renderCashPromo(meta);
+  $('leaders').innerHTML = sorted.slice(0, promoOn ? 8 : 10).map((s) => {
     const out = !(Number(s.stack) > 0 || Number(s.currentBet) > 0);
-    return `<div class="row${out ? ' out' : ''}"><span class="n">${esc(s.displayName || short(s.playerAddress))}</span><span class="v">${fmt(Number(s.stack) + Number(s.currentBet || 0))}</span></div>`;
+    const nm = esc(s.displayName || short(s.playerAddress));
+    return `<div class="row${out ? ' out' : ''}"><span class="nn"><span class="avslot" data-a="${esc(s.playerAddress)}" data-n="${nm}"></span><span class="n">${nm}</span></span><span class="v">${fmt(Number(s.stack) + Number(s.currentBet || 0))}</span></div>`;
   }).join('');
+  fillAvatars($('leaders'), 'mini');
 
   if (t?.payouts?.length) {
     $('payPanel').style.display = '';
@@ -371,6 +519,7 @@ function render(st) {
   const meta = st.meta || null;
   const h = st.currentHand;
   track(st);
+  processTalk(st);
   const actionSecs = Number(meta?.actionSeconds) > 0 ? Number(meta.actionSeconds) : 60;
   const turnLeft = h?.turnStartedAt && h.actingPosition != null ? actionSecs - (Date.now() - Date.parse(h.turnStartedAt)) / 1000 : null;
   const nl = meta?.tournament?.blinds?.nextLevelAt ? Date.parse(meta.tournament.blinds.nextLevelAt) - Date.now() : null;
@@ -413,6 +562,8 @@ function render(st) {
       plate.insertAdjacentHTML('beforeend', `<div class="clock${lvl}"><i style="width:${pct}%"></i></div><div class="secs${left <= 5 ? ' low' : ''}">${Math.ceil(left)}</div>`);
       plate.style.position = 'relative';
     }
+    plate.prepend(avatarEl(s.playerAddress, s.displayName, 'seat-av'));
+    el.classList.add('has-av');
     el.appendChild(plate);
     if (Number(s.currentBet) > 0) {
       const b = document.createElement('div'); b.className = 'bet'; b.textContent = fmt(s.currentBet);
@@ -450,6 +601,7 @@ async function tick() {
         const m = body.meta || null;
         renderInter(body.phase === 'outro' ? 'outro' : 'preroll', body.phase === 'outro' ? m?.nextGame?.at : (body.scheduledAt || m?.nextGame?.at), Boolean(m?.freeEntry || m?.nextGame?.freeEntry));
         renderOverlay(m, null);
+        $('cashPromo').style.display = 'none';
         if (lastHandId == null) { // fresh page before the first hand: friendly placeholders
           $('blinds').textContent = '25 / 50'; $('lvl').textContent = 'Level 1'; $('nextLvl').textContent = 'Blinds rise every few minutes';
           $('leaders').innerHTML = '<div class="muted">7 bots warming up… take a seat!</div>';

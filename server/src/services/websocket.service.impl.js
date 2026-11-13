@@ -31,6 +31,7 @@ const poker_chip_wallet_1 = require("./poker-chip-wallet");
 const stream_voice_service_1 = require("./stream-voice.service");
 const poker_rps_1 = require("./poker-rps");
 const table_arcade_1 = require("./table-arcade");
+const poker_table_talk_1 = require("../lib/poker-table-talk");
 // EIP-712 domain and types for WebSocket authentication
 const AUTH_EIP712_DOMAIN = {
     name: 'MORBlotto Blackjack',
@@ -1471,6 +1472,11 @@ class WebSocketService {
                 type: 'poker_quick_reaction',
                 payload: { tableId, seatIndex, type, value: val },
             });
+            // Keep a short public log so the X stream overlay can show table talk too
+            try {
+                poker_table_talk_1.recordTableTalk(tableId, { kind: 'say', fromPosition: seatIndex, fromName: state.seats[seatIndex]?.displayName ?? null, text: val, bot: false });
+            }
+            catch { /* best effort */ }
         }
         catch (error) {
             logger_1.logger.error('Error handling poker quick reaction:', error);
@@ -1550,6 +1556,10 @@ class WebSocketService {
                 type: 'poker_directed_emote',
                 payload: { tableId, fromSeatIndex, toSeatIndex, kind: k },
             });
+            try {
+                poker_table_talk_1.recordTableTalk(tableId, { kind: 'emote', fromPosition: fromSeatIndex, fromName: state.seats[fromSeatIndex]?.displayName ?? null, toPosition: toSeatIndex, toName: state.seats[toSeatIndex]?.displayName ?? null, emote: k, bot: false });
+            }
+            catch { /* best effort */ }
         }
         catch (error) {
             logger_1.logger.error('Error handling poker directed emote:', error);
