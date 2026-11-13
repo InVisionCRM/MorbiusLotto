@@ -167,43 +167,65 @@
   .log .talk { color: #e9d5ff; }
 
   /* permanent cash-game promo at the bottom of the left sidebar (copy from the worker's env, /stream-config).
-     Broadcast card: brand logo, line icons, countdown chip, QR call to action, PulseChain footer. */
-  #cashPromo { --cy: #3fd3e3; position: absolute; left: 10px; right: 10px; bottom: 10px; display: none; border-radius: 14px; overflow: hidden;
-    padding: 12px 12px 0; background: linear-gradient(170deg, #26104f 0%, #170838 48%, #0c0522 100%);
-    border: 1px solid rgba(178,107,255,.55); box-shadow: 0 0 0 1px rgba(0,0,0,.5), 0 10px 26px rgba(0,0,0,.55), 0 0 24px rgba(135,30,229,.28), inset 0 1px 0 rgba(255,255,255,.08); }
-  #cashPromo::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 3px; background: linear-gradient(90deg, var(--cy), #b26bff 60%, #871ee5); }
-  #cashPromo::after { content: ""; position: absolute; right: -60px; top: -70px; width: 190px; height: 190px; border-radius: 50%; background: radial-gradient(circle, rgba(63,211,227,.16), transparent 65%); pointer-events: none; }
-  #cashPromo > * { position: relative; z-index: 1; }
-  #cashPromo svg.ic { width: 100%; height: 100%; display: block; }
-  .cp-hd { display: flex; align-items: center; gap: 10px; }
-  .cp-logo { width: 36px; height: 40px; object-fit: contain; flex: none; filter: drop-shadow(0 0 8px rgba(63,211,227,.35)); }
-  .cp-ht { min-width: 0; }
-  .cp-k { display: flex; align-items: center; gap: 5px; font-size: 10px; font-weight: 800; letter-spacing: 1.6px; text-transform: uppercase; color: var(--cy); white-space: nowrap; }
-  .cp-k i { width: 13px; height: 13px; flex: none; }
-  .cp-t { font-size: 20px; font-weight: 800; line-height: 1.1; color: #fff; white-space: nowrap; overflow: hidden; }
-  .cp-ls { margin-top: 10px; padding-top: 9px; border-top: 1px solid rgba(178,107,255,.22); display: grid; gap: 6px; }
-  .cp-li { display: flex; align-items: center; gap: 9px; font-size: 14px; font-weight: 700; color: #f1ebff; white-space: nowrap; overflow: hidden; }
-  .cp-li i { width: 24px; height: 24px; flex: none; padding: 5px; border-radius: 7px; background: rgba(178,107,255,.16); color: #d8b4fe; box-shadow: inset 0 0 0 1px rgba(178,107,255,.3); }
-  .cp-li.prize i { background: rgba(255,211,107,.14); color: var(--gold); box-shadow: inset 0 0 0 1px rgba(255,211,107,.32); }
-  .cp-li.time i { background: rgba(63,211,227,.13); color: var(--cy); box-shadow: inset 0 0 0 1px rgba(63,211,227,.3); }
-  .cp-li b { color: var(--gold); }
-  .cp-cd { margin-top: 10px; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 10px; border-radius: 10px;
-    background: rgba(4,2,14,.6); box-shadow: inset 0 0 0 1px rgba(63,211,227,.35); }
-  .cp-cd:empty { display: none; }
-  .cp-cd span { display: block; font-size: 9px; font-weight: 800; letter-spacing: 1.4px; color: #9b8cc7; text-transform: uppercase; white-space: nowrap; }
-  .cp-cd span.reg { color: #4ade80; } .cp-cd span.reg::before { content: ""; display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: #4ade80; margin-right: 4px; vertical-align: 1px; box-shadow: 0 0 6px #4ade80; }
-  .cp-cd b { display: block; font-size: 13px; color: #fff; white-space: nowrap; }
-  .cp-cd .r { text-align: right; } .cp-cd .r b { font-size: 18px; color: var(--cy); font-variant-numeric: tabular-nums; letter-spacing: .5px; line-height: 1.05; }
-  .cp-cta { margin-top: 10px; display: flex; align-items: center; gap: 11px; }
-  .cp-qr { width: 66px; height: 66px; flex: none; border-radius: 6px; image-rendering: pixelated; box-shadow: 0 0 0 2px rgba(255,255,255,.9), 0 0 14px rgba(63,211,227,.35); }
+     Built as a morbius.io homepage game tile (components/home2/game-tile.tsx + app/home2.css): the poker tile
+     art, the purple corner ribbon with the M mark, a 3D gold title + banner ribbon like the painted tiles,
+     the homepage's gold CTA button, all in Poppins (bundled in promos/, so no system-font fallback). */
+  @font-face { font-family: "MPoppins"; src: url(/promos/poppins-600.woff2) format("woff2"); font-weight: 600; font-display: block; }
+  @font-face { font-family: "MPoppins"; src: url(/promos/poppins-700.woff2) format("woff2"); font-weight: 700; font-display: block; }
+  @font-face { font-family: "MPoppins"; src: url(/promos/poppins-800.woff2) format("woff2"); font-weight: 800; font-display: block; }
+  @font-face { font-family: "MPoppins"; src: url(/promos/poppins-900.woff2) format("woff2"); font-weight: 900; font-display: block; }
+  #cashPromo { position: absolute; left: 10px; right: 10px; bottom: 10px; display: none; border-radius: 12px; overflow: hidden; isolation: isolate;
+    font-family: "MPoppins", "Poppins", sans-serif; -webkit-font-smoothing: antialiased; color: #fff;
+    background: linear-gradient(180deg, #4b25b6 0%, #3b1b98 46%, #26106c 76%, #170a47 100%);
+    box-shadow: 0 18px 40px rgba(0,0,0,.55), 0 0 0 1px rgba(255,255,255,.08); }
+  .cp-art { position: absolute; left: 0; top: -30px; width: 100%; height: auto; z-index: -1;
+    -webkit-mask-image: linear-gradient(180deg, #000 58%, transparent 100%); mask-image: linear-gradient(180deg, #000 58%, transparent 100%); }
+  .cp-badge { position: absolute; left: 0; top: 0; z-index: 2; height: 30px; display: inline-flex; align-items: center; gap: 7px; padding: 0 15px 0 11px;
+    border-bottom-right-radius: 15px; background: linear-gradient(90deg, #4e2ed6, #5038e2 62%, #4c26ce); box-shadow: 0 2px 8px rgba(0,0,0,.3);
+    font-weight: 600; font-size: 15px; line-height: 1; white-space: nowrap; }
+  .cp-badge img { height: 17px; width: auto; display: block; }
+  .cp-when { position: relative; z-index: 1; margin-top: 5px; font-weight: 700; font-size: 11px; line-height: 1; letter-spacing: .24em; text-transform: uppercase;
+    color: #fff; text-shadow: 0 1px 0 #24105e, 0 2px 6px rgba(0,0,0,.6); white-space: nowrap; }
+  .cp-when:empty { display: none; }
+  .cp-body { padding-top: 80px; text-align: center; }
+  .cp-title { position: relative; padding: 0 12px; text-transform: uppercase; font-weight: 900; line-height: .92; letter-spacing: .01em; }
+  .cp-title > span { position: relative; display: block; white-space: nowrap; }
+  .cp-title .l1 { font-size: 20px; } .cp-title .l2 { font-size: 52px; margin-top: 1px; }
+  .cp-title .g { position: relative; z-index: 1; color: transparent; -webkit-text-stroke: .6px rgba(255,248,214,.55);
+    background: linear-gradient(180deg, #fffbe0 0%, #ffe46b 30%, #ffc02a 58%, #f59a14 82%, #ef8a0c 100%); -webkit-background-clip: text; background-clip: text; }
+  .cp-title .s { position: absolute; inset: 0; z-index: 0; color: #2a1272; -webkit-text-stroke: 9px #2a1272;
+    text-shadow: 0 2px 0 #26106a, 0 4px 0 #1f0d5a, 0 6px 0 #170848, 0 0 16px rgba(18,5,58,.85), 0 12px 18px rgba(0,0,0,.55); }
+  .cp-title .l1 .s { -webkit-text-stroke-width: 5px; text-shadow: 0 3px 0 #150743, 0 6px 10px rgba(0,0,0,.5); }
+  .cp-rib { position: relative; margin: 8px 22px 0; height: 26px; display: flex; align-items: center; justify-content: center; z-index: 1;
+    background: linear-gradient(180deg, #9277f5 0%, #6a4ae0 52%, #5a39cf 100%); border-radius: 3px;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.55), 0 3px 0 #2d1679, 0 7px 12px rgba(0,0,0,.35);
+    font-weight: 700; font-size: 13px; letter-spacing: .07em; text-transform: uppercase; white-space: nowrap; }
+  .cp-rib::before, .cp-rib::after { content: ""; position: absolute; top: 6px; width: 16px; height: 23px; z-index: -1; background: #3e22a6; }
+  .cp-rib::before { left: -11px; clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%, 42% 50%); }
+  .cp-rib::after { right: -11px; clip-path: polygon(0 0, 100% 0, 58% 50%, 100% 100%, 0 100%); }
+  .cp-rib > span { display: inline-block; }
+  .cp-rib b { color: #ffd75a; font-weight: 800; margin-right: 5px; }
+  .cp-rib:empty { display: none; }
+  .cp-next { margin: 10px 10px 0; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 5px 11px; text-align: left;
+    border-radius: 10px; background: rgba(5,8,18,.55); box-shadow: inset 0 0 0 1px rgba(255,255,255,.09); }
+  .cp-next:empty { display: none; }
+  .cp-next span { display: flex; align-items: center; gap: 5px; font-weight: 600; font-size: 9.5px; letter-spacing: .16em; text-transform: uppercase; color: #a5b4fc; white-space: nowrap; }
+  .cp-next span.reg { color: #6ee7b7; }
+  .cp-next span.reg::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: #2ee59a; box-shadow: 0 0 5px #2ee59a; }
+  .cp-next .t { font-weight: 700; font-size: 13px; white-space: nowrap; }
+  .cp-next .r { text-align: right; } .cp-next .r .t { font-weight: 800; font-size: 19px; line-height: 1.05; font-variant-numeric: tabular-nums; letter-spacing: .01em; }
+  .cp-cta { margin: 7px 10px 0; display: flex; align-items: center; gap: 9px; }
+  .cp-btn { flex: 1; min-width: 0; height: 34px; display: flex; align-items: center; justify-content: center; gap: 5px; padding: 0 8px; border-radius: 11px;
+    background: linear-gradient(180deg, #fde68a, #f59e0b); box-shadow: 0 6px 18px rgba(245,158,11,.35), inset 0 1px 0 rgba(255,255,255,.6);
+    color: #3b2503; font-weight: 600; font-size: 12px; white-space: nowrap; overflow: hidden; }
+  .cp-btn > span { display: inline-block; white-space: nowrap; }
+  .cp-btn b { font-weight: 800; }
+  .cp-btn.two { height: 52px; } .cp-btn.two small { display: block; font-size: 10.5px; font-weight: 600; opacity: .85; } .cp-btn.two b { display: block; font-size: 13px; }
+  .cp-qr { width: 52px; height: 52px; flex: none; border-radius: 8px; image-rendering: pixelated; box-shadow: 0 0 0 2px #fff; }
   .cp-qr[hidden] { display: none; }
-  .cp-ck { font-size: 10px; font-weight: 800; letter-spacing: 1.6px; text-transform: uppercase; color: var(--cy); }
-  .cp-u { font-size: 17px; font-weight: 800; line-height: 1.12; color: #fff; word-break: break-word; }
-  .cp-u em { font-style: normal; color: #4ade80; }
-  .cp-ft { margin: 11px -12px 0; padding: 6px 12px; display: flex; align-items: center; justify-content: center; gap: 7px; background: rgba(0,0,0,.32); border-top: 1px solid rgba(178,107,255,.2);
-    font-size: 11.5px; font-weight: 700; color: #d8ccf5; letter-spacing: .3px; white-space: nowrap; }
-  .cp-ft img { width: 15px; height: 14px; object-fit: contain; }
-  .cp-ft:has(span:empty) { display: none; }
+  .cp-tag { display: flex; align-items: center; justify-content: center; gap: 6px; padding: 6px 0 7px; font-weight: 600; font-size: 11px; color: rgba(226,232,240,.8); white-space: nowrap; }
+  .cp-tag img { width: 14px; height: 13px; object-fit: contain; }
+  .cp-tag:has(span:empty) { display: none; }
   .fadein { animation: fadein .6s ease; } @keyframes fadein { from { opacity: 0; transform: translateY(8px); } }
 </style>
 </head>
@@ -218,11 +240,16 @@
     <div class="panel"><h3>Chip leaders <span id="left-count"></span></h3><div id="leaders"></div></div>
     <div class="panel" id="payPanel"><h3>Payouts <span id="pool"></span></h3><div id="payouts"></div></div>
     <div id="cashPromo">
-      <div class="cp-hd"><img class="cp-logo" src="/promos/morbius-logo.png" alt="" /><div class="cp-ht"><div class="cp-k" id="cpK"></div><div class="cp-t" id="cpT"></div></div></div>
-      <div class="cp-ls" id="cpL"></div>
-      <div class="cp-cd" id="cpC"></div>
-      <div class="cp-cta"><img class="cp-qr" id="cpQ" alt="" hidden /><div><div class="cp-ck" id="cpA"></div><div class="cp-u" id="cpU"></div></div></div>
-      <div class="cp-ft"><img src="/promos/pulsechain-logo.png" alt="" /><span id="cpG"></span></div>
+      <img class="cp-art" src="/promos/poker-tile-art.webp" alt="" />
+      <div class="cp-badge" id="cpK"></div>
+      <div class="cp-body">
+        <div class="cp-title" id="cpT"></div>
+        <div class="cp-when" id="cpW"></div>
+        <div class="cp-rib" id="cpR"></div>
+        <div class="cp-next" id="cpC"></div>
+        <div class="cp-cta"><div class="cp-btn" id="cpB"></div><img class="cp-qr" id="cpQ" alt="" hidden /></div>
+        <div class="cp-tag"><img src="/promos/pulsechain-logo.png" alt="" /><span id="cpG"></span></div>
+      </div>
     </div>
   </div>
 
@@ -274,7 +301,7 @@ const hmmss = (ms) => { const s = Math.max(0, Math.round(ms / 1000)); const h = 
 
 
 // ---- stream config from the worker (/stream-config): avatar art base + cash promo copy ----
-const DEFAULT_CASH_PROMO = { enabled: true, kicker: 'FREE · DAILY', title: 'Beat the Bots', lines: ['1, 5 & 9 PM ET', '3,500 prize pool'], cta: 'Play free at', url: 'morbius.io/poker', tag: '$Morbius on #PulseChain', qr: 'qr-morbius-poker.svg' };
+const DEFAULT_CASH_PROMO = { enabled: true, kicker: 'FREE · DAILY', title: 'Beat the Bots', lines: ['1, 5 & 9 PM ET', '3,500 prize pool'], cta: 'Play free at', url: 'morbius.io/poker', tag: '$Morbius on #PulseChain', qr: '' };
 let CFG = { avatars: true, avatarBase: qs.get('avatarBase') || 'https://morbius.io/api/poker/avatar', cashPromo: DEFAULT_CASH_PROMO };
 fetch('/stream-config', { cache: 'no-store' }).then((r) => (r.ok ? r.json() : null)).then((j) => {
   if (j && typeof j === 'object') CFG = { ...CFG, ...j, avatarBase: qs.get('avatarBase') || j.avatarBase || CFG.avatarBase };
@@ -353,55 +380,50 @@ function processTalk(st) {
   if (seenTalk.size > 400) { const keep = [...seenTalk].slice(-200); seenTalk.clear(); keep.forEach((k) => seenTalk.add(k)); }
 }
 
-// line icons for the promo card (lucide paths, ISC) — crisp at any size, no emoji
-const svgIc = (body) => `<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${body}</svg>`;
-const ICONS = {
-  bot: svgIc('<path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/>'),
-  clock: svgIc('<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>'),
-  trophy: svgIc('<path d="M10 14.66v1.626a2 2 0 0 1-.976 1.696A5 5 0 0 0 7 21.978"/><path d="M14 14.66v1.626a2 2 0 0 0 .976 1.696A5 5 0 0 1 17 21.978"/><path d="M18 9h1.5a1 1 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M6 9a6 6 0 0 0 12 0V3a1 1 0 0 0-1-1H7a1 1 0 0 0-1 1z"/><path d="M6 9H4.5a1 1 0 0 1 0-5H6"/>'),
-  chip: svgIc('<circle cx="12" cy="12" r="9.5"/><circle cx="12" cy="12" r="4.5"/><path d="M12 2.5v4M12 17.5v4M2.5 12h4M17.5 12h4"/>'),
-};
-/** Pick an icon from a promo line's text: times → clock, prize/pool → trophy, bots → robot, else chips. */
+/** Promo line kind: time-like lines go in the top-right badge, the next one in the banner ribbon. */
 function promoLineKind(l) {
   const t = String(l).toLowerCase();
   if (/\b(am|pm|et|daily|every|today|tonight)\b|\d:\d\d/.test(t)) return 'time';
   if (/prize|pool|win|reward|payout|\$/.test(t)) return 'prize';
-  if (/\bbots?\b/.test(t)) return 'bot';
-  return 'chip';
+  return 'other';
 }
-const KIND_ICON = { time: 'clock', prize: 'trophy', bot: 'bot', chip: 'chip' };
+/** Set text and step the font down until it fits its box (long env copy stays on one line). */
+function fitText(el, max, min, room) {
+  el.style.fontSize = max + 'px'; const w = () => (room ? el.getBoundingClientRect().width : el.scrollWidth); const box = room || el.clientWidth;
+  for (let f = max; f > min && w() > box + 1; f -= 0.5) el.style.fontSize = (f - 0.5) + 'px';
+}
 let promoKey = '';
-/** Set text and step the font down until it fits its box (long env titles stay on one line). */
-function fitText(el, text, max, min) {
-  el.textContent = text; el.style.fontSize = max + 'px';
-  for (let f = max; f > min && el.scrollWidth > el.clientWidth + 1; f -= 0.5) el.style.fontSize = (f - 0.5) + 'px';
-}
 function renderCashPromo(meta) {
   const cp = CFG.cashPromo; const box = $('cashPromo');
   const on = meta?.kind === 'cash' && cp && cp.enabled !== false;
   box.style.display = on ? 'block' : 'none';
   if (!on) return false;
-  const key = JSON.stringify(cp);
-  if (key !== promoKey) { // static copy: only rebuilt when the config changes (the countdown below ticks every render)
+  const key = JSON.stringify(cp) + (document.fonts?.status || '');
+  if (key !== promoKey) { // static copy: rebuilt only when the config (or font load) changes; the countdown ticks below
     promoKey = key;
-    $('cpK').innerHTML = cp.kicker ? `<i>${ICONS.bot}</i>${escH(cp.kicker)}` : ''; $('cpK').style.display = cp.kicker ? '' : 'none';
-    fitText($('cpT'), cp.title || '', 20, 13);
-    $('cpL').innerHTML = (Array.isArray(cp.lines) ? cp.lines : []).map((l) => {
-      const k = promoLineKind(l);
-      const txt = k === 'prize' ? escH(l).replace(/^([$]?[\d][\d,.]*[kKmM]?)/, '<b>$1</b>') : escH(l);
-      return `<div class="cp-li ${k}"><i>${ICONS[KIND_ICON[k]]}</i><span>${txt}</span></div>`;
-    }).join('');
-    $('cpL').style.display = $('cpL').innerHTML ? '' : 'none';
-    const url = String(cp.url || ''); const cut = url.indexOf('/');
-    $('cpU').innerHTML = cut > 0 && url.length > 11 ? `${escH(url.slice(0, cut))}<br><em>${escH(url.slice(cut))}</em>` : `<em>${escH(url)}</em>`;
-    $('cpA').textContent = cp.cta || '';
+    $('cpK').innerHTML = cp.kicker ? `<img src="/promos/m-mark.png" alt="" />${escH(cp.kicker)}` : ''; $('cpK').style.display = cp.kicker ? '' : 'none';
+    const words = String(cp.title || '').trim().split(/\s+/).filter(Boolean);
+    const big = words.length > 1 ? words.pop() : words.shift() || ''; const small = words.join(' ');
+    const layer = (cls, t) => t ? `<span class="${cls}"><span class="s">${escH(t)}</span><span class="g">${escH(t)}</span></span>` : '';
+    $('cpT').innerHTML = layer('l1', small) + layer('l2', big);
+    const lines = Array.isArray(cp.lines) ? cp.lines : [];
+    const when = lines.find((l) => promoLineKind(l) === 'time') || '';
+    const rib = lines.find((l) => l !== when) || '';
+    $('cpW').textContent = when.replace(/\s*,\s*|\s+&\s+/g, ' · ');
+    $('cpR').innerHTML = rib ? `<span>${promoLineKind(rib) === 'prize' ? escH(rib).replace(/^([$]?\d[\d,.]*[kKmM]?)\s*/, '<b>$1</b>') : escH(rib)}</span>` : '';
+    $('cpB').classList.toggle('two', Boolean(cp.qr)); // next to a QR: two lines, as tall as the code
+    $('cpB').innerHTML = cp.qr ? `<span><small>${escH(cp.cta || '')}</small><b>${escH(cp.url || '')}</b></span>` : `<span>${escH(cp.cta || '')} <b>${escH(cp.url || '')}</b></span>`;
     const qr = $('cpQ'); if (cp.qr) { qr.src = `/promos/${encodeURIComponent(cp.qr)}`; qr.hidden = false; } else { qr.removeAttribute('src'); qr.hidden = true; }
     $('cpG').textContent = cp.tag || '';
+    const l2 = $('cpT').querySelector('.l2'); if (l2) fitText(l2, 52, 24);
+    const l1 = $('cpT').querySelector('.l1'); if (l1) fitText(l1, 20, 12);
+    const rs = $('cpR').firstElementChild; if (rs) fitText(rs, 13, 8, $('cpR').clientWidth - 16);
+    if (!cp.qr) fitText($('cpB').firstElementChild, 12, 8, $('cpB').clientWidth - 14);
   }
   const ng = meta.nextGame; const ms = ng?.at ? Date.parse(ng.at) - Date.now() : null;
   $('cpC').innerHTML = ms == null ? '' : ms > 0
-    ? `<div><span${ng.registrationOpen ? ' class="reg">Reg open' : '>Next game'}</span><b>${escH(etTime(ng.at))}</b></div><div class="r"><span>Starts in</span><b>${hmmss(ms)}</b></div>`
-    : '<div><span class="reg">Live now</span><b>Join in the lobby</b></div>';
+    ? `<div><span${ng.registrationOpen ? ' class="reg">Reg open' : '>Next game'}</span><div class="t">${escH(etTime(ng.at))}</div></div><div class="r"><span style="justify-content:flex-end">Starts in</span><div class="t">${hmmss(ms)}</div></div>`
+    : '<div><span class="reg">Live now</span><div class="t">Join in the lobby</div></div>';
   return true;
 }
 

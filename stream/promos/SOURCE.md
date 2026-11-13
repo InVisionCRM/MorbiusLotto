@@ -26,3 +26,13 @@ Morbius purple branding are drawn on top by the stream compositor from `promos.j
 
 Games without their own clip are listed on the text-only "More on Morbius" card. Game list taken from
 `components/home/games-section.tsx`.
+
+## Cash-stream promo card (view.html `#cashPromo`)
+
+| File | Source |
+|---|---|
+| poker-tile-art.webp | `public/home2/tiles/poker.webp` (the homepage POKER tile), cropped to the table/cards above its painted title |
+| m-mark.png | `public/home2/m-mark.png` (the M mark in the homepage tiles' "Exclusive" ribbon) |
+| pulsechain-logo.png | `public/Pulse Branding/Logo/ball.png`, resized |
+| poppins-600/700/800/900.woff2 | Poppins (Google Fonts, SIL Open Font License), latin subset; the homepage's font, bundled so the stream renderer never falls back to a system font |
+| qr-morbius-poker.svg | QR for https://morbius.io/poker (version 2, ECC M), generated with the `qrcode` package; shown only with STREAM_CASH_PROMO_QR=1 |

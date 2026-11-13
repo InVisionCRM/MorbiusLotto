@@ -51,15 +51,19 @@
  *   STREAM_AVATAR_BASE=https://morbius.io/api/poker/avatar   avatar art (<base>/<0x address> → SVG)
  *   Cash-game permanent promo (bottom of the left sidebar, cash mode only):
  *   STREAM_CASH_PROMO=0                     hide it (default on)
- *   STREAM_CASH_PROMO_KICKER="FREE · DAILY" STREAM_CASH_PROMO_TITLE="Beat the Bots"
- *   STREAM_CASH_PROMO_LINES="1, 5 & 9 PM ET|3,500 prize pool"   ("|" separates lines)
- *   STREAM_CASH_PROMO_CTA="Play free at" STREAM_CASH_PROMO_URL="morbius.io/poker"
- *   STREAM_CASH_PROMO_TAG="$Morbius on #PulseChain"
- *   STREAM_CASH_PROMO_QR=qr-morbius-poker.svg  QR image in promos/ (.svg/.png), 0 = no QR. The bundled one
- *                                          encodes https://morbius.io/poker; drop a new file in promos/ if the URL changes.
- *   (graphics: promos/morbius-logo.png, promos/pulsechain-logo.png; line icons are picked from the line
- *   text: times → clock, prize/pool → trophy, bots → robot, anything else → chips; a live countdown chip
- *   to the next Beat the Bots game sits under the lines)
+ *   Styled like the morbius.io homepage game tiles (components/home2/game-tile.tsx): the poker tile art
+ *   (promos/poker-tile-art.webp, cropped from public/home2/tiles/poker.webp above its painted title),
+ *   the tile ribbon badge with the M mark, a 3D gold title, the tile banner ribbon and the gold CTA
+ *   button, in Poppins (bundled in promos/poppins-*.woff2 so the Mac renders the same font).
+ *   STREAM_CASH_PROMO_KICKER="FREE · DAILY"   corner ribbon badge
+ *   STREAM_CASH_PROMO_TITLE="Beat the Bots"   last word is set big ("BEAT THE" / "BOTS")
+ *   STREAM_CASH_PROMO_LINES="1, 5 & 9 PM ET|3,500 prize pool"   ("|" separates; a time-like line goes in
+ *                                          the top-right badge, the next line in the banner ribbon)
+ *   STREAM_CASH_PROMO_CTA="Play free at" STREAM_CASH_PROMO_URL="morbius.io/poker"   gold button
+ *   STREAM_CASH_PROMO_TAG="$Morbius on #PulseChain"   footer, with the PulseChain logo
+ *   STREAM_CASH_PROMO_QR=1                  add the bundled QR to https://morbius.io/poker (off by default;
+ *                                          or a .svg/.png file name in promos/)
+ *   (a live countdown to the next Beat the Bots game / REG OPEN sits above the button)
  * POST /view/reload (127.0.0.1, cdp capture) reloads the broadcast page in place — picks up view.html /
  *   promo / config changes without stopping the push. view.html is re-read on every /view request.
  *
@@ -103,7 +107,7 @@ const STREAM_NAME = env('STREAM_NAME', 'Morbius Poker Cash Game');
 const CAPTURE = env('STREAM_CAPTURE', 'x11').toLowerCase() === 'cdp' ? 'cdp' : 'x11';
 const VCODEC = env('STREAM_VCODEC', 'libx264');
 const PROMO_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), 'promos');
-const PROMO_TYPES = { '.json': 'application/json', '.webm': 'video/webm', '.mp4': 'video/mp4', '.png': 'image/png', '.jpg': 'image/jpeg', '.svg': 'image/svg+xml' };
+const PROMO_TYPES = { '.json': 'application/json', '.webm': 'video/webm', '.mp4': 'video/mp4', '.png': 'image/png', '.jpg': 'image/jpeg', '.svg': 'image/svg+xml', '.webp': 'image/webp', '.woff2': 'font/woff2' };
 
 /** Resolve /promos/<file> to a file inside PROMO_DIR (no traversal), or null. */
 export function promoFile(urlPath, dir = PROMO_DIR) {
@@ -122,8 +126,15 @@ export const DEFAULT_CASH_PROMO = Object.freeze({
   cta: 'Play free at',
   url: 'morbius.io/poker',
   tag: '$Morbius on #PulseChain',
-  qr: 'qr-morbius-poker.svg',
+  qr: '',
 });
+
+/** STREAM_CASH_PROMO_QR: off by default; 1/on = the bundled QR, or a .svg/.png file name in promos/. */
+function qrSetting(v) {
+  const t = String(v || '').trim();
+  if (['1', 'true', 'yes', 'on'].includes(t.toLowerCase())) return 'qr-morbius-poker.svg';
+  return /^[A-Za-z0-9._-]+\.(svg|png)$/.test(t) && !t.includes('..') ? t : '';
+}
 
 /** Settings for view.html from env (see header). Pure: pass an env object in tests. */
 export function streamConfig(e = process.env) {
@@ -142,7 +153,7 @@ export function streamConfig(e = process.env) {
       cta: get('STREAM_CASH_PROMO_CTA', DEFAULT_CASH_PROMO.cta),
       url: get('STREAM_CASH_PROMO_URL', DEFAULT_CASH_PROMO.url),
       tag: get('STREAM_CASH_PROMO_TAG', DEFAULT_CASH_PROMO.tag),
-      qr: off('STREAM_CASH_PROMO_QR') ? '' : (/^[A-Za-z0-9._-]+\.(svg|png)$/.test(get('STREAM_CASH_PROMO_QR', '')) ? get('STREAM_CASH_PROMO_QR', '') : DEFAULT_CASH_PROMO.qr),
+      qr: qrSetting(get('STREAM_CASH_PROMO_QR', '')),
     },
   };
 }
