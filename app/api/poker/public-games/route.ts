@@ -3,7 +3,7 @@ import { neon } from '@neondatabase/serverless';
 
 /**
  * Public, read-only lobby feed for visitors without a connected wallet:
- * open/upcoming "Beat the Bots" tournaments and the always-open house cash table.
+ * open/upcoming Morbius Daily Freeroll tournaments (internally the scheduled bot games) and the always-open house cash table.
  * Only aggregate, non-private data (times, counts, pool) — no wallets, no seats, no cards.
  */
 export const dynamic = 'force-dynamic';
@@ -105,7 +105,7 @@ export async function GET() {
     const label = g.slotKey.split(' ')[1] ?? '';
     tournaments.push({
       tournamentId: g.tournamentId as string,
-      name: d?.name || `Beat the Bots ${label} ET`,
+      name: d?.name || `The Morbius Daily Freeroll ${label} ET`,
       startsAt: new Date(startMs).toISOString(),
       status: g.tournamentStatus as 'registration' | 'active',
       freeEntry: schedule?.freeEntry ?? true,

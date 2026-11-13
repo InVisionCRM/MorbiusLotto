@@ -21,6 +21,7 @@ import {
 } from '@/components/home2/sections'
 import { HeroCarousel } from '@/components/home2/hero-carousel'
 import { NewGames } from '@/components/home2/new-games'
+import { DailyFreeroll } from '@/components/home2/daily-freeroll'
 import { FLOOR_GAMES } from '@/components/home2/scenes'
 import { HomeSidebar, ChipDock, MobileTopBar } from '@/components/home2/nav'
 import { GameLauncherSheet } from '@/components/home2/game-launcher-sheet'
@@ -300,6 +301,8 @@ export default function Home2Client() {
             onOpenDrop={() => setActiveSheet('drop')}
             onRefer={mode === 'player' ? onDashboard : onConnect}
           />
+          {/* The Morbius Daily Freeroll: free poker tournament at 1, 5 & 9 PM ET (links to /poker). */}
+          <DailyFreeroll />
           {/* Connected players keep their personalized hero directly below it. */}
           {mode === 'player' ? (
             <HeroPlayer

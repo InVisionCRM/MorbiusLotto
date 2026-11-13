@@ -72,10 +72,10 @@ export const LINES = {
   botLosesToHuman: ['Good hand, {name}. I\'ll be back 🤖', 'You got me, {name} 😅', 'Well played, {name} 👏', 'Fair and square, {name} 🤝'],
   botBadBeat: ['The river hates me 😩', 'Brutal. Just brutal 😵', 'How?! 🤯', 'Poker is a cruel game 🥲', 'Pain. Pure pain 😭'],
   botBusts: ['That\'s me done. GG all 🫡', 'Out of chips. Be right back 🏧', 'GG everyone, good luck 👋', 'Busted! See you next time 😅'],
-  humanBusts: ['GG {name}, thanks for playing 🤝', 'Tough one, {name}. Come back anytime! 💜', 'GG {name}! Free Beat the Bots at 1, 5 & 9 PM ET 🏆'],
+  humanBusts: ['GG {name}, thanks for playing 🤝', 'Tough one, {name}. Come back anytime! 💜', 'GG {name}! Daily Freeroll at 1, 5 & 9 PM ET 🏆'],
   idle: [
     'Blinds are cheap, the snacks are free 😄', 'Anyone else feel lucky tonight? 🍀', 'Who shuffled this deck? 🃏', 'I can feel a big hand coming 👀',
-    'Free Beat the Bots daily at 1, 5 & 9 PM ET 🏆', 'Seats open at morbius.io/poker 🪑', 'Poker on #PulseChain hits different 💜', 'I\'m playing tight. Very tight. Maybe 😏',
+    'The Morbius Daily Freeroll: 1, 5 & 9 PM ET 🏆', 'Seats open at morbius.io/poker 🪑', 'Poker on #PulseChain hits different 💜', 'I\'m playing tight. Very tight. Maybe 😏',
     'Good game so far, everyone 🤝', '$Morbius on #PulseChain 🚀',
   ],
   teaseBot: [
