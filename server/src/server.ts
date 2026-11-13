@@ -55,6 +55,8 @@ import { PokerGameService } from './services/poker-game.service';
 import { PokerTournamentService } from './services/poker-tournament.service';
 import { PokerBotScheduleService, readBotScheduleConfig, upcomingSlots } from './services/poker-bot-schedule.service';
 import { PokerBotCashService, readBotCashConfig } from './services/poker-bot-cash.service';
+import { PokerBotBanterService } from './services/poker-bot-banter.service';
+import { getTableTalk } from './lib/poker-table-talk';
 import { loadStreamMeta } from './services/poker-bot-stream-meta';
 import { chipsToWei } from './lib/poker-chip-scale';
 import { loadPokerBotRegistry, syncPokerBotProfiles } from './lib/poker-bot-registry';
@@ -622,7 +624,8 @@ async function initializeServices() {
           return null;
         });
         res.set('Cache-Control', 'no-store');
-        res.json({ ...state, myHoleCards: null, meta });
+        // talk = recent bot banter + human quick-chat / emotes, so the stream can show them
+        res.json({ ...state, myHoleCards: null, meta, talk: getTableTalk(tableId) });
       } catch (err) {
         res.status(500).json({ error: (err as Error)?.message || 'failed' });
       }
@@ -631,6 +634,9 @@ async function initializeServices() {
     // Always-open bot cash table(s) (POKER_BOT_CASH_ENABLED=true; see poker-bot-cash.service.ts)
     pokerBotCash = new PokerBotCashService(dbService.getPool(), pokerGameService);
     pokerBotCash.start();
+    // Bots chat / emote / throw things at their tables (own timer, read-only; never in the action path)
+    pokerBotBanter = new PokerBotBanterService(dbService.getPool(), pokerGameService, (room, type, payload) => wsService.broadcastToRoom(room, { type, payload } as any));
+    pokerBotBanter.start();
     const botCashRef = pokerBotCash;
     // Public: the bot cash tables (for the stream overlay / "play now" links).
     app.get('/api/poker/bot-cash', async (_req, res) => {
@@ -5270,6 +5276,7 @@ async function initializeServices() {
 let freerollScheduler: FreerollSchedulerService | null = null;
 let pokerBotScheduler: PokerBotScheduleService | null = null;
 let pokerBotCash: PokerBotCashService | null = null;
+let pokerBotBanter: PokerBotBanterService | null = null;
 let tournamentScheduler: TournamentSchedulerService | null = null;
 let holderChipRewardsServiceRef: HolderChipRewardsService | null = null;
 let merkleDropsService: MerkleDropsService | null = null;
@@ -5306,6 +5313,7 @@ process.on('SIGTERM', () => {
   freerollScheduler?.stop();
   pokerBotScheduler?.stop();
   pokerBotCash?.stop();
+  pokerBotBanter?.stop();
   tournamentScheduler?.stop();
   merkleDropsService?.stopCron();
   merkleDropsLPService?.stopCron();
@@ -5321,6 +5329,7 @@ process.on('SIGINT', () => {
   freerollScheduler?.stop();
   pokerBotScheduler?.stop();
   pokerBotCash?.stop();
+  pokerBotBanter?.stop();
   tournamentScheduler?.stop();
   merkleDropsService?.stopCron();
   merkleDropsLPService?.stopCron();

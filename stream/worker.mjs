@@ -46,6 +46,18 @@
  *
  * Promos: /promos/* serves promos/ (promos.json + .webm/.mp4 clips) to view.html.
  *
+ * GET /stream-config → view.html settings from env (edit the env + POST /view/reload, no code change):
+ *   STREAM_AVATARS=0                        hide player avatars (default on)
+ *   STREAM_AVATAR_BASE=https://morbius.io/api/poker/avatar   avatar art (<base>/<0x address> → SVG)
+ *   Cash-game permanent promo (bottom of the left sidebar, cash mode only):
+ *   STREAM_CASH_PROMO=0                     hide it (default on)
+ *   STREAM_CASH_PROMO_KICKER="FREE · DAILY" STREAM_CASH_PROMO_TITLE="Beat the Bots"
+ *   STREAM_CASH_PROMO_LINES="1, 5 & 9 PM ET|3,500 prize pool"   ("|" separates lines)
+ *   STREAM_CASH_PROMO_URL="morbius.io/poker" STREAM_CASH_PROMO_TAG="$Morbius on #PulseChain"
+ *   (a live countdown to the next Beat the Bots game is added under the lines)
+ * POST /view/reload (127.0.0.1, cdp capture) reloads the broadcast page in place — picks up view.html /
+ *   promo / config changes without stopping the push. view.html is re-read on every /view request.
+ *
  * Never logs the RTMP URL or key.
  */
 import { spawn } from 'node:child_process';
@@ -53,7 +65,13 @@ import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-const VIEW_HTML = fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), 'view.html'));
+const VIEW_PATH = path.join(path.dirname(fileURLToPath(import.meta.url)), 'view.html');
+let VIEW_HTML = fs.readFileSync(VIEW_PATH);
+/** view.html, re-read on each request (cheap) so an updated file only needs a page reload, not a worker restart. */
+function viewHtml() {
+  try { VIEW_HTML = fs.readFileSync(VIEW_PATH); } catch { /* keep the last good copy */ }
+  return VIEW_HTML;
+}
 
 const env = (k, d) => (process.env[k] && process.env[k].trim() !== '' ? process.env[k].trim() : d);
 const API_BASE = env('API_BASE', 'https://api.morbius.io').replace(/\/$/, '');
@@ -90,6 +108,34 @@ export function promoFile(urlPath, dir = PROMO_DIR) {
   if (!PROMO_TYPES[ext]) return null;
   const f = path.join(dir, m[1]);
   try { return fs.statSync(f).isFile() ? { file: f, type: PROMO_TYPES[ext] } : null; } catch { return null; }
+}
+
+export const DEFAULT_CASH_PROMO = Object.freeze({
+  kicker: 'FREE · DAILY',
+  title: 'Beat the Bots',
+  lines: ['1, 5 & 9 PM ET', '3,500 prize pool'],
+  url: 'morbius.io/poker',
+  tag: '$Morbius on #PulseChain',
+});
+
+/** Settings for view.html from env (see header). Pure: pass an env object in tests. */
+export function streamConfig(e = process.env) {
+  const get = (k, d) => (e[k] != null && String(e[k]).trim() !== '' ? String(e[k]).trim() : d);
+  const off = (k) => ['0', 'false', 'no', 'off'].includes(String(e[k] ?? '').trim().toLowerCase());
+  const site = get('SITE_URL', 'https://morbius.io').replace(/\/$/, '');
+  const lines = get('STREAM_CASH_PROMO_LINES', null);
+  return {
+    avatars: !off('STREAM_AVATARS'),
+    avatarBase: get('STREAM_AVATAR_BASE', `${site}/api/poker/avatar`).replace(/\/$/, ''),
+    cashPromo: {
+      enabled: !off('STREAM_CASH_PROMO'),
+      kicker: get('STREAM_CASH_PROMO_KICKER', DEFAULT_CASH_PROMO.kicker),
+      title: get('STREAM_CASH_PROMO_TITLE', DEFAULT_CASH_PROMO.title),
+      lines: lines ? lines.split('|').map((l) => l.trim()).filter(Boolean).slice(0, 4) : [...DEFAULT_CASH_PROMO.lines],
+      url: get('STREAM_CASH_PROMO_URL', DEFAULT_CASH_PROMO.url),
+      tag: get('STREAM_CASH_PROMO_TAG', DEFAULT_CASH_PROMO.tag),
+    },
+  };
 }
 
 /** "2026-11-12 13:00 America/New_York" -> "1 PM" (falls back to the raw hh:mm). */
@@ -396,7 +442,18 @@ const isMain = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPat
 if (isMain) http
   .createServer((req, res) => {
     const viewM = /^\/view(\?.*)?$/i.exec(req.url || '');
-    if (viewM) { res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' }); return res.end(VIEW_HTML); }
+    if (viewM) { res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' }); return res.end(viewHtml()); }
+    if (req.url === '/stream-config') { res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' }); return res.end(JSON.stringify(streamConfig())); }
+    if (req.method === 'POST' && req.url === '/view/reload') {
+      const ra = String(req.socket.remoteAddress || '');
+      if (!['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(ra)) { res.writeHead(403); return res.end(); }
+      const page = state.current?.cdpPage;
+      if (!page) { res.writeHead(409, { 'content-type': 'application/json' }); return res.end('{"error":"no cdp page (x11 capture or not streaming)"}'); }
+      page.reload({ waitUntil: 'domcontentloaded', timeout: 20_000 })
+        .then(() => { log('view reloaded'); res.writeHead(200, { 'content-type': 'application/json' }); res.end('{"ok":true}'); })
+        .catch((e) => { res.writeHead(500, { 'content-type': 'application/json' }); res.end(JSON.stringify({ error: String(e?.message ?? e) })); });
+      return;
+    }
     if (req.url === '/api/current') {
       const c = state.current;
       if (!c || !c.tableId) {
