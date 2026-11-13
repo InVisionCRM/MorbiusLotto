@@ -166,19 +166,44 @@
   @keyframes boom { 0% { transform: translate(-50%, -50%) scale(.6); opacity: 1; } 60% { transform: translate(-50%, -50%) scale(1.5); opacity: 1; } 100% { transform: translate(-50%, -50%) scale(1.9); opacity: 0; } }
   .log .talk { color: #e9d5ff; }
 
-  /* permanent cash-game promo at the bottom of the left sidebar (copy from the worker's env, /stream-config) */
-  #cashPromo { position: absolute; left: 10px; right: 10px; bottom: 10px; display: none; border-radius: 12px; padding: 10px 12px 11px; overflow: hidden;
-    background: linear-gradient(160deg, #2a0c52, #12052a 75%); border: 1px solid #871ee5; box-shadow: 0 0 22px #871ee566; }
-  #cashPromo::before { content: ""; position: absolute; inset: 0; background: radial-gradient(circle at 85% 0%, rgba(34,197,94,.22), transparent 55%); }
-  #cashPromo > * { position: relative; }
-  #cashPromo .pk { font-size: 10.5px; }
-  #cashPromo .t { font-size: 23px; font-weight: 800; color: #fff; line-height: 1.05; margin: 6px 0 4px; text-shadow: 0 0 14px #871ee5; }
-  #cashPromo .ln { font-size: 14px; line-height: 19px; color: #f1e8ff; font-weight: 700; }
-  #cashPromo .ln b { color: var(--gold); }
-  #cashPromo .cd { margin-top: 6px; font-size: 12.5px; color: #c4b5fd; }
-  #cashPromo .cd b { color: #fff; font-variant-numeric: tabular-nums; font-size: 15px; }
-  #cashPromo .url { margin-top: 5px; font-size: 17px; font-weight: 800; color: var(--mint); }
-  #cashPromo .tag { margin-top: 2px; font-size: 12px; font-weight: 700; color: #d8b4fe; letter-spacing: .3px; }
+  /* permanent cash-game promo at the bottom of the left sidebar (copy from the worker's env, /stream-config).
+     Broadcast card: brand logo, line icons, countdown chip, QR call to action, PulseChain footer. */
+  #cashPromo { --cy: #3fd3e3; position: absolute; left: 10px; right: 10px; bottom: 10px; display: none; border-radius: 14px; overflow: hidden;
+    padding: 12px 12px 0; background: linear-gradient(170deg, #26104f 0%, #170838 48%, #0c0522 100%);
+    border: 1px solid rgba(178,107,255,.55); box-shadow: 0 0 0 1px rgba(0,0,0,.5), 0 10px 26px rgba(0,0,0,.55), 0 0 24px rgba(135,30,229,.28), inset 0 1px 0 rgba(255,255,255,.08); }
+  #cashPromo::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 3px; background: linear-gradient(90deg, var(--cy), #b26bff 60%, #871ee5); }
+  #cashPromo::after { content: ""; position: absolute; right: -60px; top: -70px; width: 190px; height: 190px; border-radius: 50%; background: radial-gradient(circle, rgba(63,211,227,.16), transparent 65%); pointer-events: none; }
+  #cashPromo > * { position: relative; z-index: 1; }
+  #cashPromo svg.ic { width: 100%; height: 100%; display: block; }
+  .cp-hd { display: flex; align-items: center; gap: 10px; }
+  .cp-logo { width: 36px; height: 40px; object-fit: contain; flex: none; filter: drop-shadow(0 0 8px rgba(63,211,227,.35)); }
+  .cp-ht { min-width: 0; }
+  .cp-k { display: flex; align-items: center; gap: 5px; font-size: 10px; font-weight: 800; letter-spacing: 1.6px; text-transform: uppercase; color: var(--cy); white-space: nowrap; }
+  .cp-k i { width: 13px; height: 13px; flex: none; }
+  .cp-t { font-size: 20px; font-weight: 800; line-height: 1.1; color: #fff; white-space: nowrap; overflow: hidden; }
+  .cp-ls { margin-top: 10px; padding-top: 9px; border-top: 1px solid rgba(178,107,255,.22); display: grid; gap: 6px; }
+  .cp-li { display: flex; align-items: center; gap: 9px; font-size: 14px; font-weight: 700; color: #f1ebff; white-space: nowrap; overflow: hidden; }
+  .cp-li i { width: 24px; height: 24px; flex: none; padding: 5px; border-radius: 7px; background: rgba(178,107,255,.16); color: #d8b4fe; box-shadow: inset 0 0 0 1px rgba(178,107,255,.3); }
+  .cp-li.prize i { background: rgba(255,211,107,.14); color: var(--gold); box-shadow: inset 0 0 0 1px rgba(255,211,107,.32); }
+  .cp-li.time i { background: rgba(63,211,227,.13); color: var(--cy); box-shadow: inset 0 0 0 1px rgba(63,211,227,.3); }
+  .cp-li b { color: var(--gold); }
+  .cp-cd { margin-top: 10px; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 10px; border-radius: 10px;
+    background: rgba(4,2,14,.6); box-shadow: inset 0 0 0 1px rgba(63,211,227,.35); }
+  .cp-cd:empty { display: none; }
+  .cp-cd span { display: block; font-size: 9px; font-weight: 800; letter-spacing: 1.4px; color: #9b8cc7; text-transform: uppercase; white-space: nowrap; }
+  .cp-cd span.reg { color: #4ade80; } .cp-cd span.reg::before { content: ""; display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: #4ade80; margin-right: 4px; vertical-align: 1px; box-shadow: 0 0 6px #4ade80; }
+  .cp-cd b { display: block; font-size: 13px; color: #fff; white-space: nowrap; }
+  .cp-cd .r { text-align: right; } .cp-cd .r b { font-size: 18px; color: var(--cy); font-variant-numeric: tabular-nums; letter-spacing: .5px; line-height: 1.05; }
+  .cp-cta { margin-top: 10px; display: flex; align-items: center; gap: 11px; }
+  .cp-qr { width: 66px; height: 66px; flex: none; border-radius: 6px; image-rendering: pixelated; box-shadow: 0 0 0 2px rgba(255,255,255,.9), 0 0 14px rgba(63,211,227,.35); }
+  .cp-qr[hidden] { display: none; }
+  .cp-ck { font-size: 10px; font-weight: 800; letter-spacing: 1.6px; text-transform: uppercase; color: var(--cy); }
+  .cp-u { font-size: 17px; font-weight: 800; line-height: 1.12; color: #fff; word-break: break-word; }
+  .cp-u em { font-style: normal; color: #4ade80; }
+  .cp-ft { margin: 11px -12px 0; padding: 6px 12px; display: flex; align-items: center; justify-content: center; gap: 7px; background: rgba(0,0,0,.32); border-top: 1px solid rgba(178,107,255,.2);
+    font-size: 11.5px; font-weight: 700; color: #d8ccf5; letter-spacing: .3px; white-space: nowrap; }
+  .cp-ft img { width: 15px; height: 14px; object-fit: contain; }
+  .cp-ft:has(span:empty) { display: none; }
   .fadein { animation: fadein .6s ease; } @keyframes fadein { from { opacity: 0; transform: translateY(8px); } }
 </style>
 </head>
@@ -189,11 +214,16 @@
     <div class="panel"><h3>Blinds <span id="lvl"></span></h3>
       <div class="big" id="blinds">–</div>
       <div id="lvlClock" style="display:none"><span class="t" id="lvlT"></span><span class="l">to next level</span></div>
-      <div class="muted" id="nextLvl"></div></div>
+      <div class="muted" id="nextLvl" style="white-space:pre-line"></div></div>
     <div class="panel"><h3>Chip leaders <span id="left-count"></span></h3><div id="leaders"></div></div>
     <div class="panel" id="payPanel"><h3>Payouts <span id="pool"></span></h3><div id="payouts"></div></div>
-    <div id="cashPromo"><span class="pk" id="cpK"></span><div class="t" id="cpT"></div><div id="cpL"></div>
-      <div class="cd" id="cpC"></div><div class="url" id="cpU"></div><div class="tag" id="cpG"></div></div>
+    <div id="cashPromo">
+      <div class="cp-hd"><img class="cp-logo" src="/promos/morbius-logo.png" alt="" /><div class="cp-ht"><div class="cp-k" id="cpK"></div><div class="cp-t" id="cpT"></div></div></div>
+      <div class="cp-ls" id="cpL"></div>
+      <div class="cp-cd" id="cpC"></div>
+      <div class="cp-cta"><img class="cp-qr" id="cpQ" alt="" hidden /><div><div class="cp-ck" id="cpA"></div><div class="cp-u" id="cpU"></div></div></div>
+      <div class="cp-ft"><img src="/promos/pulsechain-logo.png" alt="" /><span id="cpG"></span></div>
+    </div>
   </div>
 
   <div id="right" class="side">
@@ -244,7 +274,7 @@ const hmmss = (ms) => { const s = Math.max(0, Math.round(ms / 1000)); const h = 
 
 
 // ---- stream config from the worker (/stream-config): avatar art base + cash promo copy ----
-const DEFAULT_CASH_PROMO = { enabled: true, kicker: 'FREE · DAILY', title: 'Beat the Bots', lines: ['1, 5 & 9 PM ET', '3,500 prize pool'], url: 'morbius.io/poker', tag: '$Morbius on #PulseChain' };
+const DEFAULT_CASH_PROMO = { enabled: true, kicker: 'FREE · DAILY', title: 'Beat the Bots', lines: ['1, 5 & 9 PM ET', '3,500 prize pool'], cta: 'Play free at', url: 'morbius.io/poker', tag: '$Morbius on #PulseChain', qr: 'qr-morbius-poker.svg' };
 let CFG = { avatars: true, avatarBase: qs.get('avatarBase') || 'https://morbius.io/api/poker/avatar', cashPromo: DEFAULT_CASH_PROMO };
 fetch('/stream-config', { cache: 'no-store' }).then((r) => (r.ok ? r.json() : null)).then((j) => {
   if (j && typeof j === 'object') CFG = { ...CFG, ...j, avatarBase: qs.get('avatarBase') || j.avatarBase || CFG.avatarBase };
@@ -323,19 +353,55 @@ function processTalk(st) {
   if (seenTalk.size > 400) { const keep = [...seenTalk].slice(-200); seenTalk.clear(); keep.forEach((k) => seenTalk.add(k)); }
 }
 
+// line icons for the promo card (lucide paths, ISC) — crisp at any size, no emoji
+const svgIc = (body) => `<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${body}</svg>`;
+const ICONS = {
+  bot: svgIc('<path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/>'),
+  clock: svgIc('<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>'),
+  trophy: svgIc('<path d="M10 14.66v1.626a2 2 0 0 1-.976 1.696A5 5 0 0 0 7 21.978"/><path d="M14 14.66v1.626a2 2 0 0 0 .976 1.696A5 5 0 0 1 17 21.978"/><path d="M18 9h1.5a1 1 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M6 9a6 6 0 0 0 12 0V3a1 1 0 0 0-1-1H7a1 1 0 0 0-1 1z"/><path d="M6 9H4.5a1 1 0 0 1 0-5H6"/>'),
+  chip: svgIc('<circle cx="12" cy="12" r="9.5"/><circle cx="12" cy="12" r="4.5"/><path d="M12 2.5v4M12 17.5v4M2.5 12h4M17.5 12h4"/>'),
+};
+/** Pick an icon from a promo line's text: times → clock, prize/pool → trophy, bots → robot, else chips. */
+function promoLineKind(l) {
+  const t = String(l).toLowerCase();
+  if (/\b(am|pm|et|daily|every|today|tonight)\b|\d:\d\d/.test(t)) return 'time';
+  if (/prize|pool|win|reward|payout|\$/.test(t)) return 'prize';
+  if (/\bbots?\b/.test(t)) return 'bot';
+  return 'chip';
+}
+const KIND_ICON = { time: 'clock', prize: 'trophy', bot: 'bot', chip: 'chip' };
+let promoKey = '';
+/** Set text and step the font down until it fits its box (long env titles stay on one line). */
+function fitText(el, text, max, min) {
+  el.textContent = text; el.style.fontSize = max + 'px';
+  for (let f = max; f > min && el.scrollWidth > el.clientWidth + 1; f -= 0.5) el.style.fontSize = (f - 0.5) + 'px';
+}
 function renderCashPromo(meta) {
   const cp = CFG.cashPromo; const box = $('cashPromo');
   const on = meta?.kind === 'cash' && cp && cp.enabled !== false;
   box.style.display = on ? 'block' : 'none';
   if (!on) return false;
-  $('cpK').textContent = cp.kicker || ''; $('cpK').style.display = cp.kicker ? '' : 'none';
-  $('cpT').textContent = cp.title || '';
-  $('cpL').innerHTML = (Array.isArray(cp.lines) ? cp.lines : []).map((l) => `<div class="ln">${escH(l)}</div>`).join('');
+  const key = JSON.stringify(cp);
+  if (key !== promoKey) { // static copy: only rebuilt when the config changes (the countdown below ticks every render)
+    promoKey = key;
+    $('cpK').innerHTML = cp.kicker ? `<i>${ICONS.bot}</i>${escH(cp.kicker)}` : ''; $('cpK').style.display = cp.kicker ? '' : 'none';
+    fitText($('cpT'), cp.title || '', 20, 13);
+    $('cpL').innerHTML = (Array.isArray(cp.lines) ? cp.lines : []).map((l) => {
+      const k = promoLineKind(l);
+      const txt = k === 'prize' ? escH(l).replace(/^([$]?[\d][\d,.]*[kKmM]?)/, '<b>$1</b>') : escH(l);
+      return `<div class="cp-li ${k}"><i>${ICONS[KIND_ICON[k]]}</i><span>${txt}</span></div>`;
+    }).join('');
+    $('cpL').style.display = $('cpL').innerHTML ? '' : 'none';
+    const url = String(cp.url || ''); const cut = url.indexOf('/');
+    $('cpU').innerHTML = cut > 0 && url.length > 11 ? `${escH(url.slice(0, cut))}<br><em>${escH(url.slice(cut))}</em>` : `<em>${escH(url)}</em>`;
+    $('cpA').textContent = cp.cta || '';
+    const qr = $('cpQ'); if (cp.qr) { qr.src = `/promos/${encodeURIComponent(cp.qr)}`; qr.hidden = false; } else { qr.removeAttribute('src'); qr.hidden = true; }
+    $('cpG').textContent = cp.tag || '';
+  }
   const ng = meta.nextGame; const ms = ng?.at ? Date.parse(ng.at) - Date.now() : null;
   $('cpC').innerHTML = ms == null ? '' : ms > 0
-    ? `Next: ${escH(etTime(ng.at))}${ng.registrationOpen ? ' · <span style="color:var(--mint);font-weight:700">REG OPEN</span>' : ''}<br>Starts in <b>${hmmss(ms)}</b>`
-    : '<b>Starting now</b> · join in the lobby';
-  $('cpU').textContent = cp.url || ''; $('cpG').textContent = cp.tag || '';
+    ? `<div><span${ng.registrationOpen ? ' class="reg">Reg open' : '>Next game'}</span><b>${escH(etTime(ng.at))}</b></div><div class="r"><span>Starts in</span><b>${hmmss(ms)}</b></div>`
+    : '<div><span class="reg">Live now</span><b>Join in the lobby</b></div>';
   return true;
 }
 
@@ -462,7 +528,7 @@ function renderSidebars(st, meta) {
   $('lvlClock').style.display = lvlMs != null ? '' : 'none';
   if (lvlMs != null) { $('lvlT').textContent = mmss(lvlMs); $('lvlT').className = 't' + (lvlMs <= 60_000 ? ' low' : ''); }
   if (b?.nextLevelAt) $('nextLvl').textContent = `Next level ${fmt(b.nextSmallBlind)}/${fmt(b.nextBigBlind)}`;
-  else if (meta?.kind === 'cash') $('nextLvl').textContent = `Buy-in ${fmt(st.bigBlind * 40)}–${fmt(st.bigBlind * 100)} chips`;
+  else if (meta?.kind === 'cash') $('nextLvl').textContent = `Buy-in ${fmt(st.bigBlind * 40)}–${fmt(st.bigBlind * 100)} chips\nCash out anytime`;
   else $('nextLvl').textContent = b?.nextBigBlind ? `Next ${fmt(b.nextSmallBlind)}/${fmt(b.nextBigBlind)}` : '';
 
   const seated = st.seats.filter((s) => s.playerAddress);
@@ -475,6 +541,10 @@ function renderSidebars(st, meta) {
     const nm = esc(s.displayName || short(s.playerAddress));
     return `<div class="row${out ? ' out' : ''}"><span class="nn"><span class="avslot" data-a="${esc(s.playerAddress)}" data-n="${nm}"></span><span class="n">${nm}</span></span><span class="v">${fmt(Number(s.stack) + Number(s.currentBet || 0))}</span></div>`;
   }).join('');
+  if (promoOn) { // never let the leader list run into the promo card (long env copy / extra lines)
+    const L = $('leaders'); const top = $('cashPromo').getBoundingClientRect().top - 10;
+    while (L.children.length > 3 && L.getBoundingClientRect().bottom > top) L.lastElementChild.remove();
+  }
   fillAvatars($('leaders'), 'mini');
 
   if (t?.payouts?.length) {
@@ -482,6 +552,8 @@ function renderSidebars(st, meta) {
     $('pool').textContent = `pool ${fmt(t.prizePool)}`;
     const ord = ['1st', '2nd', '3rd', '4th', '5th', '6th'];
     $('payouts').innerHTML = t.payouts.map((p) => `<div class="row"><span class="n">${ord[p.place - 1] || p.place + 'th'} · ${p.percent}%</span><span class="v">${fmt(p.amount)}</span></div>`).join('');
+  } else if (meta?.kind === 'cash' && promoOn) {
+    $('payPanel').style.display = 'none'; // the promo card takes this space; "cash out anytime" is under the blinds
   } else if (meta?.kind === 'cash') {
     $('payPanel').style.display = '';
     $('pool').textContent = '';
@@ -505,7 +577,7 @@ function renderOverlay(meta, st) {
   $('cashV').textContent = cash ? `Blinds ${fmt(cash.smallBlind)}/${fmt(cash.bigBlind)} · vs bots` : 'Open tables in lobby';
   const ng = meta?.nextGame;
   const free = Boolean(ng?.freeEntry || meta?.freeEntry || meta?.tournament?.freeEntry);
-  $('nextV').textContent = ng ? `${etTime(ng.at)} · ${ng.freeEntry ? 'FREE ENTRY' : fmt(ng.buyIn) + ' buy-in'}${ng.registrationOpen ? ' · REG OPEN' : ''}` : '1 PM · 5 PM · 9 PM ET';
+  $('nextV').textContent = ng ? `${etTime(ng.at)} · ${ng.freeEntry ? 'FREE' : fmt(ng.buyIn) + ' buy-in'}${ng.registrationOpen ? ' · REG OPEN' : ''}` : '1 PM · 5 PM · 9 PM ET';
   $('freeTop').style.display = (meta?.kind === 'cash' ? false : (meta?.tournament ? meta.tournament.freeEntry : free)) ? '' : 'none'; // cash table costs chips
   $('joinWallet').innerHTML = free ? 'Connect a wallet (<b>no chips needed</b> for Beat the Bots)' : 'Connect a wallet &amp; grab chips';
   $('joinCash').innerHTML = cash ? 'Take a seat at the <b>cash table</b> anytime' : 'Or join an open <b>cash table</b> in the lobby';
