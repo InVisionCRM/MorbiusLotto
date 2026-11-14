@@ -82,6 +82,8 @@ export interface MttLiveTestInput {
   lateRegMinutes?: unknown;
   allowDailyOverlap?: unknown;
   prizePercentages?: unknown;
+  /** Chips each bot pays (integer 1–1,000,000); default 715. Pool = buyIn × 70 bots. */
+  buyIn?: unknown;
 }
 
 function intIn(raw: unknown, dflt: number, min: number, max: number, label: string): number {
@@ -114,6 +116,8 @@ export function buildMttLiveTestConfig(input: MttLiveTestInput, nowMs = Date.now
 
   const lateRegMinutes = intIn(input.lateRegMinutes, MTT_LIVE_TEST_DEFAULTS.lateRegMinutes, 0, 120, 'lateRegMinutes');
 
+  const buyIn = BigInt(intIn(input.buyIn, Number(MTT_LIVE_TEST_DEFAULTS.buyIn), 1, 1_000_000, 'buyIn'));
+
   let prizePercentages = MTT_LIVE_TEST_DEFAULTS.prizePercentages;
   if (input.prizePercentages != null) {
     prizePercentages = normalizePokerTournamentPrizePercents(MTT_LIVE_TEST_DEFAULTS.maxPlayers, input.prizePercentages);
@@ -123,6 +127,7 @@ export function buildMttLiveTestConfig(input: MttLiveTestInput, nowMs = Date.now
     ...MTT_LIVE_TEST_DEFAULTS,
     name,
     startAt,
+    buyIn,
     lateRegMinutes,
     prizePercentages,
     allowDailyOverlap: input.allowDailyOverlap === true,
