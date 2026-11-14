@@ -352,6 +352,12 @@ export class PokerGameService {
   /** Bail flag for `recoverStuckPostHandTables` so overlapping ticks can't pile up. */
   private recoveryInFlight = false;
   /**
+   * Tables whose deferred post-hand work (tournament sync / MTT balancing) is running right now.
+   * `ensureHandRunning` skips them: the timer body deals the next hand itself once the callback
+   * returns, and an MTT balancing "kick" from another table must not deal on top of it.
+   */
+  private postHandInFlight: Set<string> = new Set();
+  /**
    * Active server-driven runout timers — one per table. Cleared on completion,
    * on `clearScheduledNextHand` (leaveTable / standUp mid-runout), and on
    * recovery fast-forward.
@@ -387,6 +393,8 @@ export class PokerGameService {
    * pacing.
    */
   private runoutDelaysEnabled = process.env.NODE_ENV !== 'test';
+  /** Post-showdown pause before the next hand. Only tests / the local MTT smoke script change it. */
+  private showdownDelayMs = SHOWDOWN_DELAY_MS;
 
   constructor(
     private dbService: DatabaseService,
@@ -512,6 +520,11 @@ export class PokerGameService {
    */
   setRunoutDelaysForTesting(enabled: boolean): void {
     this.runoutDelaysEnabled = enabled;
+  }
+
+  /** Test / local-smoke only: shorten the 15 s post-showdown pause between hands. */
+  setShowdownDelayForTesting(ms: number): void {
+    this.showdownDelayMs = Math.max(0, Math.floor(ms));
   }
 
   /**
@@ -773,6 +786,7 @@ export class PokerGameService {
 
     const timer = setTimeout(async () => {
       this.nextHandTimers.delete(tableId);
+      this.postHandInFlight.add(tableId);
       try {
         const handNumber = this.pendingPostHandHandNumbers.get(tableId);
         if (handNumber != null) {
@@ -800,12 +814,15 @@ export class PokerGameService {
               AND post_hand_processed_at IS NULL`,
           [tableId],
         );
+        this.postHandInFlight.delete(tableId);
         await this.tryStartNextHand(tableId);
         await this.broadcastState(tableId);
       } catch (error) {
         logger.error('Failed to transition to next poker hand after showdown delay', { tableId, error });
+      } finally {
+        this.postHandInFlight.delete(tableId);
       }
-    }, SHOWDOWN_DELAY_MS);
+    }, this.showdownDelayMs);
 
     this.nextHandTimers.set(tableId, timer);
   }
@@ -938,6 +955,7 @@ export class PokerGameService {
           // throws (matches the original "mark after, succeed-or-throw"
           // intent — the marker is set unconditionally either way).
           if (claimed && this.postHandCallback) {
+            this.postHandInFlight.add(tableId);
             try {
               await this.postHandCallback(tableId, handNumber);
             } catch (err) {
@@ -946,6 +964,8 @@ export class PokerGameService {
                 handNumber,
                 err,
               });
+            } finally {
+              this.postHandInFlight.delete(tableId);
             }
           }
 
@@ -3885,8 +3905,40 @@ export class PokerGameService {
    * is running or a next-hand timer is already pending.
    */
   async ensureHandRunning(tableId: string): Promise<void> {
-    if (this.nextHandTimers.has(tableId) || this.runoutInFlight.has(tableId)) return;
+    if (this.nextHandTimers.has(tableId) || this.runoutInFlight.has(tableId) || this.postHandInFlight.has(tableId)) return;
     await this.tryStartNextHand(tableId);
+  }
+
+  /**
+   * True when the table is fully idle: no uncompleted hand row, no all-in runout animating,
+   * no post-showdown next-hand timer pending, and no deferred post-hand work running (e.g. an
+   * MTT table left with one player). MTT balancing only evicts the in-memory Table of — or
+   * breaks — a non-source table in this state.
+   */
+  async isTableIdle(tableId: string): Promise<boolean> {
+    if (
+      this.runoutInFlight.has(tableId) ||
+      this.postHandInFlight.has(tableId) ||
+      this.nextHandTimers.has(tableId)
+    ) {
+      return false;
+    }
+    const r = await this.getPool().query(
+      `SELECT 1 FROM poker_hands WHERE table_id = $1 AND completed_at IS NULL LIMIT 1`,
+      [tableId],
+    );
+    return r.rows.length === 0;
+  }
+
+  /**
+   * Drop the cached in-memory chevtek Table for `tableId` (MTT player moves). The next
+   * `startHand` rebuilds it from `poker_seats`, and any read in between falls back to DB
+   * seats (or `reconstructTable`), so a moved player never lingers as a ghost seat at the
+   * source nor goes missing at the destination. Never call for a table that is mid-hand —
+   * the live hand's state only exists in this cache until showdown.
+   */
+  evictTableCache(tableId: string): void {
+    this.activeTables.delete(tableId);
   }
 
   private async tryStartNextHand(tableId: string): Promise<void> {

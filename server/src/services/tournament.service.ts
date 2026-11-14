@@ -1099,9 +1099,12 @@ export class TournamentService {
       // against any out-of-range value that bypassed the API + DB CHECK constraint.
       const isPokerFreeroll =
         String(tournament.game_type ?? '') === 'poker' && tournament.buy_in_amount === 0n;
-      const platformFeePercent = isPokerFreeroll ? 5 : 3;
+      // `fees_waived` (migration 203, server-set only — e.g. the 100-player MTT live test):
+      // calculate_tournament_prizes already distributed 100% of the pool, so no fee is taken here.
+      const feesWaived = tournamentResult.rows[0]?.fees_waived === true;
+      const platformFeePercent = feesWaived ? 0 : isPokerFreeroll ? 5 : 3;
       const rawCreatorFee = Number(tournament.creator_fee_percent ?? 2);
-      const creatorFeePercent = isPokerFreeroll
+      const creatorFeePercent = feesWaived || isPokerFreeroll
         ? 0
         : Math.max(0, Math.min(15, Number.isFinite(rawCreatorFee) ? Math.round(rawCreatorFee) : 2));
       const totalPool = actualPrizePool;
