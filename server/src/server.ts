@@ -54,6 +54,7 @@ import { WebSocketService } from './services/websocket.service';
 import { PokerGameService } from './services/poker-game.service';
 import { PokerTournamentService } from './services/poker-tournament.service';
 import { PokerBotScheduleService, readBotScheduleConfig, upcomingSlots } from './services/poker-bot-schedule.service';
+import { PokerMttEventService } from './services/poker-mtt-event.service';
 import { PokerBotCashService, readBotCashConfig } from './services/poker-bot-cash.service';
 import { PokerBotBanterService } from './services/poker-bot-banter.service';
 import { getTableTalk } from './lib/poker-table-talk';
@@ -598,6 +599,24 @@ async function initializeServices() {
         res.json({ tournamentId, slotKey: slot.slotKey, startsAt: at.toISOString() });
       } catch (err) {
         res.status(500).json({ error: (err as Error)?.message || 'failed' });
+      }
+    });
+
+    // Admin: create the one-shot 100-player MTT live test (70 'mtt' bots + 30 free human seats,
+    // 50,050 pool paid in full to the top 10). Same auth as run-now. Body: { startAt (ISO, required),
+    // name?, lateRegMinutes?, prizePercentages? (10 ints, sum 100), allowDailyOverlap? }.
+    // See services/poker-mtt-event.service.ts. Idempotent per startAt (409 on repeat).
+    const mttEvents = new PokerMttEventService(dbService.getPool(), pokerTournamentService, botSchedulerRef);
+    app.post('/api/poker/mtt-live-test', express.json(), async (req, res) => {
+      const expected = (process.env.POKER_BOT_ADMIN_TOKEN || '').trim();
+      const given = String(req.headers['x-admin-token'] || '');
+      if (!expected || expected.length < 16 || given !== expected) return res.status(403).json({ error: 'forbidden' });
+      try {
+        const result = await mttEvents.createLiveTest(req.body ?? {});
+        if ('conflict' in result) return res.status(409).json({ error: 'an MTT live test already exists for this startAt', slotKey: result.slotKey });
+        res.json(result);
+      } catch (err) {
+        res.status(400).json({ error: (err as Error)?.message || 'failed' });
       }
     });
 
