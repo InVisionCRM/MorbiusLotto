@@ -19,14 +19,14 @@ import { randomPlaceholderConfig } from './cosmetics-catalog';
 import { logger } from '../utils/logger';
 
 const ADDRESS_RE = /^0x[0-9a-f]{40}$/;
-export type PokerBotRole = 'tournament' | 'cash';
+export type PokerBotRole = 'tournament' | 'cash' | 'mtt';
 
 export interface PokerBotAccount {
   /** Lowercase 0x address (synthetic — keyless). */
   walletAddress: string;
   /** Seat name shown to players (no "_bot" suffix since migration 201). */
   displayName: string;
-  /** 'tournament' = scheduled Beat-the-Bots games, 'cash' = bot cash table. */
+  /** 'tournament' = scheduled daily freerolls, 'cash' = bot cash table, 'mtt' = 100-player MTT field (migration 203). */
   role: PokerBotRole;
   /** AI tuning knobs; `{}` until personalities ship. */
   personality: Record<string, unknown>;
@@ -55,7 +55,9 @@ function toAccount(row: { wallet_address: string; display_name: string; personal
   if (!displayName.trim()) {
     throw new Error(`poker_bot_accounts: empty display_name for ${walletAddress}`);
   }
-  const role: PokerBotRole = row.role === 'cash' ? 'cash' : 'tournament';
+  // Unknown / missing roles fall back to 'tournament' (pre-201 rows). 'mtt' must be explicit so an
+  // MTT bot is never picked up by the daily scheduler (listPokerBotAccounts('tournament')).
+  const role: PokerBotRole = row.role === 'cash' ? 'cash' : row.role === 'mtt' ? 'mtt' : 'tournament';
   const personality =
     row.personality && typeof row.personality === 'object' && !Array.isArray(row.personality)
       ? (row.personality as Record<string, unknown>)
