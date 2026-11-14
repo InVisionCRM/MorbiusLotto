@@ -1353,10 +1353,17 @@ export class PokerTournamentService {
           [tournamentId],
         );
         if (seatTarget.rows.length === 0) {
-          throw new Error('Late registration is open but every table is currently full');
+          // MTT with every table full but the field still under maxPlayers (e.g. 70 bots seated
+          // 7 × 10 and a human arrives after the start): open one more table. The entrant waits
+          // there alone until the post-hand balancing pass moves players in and kicks it to deal.
+          lateRegTableId = await this.openLateRegMttTable(client, tournamentId, config);
+          if (!lateRegTableId) {
+            throw new Error('Late registration is open but every table is currently full');
+          }
+        } else {
+          lateRegTableId = String(seatTarget.rows[0].id);
         }
         isLateReg = true;
-        lateRegTableId = String(seatTarget.rows[0].id);
       } else {
         throw new Error(`Tournament is not open for registration (status: ${tournament.status})`);
       }
@@ -1613,6 +1620,56 @@ export class PokerTournamentService {
     }
 
     throw new Error('joinPokerTournament: missing committed entry (internal error)');
+  }
+
+  /**
+   * Late registration into a full MTT: create one more table (next `table_seq`, the field's
+   * current blind level + level stamp) inside the caller's join transaction, which already holds
+   * the tournament row lock. Returns null — caller keeps the "every table is full" error — for
+   * single-table SNGs, once the final table has formed, or when the field is at `maxPlayers`.
+   */
+  private async openLateRegMttTable(
+    client: { query: Pool['query'] },
+    tournamentId: string,
+    config: PokerTournamentConfig,
+  ): Promise<string | null> {
+    const seatsPerTable = this.effectiveSeatsPerTable(config);
+    if (seatsPerTable >= config.maxPlayers) return null;
+    const field = await client.query(
+      `SELECT (SELECT COUNT(*) FROM tournament_entries WHERE tournament_id = $1 AND status = 'playing')::int AS live,
+              EXISTS (SELECT 1 FROM poker_tables WHERE tournament_id = $1 AND is_final_table) AS has_final,
+              (SELECT COALESCE(MAX(table_seq), 0) FROM poker_tables WHERE tournament_id = $1)::int AS max_seq`,
+      [tournamentId],
+    );
+    const f = field.rows[0];
+    if (!f || f.has_final || Number(f.live) >= config.maxPlayers) return null;
+    const tpl = await client.query(
+      `SELECT small_blind, big_blind, current_blind_level, current_blind_level_started_at
+         FROM poker_tables WHERE tournament_id = $1
+        ORDER BY current_blind_level DESC NULLS LAST, table_seq LIMIT 1`,
+      [tournamentId],
+    );
+    const t = tpl.rows[0];
+    if (!t) return null;
+    const ins = await client.query(
+      `INSERT INTO poker_tables (
+         small_blind, big_blind, max_seats, status, tournament_id, tournament_mode,
+         current_blind_level, current_blind_level_started_at, table_seq, is_final_table
+       ) VALUES ($1::NUMERIC, $2::NUMERIC, $3, 'waiting', $4, TRUE, $5, $6, $7, FALSE)
+       RETURNING id`,
+      [
+        toBigIntSafe(t.small_blind).toString(),
+        toBigIntSafe(t.big_blind).toString(),
+        seatsPerTable,
+        tournamentId,
+        t.current_blind_level ?? null,
+        t.current_blind_level_started_at ?? null,
+        Number(f.max_seq) + 1,
+      ],
+    );
+    const id = String(ins.rows[0].id);
+    logger.info('MTT late registration opened a new table', { tournamentId, tableId: id, tableSeq: Number(f.max_seq) + 1 });
+    return id;
   }
 
   /**

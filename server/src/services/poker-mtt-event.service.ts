@@ -24,7 +24,7 @@ import {
   type PokerTournamentService,
 } from './poker-tournament.service';
 import { readBotScheduleConfig, zonedToUtc, type BotScheduleConfig, type PokerBotScheduleService } from './poker-bot-schedule.service';
-import { listPokerBotAccounts } from '../lib/poker-bot-registry';
+import { listPokerBotAccounts, loadPokerBotRegistry, syncPokerBotProfiles } from '../lib/poker-bot-registry';
 import { getPokerMttBotDailyFundCap } from '../lib/poker-bot-bankroll';
 
 /** Slot-key prefix in poker_bot_scheduled_games (daily slots are "YYYY-MM-DD HH:MM tz"). */
@@ -198,6 +198,10 @@ export class PokerMttEventService {
       }
     }
 
+    // Fresh registry + seat-tag profiles (placeholder avatars), so the event can be created right
+    // after migration 203 without waiting for the 60 s registry refresh or a restart.
+    await loadPokerBotRegistry(this.pool);
+    await syncPokerBotProfiles(this.pool);
     const bots = listPokerBotAccounts('mtt').map((b) => b.walletAddress).sort();
     if (bots.length < cfg.bots) {
       throw new Error(`Need ${cfg.bots} 'mtt' bots in poker_bot_accounts, found ${bots.length} — run migration 203`);

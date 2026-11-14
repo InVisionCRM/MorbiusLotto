@@ -271,12 +271,13 @@ describe('MTT live test: activation, balancing, breaking, cache eviction', () =>
     expect(active.has(src.id)).toBe(false);
     // the idle destination is nudged to deal, and the moved player is dealt into that hand
     let dealt: string[] = [];
-    for (let i = 0; i < 40 && dealt.length === 0; i++) {
+    // startHand inserts hole cards row by row — wait for the complete deal.
+    for (let i = 0; i < 60 && dealt.length < 8; i++) {
       const h = await testPool.query<{ player_address: string }>(
         `SELECT hc.player_address FROM poker_hands h JOIN poker_hand_hole_cards hc ON hc.hand_id = h.id
           WHERE h.table_id = $1 AND h.completed_at IS NULL`, [short.id]);
       dealt = h.rows.map((r) => r.player_address.toLowerCase());
-      if (dealt.length === 0) await new Promise((r) => setTimeout(r, 50));
+      if (dealt.length < 8) await new Promise((r) => setTimeout(r, 50));
     }
     expect(dealt).toHaveLength(8);
     expect(dealt).toContain(mover.toLowerCase());
@@ -344,6 +345,32 @@ describe('MTT live test: activation, balancing, breaking, cache eviction', () =>
       `SELECT status FROM tournament_entries WHERE tournament_id = $1 AND LOWER(player_address) = LOWER($2)`,
       [ev.tournamentId, survivor]);
     expect(entry.rows[0].status).toBe('playing');
+  });
+
+  it('late registration into a full field opens a new table that balancing then fills', async () => {
+    const ev = await startEvent(); // 70 bots → 7 full tables
+    const human = HUMANS[2];
+    const joined = await svc.joinPokerTournament(ev.tournamentId, human);
+    let ts = await tables(ev.tournamentId);
+    expect(ts).toHaveLength(8);
+    const fresh = ts.find((t) => t.table_seq === 8)!;
+    expect(joined.tableId).toBe(fresh.id);
+    expect(fresh.seats).toBe(1);
+    expect(fresh.level).toBe(ts[0].level);
+    expect(fresh.started.getTime()).toBe(ts[0].started.getTime());
+    expect(await getTestChipBalance(human)).toBeGreaterThan(0n); // free entry: nothing debited
+
+    await settleAllHands(ev.tournamentId);
+    await svc.syncAfterHand(ts[0].id, 1); // biggest table (10) sends players to the 1-player table
+    ts = await tables(ev.tournamentId);
+    expect(ts.find((t) => t.id === fresh.id)!.seats).toBeGreaterThanOrEqual(3);
+    let live = 0;
+    for (let i = 0; i < 60 && live === 0; i++) {
+      const h = await testPool.query(`SELECT 1 FROM poker_hands WHERE table_id = $1 AND completed_at IS NULL`, [fresh.id]);
+      live = h.rows.length;
+      if (!live) await new Promise((r) => setTimeout(r, 50));
+    }
+    expect(live).toBe(1);
   });
 
   it('ranks MTT busts against the whole field, not the table', async () => {
