@@ -3326,7 +3326,7 @@ export class PokerTournamentService {
 
     const tRow = await this.pool.query(
       `SELECT creator_address, status, buy_in_amount, prize_pool, guaranteed_prize_funder_address,
-              prize_token_address
+              prize_token_address, poker_config
        FROM tournaments WHERE id = $1 AND game_type = 'poker'`,
       [tournamentId]
     );
@@ -3348,13 +3348,17 @@ export class PokerTournamentService {
     const client = await this.pool.connect();
     try {
       await client.query('BEGIN');
+      const cancelConfig = this.parsePokerConfig(t.poker_config);
       for (const entry of entries.rows) {
         // Escrow buy-ins are refunded on-chain below (push), not as poker chips.
-        if (buyIn > 0n && !isEscrowBuyIn) {
+        // Free-entry promo games: refund only what the wallet paid (humans 0, bots the buy-in) —
+        // same rule as the scheduled under-min cancel, so a cancel can't mint chips for humans.
+        const paid = this.entryBuyInFor(cancelConfig, String(entry.player_address), buyIn);
+        if (paid > 0n && !isEscrowBuyIn) {
           await applyPokerChipDelta(
             client,
             entry.player_address,
-            buyIn,
+            paid,
             'tournament_refund',
             { type: 'tournament', id: tournamentId },
           );

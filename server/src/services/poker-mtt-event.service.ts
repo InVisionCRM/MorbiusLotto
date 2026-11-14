@@ -285,6 +285,26 @@ export class PokerMttEventService {
     }
   }
 
+  /**
+   * Cancel a live-test event that hasn't started (registration phase): refunds the bots' buy-ins
+   * through the existing cancel path (humans paid nothing). Only tournaments created by this
+   * service (slot key prefix) can be cancelled here.
+   */
+  async cancelLiveTest(tournamentId: string): Promise<{ tournamentId: string; slotKey: string }> {
+    const r = await this.pool.query<{ slot_key: string; creator_address: string }>(
+      `SELECT g.slot_key, t.creator_address
+         FROM poker_bot_scheduled_games g JOIN tournaments t ON t.id = g.tournament_id
+        WHERE g.tournament_id = $1 AND g.slot_key LIKE $2`,
+      [tournamentId, `${MTT_LIVE_TEST_SLOT_PREFIX} %`],
+    );
+    const row = r.rows[0];
+    if (!row) throw new Error('Not an MTT live-test event');
+    await this.tournaments.cancelPokerTournament(tournamentId, String(row.creator_address));
+    await this.markSlot(row.slot_key, tournamentId, 'cancelled', null);
+    logger.info('[mtt-live-test] event cancelled', { tournamentId, slotKey: row.slot_key });
+    return { tournamentId, slotKey: row.slot_key };
+  }
+
   private async markSlot(slotKey: string, tournamentId: string | null, status: string, error: string | null) {
     await this.pool
       .query(

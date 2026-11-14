@@ -68,7 +68,10 @@ async function main() {
   const counters = { moved: 0, broken: 0, consolidated: 0, eliminated: 0 };
   const eliminatedOnce = new Set<string>();
   const duplicateEliminations: string[] = [];
-  mtt.setBroadcastCallback((_room, msg: any) => {
+  // The sweeps below are server-wide (like prod), so only count this event's room.
+  let eventRoom = '';
+  mtt.setBroadcastCallback((room, msg: any) => {
+    if (room !== eventRoom) return;
     if (msg.type === 'poker_tournament_player_moved') counters.moved++;
     if (msg.type === 'poker_tournament_table_broken') counters.broken++;
     if (msg.type === 'poker_tournament_table_consolidated') counters.consolidated++;
@@ -94,6 +97,7 @@ async function main() {
   });
   if ('conflict' in created) throw new Error('slot conflict');
   const { tournamentId, slotKey } = created;
+  eventRoom = `poker_tournament:${tournamentId}`;
   log('event created', { tournamentId, botsSeated: created.botsSeated, prizePool: created.prizePool });
   if (created.botsSeated !== 70 || created.prizePool !== '50050') throw new Error('bad event setup');
 

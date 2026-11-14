@@ -202,6 +202,22 @@ describe('MTT live test: creation + bot seating', () => {
     expect(n.rows[0].n).toBe(72);
   });
 
+  it('cancel before the start refunds the bots and gives free-entry humans nothing', async () => {
+    const ev = await createEvent();
+    const bot = MTT_BOTS()[0];
+    const botBefore = await getTestChipBalance(bot);
+    const humanBefore = await getTestChipBalance(HUMANS[3]);
+    await svc.joinPokerTournament(ev.tournamentId, HUMANS[3]);
+    await events.cancelLiveTest(ev.tournamentId);
+    expect(await getTestChipBalance(bot)).toBe(botBefore + 715n);
+    expect(await getTestChipBalance(HUMANS[3])).toBe(humanBefore);
+    const t = await testPool.query(`SELECT status FROM tournaments WHERE id = $1`, [ev.tournamentId]);
+    expect(t.rows[0].status).toBe('cancelled');
+    const slot = await testPool.query(`SELECT status FROM poker_bot_scheduled_games WHERE slot_key = $1`, [ev.slotKey]);
+    expect(slot.rows[0].status).toBe('cancelled');
+    await expect(events.cancelLiveTest('00000000-0000-0000-0000-000000000000')).rejects.toThrow(/Not an MTT/);
+  });
+
   it('refuses a start time that overlaps a daily freeroll unless explicitly allowed', async () => {
     // 1:30 PM ET on some future day overlaps the 1 PM daily game.
     const d = new Date(Date.now() + 3 * 86_400_000);

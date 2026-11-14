@@ -620,6 +620,18 @@ async function initializeServices() {
       }
     });
 
+    // Admin: cancel an MTT live test that hasn't started (bots refunded; humans paid nothing).
+    app.post('/api/poker/mtt-live-test/:tournamentId/cancel', async (req, res) => {
+      const expected = (process.env.POKER_BOT_ADMIN_TOKEN || '').trim();
+      const given = String(req.headers['x-admin-token'] || '');
+      if (!expected || expected.length < 16 || given !== expected) return res.status(403).json({ error: 'forbidden' });
+      try {
+        res.json(await mttEvents.cancelLiveTest(String(req.params.tournamentId || '')));
+      } catch (err) {
+        res.status(400).json({ error: (err as Error)?.message || 'failed' });
+      }
+    });
+
     // Public, read-only table snapshot for the X stream renderer (stream/ service).
     // Only tables of scheduled bot games; hole cards are never included (viewer = null),
     // showdown cards appear only once the hand is shown down — same as any seat sees.
