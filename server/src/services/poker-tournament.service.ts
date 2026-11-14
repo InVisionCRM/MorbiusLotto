@@ -319,6 +319,12 @@ export interface CreatePokerTournamentParams {
   internalHumanFreeEntry?: boolean;
   /** Server-only (bot scheduler): faster blind levels in the end game. */
   internalFastEndgame?: boolean;
+  /**
+   * Server-only (MTT live test): no prize-pool cut and no platform / creator fee at payout, so the
+   * advertised pool pays in full (`tournaments.fees_waived`, migration 203). Forces both fee
+   * percents to 0. Ignored unless exactly `true`.
+   */
+  internalFeesWaived?: boolean;
   isPrivate?: boolean;
   pinCode?: string | null;
   /**
@@ -387,6 +393,14 @@ export function normalizePokerTournamentPrizePercents(maxPlayers: number, raw: u
 
 export class PokerTournamentService {
   private broadcastCallback: ((room: string, message: object) => void) | null = null;
+  /**
+   * Per-tournament mutex for MTT seat moves (final-table collapse, balancing, table breaking).
+   * Every table's post-hand callback runs on its own timer, so two tables of the same MTT can
+   * finish a hand at the same moment; without this they could both decide to break into each
+   * other. Code inside the lock must never wait on a per-table lock in PokerGameService
+   * (deadlock): moves are plain DB writes, and table "kicks" run after the lock is released.
+   */
+  private tournamentLocks: Map<string, Promise<void>> = new Map();
 
   constructor(
     private pool: Pool,
@@ -397,6 +411,43 @@ export class PokerTournamentService {
   /** Wire in a broadcast function so the service can push WS events. */
   setBroadcastCallback(cb: (room: string, message: object) => void): void {
     this.broadcastCallback = cb;
+  }
+
+  private async withTournamentLock<T>(tournamentId: string, fn: () => Promise<T>): Promise<T> {
+    const prev = this.tournamentLocks.get(tournamentId) ?? Promise.resolve();
+    let release!: () => void;
+    const next = new Promise<void>((r) => { release = r; });
+    this.tournamentLocks.set(tournamentId, next);
+    try {
+      await prev;
+      return await fn();
+    } finally {
+      release();
+      if (this.tournamentLocks.get(tournamentId) === next) this.tournamentLocks.delete(tournamentId);
+    }
+  }
+
+  /**
+   * MTT post-hand seat work for `sourceTableId` (which must be between hands): final-table
+   * collapse, then table breaking / balancing. Serialized per tournament. Destination tables
+   * that received players are nudged to deal (fire-and-forget, outside the lock) so a table
+   * that was sitting idle with one player starts again.
+   */
+  private async runMttSeatMaintenance(
+    tournamentId: string,
+    config: PokerTournamentConfig,
+    sourceTableId: string,
+  ): Promise<void> {
+    const kicks = await this.withTournamentLock(tournamentId, async () => {
+      await this.maybeConsolidateTables(tournamentId, config, sourceTableId);
+      return this.maybeBalanceTables(tournamentId, config, sourceTableId);
+    });
+    for (const tableId of kicks) {
+      if (tableId === sourceTableId) continue;
+      void this.pokerGameService.ensureHandRunning(tableId).catch((err) =>
+        logger.warn('MTT balance: destination kick failed', { tournamentId, tableId, err }),
+      );
+    }
   }
 
   private broadcast(room: string, type: string, payload: object): void {
@@ -1009,10 +1060,14 @@ export class PokerTournamentService {
       // Creator-chosen fee (0–15 integer). Default 2 if missing/invalid. DB CHECK constraint
       // (migration 120) provides a second line of defense. Freerolls override to 0 at payout
       // time (server-side in tournament.service.ts:1083) but we still persist the user's choice.
+      const feesWaived = params.internalFeesWaived === true;
       const rawCreatorFee = Number(params.creatorFeePercent);
-      const creatorFeePercent = Number.isFinite(rawCreatorFee)
-        ? Math.max(0, Math.min(15, Math.round(rawCreatorFee)))
-        : 2;
+      const creatorFeePercent = feesWaived
+        ? 0
+        : Number.isFinite(rawCreatorFee)
+          ? Math.max(0, Math.min(15, Math.round(rawCreatorFee)))
+          : 2;
+      const platformFeePercent = feesWaived ? 0 : 3;
 
       const result = await client.query(
         `INSERT INTO tournaments (
@@ -1023,16 +1078,16 @@ export class PokerTournamentService {
         creator_fee_percent, platform_fee_percent, status,
         game_type, poker_config, scheduled_start_at,
         prize_token_address, prize_token_decimals, prize_token_symbol, prize_token_name,
-        escrow_tx_hash, escrow_tournament_id_bytes32, action_timer_seconds
+        escrow_tx_hash, escrow_tournament_id_bytes32, action_timer_seconds${feesWaived ? ', fees_waived' : ''}
       ) VALUES (
         COALESCE($17::UUID, gen_random_uuid()),
         $1, $2, $3::NUMERIC, $4, 999, $5,
         $6, $7::JSONB, $8::JSONB, $9, $10,
         $11, $12::JSONB, $13::NUMERIC, $14,
-        $24, 3, 'registration',
+        $24, $26, 'registration',
         'poker', $15::JSONB, $16,
         $18, $19, $20, $21,
-        $22, $23, $25
+        $22, $23, $25${feesWaived ? ', TRUE' : ''}
       ) RETURNING id`,
         [
           params.name.trim(),
@@ -1060,6 +1115,7 @@ export class PokerTournamentService {
           escrowVerified?.bytes32Id ?? customBuyInRow?.bytes32Id ?? null,
           creatorFeePercent,
           actionTimerSeconds,
+          platformFeePercent,
         ]
       );
 
@@ -1297,10 +1353,17 @@ export class PokerTournamentService {
           [tournamentId],
         );
         if (seatTarget.rows.length === 0) {
-          throw new Error('Late registration is open but every table is currently full');
+          // MTT with every table full but the field still under maxPlayers (e.g. 70 bots seated
+          // 7 × 10 and a human arrives after the start): open one more table. The entrant waits
+          // there alone until the post-hand balancing pass moves players in and kicks it to deal.
+          lateRegTableId = await this.openLateRegMttTable(client, tournamentId, config);
+          if (!lateRegTableId) {
+            throw new Error('Late registration is open but every table is currently full');
+          }
+        } else {
+          lateRegTableId = String(seatTarget.rows[0].id);
         }
         isLateReg = true;
-        lateRegTableId = String(seatTarget.rows[0].id);
       } else {
         throw new Error(`Tournament is not open for registration (status: ${tournament.status})`);
       }
@@ -1557,6 +1620,56 @@ export class PokerTournamentService {
     }
 
     throw new Error('joinPokerTournament: missing committed entry (internal error)');
+  }
+
+  /**
+   * Late registration into a full MTT: create one more table (next `table_seq`, the field's
+   * current blind level + level stamp) inside the caller's join transaction, which already holds
+   * the tournament row lock. Returns null — caller keeps the "every table is full" error — for
+   * single-table SNGs, once the final table has formed, or when the field is at `maxPlayers`.
+   */
+  private async openLateRegMttTable(
+    client: { query: Pool['query'] },
+    tournamentId: string,
+    config: PokerTournamentConfig,
+  ): Promise<string | null> {
+    const seatsPerTable = this.effectiveSeatsPerTable(config);
+    if (seatsPerTable >= config.maxPlayers) return null;
+    const field = await client.query(
+      `SELECT (SELECT COUNT(*) FROM tournament_entries WHERE tournament_id = $1 AND status = 'playing')::int AS live,
+              EXISTS (SELECT 1 FROM poker_tables WHERE tournament_id = $1 AND is_final_table) AS has_final,
+              (SELECT COALESCE(MAX(table_seq), 0) FROM poker_tables WHERE tournament_id = $1)::int AS max_seq`,
+      [tournamentId],
+    );
+    const f = field.rows[0];
+    if (!f || f.has_final || Number(f.live) >= config.maxPlayers) return null;
+    const tpl = await client.query(
+      `SELECT small_blind, big_blind, current_blind_level, current_blind_level_started_at
+         FROM poker_tables WHERE tournament_id = $1
+        ORDER BY current_blind_level DESC NULLS LAST, table_seq LIMIT 1`,
+      [tournamentId],
+    );
+    const t = tpl.rows[0];
+    if (!t) return null;
+    const ins = await client.query(
+      `INSERT INTO poker_tables (
+         small_blind, big_blind, max_seats, status, tournament_id, tournament_mode,
+         current_blind_level, current_blind_level_started_at, table_seq, is_final_table
+       ) VALUES ($1::NUMERIC, $2::NUMERIC, $3, 'waiting', $4, TRUE, $5, $6, $7, FALSE)
+       RETURNING id`,
+      [
+        toBigIntSafe(t.small_blind).toString(),
+        toBigIntSafe(t.big_blind).toString(),
+        seatsPerTable,
+        tournamentId,
+        t.current_blind_level ?? null,
+        t.current_blind_level_started_at ?? null,
+        Number(f.max_seq) + 1,
+      ],
+    );
+    const id = String(ins.rows[0].id);
+    logger.info('MTT late registration opened a new table', { tournamentId, tableId: id, tableSeq: Number(f.max_seq) + 1 });
+    return id;
   }
 
   /**
@@ -2312,11 +2425,12 @@ export class PokerTournamentService {
     }
 
     // MTT: after eliminations + blind adjust, fold short tables into the final table when the
-    // total seated count drops to the final-table threshold. No-op for single-table SNG.
+    // total seated count drops to the final-table threshold; above that, break a table when the
+    // field fits on one fewer and keep table sizes within one of each other. No-op for SNG.
     try {
-      await this.maybeConsolidateTables(tournamentId, config, tableId);
+      await this.runMttSeatMaintenance(tournamentId, config, tableId);
     } catch (err) {
-      logger.error('MTT maybeConsolidateTables failed (continuing)', { tournamentId, tableId, err });
+      logger.error('MTT seat maintenance failed (continuing)', { tournamentId, tableId, err });
     }
   }
 
@@ -2681,6 +2795,17 @@ export class PokerTournamentService {
     );
     if (Number(activePlayers.rows[0].c) <= 1) {
       await this.completeTournament(tournamentId, tableId);
+      return;
+    }
+
+    // MTT: this table can't deal (< 2 stacked seats) but the tournament goes on elsewhere.
+    // Its post-hand callback will never fire again, so break / rebalance it from here — the
+    // lone survivor is moved to another table instead of sitting out the event. We run inside
+    // tryStartNextHand's table lock; the seat maintenance never takes a table lock.
+    try {
+      await this.runMttSeatMaintenance(tournamentId, config, tableId);
+    } catch (err) {
+      logger.error('MTT seat maintenance (underfilled table) failed', { tournamentId, tableId, err });
     }
   }
 
@@ -2892,87 +3017,112 @@ export class PokerTournamentService {
       return;
     }
 
+    // One clock per tournament. Every table of an MTT shares the same level and the same
+    // level-start stamp, so blinds can't drift apart across tables. (Previously each table was
+    // advanced on its own and `fastEndgame` looked only at that table's players — a bot-only
+    // table would drop to 1-minute levels while the human's table stayed on the base length.)
+    // A single-table SNG behaves exactly as before.
+    const byTournament = new Map<string, typeof tables>();
     for (const row of tables) {
+      const list = byTournament.get(row.tournament_id) ?? [];
+      list.push(row);
+      byTournament.set(row.tournament_id, list);
+    }
+
+    const levelOf = (r: (typeof tables)[number]) => Math.max(1, Math.floor(Number(r.current_blind_level ?? 1)));
+    const startedMs = (r: (typeof tables)[number]) =>
+      r.current_blind_level_started_at instanceof Date ? r.current_blind_level_started_at.getTime() : NaN;
+    let botSet: Set<string> | null | undefined;
+
+    for (const [tournamentId, rows] of byTournament) {
       try {
-        const config = this.parsePokerConfig(row.poker_config);
+        const config = this.parsePokerConfig(rows[0].poker_config);
         if (this.getBlindIncreaseMode(config) !== 'by_time') continue;
 
         const baseInterval = this.normalizeBlindIntervalMinutes(config.blindIntervalMinutes);
         if (!baseInterval) continue;
+
+        const valid = rows.filter((r) => Number.isFinite(startedMs(r)));
+        if (valid.length === 0) continue;
+        // Leader = most advanced table (ties: earliest stamp); lagging tables are synced to it.
+        const leader = valid.reduce((best, r) =>
+          levelOf(r) > levelOf(best) || (levelOf(r) === levelOf(best) && startedMs(r) < startedMs(best)) ? r : best,
+        );
+
         let interval: number = baseInterval;
         if (config.fastEndgame) {
-          const alive = (row.alive_addrs ?? []).filter(Boolean);
-          let botSet: Set<string> | null = null;
-          try { botSet = getPokerBotAddressSet(); } catch { botSet = null; }
+          const alive = [...new Set(rows.flatMap((r) => (r.alive_addrs ?? []).filter(Boolean)))];
+          if (botSet === undefined) {
+            try { botSet = getPokerBotAddressSet(); } catch { botSet = null; }
+          }
           // Registry missing -> can't tell humans apart; assume humans remain (no bot-only speed-up).
-          const humansAlive = botSet ? alive.filter((a) => !botSet!.has(a)).length : alive.length;
+          const bots = botSet;
+          const humansAlive = bots ? alive.filter((a) => !bots.has(a)).length : alive.length;
           const lateRegMs = (config.lateRegMinutes ?? 0) * 60_000;
-          const activatedMs = row.activated_at ? new Date(row.activated_at).getTime() : null;
+          const activatedMs = rows[0].activated_at ? new Date(rows[0].activated_at).getTime() : null;
           const lateRegOpen = lateRegMs > 0 && (activatedMs == null || Date.now() < activatedMs + lateRegMs);
           interval = endgameBlindIntervalMinutes(baseInterval, {
             fastEndgame: true, alive: alive.length, humansAlive, lateRegOpen,
           });
         }
 
-        const startedAt = row.current_blind_level_started_at;
-        if (!(startedAt instanceof Date) || Number.isNaN(startedAt.getTime())) continue;
-
-        const startingLevel = Math.max(1, Math.floor(Number(row.current_blind_level ?? 1)));
-        const target = this.computeBlindLevelByTime(
+        const leaderLevel = levelOf(leader);
+        const computed = this.computeBlindLevelByTime(
           config.blindSchedule,
           interval,
-          startedAt,
-          startingLevel,
+          leader.current_blind_level_started_at as Date,
+          leaderLevel,
         );
+        const advanced = computed.level !== leaderLevel;
+        // Advancing resets the shared level clock to now so the next interval starts cleanly
+        // (even if the on-table blind values don't change, e.g. duplicate level rows).
+        const level = advanced ? computed.level : leaderLevel;
+        const stamp = advanced ? new Date() : new Date(startedMs(leader));
+        const sb = advanced ? computed.smallBlind : Number(toBigIntSafe(leader.small_blind ?? 0));
+        const bb = advanced ? computed.bigBlind : Number(toBigIntSafe(leader.big_blind ?? 0));
+        if (!(sb > 0 && bb > 0)) continue;
 
-        if (target.level === startingLevel) continue; // not yet time
+        for (const row of rows) {
+          const curSB = Number(toBigIntSafe(row.small_blind ?? 0));
+          const curBB = Number(toBigIntSafe(row.big_blind ?? 0));
+          const sameBlinds = curSB === sb && curBB === bb;
+          if (sameBlinds && levelOf(row) === level && startedMs(row) === stamp.getTime()) continue;
 
-        const curSB = Number(toBigIntSafe(row.small_blind ?? 0));
-        const curBB = Number(toBigIntSafe(row.big_blind ?? 0));
-        const sameBlinds = curSB === target.smallBlind && curBB === target.bigBlind;
+          await this.pool.query(
+            `UPDATE poker_tables
+               SET small_blind = $2::NUMERIC,
+                   big_blind   = $3::NUMERIC,
+                   current_blind_level = $4,
+                   current_blind_level_started_at = $5
+             WHERE id = $1`,
+            [row.table_id, BigInt(sb).toString(), BigInt(bb).toString(), level, stamp],
+          );
 
-        // Reset the level clock to NOW so the next interval starts cleanly,
-        // even if no on-table blind values changed (e.g. duplicate level rows).
-        await this.pool.query(
-          `UPDATE poker_tables
-             SET small_blind = $2::NUMERIC,
-                 big_blind   = $3::NUMERIC,
-                 current_blind_level = $4,
-                 current_blind_level_started_at = NOW()
-           WHERE id = $1`,
-          [
-            row.table_id,
-            BigInt(target.smallBlind).toString(),
-            BigInt(target.bigBlind).toString(),
-            target.level,
-          ],
-        );
-
-        logger.info('Poker tournament blinds advanced by time', {
-          tournamentId: row.tournament_id,
-          tableId: row.table_id,
-          intervalMinutes: interval,
-          fromLevel: startingLevel,
-          toLevel: target.level,
-          smallBlind: target.smallBlind,
-          bigBlind: target.bigBlind,
-          sameBlinds,
-        });
-
-        if (!sameBlinds) {
-          this.broadcast(`poker_tournament:${row.tournament_id}`, 'poker_tournament_blind_level_up', {
-            tournamentId: row.tournament_id,
+          logger.info(advanced ? 'Poker tournament blinds advanced by time' : 'Poker tournament table blind clock synced', {
+            tournamentId,
             tableId: row.table_id,
-            newLevel: target.level,
-            smallBlind: target.smallBlind,
-            bigBlind: target.bigBlind,
-            handNumber: Number(row.hand_number ?? 0),
+            intervalMinutes: interval,
+            fromLevel: levelOf(row),
+            toLevel: level,
+            smallBlind: sb,
+            bigBlind: bb,
+            sameBlinds,
           });
+
+          if (!sameBlinds) {
+            this.broadcast(`poker_tournament:${tournamentId}`, 'poker_tournament_blind_level_up', {
+              tournamentId,
+              tableId: row.table_id,
+              newLevel: level,
+              smallBlind: sb,
+              bigBlind: bb,
+              handNumber: Number(row.hand_number ?? 0),
+            });
+          }
         }
       } catch (err) {
-        logger.error('tickTimeBasedBlindAdvances: per-table tick failed', {
-          tableId: row.table_id,
-          tournamentId: row.tournament_id,
+        logger.error('tickTimeBasedBlindAdvances: per-tournament tick failed', {
+          tournamentId,
           err,
         });
       }
@@ -3176,7 +3326,7 @@ export class PokerTournamentService {
 
     const tRow = await this.pool.query(
       `SELECT creator_address, status, buy_in_amount, prize_pool, guaranteed_prize_funder_address,
-              prize_token_address
+              prize_token_address, poker_config
        FROM tournaments WHERE id = $1 AND game_type = 'poker'`,
       [tournamentId]
     );
@@ -3198,13 +3348,17 @@ export class PokerTournamentService {
     const client = await this.pool.connect();
     try {
       await client.query('BEGIN');
+      const cancelConfig = this.parsePokerConfig(t.poker_config);
       for (const entry of entries.rows) {
         // Escrow buy-ins are refunded on-chain below (push), not as poker chips.
-        if (buyIn > 0n && !isEscrowBuyIn) {
+        // Free-entry promo games: refund only what the wallet paid (humans 0, bots the buy-in) —
+        // same rule as the scheduled under-min cancel, so a cancel can't mint chips for humans.
+        const paid = this.entryBuyInFor(cancelConfig, String(entry.player_address), buyIn);
+        if (paid > 0n && !isEscrowBuyIn) {
           await applyPokerChipDelta(
             client,
             entry.player_address,
-            buyIn,
+            paid,
             'tournament_refund',
             { type: 'tournament', id: tournamentId },
           );
@@ -3807,6 +3961,21 @@ export class PokerTournamentService {
     assumeLockHeld: boolean = false,
   ): Promise<void> {
     let remainingAfterElim = seatCount - bustedAddresses.length;
+    if (bustedAddresses.length > 0) {
+      // MTT: `seatCount` is only this table's seats. With several tables live, rank against the
+      // whole field (everyone still 'playing', including this hand's busts) so the first player
+      // out of a 100-runner field is ranked ~100, not ~10. calculate_tournament_prizes re-ranks
+      // by finish order at payout either way; this keeps live standings / bust-out DMs right.
+      const field = await this.pool.query<{ tables: number; playing: number }>(
+        `SELECT (SELECT COUNT(*) FROM poker_tables WHERE tournament_id = $1)::int AS tables,
+                (SELECT COUNT(*) FROM tournament_entries WHERE tournament_id = $1 AND status = 'playing')::int AS playing`,
+        [tournamentId],
+      );
+      const f = field.rows[0];
+      if (f && Number(f.tables) > 1) {
+        remainingAfterElim = Math.max(0, Number(f.playing) - bustedAddresses.length);
+      }
+    }
 
     for (const addr of bustedAddresses) {
       const pts = await this.pool.query(
@@ -4010,6 +4179,15 @@ export class PokerTournamentService {
       [toTableId, tournamentId, normalized],
     );
 
+    // Drop the cached chevtek Tables so neither side serves a stale seat map: the source is
+    // between hands by contract (its next startHand rebuilds from poker_seats anyway); the
+    // destination only when it is fully idle — a mid-hand destination keeps its live Table
+    // (the hand's state only lives there) and picks the new seat up when it deals next.
+    this.pokerGameService.evictTableCache(fromTableId);
+    if (await this.pokerGameService.isTableIdle(toTableId)) {
+      this.pokerGameService.evictTableCache(toTableId);
+    }
+
     logger.info('MTT player moved', { tournamentId, fromTableId, toTableId, playerAddress: normalized, stackChips });
 
     this.broadcast(`poker_tournament:${tournamentId}`, 'poker_tournament_player_moved', {
@@ -4182,6 +4360,210 @@ export class PokerTournamentService {
     } catch (err) {
       logger.warn('MTT final-table startHand after consolidation failed', { tournamentId, targetTableId: target.id, err });
     }
+  }
+
+  /**
+   * Next big blind at a table that is between hands: the button advances to the next occupied
+   * seat after `button_position` (same rule as `PokerGameService.startHand`), the small blind
+   * sits after it and the big blind after that. Only seats in `positions` are considered.
+   */
+  static nextBigBlindPosition(buttonPosition: number, positions: number[], maxSeats: number): number | null {
+    const occupied = [...new Set(positions)].sort((a, b) => a - b);
+    if (occupied.length === 0) return null;
+    const next = (from: number): number => {
+      for (let i = 1; i <= maxSeats; i++) {
+        const pos = (from + i) % maxSeats;
+        if (occupied.includes(pos)) return pos;
+      }
+      return from;
+    };
+    const button = next(buttonPosition);
+    if (occupied.length <= 2) return occupied.length === 1 ? button : next(button); // heads-up: non-button is BB
+    return next(next(button));
+  }
+
+  /**
+   * Pure MTT balancing decision for one pass, given live table sizes. `sourceId` is the table
+   * that just finished a hand (always safe to move players out of); `idleIds` are other tables
+   * that are fully idle (no hand, no pending next hand) and so may also be broken. Returns:
+   *   - `{ kind: 'break', tableId }` when the field fits on one fewer table (and at least two
+   *     tables would remain — the final-table collapse owns the last merge): break the shortest
+   *     table, preferring the source, else an idle shortest table.
+   *   - `{ kind: 'balance', moves }` moving players one at a time from the source to the
+   *     currently shortest table while the source has 2+ more players than it and the source is
+   *     the biggest table (or the shortest table is below 3 players and needs topping up).
+   *   - `{ kind: 'none' }` otherwise.
+   * Exposed (static) for unit tests.
+   */
+  static planMttBalance(
+    tables: Array<{ id: string; seq: number | null; count: number; maxSeats: number }>,
+    sourceId: string,
+    opts: { seatsPerTable: number; finalTableSize: number; idleIds?: Set<string>; maxMovesPerPass?: number },
+  ):
+    | { kind: 'none' }
+    | { kind: 'break'; tableId: string }
+    | { kind: 'balance'; moves: Array<{ toTableId: string }> } {
+    const live = tables.filter((t) => t.count > 0);
+    if (live.length <= 1) return { kind: 'none' };
+    const total = live.reduce((n, t) => n + t.count, 0);
+    if (total <= opts.finalTableSize) return { kind: 'none' };
+    const src = live.find((t) => t.id === sourceId);
+    if (!src) return { kind: 'none' };
+
+    // 1. Table breaking.
+    const neededTables = Math.ceil(total / Math.max(1, opts.seatsPerTable));
+    if (live.length > neededTables && live.length - 1 >= 2) {
+      const minCount = Math.min(...live.map((t) => t.count));
+      const shortest = live
+        .filter((t) => t.count === minCount)
+        .sort((a, b) => (b.seq ?? 0) - (a.seq ?? 0)); // highest seq breaks first
+      let breakId: string | null = null;
+      if (shortest.some((t) => t.id === src.id)) breakId = src.id;
+      else breakId = shortest.find((t) => opts.idleIds?.has(t.id))?.id ?? null;
+      if (breakId) {
+        const victim = live.find((t) => t.id === breakId)!;
+        const room = live
+          .filter((t) => t.id !== breakId)
+          .reduce((n, t) => n + Math.max(0, t.maxSeats - t.count), 0);
+        if (room >= victim.count) return { kind: 'break', tableId: breakId };
+      }
+    }
+
+    // 2. Balancing out of the source.
+    const counts = new Map(live.map((t) => [t.id, t.count]));
+    const maxMoves = Math.max(1, opts.maxMovesPerPass ?? 4);
+    const moves: Array<{ toTableId: string }> = [];
+    while (moves.length < maxMoves) {
+      const srcCount = counts.get(src.id)!;
+      const others = live
+        .filter((t) => t.id !== src.id && counts.get(t.id)! < t.maxSeats)
+        .sort((a, b) => counts.get(a.id)! - counts.get(b.id)! || (a.seq ?? 0) - (b.seq ?? 0));
+      const dest = others[0];
+      if (!dest) break;
+      const destCount = counts.get(dest.id)!;
+      const maxCount = Math.max(...live.map((t) => counts.get(t.id)!));
+      if (srcCount - destCount < 2) break;
+      if (srcCount !== maxCount && destCount >= 3) break;
+      moves.push({ toTableId: dest.id });
+      counts.set(src.id, srcCount - 1);
+      counts.set(dest.id, destCount + 1);
+    }
+    return moves.length > 0 ? { kind: 'balance', moves } : { kind: 'none' };
+  }
+
+  /**
+   * MTT table breaking + balancing (above the final-table threshold). Must run under
+   * `withTournamentLock` with `sourceTableId` between hands. Players are only ever moved out
+   * of the source or out of a fully idle table, never out of a table that is dealing; moving
+   * *into* a dealing table is fine (same as late registration — dealt in on its next hand).
+   * Returns the destination table ids so the caller can nudge idle ones to deal.
+   */
+  private async maybeBalanceTables(
+    tournamentId: string,
+    config: PokerTournamentConfig,
+    sourceTableId: string,
+  ): Promise<string[]> {
+    const listed = await this.listTournamentTables(tournamentId);
+    if (listed.length <= 1) return [];
+    const meta = await this.pool.query<{ id: string; max_seats: number; button_position: number | null }>(
+      `SELECT id, max_seats, button_position FROM poker_tables WHERE tournament_id = $1`,
+      [tournamentId],
+    );
+    const metaById = new Map(meta.rows.map((r) => [String(r.id), r]));
+    const tables = listed.map((t) => ({
+      id: t.id,
+      seq: t.seq,
+      count: t.seatCount,
+      maxSeats: Number(metaById.get(t.id)?.max_seats) || this.effectiveSeatsPerTable(config),
+    }));
+
+    const idleIds = new Set<string>();
+    for (const t of tables) {
+      if (t.id === sourceTableId || t.count === 0) continue;
+      if (await this.pokerGameService.isTableIdle(t.id)) idleIds.add(t.id);
+    }
+
+    const plan = PokerTournamentService.planMttBalance(tables, sourceTableId, {
+      seatsPerTable: this.effectiveSeatsPerTable(config),
+      finalTableSize: this.effectiveFinalTableSize(config),
+      idleIds,
+    });
+    if (plan.kind === 'none') return [];
+
+    const stackedSeats = async (tableId: string) =>
+      (
+        await this.pool.query<{ player_address: string; position: number; stack: unknown }>(
+          `SELECT player_address, position, stack FROM poker_seats WHERE table_id = $1 ORDER BY position`,
+          [tableId],
+        )
+      ).rows;
+
+    const kicks = new Set<string>();
+    const moved: Array<{ address: string; fromTableId: string; toTableId: string }> = [];
+
+    if (plan.kind === 'break') {
+      const victimId = plan.tableId;
+      const seats = await stackedSeats(victimId);
+      // A busted (0-chip) seat still waiting for its post-hand elimination means the table isn't
+      // actually settled — leave it for its own post-hand pass.
+      if (seats.some((r) => toBigIntSafe(r.stack ?? 0) <= 0n)) return [];
+      const counts = new Map(tables.map((t) => [t.id, t.count]));
+      for (const seat of seats) {
+        const dest = tables
+          .filter((t) => t.id !== victimId && counts.get(t.id)! > 0 && counts.get(t.id)! < t.maxSeats)
+          .sort((a, b) => counts.get(a.id)! - counts.get(b.id)! || (a.seq ?? 0) - (b.seq ?? 0))[0];
+        if (!dest) break;
+        try {
+          await this.movePlayerBetweenTables(tournamentId, victimId, dest.id, seat.player_address);
+          counts.set(dest.id, counts.get(dest.id)! + 1);
+          counts.set(victimId, counts.get(victimId)! - 1);
+          kicks.add(dest.id);
+          moved.push({ address: seat.player_address.toLowerCase(), fromTableId: victimId, toTableId: dest.id });
+        } catch (err) {
+          logger.error('MTT table break: move failed', { tournamentId, victimId, toTableId: dest.id, err });
+        }
+      }
+      await this.pruneEmptyTournamentTables(tournamentId);
+      logger.info('MTT table broken', {
+        tournamentId,
+        brokenTableId: victimId,
+        moves: moved.length,
+        tablesBefore: tables.filter((t) => t.count > 0).length,
+      });
+      this.broadcast(`poker_tournament:${tournamentId}`, 'poker_tournament_table_broken', {
+        tournamentId,
+        brokenTableId: victimId,
+        moves: moved,
+      });
+      return [...kicks];
+    }
+
+    // Balance: move the next big blind(s) out of the source, one at a time.
+    const src = metaById.get(sourceTableId);
+    const maxSeats = Number(src?.max_seats) || this.effectiveSeatsPerTable(config);
+    let remaining = (await stackedSeats(sourceTableId)).filter((r) => toBigIntSafe(r.stack ?? 0) > 0n);
+    for (const move of plan.moves) {
+      const bbPos = PokerTournamentService.nextBigBlindPosition(
+        Number(src?.button_position ?? 0),
+        remaining.map((r) => Number(r.position)),
+        maxSeats,
+      );
+      const seat = remaining.find((r) => Number(r.position) === bbPos) ?? remaining[0];
+      if (!seat) break;
+      try {
+        await this.movePlayerBetweenTables(tournamentId, sourceTableId, move.toTableId, seat.player_address);
+        kicks.add(move.toTableId);
+        moved.push({ address: seat.player_address.toLowerCase(), fromTableId: sourceTableId, toTableId: move.toTableId });
+      } catch (err) {
+        logger.error('MTT balance: move failed', { tournamentId, sourceTableId, toTableId: move.toTableId, err });
+        break;
+      }
+      remaining = remaining.filter((r) => r !== seat);
+    }
+    if (moved.length > 0) {
+      logger.info('MTT tables balanced', { tournamentId, sourceTableId, moves: moved.length });
+    }
+    return [...kicks];
   }
 }
 

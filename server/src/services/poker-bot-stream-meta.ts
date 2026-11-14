@@ -81,11 +81,18 @@ export async function loadStreamMeta(pool: Pool, tableId: string, nowMs = Date.n
     `SELECT pt.max_seats, pt.small_blind, pt.big_blind, pt.current_blind_level, pt.current_blind_level_started_at,
             pt.tournament_id, t.name, t.status, t.poker_config, t.prize_pool, t.prize_percentages,
             t.platform_fee_percent, t.creator_fee_percent, t.activated_at, t.action_timer_seconds,
+            /* to_jsonb read: works before migration 203 adds the column */
+            COALESCE((to_jsonb(t) ->> 'fees_waived')::boolean, FALSE) AS fees_waived,
             (SELECT COUNT(*) FROM tournament_entries e WHERE e.tournament_id = t.id)::int AS entrants,
-            (SELECT COUNT(*) FROM poker_seats s WHERE s.table_id = pt.id AND s.player_address IS NOT NULL
-                AND COALESCE(s.stack, 0) > 0)::int AS alive,
+            /* players left = every table of the tournament (MTT), or just this table (cash / SNG) */
+            (SELECT COUNT(*) FROM poker_seats s WHERE s.table_id IN (
+                SELECT p2.id FROM poker_tables p2
+                 WHERE p2.id = pt.id OR (pt.tournament_id IS NOT NULL AND p2.tournament_id = pt.tournament_id))
+                AND s.player_address IS NOT NULL AND COALESCE(s.stack, 0) > 0)::int AS alive,
             (SELECT COUNT(*) FROM poker_seats s WHERE s.table_id = pt.id AND s.player_address IS NOT NULL)::int AS seated,
-            (SELECT array_agg(LOWER(s.player_address)) FROM poker_seats s WHERE s.table_id = pt.id
+            (SELECT array_agg(LOWER(s.player_address)) FROM poker_seats s WHERE s.table_id IN (
+                SELECT p2.id FROM poker_tables p2
+                 WHERE p2.id = pt.id OR (pt.tournament_id IS NOT NULL AND p2.tournament_id = pt.tournament_id))
                 AND s.player_address IS NOT NULL AND COALESCE(s.stack, 0) > 0) AS alive_addrs
        FROM poker_tables pt
        LEFT JOIN tournaments t ON t.id = pt.tournament_id
@@ -126,9 +133,9 @@ export async function loadStreamMeta(pool: Pool, tableId: string, nowMs = Date.n
       entrants: row.entrants,
       playersLeft: row.alive,
       prizePool: num(row.prize_pool),
-      // calculate_tournament_prizes() (migration 127) always distributes 95% of the pool
-      // (hard-coded 3% protocol + 2% creator), whatever creator_fee_percent says.
-      payouts: computeStreamPayouts(num(row.prize_pool), pcts, 5, 0),
+      // calculate_tournament_prizes() distributes 95% of the pool (hard-coded 3% protocol + 2%
+      // creator, whatever creator_fee_percent says) — or 100% when fees_waived (migration 203).
+      payouts: computeStreamPayouts(num(row.prize_pool), pcts, row.fees_waived === true ? 0 : 5, 0),
       blinds: computeBlindInfo(
         cfg,
         Math.max(1, Number(row.current_blind_level ?? 1)),

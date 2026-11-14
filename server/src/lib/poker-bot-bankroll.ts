@@ -14,13 +14,17 @@
  * never count as wager turnover for VIP tiers or the Weekly Drop.
  *
  * Funding source: `POKER_BOT_BANKROLL_WALLET` when set (transfer); otherwise a
- * ledgered credit straight to the bot (self-funded mode). Optional daily cap:
- * `POKER_BOT_DAILY_FUND_CAP` (unset = unlimited).
+ * ledgered credit straight to the bot (self-funded mode). Daily caps, per bot pool:
+ *   - daily-freeroll + cash bots: `POKER_BOT_DAILY_FUND_CAP` (unset = unlimited)
+ *   - 'mtt' bots (100-player MTT field): `POKER_MTT_BOT_DAILY_FUND_CAP`
+ *     (unset = 60,000 — one 70 × 715 event; 0 = unlimited)
+ * The two budgets never count each other's credits, so seating the 70-bot MTT can't
+ * exhaust the cap the 1/5/9 PM daily games rely on, and vice versa.
  */
 
 import type { PoolClient } from 'pg';
 import { applyPokerChipDelta, getPokerChipBalance, type PokerChipRef } from '../services/poker-chip-wallet';
-import { isPokerBotWallet } from './poker-bot-registry';
+import { getPokerBotAccount, isPokerBotWallet } from './poker-bot-registry';
 
 const ADDRESS_RE = /^0x[a-fA-F0-9]{40}$/;
 
@@ -56,6 +60,24 @@ export function getPokerBotDailyFundCap(): bigint | null {
     return v > 0n ? v : null;
   } catch {
     return null;
+  }
+}
+
+/** Default daily funding budget for the 'mtt' bot pool: one 70-bot × 715 buy-in event (50,050) + headroom. */
+export const POKER_MTT_BOT_DAILY_FUND_CAP_DEFAULT = 60_000n;
+
+/**
+ * Daily cap on chips credited to 'mtt' bots (`POKER_MTT_BOT_DAILY_FUND_CAP`).
+ * Unset = `POKER_MTT_BOT_DAILY_FUND_CAP_DEFAULT`; `0` = unlimited.
+ */
+export function getPokerMttBotDailyFundCap(): bigint | null {
+  const raw = process.env.POKER_MTT_BOT_DAILY_FUND_CAP?.trim();
+  if (!raw) return POKER_MTT_BOT_DAILY_FUND_CAP_DEFAULT;
+  try {
+    const v = BigInt(raw);
+    return v > 0n ? v : null;
+  } catch {
+    return POKER_MTT_BOT_DAILY_FUND_CAP_DEFAULT;
   }
 }
 
@@ -96,17 +118,23 @@ export async function fundPokerBotToBalance(
   }
   const delta = targetChips - current;
 
-  const cap = getPokerBotDailyFundCap();
+  // Each bot pool has its own budget: 'mtt' bots vs everyone else (daily-freeroll + cash bots).
+  const isMtt = getPokerBotAccount(bot)?.role === 'mtt';
+  const cap = isMtt ? getPokerMttBotDailyFundCap() : getPokerBotDailyFundCap();
   if (cap != null) {
     const used = await client.query<{ s: string | null }>(
       `SELECT COALESCE(SUM(delta), 0)::TEXT AS s FROM poker_chip_ledger
         WHERE reason = 'bot_bankroll_fund' AND delta > 0
-          AND wallet_address IN (SELECT wallet_address FROM poker_bot_accounts)
+          AND wallet_address IN (
+            SELECT wallet_address FROM poker_bot_accounts
+             WHERE (role = 'mtt') = $1
+          )
           AND created_at >= (date_trunc('day', NOW() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC')`,
+      [isMtt],
     );
     const usedChips = BigInt(String(used.rows[0]?.s ?? '0').split('.')[0] || '0');
     if (usedChips + delta > cap) {
-      throw new Error(`Bot daily fund cap reached (${usedChips} + ${delta} > ${cap})`);
+      throw new Error(`${isMtt ? 'MTT bot' : 'Bot'} daily fund cap reached (${usedChips} + ${delta} > ${cap})`);
     }
   }
 
