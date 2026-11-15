@@ -1,4 +1,4 @@
-import { parseScheduleTimes, upcomingSlots, zonedToUtc, pickBots, readBotScheduleConfig } from '../../services/poker-bot-schedule.service';
+import { parseScheduleTimes, upcomingSlots, formatDailyGameName, zonedToUtc, pickBots, readBotScheduleConfig } from '../../services/poker-bot-schedule.service';
 
 describe('poker bot schedule helpers', () => {
   it('parses default and custom times', () => {
@@ -63,5 +63,21 @@ describe('early registration lead', () => {
     // 22:05 ET: tomorrow's 1 PM opens (14h55m ahead).
     const night = zonedToUtc(2026, 11, 12, 22, 5, 'America/New_York').getTime();
     expect(upcomingSlots(night, cfg, 900 * 60_000).map((s) => s.slotKey)).toEqual(['2026-11-13 13:00 America/New_York']);
+  });
+});
+
+describe('formatDailyGameName', () => {
+  it.each([
+    ['21:00', '#PulseChain Poker FreeRoll at 9pm EST'],
+    ['01:00', '#PulseChain Poker FreeRoll at 1am EST'],
+    ['13:00', '#PulseChain Poker FreeRoll at 1pm EST'],
+    ['00:00', '#PulseChain Poker FreeRoll at 12am EST'],
+    ['12:00', '#PulseChain Poker FreeRoll at 12pm EST'],
+    ['09:30', '#PulseChain Poker FreeRoll at 9:30am EST'],
+  ])('%s -> %s', (label, expected) => {
+    expect(formatDailyGameName(label)).toBe(expected);
+  });
+  it('honours a custom prefix', () => {
+    expect(formatDailyGameName('17:00', 'Custom')).toBe('Custom at 5pm EST');
   });
 });

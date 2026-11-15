@@ -226,6 +226,17 @@ describe('MTT live test config', () => {
     expect(MTT_LIVE_TEST_DEFAULTS.allowDailyOverlap).toBe(false);
   });
 
+  it('buyIn override: accepted, defaults to 715, rejects invalid', () => {
+    const startAt = '2026-11-21T15:00:00Z';
+    const cfg = buildMttLiveTestConfig({ startAt, buyIn: 7145 }, now);
+    expect(cfg.buyIn).toBe(7145n);
+    expect(cfg.buyIn * BigInt(cfg.bots)).toBe(500_150n);
+    expect(buildMttLiveTestConfig({ startAt }, now).buyIn).toBe(715n);
+    for (const bad of [0, 1.5, 'abc', 2_000_000]) {
+      expect(() => buildMttLiveTestConfig({ startAt, buyIn: bad }, now)).toThrow(/buyIn/);
+    }
+  });
+
   it('slot key is distinct from the daily "YYYY-MM-DD HH:MM tz" keys', () => {
     expect(mttLiveTestSlotKey(new Date('2026-11-21T15:00:00Z'))).toBe('mtt-live-test 2026-11-21T15:00:00.000Z');
   });
