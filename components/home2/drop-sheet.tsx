@@ -9,8 +9,8 @@
  * Open/close: toggles an `open` class on its own veil + panel — see nav.tsx.
  */
 
-import React, { useEffect, useState } from 'react';
-import { nextSundayDropUtc } from '@/lib/weekly-drop-time';
+import React from 'react';
+import { useCountdown } from './sections';
 
 export interface DropSheetProps {
   open: boolean;
@@ -20,13 +20,9 @@ export interface DropSheetProps {
   countdownTo?: Date;
   entries?: number;
   totalEntrants?: number | null;
-  statusPill?: string;
+  /** Status word for the kicker, e.g. 'Live'. */
+  status?: string;
 }
-
-/* same fallback as sections.tsx WeeklyDrop — next Sunday 20:00 */
-/* Fallback drop time: next Sunday 8 PM Eastern (DST-aware), matching the
- * backend. Only used when the server's closesAt hasn't loaded yet. */
-const nextDrop = nextSundayDropUtc;
 
 export function DropSheet({
   open,
@@ -35,34 +31,10 @@ export function DropSheet({
   countdownTo,
   entries,
   totalEntrants = null,
-  statusPill = '🎟 LIGHTING SOON',
+  status = 'Lighting soon',
 }: DropSheetProps) {
-  const countdownMs = countdownTo?.getTime();
-  const [cd, setCd] = useState({ d: '0', h: '00', m: '00', s: '00' });
-
   /* tick only while the sheet is visible */
-  useEffect(() => {
-    if (!open) return;
-    function tick() {
-      let ms = Math.max(0, (countdownMs ?? nextDrop().getTime()) - Date.now());
-      const day = Math.floor(ms / 86400000);
-      ms -= day * 86400000;
-      const hr = Math.floor(ms / 3600000);
-      ms -= hr * 3600000;
-      const mi = Math.floor(ms / 60000);
-      ms -= mi * 60000;
-      const se = Math.floor(ms / 1000);
-      setCd({
-        d: String(day),
-        h: String(hr).padStart(2, '0'),
-        m: String(mi).padStart(2, '0'),
-        s: String(se).padStart(2, '0'),
-      });
-    }
-    tick();
-    const id = setInterval(tick, 1000);
-    return () => clearInterval(id);
-  }, [countdownMs, open]);
+  const cd = useCountdown(countdownTo?.getTime(), open);
 
   const viewDetails = () => {
     onClose?.();
@@ -74,9 +46,9 @@ export function DropSheet({
       <div className={`sheet-veil${open ? ' open' : ''}`} aria-hidden={!open} onClick={onClose}></div>
       <div className={`sheet dropsheet${open ? ' open' : ''}`} aria-hidden={!open}>
         <div className="grab"></div>
-        <div className="ds-pill">{statusPill}</div>
+        <div className="kick">Weekly Drop · {status}</div>
         <div className="ds-pot">{pot.toLocaleString('en-US')}</div>
-        <div className="ds-unit">MORBIUS · TOP 3 WIN EVERY SUNDAY · 8PM ET</div>
+        <div className="ds-unit">MORBIUS · top 3 win every Sunday · 8 PM ET</div>
         <div className="ds-count">
           <div className="cb">
             <b>{cd.d}</b>
@@ -99,7 +71,7 @@ export function DropSheet({
           <div className="ds-meta">
             {entries != null && (
               <span>
-                🎟 <b>{entries}</b> {entries === 1 ? 'entry' : 'entries'} — yours
+                <b>{entries}</b> {entries === 1 ? 'entry' : 'entries'} — yours
               </span>
             )}
             {totalEntrants != null && (
@@ -109,8 +81,13 @@ export function DropSheet({
             )}
           </div>
         )}
-        <button type="button" className="ds-cta" onClick={viewDetails}>
-          View full details
+        <button type="button" className="btn-steel ds-cta" onClick={viewDetails}>
+          <span>View full details</span>
+          <i>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M5 12h14M13 6l6 6-6 6" />
+            </svg>
+          </i>
         </button>
       </div>
     </>

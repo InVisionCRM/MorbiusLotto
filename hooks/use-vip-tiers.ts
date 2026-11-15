@@ -8,6 +8,8 @@ export interface VipLadderTier {
   tierName: string
   minLifetimeWagerChips: string
   color: string
+  /** Rakeback on losses, in basis points (500 = 5%), when the config sends it. */
+  rakebackBps?: number
 }
 
 /** The VIP tier ladder (public). Cached generously — thresholds move rarely. */

@@ -28,7 +28,7 @@ export function GameLauncherSheet({ open, onClose }: GameLauncherSheetProps) {
 
   const games = useMemo(() => {
     const s = q.trim().toLowerCase();
-    return s ? FLOOR_GAMES.filter((g) => g.name.toLowerCase().includes(s)) : FLOOR_GAMES;
+    return s ? FLOOR_GAMES.filter((g) => `${g.name} ${g.blurb}`.toLowerCase().includes(s)) : FLOOR_GAMES;
   }, [q]);
 
   return (
@@ -36,8 +36,9 @@ export function GameLauncherSheet({ open, onClose }: GameLauncherSheetProps) {
       <div className={`sheet-veil gl-veil${open ? ' open' : ''}`} aria-hidden={!open} onClick={onClose}></div>
       <div className={`sheet launcher${open ? ' open' : ''}`} aria-hidden={!open}>
         <div className="grab"></div>
+        <span className="kick">The collection</span>
         <h3>All games</h3>
-        <div className="sub">{FLOOR_GAMES.length} games, one chip — tap to play</div>
+        <div className="sub">{FLOOR_GAMES.length} references, one chip — tap to play</div>
         <input
           className="gl-search"
           type="search"
@@ -48,7 +49,7 @@ export function GameLauncherSheet({ open, onClose }: GameLauncherSheetProps) {
         />
         <div className="gl-grid">
           {games.map((g) => (
-            <GameTile key={g.key} game={g} badge={null} className="gl-tile" onClick={onClose} />
+            <GameTile key={g.key} game={g} badge={null} className="gl-tile" compact onClick={onClose} />
           ))}
           {games.length === 0 && <div className="gl-empty">No games match &ldquo;{q}&rdquo;</div>}
         </div>

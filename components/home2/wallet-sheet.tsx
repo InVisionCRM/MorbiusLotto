@@ -71,7 +71,7 @@ export function WalletSheet({
   onDisconnect,
 }: WalletSheetProps) {
   const [copied, setCopied] = useState(false);
-  const copyTimer = useRef<ReturnType<typeof setTimeout>>();
+  const copyTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   useEffect(() => () => clearTimeout(copyTimer.current), []);
 
   const copyAddress = async () => {
@@ -136,33 +136,39 @@ export function WalletSheet({
             </div>
             <div className="opts">
               <button type="button" className="gold" onClick={act(onDeposit)}>
-                💰 Deposit<small>Add MORBIUS to play balance</small>
+                Deposit<small>Add MORBIUS to play balance</small>
               </button>
               <button type="button" onClick={act(onWithdraw)}>
-                ↗ Withdraw<small>Back to your wallet</small>
+                Withdraw<small>Back to your wallet</small>
               </button>
               <button type="button" onClick={act(onProfile)}>
-                🧑‍🎨 Profile settings<small>Name, avatar, socials</small>
+                Profile settings<small>Name, avatar, socials</small>
               </button>
               <button type="button" onClick={act(onApprovals)}>
-                🛡 Revoke approvals<small>Manage token allowances</small>
+                Revoke approvals<small>Manage token allowances</small>
               </button>
               <button type="button" className="wide" onClick={act(onDashboard)}>
-                📊 Dashboard<small>Stats, history, profile</small>
+                Dashboard<small>Stats, history, profile</small>
               </button>
               <button type="button" className="rose" onClick={act(onDisconnect)}>
-                🔌 Disconnect
+                Disconnect
               </button>
             </div>
           </>
         ) : (
           <>
+            <span className="kick">Morbius · Member</span>
             <h3>Take a seat at the table</h3>
             <div className="sub">
               Connect your wallet to play, hold a MORBIUS balance and earn VIP rakeback on losses.
             </div>
-            <button type="button" className="ws-connect" onClick={act(onConnect)}>
-              Connect Wallet
+            <button type="button" className="btn-steel ws-connect" onClick={act(onConnect)}>
+              <span>Connect wallet</span>
+              <i>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M5 12h14M13 6l6 6-6 6" />
+                </svg>
+              </i>
             </button>
           </>
         )}

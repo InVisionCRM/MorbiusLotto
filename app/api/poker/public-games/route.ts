@@ -3,7 +3,7 @@ import { neon } from '@neondatabase/serverless';
 
 /**
  * Public, read-only lobby feed for visitors without a connected wallet:
- * open/upcoming Morbius Daily Freeroll tournaments (internally the scheduled bot games) and the always-open house cash table.
+ * open/upcoming daily FreeRoll tournaments (internally the scheduled bot games) and the always-open house cash table.
  * Only aggregate, non-private data (times, counts, pool) — no wallets, no seats, no cards.
  */
 export const dynamic = 'force-dynamic';
@@ -36,6 +36,19 @@ export type PublicTournament = {
 };
 export type PublicCashTable = CashFeed['tables'][number];
 export type PublicGamesResponse = { now: string; tournaments: PublicTournament[]; cash: PublicCashTable[] };
+
+/**
+ * Viewer-facing clock time for a daily game slot, matching the backend's
+ * poker-bot-schedule helper (kept local — this route must not import server/).
+ * "21:00" -> "9pm", "09:30" -> "9:30am", "00:00" -> "12am", "12:00" -> "12pm"
+ */
+function formatDailyGameTime(localLabel: string): string {
+  const [h, m] = localLabel.split(':').map((n) => parseInt(n, 10));
+  if (!Number.isFinite(h)) return localLabel;
+  const suffix = h >= 12 ? 'pm' : 'am';
+  const h12 = h % 12 === 0 ? 12 : h % 12;
+  return m ? `${h12}:${String(m).padStart(2, '0')}${suffix}` : `${h12}${suffix}`;
+}
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -105,7 +118,7 @@ export async function GET() {
     const label = g.slotKey.split(' ')[1] ?? '';
     tournaments.push({
       tournamentId: g.tournamentId as string,
-      name: d?.name || `The Morbius Daily Freeroll ${label} ET`,
+      name: d?.name || `#PulseChain Poker FreeRoll at ${formatDailyGameTime(label)} EST`,
       startsAt: new Date(startMs).toISOString(),
       status: g.tournamentStatus as 'registration' | 'active',
       freeEntry: schedule?.freeEntry ?? true,

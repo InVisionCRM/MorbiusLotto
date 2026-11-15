@@ -1,140 +1,99 @@
 'use client';
 
 /**
- * Home2 sections — faithful port of public/home-nav-lab.html.
- * Markup, class names and behavior mirror the lab exactly; CSS lives in the
- * `.home2`-scoped stylesheet ported separately. Game tiles come from
- * components/home2/game-tile.tsx; the catalog lives in components/home2/scenes.tsx.
+ * Home2 sections — Chronograph port (design option 11, with approved Liquid
+ * Chrome touches from option 12). Markup follows the option-11 mockup's
+ * structure and class names (`.tick`, `.mc`, `.gauge`, `.rows`, `.sh`, `.tabs`,
+ * `.grid`, `.duo`, `.drop`, `.vip`, `.lad`); CSS lives in app/home2.css under
+ * `.home2`. Game cards come from game-tile.tsx; the catalog from scenes.tsx.
  */
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { nextSundayDropUtc } from '@/lib/weekly-drop-time';
-import { VipTierBadge } from '@/components/vip/VipTierBadge';
-import {
-  PlinkoScene,
-  CrashScene,
-  MinesScene,
-  FLOOR_GAMES,
-  type FloorGame,
-} from '@/components/home2/scenes';
+import { FLOOR_GAMES, type FloorGame } from '@/components/home2/scenes';
 import { GameTile } from '@/components/home2/game-tile';
 import { SelfExclusionModal } from '@/components/ResponsibleGaming';
 
 /* ────────────────────────────────────────────────────────────
-   Shared: hero ember particles (port of the lab's embers())
+   Shared line icons (mockup stroke set)
    ──────────────────────────────────────────────────────────── */
-function useEmbers(canvasRef: React.RefObject<HTMLCanvasElement | null>) {
-  useEffect(() => {
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-    const cv = canvasRef.current;
-    if (!cv) return;
-    const ctx = cv.getContext('2d');
-    if (!ctx) return;
+const ICONS = {
+  plus: 'M12 5v14M5 12h14',
+  bars: 'M4 20V10M10 20V4M16 20v-7M22 20H2',
+  play: 'M7 5v14l11-7z',
+  ticket: 'M3 9a2 2 0 0 0 0 4v5a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1v-5a2 2 0 0 1 0-4V6a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1z',
+  crown: 'M3 8l4.5 4L12 5l4.5 7L21 8l-2 11H5z',
+  share: 'M16 7a3 3 0 1 0 0-.01M8 12a3 3 0 1 0 0-.01M16 17a3 3 0 1 0 0-.01M10.6 10.7l2.8-1.6M10.6 13.3l2.8 1.6',
+  scan: 'M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14zM21 21l-4.6-4.6',
+  wallet: 'M4 7h15a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h12M16.5 13.5h.01',
+  arrow: 'M5 12h14M13 6l6 6-6 6',
+  chev: 'm9 6 6 6-6 6',
+} as const;
 
-    let W = 0;
-    let H = 0;
-    type Part = { x: number; y: number; r: number; vy: number; vx: number; c: string; a: number; ph: number };
-    const parts: Part[] = [];
-    function size() {
-      const parent = cv!.parentElement;
-      if (!parent) return;
-      const r = parent.getBoundingClientRect();
-      W = cv!.width = r.width;
-      H = cv!.height = r.height;
-    }
-    size();
-    window.addEventListener('resize', size);
-    const COLORS = ['rgba(34,211,238,', 'rgba(251,191,36,', 'rgba(167,139,250,'];
-    for (let i = 0; i < 42; i++)
-      parts.push({
-        x: Math.random(),
-        y: Math.random(),
-        r: 0.6 + Math.random() * 1.8,
-        vy: 0.08 + Math.random() * 0.22,
-        vx: (Math.random() - 0.5) * 0.06,
-        c: COLORS[i % 3],
-        a: 0.15 + Math.random() * 0.4,
-        ph: Math.random() * 6.28,
-      });
-    let raf = 0;
-    let stopped = false;
-    function draw(t: number) {
-      if (stopped) return;
-      ctx!.clearRect(0, 0, W, H);
-      for (const p of parts) {
-        p.y -= p.vy / 100;
-        p.x += p.vx / 100;
-        if (p.y < -0.05) {
-          p.y = 1.05;
-          p.x = Math.random();
-        }
-        const tw = 0.6 + 0.4 * Math.sin(t / 700 + p.ph);
-        ctx!.beginPath();
-        ctx!.arc(p.x * W, p.y * H, p.r, 0, 6.28);
-        ctx!.fillStyle = p.c + p.a * tw + ')';
-        ctx!.fill();
-      }
-      raf = requestAnimationFrame(draw);
-    }
-    draw(0);
-    return () => {
-      stopped = true;
-      cancelAnimationFrame(raf);
-      window.removeEventListener('resize', size);
-    };
-  }, [canvasRef]);
+export function Icon({ d, w = 1.6 }: { d: keyof typeof ICONS; w?: number }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={w} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d={ICONS[d]} />
+    </svg>
+  );
 }
 
 /* ────────────────────────────────────────────────────────────
-   1. TICKER — cumulative + highlight events
+   1. TICKER — mono marquee of live facts
    ──────────────────────────────────────────────────────────── */
-/* Every item comes from the page (live wins + standing facts) — the ticker
- * never invents an event. A short list is repeated so the track is still
- * wider than the screen, then doubled for the seamless loop. */
-const TICKER_MIN_ITEMS = 8;
+export interface TickerItem {
+  /** Gold lead-in, e.g. "Weekly Drop". */
+  k: string;
+  /** Plain text after it. Rendered as text — never HTML. */
+  v: string;
+}
 
-export function HomeTicker({ items }: { items: string[] }) {
-  if (items.length === 0) throw new Error('HomeTicker needs at least one item');
-  const filled: string[] = [];
+/* Every item comes from the page (live wins + standing facts) — the ticker
+ * never invents an event. A short list is repeated until the strip is wider
+ * than the screen, then tripled so the -33.33% loop is seamless. */
+const TICKER_MIN_ITEMS = 6;
+
+export function HomeTicker({ items }: { items: TickerItem[] }) {
+  if (items.length === 0) return null;
+  const filled: TickerItem[] = [];
   while (filled.length < TICKER_MIN_ITEMS) filled.push(...items);
-  const doubled = [...filled, ...filled];
+  const loop = [...filled, ...filled, ...filled];
   return (
-    <div className="ticker">
-      <div className="ticker-track" id="tickerTrack">
-        {doubled.map((item, i) => (
-          <React.Fragment key={i}>
-            <span className="tk" dangerouslySetInnerHTML={{ __html: item }} />
-            <span className="tk">
-              <span className="dot" />
+    <div className="tickwrap" aria-label="Live at Morbius">
+      <div className="tick">
+        <div>
+          {loop.map((it, i) => (
+            <span key={i} aria-hidden={i >= filled.length ? true : undefined}>
+              <b>{it.k}</b> {it.v}
             </span>
-          </React.Fragment>
-        ))}
+          ))}
+        </div>
       </div>
     </div>
   );
 }
 
 /* ────────────────────────────────────────────────────────────
-   2. HERO · PLAYER — the Player Card
-   Port of option 01 in public/profile-hero-lab.html. The card states rather
-   than narrates: identity, tier and balance embossed on one object, with the
-   three things a returning player actually clicks beside it. The greeting,
-   the "while you were away" digest and the resume paragraph are deliberately
-   gone — the ticker already carries that news, and the lab's whole point was
-   dropping five prose messages to zero.
+   2. MEMBER CARD — the connected player's gauge card
    ──────────────────────────────────────────────────────────── */
 
+/** Tier ink, matched to the mockup's bronze (#e3a878) and the shared palette. */
+export const TIER_INK: Record<string, string> = {
+  BRONZE: '#e3a878',
+  SILVER: '#c7ccd8',
+  GOLD: '#e9c46a',
+  PLATINUM: '#e8e6e1',
+  DIAMOND: '#9fe6ff',
+  OBSIDIAN: '#a99cf0',
+};
+
 /**
- * Two letters for the monogram tile. A display name gives its initials; a
- * single word gives first + last (Det → DT, as the lab drew it); a bare
- * wallet address gives the first two characters after 0x, so the tile is
- * still stable identity rather than noise.
+ * Two letters for the monogram. A display name gives its initials; a single
+ * word gives first + last; a bare wallet address gives the two hex digits
+ * after 0x, so the tile is stable identity rather than noise.
  */
 function monogramFor(name: string): string {
-  // A wallet-derived name is not a word — first + last would pull a letter
-  // from each end of a truncation, so take the two characters that actually
-  // identify the address.
   const hex = /^0x([0-9a-f]{2})/i.exec(name.trim());
   if (hex) return hex[1].toUpperCase();
   const words = name.replace(/[….]/g, '').trim().split(/\s+/).filter(Boolean);
@@ -144,59 +103,75 @@ function monogramFor(name: string): string {
   return (w || '?').toUpperCase();
 }
 
-export interface HeroPlayerAction {
-  icon: string;
+interface RowProps {
+  icon: keyof typeof ICONS;
   title: string;
   sub: string;
   href?: string;
+  external?: boolean;
   onClick?: () => void;
+}
+
+function Row({ icon, title, sub, href, external, onClick }: RowProps) {
+  const inner = (
+    <>
+      <span className="ic">
+        <Icon d={icon} />
+      </span>
+      <span className="tx">
+        <b>{title}</b>
+        <small>{sub}</small>
+      </span>
+      <span className="go">
+        <Icon d="chev" w={1.9} />
+      </span>
+    </>
+  );
+  if (href && external)
+    return (
+      <a href={href} target="_blank" rel="noopener noreferrer">
+        {inner}
+      </a>
+    );
+  if (href) return <Link href={href}>{inner}</Link>;
+  return (
+    <button type="button" onClick={onClick}>
+      {inner}
+    </button>
+  );
+}
+
+/** Half-circle gauge: dotted track, cyan→gold arc and the gold needle, both sweeping to `pct` on load. */
+function Gauge({ pct, children }: { pct: number; children: React.ReactNode }) {
+  const p = Math.max(0, Math.min(100, Math.round(pct)));
+  return (
+    <div className="gauge" style={{ '--p': p } as React.CSSProperties}>
+      <svg viewBox="0 0 200 120" aria-hidden="true">
+        <path className="g0" d="M20 110 A80 80 0 0 1 180 110" />
+        {p > 0 && <path className="g1" pathLength={100} d="M20 110 A80 80 0 0 1 180 110" />}
+      </svg>
+      <i className="needle" aria-hidden="true" />
+      <div className="gl">{children}</div>
+    </div>
+  );
 }
 
 export interface HeroPlayerProps {
   name?: string;
-  /** Wallet address, shown truncated on the card's identity line. */
   address?: string;
-  /** Profile picture; falls back to the monogram tile when absent. */
   avatarUrl?: string | null;
   tierName?: string;
-  tierEmoji?: string;
   /** null when the player is already at the top rung. */
   nextTierName?: string | null;
   nextTierRakeback?: string;
   wagerToNext?: string;
-  /** 0-100 along the current rung. */
+  /** 0-100 along the current rung — drives the gauge needle. */
   progressPct?: number;
   balance?: string;
-  /** Optional "MEMBER SINCE …" prefix; omitted when the join date is unknown. */
-  memberSince?: string;
   /** First action row — where the player left off. Omitted if they have no history. */
   resume?: { title: string; sub: string; href?: string };
-  /** Optional ambient background layer (e.g. <PriceChartBg />) rendered behind .hero-inner. */
-  chartBg?: React.ReactNode;
   onDeposit?: () => void;
   onDashboard?: () => void;
-}
-
-function PlayerAction({ icon, title, sub, href, onClick }: HeroPlayerAction) {
-  const inner = (
-    <>
-      <span className="ic">{icon}</span>
-      <span className="tx">
-        <span className="tt">{title}</span>
-        <span className="ss">{sub}</span>
-      </span>
-      <span className="go">→</span>
-    </>
-  );
-  return href ? (
-    <Link href={href} className="pc-act">
-      {inner}
-    </Link>
-  ) : (
-    <button type="button" className="pc-act" onClick={onClick}>
-      {inner}
-    </button>
-  );
 }
 
 export function HeroPlayer({
@@ -204,708 +179,410 @@ export function HeroPlayer({
   address,
   avatarUrl = null,
   tierName = 'BRONZE',
-  tierEmoji = '🥉',
   nextTierName = 'SILVER',
   nextTierRakeback = '8%',
   wagerToNext = '0',
   progressPct = 0,
   balance = '0',
-  memberSince,
   resume,
-  chartBg = null,
   onDeposit,
   onDashboard,
 }: HeroPlayerProps) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  useEmbers(canvasRef);
-
   const short = address ? `${address.slice(0, 6)}…${address.slice(-4)}` : null;
-  /* A player with no display name is already shown as their truncated
-     address, so don't print it a second time underneath. */
   const nameIsAddress = /^0x/i.test(name.trim());
-  const identity = [memberSince ? `MEMBER SINCE ${memberSince}` : null, nameIsAddress ? null : short]
-    .filter(Boolean)
-    .join(' · ');
   const atTop = !nextTierName;
 
   return (
-    <header className="hero only-player">
-      <canvas id="heroCanvas" ref={canvasRef} />
-      {chartBg}
-      <div className="hero-inner pc">
-        <div className="pc-card">
-          <div className="pc-top">
-            <span className="pc-brand">MORBIUS · MEMBER</span>
-            <span className="tierchip">
-              {tierEmoji} {tierName}
-            </span>
-          </div>
-
-          <div className="pc-body">
-            {avatarUrl ? (
-              <img className="av av-photo" src={avatarUrl} alt="" />
-            ) : (
-              <div className="av av-mono">{monogramFor(name)}</div>
-            )}
-            <div>
-              <div className="pc-name">{name}</div>
-              {identity && <div className="pc-sub mono">{identity}</div>}
-            </div>
-          </div>
-
-          <div className="pc-bal">
-            <div className="k">PLAY BALANCE</div>
-            <div className="v mono">
-              {balance} <span>MORBIUS</span>
-            </div>
-          </div>
-
-          <div className="pc-meter">
-            <div className="bar">
-              <i style={{ width: `${Math.max(0, Math.min(100, progressPct))}%` }} />
-            </div>
-            <div className="lbl">
-              {atTop ? (
-                <>
-                  <span>Top tier reached</span>
-                  <span>{nextTierRakeback} back on every loss</span>
-                </>
-              ) : (
-                <>
-                  <span>
-                    {wagerToNext} to {nextTierName}
-                  </span>
-                  <span>
-                    {nextTierRakeback} rakeback at {nextTierName}
-                  </span>
-                </>
-              )}
-            </div>
-          </div>
+    <section className="mem" aria-label="Your Morbius membership">
+      <div className="mc">
+        <div className="mc-top">
+          <span className="brand">MORBIUS · MEMBER</span>
+          <span className="tier" style={{ color: TIER_INK[tierName] ?? TIER_INK.BRONZE }}>
+            {tierName}
+          </span>
         </div>
-
-        <div className="pc-side">
-          {resume && (
-            <PlayerAction icon="🂡" title={resume.title} sub={resume.sub} href={resume.href} />
-          )}
-          <PlayerAction icon="💰" title="Deposit" sub="top up your play balance" onClick={onDeposit} />
-          <PlayerAction icon="📊" title="Dashboard" sub="history, stats & verify" onClick={onDashboard} />
-        </div>
-      </div>
-    </header>
-  );
-}
-
-/* ────────────────────────────────────────────────────────────
-   3. HERO · VISITOR
-   ──────────────────────────────────────────────────────────── */
-export interface HeroVisitorProps {
-  gamesPlayed?: number;
-  morbiusWon?: number;
-  biggestWin?: number;
-  players?: number;
-  /** Optional ambient background layer (e.g. <PriceChartBg />) rendered behind .hero-inner. */
-  chartBg?: React.ReactNode;
-  onTakeSeat?: () => void;
-}
-
-export function HeroVisitor({
-  gamesPlayed = 3412086,
-  morbiusWon = 61240000,
-  biggestWin = 148200,
-  players = 4216,
-  chartBg = null,
-  onTakeSeat,
-}: HeroVisitorProps) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  useEmbers(canvasRef);
-
-  const proofRef = useRef<HTMLDivElement>(null);
-
-  /* port of the lab's countUp() — eased 1.6s count-up on the .proof numbers */
-  useEffect(() => {
-    const root = proofRef.current;
-    if (!root) return;
-    let stopped = false;
-    const rafs: number[] = [];
-    root.querySelectorAll<HTMLElement>('.n').forEach((el) => {
-      const target = parseInt(el.dataset.count ?? '0', 10);
-      const t0 = performance.now();
-      function step(t: number) {
-        if (stopped) return;
-        const p = Math.min((t - t0) / 1600, 1);
-        const eased = 1 - Math.pow(1 - p, 3);
-        el.textContent = Math.floor(target * eased).toLocaleString('en-US');
-        if (p < 1) rafs.push(requestAnimationFrame(step));
-      }
-      rafs.push(requestAnimationFrame(step));
-    });
-    return () => {
-      stopped = true;
-      rafs.forEach((r) => cancelAnimationFrame(r));
-    };
-  }, [gamesPlayed, morbiusWon, biggestWin, players]);
-
-  return (
-    <header className="hero only-visitor">
-      <canvas id="heroCanvasV" ref={canvasRef} />
-      {chartBg}
-      <div className="hero-inner hv">
-        <div className="kick">THE MORBIUS CASINO · 26 GAMES</div>
-        <h1>
-          PLAY. RANK UP.<span className="l2">GET PAID BACK.</span>
-        </h1>
-        <p className="sub">
-          Lose a bet, <b>get paid back</b>. Climb six VIP tiers from Bronze at 5% to Obsidian at{' '}
-          <b>25% back on every loss</b>. Build your avatar, take your seat, and make the house soften every hit.
-        </p>
-        <div className="ctas">
-          <button className="cta-main" onClick={onTakeSeat}>
-            TAKE A SEAT
-          </button>
-          <button className="cta-sec">See the ladder ↓</button>
-        </div>
-        <div className="proof" ref={proofRef}>
-          <div className="p">
-            <div className="n c" data-count={gamesPlayed}>
-              0
-            </div>
-            <div className="l">GAMES PLAYED</div>
-          </div>
-          <div className="p">
-            <div className="n g" data-count={morbiusWon}>
-              0
-            </div>
-            <div className="l">MORBIUS WON</div>
-          </div>
-          <div className="p">
-            <div className="n o" data-count={biggestWin}>
-              0
-            </div>
-            <div className="l">BIGGEST WIN</div>
-          </div>
-          <div className="p">
-            <div className="n e" data-count={players}>
-              0
-            </div>
-            <div className="l">PLAYERS</div>
-          </div>
-        </div>
-      </div>
-    </header>
-  );
-}
-
-/* ────────────────────────────────────────────────────────────
-   4. THE VAULT — rolling odometer strip
-   ──────────────────────────────────────────────────────────── */
-function OdometerDigit({ digit }: { digit: number }) {
-  const colRef = useRef<HTMLSpanElement>(null);
-  /* like the lab: mount at 0, then roll to the target on the next frame */
-  useEffect(() => {
-    const col = colRef.current;
-    if (!col) return;
-    const raf = requestAnimationFrame(() => {
-      col.style.transform = `translateY(${-38 * digit}px)`;
-    });
-    return () => cancelAnimationFrame(raf);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-  return (
-    <span className="dg">
-      <span className="col" ref={colRef}>
-        {'0123456789'.split('').map((d) => (
-          <span key={d}>{d}</span>
-        ))}
-      </span>
-    </span>
-  );
-}
-
-export interface VaultStripProps {
-  value?: number;
-  gamesPlayed?: string;
-  biggestWin?: string;
-  price?: string;
-  priceLabel?: string;
-  /** When provided, the price stat becomes clickable (opens the chart modal). */
-  onPriceClick?: () => void;
-}
-
-export function VaultStrip({
-  value = 61240418,
-  gamesPlayed = '3.4M',
-  biggestWin = '148,200',
-  price = '$0.00042 ▲',
-  priceLabel = 'MORBIUS / USD',
-  onPriceClick,
-}: VaultStripProps) {
-  const [val, setVal] = useState(value);
-
-  /* reset when the prop changes */
-  useEffect(() => {
-    setVal(value);
-  }, [value]);
-
-  /* odometer rolls only when the real value changes (analytics refetch) */
-
-  const str = val.toLocaleString('en-US');
-
-  return (
-    <section className="furnace">
-      <div className="furn-title">
-        <div className="fl">🏆</div>
-        <div className="tt">
-          <b>THE VAULT</b>
-          <span>ALL-TIME MORBIUS WON</span>
-        </div>
-      </div>
-      <div className="odometer" id="burnOdo" aria-label="All-time MORBIUS won">
-        {str.split('').map((ch, i) =>
-          ch === ',' ? (
-            <span key={`${val}-${i}`} className="sep">
-              ,
-            </span>
+        <Gauge pct={atTop ? 100 : progressPct}>
+          <small>Play balance</small>
+          <b>{balance}</b>
+          <span>MORBIUS</span>
+        </Gauge>
+        <div className="who">
+          {avatarUrl ? (
+            <img className="av" src={avatarUrl} alt="" />
           ) : (
-            /* key includes val so every digit re-rolls from 0 each tick, like the lab's full re-render */
-            <OdometerDigit key={`${val}-${i}`} digit={parseInt(ch, 10)} />
-          )
-        )}
-        <span className="unit">MORBIUS</span>
+            <span className="av">{monogramFor(name)}</span>
+          )}
+          <div>
+            <b>{name}</b>
+            {short && !nameIsAddress && <small>{short}</small>}
+          </div>
+        </div>
+        <div className="ml">
+          {atTop ? (
+            <>
+              <span>
+                <b>Top tier</b> reached
+              </span>
+              <span>{nextTierRakeback} back on losses</span>
+            </>
+          ) : (
+            <>
+              <span>
+                <b>{wagerToNext}</b> to {nextTierName}
+              </span>
+              <span>
+                {nextTierRakeback} at {nextTierName}
+              </span>
+            </>
+          )}
+        </div>
       </div>
-      <div className="furn-stats">
-        <div className="s">
-          <div className="n cy">{gamesPlayed}</div>
-          <div className="l">GAMES PLAYED</div>
+      <div className="rows">
+        {resume && <Row icon="play" title={resume.title} sub={resume.sub} href={resume.href} />}
+        <Row icon="plus" title="Deposit" sub="Top up your play balance" onClick={onDeposit} />
+        <Row icon="bars" title="Dashboard" sub="History, stats & verify" onClick={onDashboard} />
+        <Row icon="share" title="Refer & earn" sub="Bring a friend, get paid for it" href="/referrals" />
+      </div>
+    </section>
+  );
+}
+
+/**
+ * The same column for a visitor: an unset gauge and a Connect button — no
+ * sample member, no invented numbers — plus the doors the old promo carousel
+ * used to open (VIP, the Weekly Drop, referrals, the token analyzer).
+ */
+export function HeroVisitor({ onConnect, onOpenDrop }: { onConnect?: () => void; onOpenDrop?: () => void }) {
+  return (
+    <section className="mem" aria-label="Take a seat">
+      <div className="mc visitor">
+        <div className="mc-top">
+          <span className="brand">MORBIUS · MEMBER</span>
+          <span className="tier">NOT SEATED</span>
         </div>
-        <div className="s">
-          <div className="n gd">{biggestWin}</div>
-          <div className="l">BIGGEST WIN</div>
+        <Gauge pct={0}>
+          <small>Play balance</small>
+          <b className="dim">—</b>
+          <span>Connect to begin</span>
+        </Gauge>
+        <div className="ml">
+          <span>
+            <b>Rakeback</b> on losses
+          </span>
+          <span>Bronze 5% → Obsidian 25%</span>
         </div>
-        <div
-          className="s"
-          onClick={onPriceClick}
-          role={onPriceClick ? 'button' : undefined}
-          tabIndex={onPriceClick ? 0 : undefined}
-          onKeyDown={
-            onPriceClick
-              ? (e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    onPriceClick();
-                  }
-                }
-              : undefined
-          }
-          style={onPriceClick ? { cursor: 'pointer' } : undefined}
-        >
-          <div className="n up">{price}</div>
-          <div className="l">{priceLabel}</div>
-        </div>
+        <button type="button" className="btn-steel" onClick={onConnect}>
+          <span>Connect wallet</span>
+          <i>
+            <Icon d="arrow" w={1.9} />
+          </i>
+        </button>
+      </div>
+      <div className="rows">
+        <Row icon="crown" title="VIP club" sub="Six tiers of rakeback on losses" href="/vip" />
+        <Row icon="ticket" title="The Weekly Drop" sub="Top 3 win every Sunday · 8 PM ET" onClick={onOpenDrop} />
+        <Row icon="share" title="Refer & earn" sub="Bring a friend, get paid for it" href="/referrals" />
+        <Row icon="scan" title="Token analyzer" sub="Scan any PulseChain token" href="https://scan.morbius.io" external />
       </div>
     </section>
   );
 }
 
 /* ────────────────────────────────────────────────────────────
-   5. TONIGHT'S TABLE — deterministic daily spotlight
+   3. THE COLLECTION — every game, category tabs
    ──────────────────────────────────────────────────────────── */
-export function TonightsTable({ cards }: { cards?: React.ReactNode }) {
+const MULTIPLAYER_KEYS = new Set(['poker', 'blackjack']);
+
+export const FLOOR_TABS: { f: string; label: string; test: (g: FloorGame) => boolean }[] = [
+  { f: 'all', label: 'All', test: () => true },
+  { f: 'blackjack', label: 'Blackjack', test: (g) => g.family === 'blackjack' },
+  { f: 'poker', label: 'Poker', test: (g) => g.family === 'poker' },
+  { f: 'table', label: 'Table', test: (g) => g.family === 'table' },
+  { f: 'orig', label: 'Originals', test: (g) => g.cat === 'orig' },
+  { f: 'multi', label: 'Multiplayer', test: (g) => g.badge?.kind === 'multi' || MULTIPLAYER_KEYS.has(g.key) },
+];
+
+export function TheFloor({ filter, onFilter }: { filter: string; onFilter: (f: string) => void }) {
+  const tab = FLOOR_TABS.find((t) => t.f === filter) ?? FLOOR_TABS[0];
+  const games = FLOOR_GAMES.filter(tab.test);
+
   return (
-    <section className="zone">
-      <div className="zone-head">
+    <>
+      <div className="sh" id="collection">
         <h2>
-          TONIGHT&apos;S <em>TABLE</em>
+          The <em>collection</em>
         </h2>
+        <span className="meta">
+          {FLOOR_GAMES.length} references{tab.f !== 'all' ? ` · ${games.length} ${tab.label.toLowerCase()}` : ''}
+        </span>
       </div>
-      <div className="spot-grid">
-        {cards ?? (
-          <>
-            {/* featured: PLINKO */}
-            <Link href="/plinko2" className="scene-card big" style={{ '--glow': 'rgba(34,211,238,.25)' } as React.CSSProperties}>
-              <span className="badge feat">★ FEATURED TONIGHT</span>
-              <div className="stage">
-                <PlinkoScene />
-              </div>
-              <div className="meta">
-                <div className="name f-titan">PLINKO</div>
-                <div className="row">
-                  <span className="st">
-                    Weekly high <b>48,200</b>
-                  </span>
-                  <span>·</span>
-                  <span className="st">top slot ×1000</span>
-                </div>
-              </div>
-            </Link>
-
-            {/* runner-up: CRASH */}
-            <Link href="/crash" className="scene-card" style={{ '--glow': 'rgba(251,113,133,.22)' } as React.CSSProperties}>
-              <span className="badge hot">🔥 HOT STREAK</span>
-              <div className="stage">
-                <CrashScene />
-              </div>
-              <div className="meta">
-                <div className="name f-bungee" style={{ fontSize: 14 }}>
-                  CRASH
-                </div>
-                <div className="row">
-                  <span className="st">
-                    Best today <b>×124</b>
-                  </span>
-                </div>
-              </div>
-            </Link>
-
-            {/* runner-up: MINES */}
-            <Link href="/mines2" className="scene-card" style={{ '--glow': 'rgba(52,211,153,.2)' } as React.CSSProperties}>
-              <div className="stage">
-                <MinesScene />
-              </div>
-              <div className="meta">
-                <div className="name f-lilita" style={{ fontSize: 15 }}>
-                  MINES
-                </div>
-                <div className="row">
-                  <span className="st">24 safe picks record</span>
-                </div>
-              </div>
-            </Link>
-          </>
-        )}
+      <div className="tabs" role="tablist" aria-label="Filter games">
+        {FLOOR_TABS.map((t) => (
+          <button
+            key={t.f}
+            type="button"
+            role="tab"
+            aria-selected={tab.f === t.f}
+            className={tab.f === t.f ? 'on' : undefined}
+            onClick={() => onFilter(t.f)}
+          >
+            {t.label}
+          </button>
+        ))}
       </div>
-    </section>
+      <section className="grid" aria-label={`${tab.label} games`} key={tab.f}>
+        {games.map((g, i) => (
+          <GameTile key={g.key} game={g} order={i} />
+        ))}
+      </section>
+    </>
   );
 }
 
 /* ────────────────────────────────────────────────────────────
-   6. THE FLOOR — game tiles grouped into family shelves + filter pills
+   4. THE WORKSHOP — creator tools (Create-a-Slot / -Tournament / -Table)
    ──────────────────────────────────────────────────────────── */
-type FloorFamily = FloorGame['family'];
+/** Static-file links (the builder lab pages) use <a>; app routes use <Link>. */
+function A({ href, plain, className, children }: { href: string; plain?: boolean; className: string; children: React.ReactNode }) {
+  return plain ? (
+    <a className={className} href={href}>
+      {children}
+    </a>
+  ) : (
+    <Link className={className} href={href}>
+      {children}
+    </Link>
+  );
+}
 
-/* The floor is grouped by game family so it reads as a menu instead of a
-   34-card wall. 'all' shows every shelf with its heading; picking a family
-   shows just that shelf. Order runs card games first, then table, then the
-   originals — biggest draw to deepest cut. */
-const FLOOR_FAMILIES: { f: FloorFamily; label: string; sub: string }[] = [
-  { f: 'blackjack', label: 'Blackjack', sub: 'seven ways to make 21' },
-  { f: 'poker', label: 'Poker', sub: "hold'em, stud & the dealer duels" },
-  { f: 'table', label: 'Casino Table', sub: 'the classics, one chip' },
-  { f: 'arcade', label: 'Arcade', sub: 'fast originals, instant settle' },
-];
+interface Feat {
+  t: string;
+  d: string;
+}
 
-const FLOOR_FILTERS: { f: string; label: string }[] = [
-  { f: 'all', label: 'All' },
-  ...FLOOR_FAMILIES.map((x) => ({ f: x.f as string, label: x.label })),
-];
-
-export function TheFloor() {
-  const [filter, setFilter] = useState('all');
-  const games = FLOOR_GAMES;
-
-  const shelves = FLOOR_FAMILIES
-    .filter((fam) => filter === 'all' || filter === fam.f)
-    .map((fam) => ({ ...fam, games: games.filter((g) => g.family === fam.f) }))
-    .filter((shelf) => shelf.games.length > 0);
-
+function Atelier({
+  id,
+  calibre,
+  kick,
+  title,
+  body,
+  feats,
+  cta,
+  guide,
+  ctaSub,
+  shots,
+}: {
+  id: string;
+  calibre: string;
+  kick: string;
+  title: React.ReactNode;
+  body: React.ReactNode;
+  feats: Feat[];
+  cta: { label: string; href: string; plain?: boolean };
+  guide: { label: string; href: string; plain?: boolean };
+  ctaSub: string;
+  shots: { src: string; alt: string; tag: string; gold?: boolean }[];
+}) {
   return (
-    <section className="zone">
-      <div className="zone-head">
-        <h2>
-          THE <em>FLOOR</em>
-        </h2>
-        <div className="pills">
-          {FLOOR_FILTERS.map((p) => (
-            <button
-              key={p.f}
-              className={`pill${filter === p.f ? ' on' : ''}`}
-              data-f={p.f}
-              onClick={() => setFilter(p.f)}
-            >
-              {p.label}
-            </button>
+    <article className={`atelier at-${id}`}>
+      <div className="at-copy">
+        <span className="kick">
+          {calibre} · {kick}
+        </span>
+        <h3>{title}</h3>
+        <p>{body}</p>
+        <ol className="at-feats">
+          {feats.map((f, i) => (
+            <li key={f.t}>
+              <span className="n">{String(i + 1).padStart(2, '0')}</span>
+              <span>
+                <b>{f.t}</b>
+                <small>{f.d}</small>
+              </span>
+            </li>
           ))}
+        </ol>
+        <div className="at-cta">
+          <A className="btn-steel" href={cta.href} plain={cta.plain}>
+            <span>{cta.label}</span>
+            <i>
+              <Icon d="arrow" w={1.9} />
+            </i>
+          </A>
+          <A className="at-guide" href={guide.href} plain={guide.plain}>
+            {guide.label} <span aria-hidden="true">→</span>
+          </A>
+          <span className="at-sub">{ctaSub}</span>
         </div>
       </div>
-      {shelves.map((shelf) => (
-        <div key={shelf.f} className="floor-shelf">
-          <div className="shelf-head">
-            <h3>{shelf.label}</h3>
-            <span className="shelf-sub">{shelf.sub}</span>
-            <span className="shelf-count">{shelf.games.length}</span>
-          </div>
-          <div className="floor-grid">
-            {shelf.games.map((g) => (
-              <GameTile key={g.key} game={g} />
-            ))}
-          </div>
-        </div>
-      ))}
-    </section>
+      <div className={`at-shots${shots.length === 1 ? ' one' : ''}`}>
+        {shots.map((s) => (
+          <figure key={s.src}>
+            <img src={s.src} alt={s.alt} loading="lazy" />
+            <figcaption className={s.gold ? 'g' : undefined}>{s.tag}</figcaption>
+          </figure>
+        ))}
+      </div>
+    </article>
   );
 }
 
-/* ────────────────────────────────────────────────────────────
-   6b. CREATE-A-SLOT — build-your-own slot machine promo
-   ──────────────────────────────────────────────────────────── */
-const FORGE_FEATS = [
-  { ic: '🎨', t: 'Design every reel', d: 'symbols, colors, sounds & border FX' },
-  { ic: '🎁', t: 'Real bonus rounds', d: 'free spins, wheels & pick games' },
-  { ic: '🛡️', t: 'Provably fair', d: 'every spin sealed & verifiable' },
-  { ic: '🌐', t: 'Embed anywhere', d: 'one iframe snippet, any website' },
-  { ic: '🪙', t: 'Your own token', d: 'run it on any PRC-20 you choose' },
-  { ic: '📈', t: 'Creator dashboard', d: 'live RTP, volume & bankroll stats' },
-];
+export function WorkshopHead() {
+  return (
+    <div className="sh" id="workshop">
+      <h2>
+        The <em>workshop</em>
+      </h2>
+      <span className="meta">Creator tools · 03</span>
+    </div>
+  );
+}
 
 export function SlotForge() {
   return (
-    <section className="zone forge-zone">
-      <div className="zone-head">
-        <h2>
-          CREATE-A-<em>SLOT</em>
-        </h2>
-        <span className="soon">COMING SOON</span>
-      </div>
-      <div className="forge-panel">
-        <div className="forge-copy">
-          <div className="forge-kicker">CREATOR TOOL &middot; COMING SOON</div>
-          <h3>
-            Create your own <em>Slot&nbsp;Machine!</em>
-          </h3>
-          <p>
-            Build a machine from scratch — pick the grid, draw the paytable, wire up a bonus
-            round — then publish it and drop it on any website with one embed code. Fund it
-            with your own token and the house edge is <b>yours</b>.
-          </p>
-          <ul className="forge-feats">
-            {FORGE_FEATS.map((f) => (
-              <li key={f.t}>
-                <span className="fi">{f.ic}</span>
-                <span className="ft">
-                  <b>{f.t}</b>
-                  <i>{f.d}</i>
-                </span>
-              </li>
-            ))}
-          </ul>
-          <div className="forge-cta-row">
-            <a className="forge-cta" href="/slot-builder-lab.html">
-              <span className="fc-ic">🎰</span> OPEN THE BUILDER
-            </a>
-            <a className="forge-guide" href="/slot-guide.html">
-              Read the guide <span aria-hidden="true">→</span>
-            </a>
-            <span className="forge-cta-sub">free to build &middot; no code needed</span>
-          </div>
-        </div>
-        <div className="forge-shots">
-          <div className="fshot fshot-builder">
-            <img src="/home2/forge-builder.webp" alt="The Create-A-Slot builder studio" loading="lazy" />
-            <span className="fshot-tag">the studio</span>
-          </div>
-          <div className="fshot fshot-cab">
-            <img src="/home2/forge-cabinet.webp" alt="A community-built slot machine hitting a win" loading="lazy" />
-            <span className="fshot-tag gold">your machine, live</span>
-          </div>
-        </div>
-      </div>
-    </section>
+    <Atelier
+      id="slot"
+      calibre="Create-a-Slot"
+      kick="Coming soon"
+      title={
+        <>
+          Create your own <em>slot&nbsp;machine</em>
+        </>
+      }
+      body={
+        <>
+          Build a machine from scratch — pick the grid, draw the paytable, wire up a bonus round — then publish it and drop it on any
+          website with one embed code. Fund it with your own token and the house edge is <b>yours</b>.
+        </>
+      }
+      feats={[
+        { t: 'Design every reel', d: 'symbols, colors, sounds & border FX' },
+        { t: 'Real bonus rounds', d: 'free spins, wheels & pick games' },
+        { t: 'Provably fair', d: 'every spin sealed & verifiable' },
+        { t: 'Embed anywhere', d: 'one iframe snippet, any website' },
+        { t: 'Your own token', d: 'run it on any PRC-20 you choose' },
+        { t: 'Creator dashboard', d: 'live RTP, volume & bankroll stats' },
+      ]}
+      cta={{ label: 'Open the builder', href: '/slot-builder-lab.html', plain: true }}
+      guide={{ label: 'Read the guide', href: '/slot-guide.html', plain: true }}
+      ctaSub="free to build · no code needed"
+      shots={[
+        { src: '/home2/forge-builder.webp', alt: 'The Create-A-Slot builder studio', tag: 'the studio' },
+        { src: '/home2/forge-cabinet.webp', alt: 'A community-built slot machine hitting a win', tag: 'your machine, live', gold: true },
+      ]}
+    />
   );
 }
-
-/* ────────────────────────────────────────────────────────────
-   6c. CREATE-A-TOURNAMENT — custom PRC-20 buy-in poker tournaments
-   ──────────────────────────────────────────────────────────── */
-const TOURNEY_FEATS = [
-  { ic: '🪙', t: 'Buy-ins in your token', d: 'any PRC-20 — or MORBIUS' },
-  { ic: '🔒', t: 'Escrowed on-chain', d: 'every buy-in sits in the prize escrow' },
-  { ic: '💸', t: '2% of the pool is yours', d: 'paid out with the prizes' },
-  { ic: '⏱️', t: 'Sit & Go or scheduled', d: 'fires when the seats fill' },
-  { ic: '↩️', t: 'Refunds handled', d: 'short table cancels and pays everyone back' },
-  { ic: '📣', t: 'Share card built in', d: 'one-click PNG for the timeline' },
-];
 
 export function TourneyForge() {
   return (
-    <section className="zone forge-zone tourney-zone">
-      <div className="zone-head">
-        <h2>
-          CREATE-A-<em>TOURNAMENT</em>
-        </h2>
-      </div>
-      <div className="forge-panel">
-        <div className="forge-copy">
-          <div className="forge-kicker">CREATOR TOOL &middot; PRC-20</div>
-          <h3>
-            Run a <em>poker&nbsp;tournament</em> for your token
-          </h3>
-          <p>
-            Pick your PRC-20, set the buy-in, and every seat pays into the
-            on-chain prize escrow. The pool builds as players join, the table
-            fires when it fills, and <b>2% of the prize pool is yours</b> when
-            the payouts settle.
-          </p>
-          <ul className="forge-feats">
-            {TOURNEY_FEATS.map((f) => (
-              <li key={f.t}>
-                <span className="fi">{f.ic}</span>
-                <span className="ft">
-                  <b>{f.t}</b>
-                  <i>{f.d}</i>
-                </span>
-              </li>
-            ))}
-          </ul>
-          <div className="forge-cta-row">
-            <Link className="forge-cta" href="/poker/tournaments/create">
-              <span className="fc-ic">🏆</span> CREATE A TOURNAMENT
-            </Link>
-            <Link className="forge-guide" href="/poker">
-              See what&apos;s running <span aria-hidden="true">→</span>
-            </Link>
-            <span className="forge-cta-sub">your token &middot; your rake</span>
-          </div>
-        </div>
-        <div className="forge-shots one">
-          <div className="fshot fshot-cab">
-            <img
-              src="/home2/tourney-share-card.webp"
-              alt="A poker tournament share card with a HEX buy-in and prize pool"
-              loading="lazy"
-            />
-            <span className="fshot-tag gold">your tournament, shareable</span>
-          </div>
-        </div>
-      </div>
-    </section>
+    <Atelier
+      id="tourney"
+      calibre="Create-a-Tournament"
+      kick="PRC-20"
+      title={
+        <>
+          Run a <em>poker&nbsp;tournament</em> for your token
+        </>
+      }
+      body={
+        <>
+          Pick your PRC-20, set the buy-in, and every seat pays into the on-chain prize escrow. The pool builds as players join, the
+          table fires when it fills, and <b>2% of the prize pool is yours</b> when the payouts settle.
+        </>
+      }
+      feats={[
+        { t: 'Buy-ins in your token', d: 'any PRC-20 — or MORBIUS' },
+        { t: 'Escrowed on-chain', d: 'every buy-in sits in the prize escrow' },
+        { t: '2% of the pool is yours', d: 'paid out with the prizes' },
+        { t: 'Sit & Go or scheduled', d: 'fires when the seats fill' },
+        { t: 'Refunds handled', d: 'short table cancels and pays everyone back' },
+        { t: 'Share card built in', d: 'one-click PNG for the timeline' },
+      ]}
+      cta={{ label: 'Create a tournament', href: '/poker/tournaments/create' }}
+      guide={{ label: "See what's running", href: '/poker' }}
+      ctaSub="your token · your rake"
+      shots={[
+        {
+          src: '/home2/tourney-share-card.webp',
+          alt: 'A poker tournament share card with a HEX buy-in and prize pool',
+          tag: 'your tournament, shareable',
+          gold: true,
+        },
+      ]}
+    />
   );
 }
-
-/* ────────────────────────────────────────────────────────────
-   6d. CREATE-A-TABLE — custom blackjack tables
-   ──────────────────────────────────────────────────────────── */
-const TABLE_FEATS = [
-  { ic: '🖼️', t: 'Your art on the felt', d: 'upload a board or start from a preset' },
-  { ic: '🃏', t: 'Cards & backs to match', d: 'faces, backs, and how they lie' },
-  { ic: '🎬', t: 'Deal animations', d: 'pick how cards land and clear' },
-  { ic: '🔊', t: 'Table sounds', d: 'chips, shuffles and the dealer' },
-  { ic: '📐', t: 'Nudge everything', d: 'seats, dealer and card angle, to the pixel' },
-  { ic: '🎥', t: 'Video tables too', d: 'an MP4 board on a 24-hour cycle' },
-];
 
 export function TableForge() {
   return (
-    <section className="zone forge-zone table-zone">
-      <div className="zone-head">
-        <h2>
-          CREATE-A-<em>TABLE</em>
-        </h2>
-        <span className="soon">COMING SOON</span>
-      </div>
-      <div className="forge-panel">
-        <div className="forge-copy">
-          <div className="forge-kicker">BLACKJACK &middot; COMING SOON</div>
-          <h3>
-            Put your project on a <em>blackjack&nbsp;table</em>
-          </h3>
-          <p>
-            Six steps and your board is on the floor: drop in your art, style
-            the cards, choose the animations and sounds, then nudge every seat
-            into place. Players sit down at <b>your</b> table and play it in
-            MORBIUS.
-          </p>
-          <ul className="forge-feats">
-            {TABLE_FEATS.map((f) => (
-              <li key={f.t}>
-                <span className="fi">{f.ic}</span>
-                <span className="ft">
-                  <b>{f.t}</b>
-                  <i>{f.d}</i>
-                </span>
-              </li>
-            ))}
-          </ul>
-          <div className="forge-cta-row">
-            <Link className="forge-cta" href="/blackjack-multi/design">
-              <span className="fc-ic">🎨</span> OPEN THE TABLE BUILDER
-            </Link>
-            <Link className="forge-guide" href="/blackjack-multi">
-              Play the live tables <span aria-hidden="true">→</span>
-            </Link>
-            <span className="forge-cta-sub">free to build &middot; no code needed</span>
-          </div>
-        </div>
-        <div className="forge-shots">
-          <div className="fshot fshot-builder">
-            <img src="/home2/tableforge-studio.webp" alt="The Create-A-Table builder studio" loading="lazy" />
-            <span className="fshot-tag">the studio</span>
-          </div>
-          <div className="fshot fshot-cab">
-            <img src="/home2/tableforge-preview.webp" alt="A branded blackjack table mid-round" loading="lazy" />
-            <span className="fshot-tag gold">your table, in play</span>
-          </div>
-        </div>
-      </div>
-    </section>
+    <Atelier
+      id="table"
+      calibre="Create-a-Table"
+      kick="Blackjack · Coming soon"
+      title={
+        <>
+          Put your project on a <em>blackjack&nbsp;table</em>
+        </>
+      }
+      body={
+        <>
+          Six steps and your board is on the floor: drop in your art, style the cards, choose the animations and sounds, then nudge
+          every seat into place. Players sit down at <b>your</b> table and play it in MORBIUS.
+        </>
+      }
+      feats={[
+        { t: 'Your art on the felt', d: 'upload a board or start from a preset' },
+        { t: 'Cards & backs to match', d: 'faces, backs, and how they lie' },
+        { t: 'Deal animations', d: 'pick how cards land and clear' },
+        { t: 'Table sounds', d: 'chips, shuffles and the dealer' },
+        { t: 'Nudge everything', d: 'seats, dealer and card angle, to the pixel' },
+        { t: 'Video tables too', d: 'an MP4 board on a 24-hour cycle' },
+      ]}
+      cta={{ label: 'Open the table builder', href: '/blackjack-multi/design' }}
+      guide={{ label: 'Play the live tables', href: '/blackjack-multi' }}
+      ctaSub="free to build · no code needed"
+      shots={[
+        { src: '/home2/tableforge-studio.webp', alt: 'The Create-A-Table builder studio', tag: 'the studio' },
+        { src: '/home2/tableforge-preview.webp', alt: 'A branded blackjack table mid-round', tag: 'your table, in play', gold: true },
+      ]}
+    />
   );
 }
 
 /* ────────────────────────────────────────────────────────────
-   7. THE WEEKLY DROP — raffle jackpot
+   5. THE WEEKLY DROP — duo, left
    ──────────────────────────────────────────────────────────── */
 export interface WeeklyDropWinner {
   letter: string;
   name: string;
   amount: string;
-  gradient: string;
 }
 
 export interface WeeklyDropProps {
-  /** Small line under the unit row, e.g. '+142 fed by bets this week'. */
+  /** Small line under the pot, e.g. '+142 fed by bets this week'. */
   accruedNote?: string | null;
   pot?: number;
   entries: number;
   progress: number;
   entriesSub: React.ReactNode;
   winners: WeeklyDropWinner[];
-  /** Pill text above the title (e.g. '🎟 DROP #12 · LIVE'). */
-  statusPill?: string;
-  /** When provided, count down to this instant instead of the computed next Sunday 8PM. */
+  /** Status kicker, e.g. 'Live' / 'Lighting soon'. */
+  status?: string;
+  /** When provided, count down to this instant instead of the computed next Sunday 8PM ET. */
   countdownTo?: Date;
-  /**
-   * Players holding ≥ 1 entry in the open draw. When set (backend live), a
-   * "N players entered · View entrants" line shows under the jp-you card in
-   * both player and visitor modes; omit to hide the line entirely.
-   */
+  /** Players holding ≥ 1 entry in the open draw; null hides the entrants line. */
   totalEntrants?: number | null;
-  /** Opens the entrants modal (rendered by the page, e.g. Home2Client). */
   onViewEntrants?: () => void;
 }
 
-/* Fallback drop time: next Sunday 8 PM Eastern (DST-aware), matching the
- * backend. Only used when the server's closesAt hasn't loaded yet. */
-const nextDrop = nextSundayDropUtc;
-
-export function WeeklyDrop({
-  // 25,000 is the guaranteed weekly minimum — the pot shown before a draw opens.
-  // Only the server ever changes this number; nothing here animates it.
-  pot = 25000,
-  entries,
-  progress,
-  entriesSub,
-  winners,
-  statusPill = '🎟 LIGHTING SOON',
-  countdownTo,
-  totalEntrants = null,
-  onViewEntrants,
-  accruedNote = null,
-}: WeeklyDropProps) {
-  /* live countdown — to `countdownTo` when given, else next Sunday 20:00 (lab's tick()) */
-  const countdownMs = countdownTo?.getTime();
+/** Live d/h/m/s to `target` (or the next Sunday 8 PM ET fallback). */
+export function useCountdown(targetMs: number | undefined, active = true) {
   const [cd, setCd] = useState({ d: '0', h: '00', m: '00', s: '00' });
   useEffect(() => {
+    if (!active) return;
     function tick() {
-      let ms = Math.max(0, (countdownMs ?? nextDrop().getTime()) - Date.now());
+      let ms = Math.max(0, (targetMs ?? nextSundayDropUtc().getTime()) - Date.now());
       const day = Math.floor(ms / 86400000);
       ms -= day * 86400000;
       const hr = Math.floor(ms / 3600000);
@@ -913,74 +590,76 @@ export function WeeklyDrop({
       const mi = Math.floor(ms / 60000);
       ms -= mi * 60000;
       const se = Math.floor(ms / 1000);
-      setCd({
-        d: String(day),
-        h: String(hr).padStart(2, '0'),
-        m: String(mi).padStart(2, '0'),
-        s: String(se).padStart(2, '0'),
-      });
+      setCd({ d: String(day), h: String(hr).padStart(2, '0'), m: String(mi).padStart(2, '0'), s: String(se).padStart(2, '0') });
     }
     tick();
     const id = setInterval(tick, 1000);
     return () => clearInterval(id);
-  }, [countdownMs]);
+  }, [targetMs, active]);
+  return cd;
+}
+
+export function WeeklyDrop({
+  // 25,000 is the guaranteed weekly minimum — the pot shown before a draw opens.
+  pot = 25000,
+  entries,
+  progress,
+  entriesSub,
+  winners,
+  status = 'Lighting soon',
+  countdownTo,
+  totalEntrants = null,
+  onViewEntrants,
+  accruedNote = null,
+}: WeeklyDropProps) {
+  const cd = useCountdown(countdownTo?.getTime());
 
   return (
-    <section className="jackpot" id="weeklyDrop">
-      <div className="soon">{statusPill}</div>
-      <h2 className="jp-logo">
-        <img src="/home2/drop-logo.webp" alt="The Weekly Drop" width={800} height={400} />
-      </h2>
-      <div className="jp-num" id="jpNum">
+    <div className="drop" id="weeklyDrop">
+      <span className="kick">Weekly Drop · {status}</span>
+      <div className="pot">
         {pot.toLocaleString('en-US')}
+        <span>MORBIUS</span>
       </div>
-      <div className="jp-unit">MORBIUS · TOP 3 WIN EVERY SUNDAY · 8PM ET</div>
-      {accruedNote && (
-        <div style={{ fontSize: 10, color: 'var(--text2)', marginTop: -12, marginBottom: 16, position: 'relative', zIndex: 1 }}>
-          {accruedNote}
-        </div>
-      )}
+      <p>Top 3 win every Sunday · 8 PM ET</p>
+      {accruedNote && <p className="note">{accruedNote}</p>}
 
-      <div className="jp-count" id="jpCount">
-        <div className="cb">
-          <b id="cdD">{cd.d}</b>
-          <span>DAYS</span>
+      <div className="cd" role="timer" aria-label="Time until the draw">
+        <div>
+          <b>{cd.d}</b>
+          <small>days</small>
         </div>
-        <div className="cb">
-          <b id="cdH">{cd.h}</b>
-          <span>HOURS</span>
+        <div>
+          <b>{cd.h}</b>
+          <small>hrs</small>
         </div>
-        <div className="cb">
-          <b id="cdM">{cd.m}</b>
-          <span>MIN</span>
+        <div>
+          <b>{cd.m}</b>
+          <small>min</small>
         </div>
-        <div className="cb">
-          <b id="cdS">{cd.s}</b>
-          <span>SEC</span>
+        <div>
+          <b>{cd.s}</b>
+          <small>sec</small>
         </div>
       </div>
 
-      <div className="jp-you only-player">
+      <div className="drop-you only-player">
         <div className="t">
-          <span>🎟 YOUR ENTRIES</span>
+          <span>Your entries</span>
           <b>{entries}</b>
         </div>
-        <div className="bar">
-          <i style={{ width: `${progress}%` }} />
+        <div className="meter" style={{ '--p': `${Math.max(0, Math.min(100, progress))}%` } as React.CSSProperties}>
+          <i />
         </div>
         <div className="sub">{entriesSub}</div>
       </div>
-      <div className="jp-you only-visitor" style={{ textAlign: 'center' }}>
-        <div className="sub" style={{ margin: 0 }}>
-          Every <b style={{ color: 'var(--gold)' }}>1,000 MORBIUS</b> you play is a ticket — plus one free entry every
-          day just for signing in. Connect to start earning.
-        </div>
-      </div>
+      <p className="drop-you only-visitor">
+        Every <b>1,000 MORBIUS</b> you play is a ticket — plus one free entry every day just for signing in. Connect to start earning.
+      </p>
 
-      {/* live entrant count — hidden entirely when the backend/draw is absent */}
       {totalEntrants != null && (
-        <div className="jp-entrants">
-          🎟 <b>{totalEntrants.toLocaleString('en-US')}</b> {totalEntrants === 1 ? 'player' : 'players'} entered ·{' '}
+        <div className="drop-ent">
+          <b>{totalEntrants.toLocaleString('en-US')}</b> {totalEntrants === 1 ? 'player' : 'players'} entered ·{' '}
           <button type="button" onClick={onViewEntrants}>
             View entrants
           </button>
@@ -988,75 +667,74 @@ export function WeeklyDrop({
       )}
 
       {winners.length > 0 && (
-        <>
-          <div className="jp-wlbl">LAST WEEK&apos;S TOP 3</div>
-          <div className="jp-winners">
-            {winners.map((w, i) => (
-              <div key={w.name} className={`w${i === 0 ? ' first' : ''}`}>
-                <div className="av" style={{ background: w.gradient }}>
-                  {w.letter}
-                </div>
-                <span>{w.name}</span>
+        <div className="drop-win">
+          <span className="lbl">Last week&apos;s top 3</span>
+          <ol>
+            {winners.map((w) => (
+              <li key={w.name}>
+                <span className="av">{w.letter}</span>
+                <span className="nm">{w.name}</span>
                 <b>{w.amount}</b>
-              </div>
+              </li>
             ))}
-          </div>
-        </>
+          </ol>
+        </div>
       )}
 
       <p className="how">
-        <b>0.25% of every bet on every game</b> feeds the pot — guaranteed <b>25,000 MORBIUS minimum</b> each week.
-        Entries reset every draw, winners are paid straight to their balance, and every draw is{' '}
-        <b>commit-reveal verifiable</b>. Winners wear the aura for a week.
+        0.25% of every bet on every game feeds the pot — guaranteed <b>25,000 MORBIUS minimum</b> each week. Entries reset every draw,
+        winners are paid straight to their balance, and every draw is commit-reveal verifiable.
       </p>
-    </section>
+    </div>
   );
 }
 
 /* ────────────────────────────────────────────────────────────
-   8. THE LADDER — VIP strip
+   6. VIP LADDER — duo, right
    ──────────────────────────────────────────────────────────── */
 const VIP_TIERS = [
-  { h: '25', level: 1, name: 'BRONZE', rb: '5%', hex: '#cd7f32' },
-  { h: '210', level: 2, name: 'SILVER', rb: '8%', hex: '#cbd5e1' },
-  { h: '45', level: 3, name: 'GOLD', rb: '12%', hex: '#f6c445' },
-  { h: '190', level: 4, name: 'PLATINUM', rb: '16%', hex: '#e5e4e2' },
-  { h: '260', level: 5, name: 'DIAMOND', rb: '20%', hex: '#9fe6ff' },
-  { h: '285', level: 6, name: 'OBSIDIAN', rb: '25%', hex: '#6d5ea8' },
+  { name: 'BRONZE', rb: '5%', h: 30 },
+  { name: 'SILVER', rb: '8%', h: 44 },
+  { name: 'GOLD', rb: '12%', h: 58 },
+  { name: 'PLATINUM', rb: '16%', h: 72 },
+  { name: 'DIAMOND', rb: '20%', h: 86 },
+  { name: 'OBSIDIAN', rb: '25%', h: 100 },
 ];
 
-export function VipLadder({ currentTier = 'SILVER' }: { currentTier?: string }) {
+export function VipLadder({ currentTier = '' }: { currentTier?: string }) {
+  const cur = currentTier.toUpperCase();
   return (
-    <section className="zone">
-      <div className="zone-head">
-        <h2>
-          THE <em>LADDER</em>
-        </h2>
-      </div>
-      <div className="vip-strip">
-        {VIP_TIERS.map((t) => (
+    <div className="vip" id="vip">
+      <span className="kick">VIP ladder</span>
+      <h3>
+        Play. Rank up. <em>Get paid back.</em>
+      </h3>
+      <div className="lad" role="list" aria-label="Rakeback on losses by tier">
+        {VIP_TIERS.map((t, i) => (
           <div
             key={t.name}
-            className={`vip-card${t.name === currentTier.toUpperCase() ? ' you' : ''}`}
-            style={{ '--h': t.h } as React.CSSProperties}
+            role="listitem"
+            className={t.name === cur ? 'cur' : undefined}
+            style={{ '--h': `${t.h}%`, '--d': `${i * 80}ms`, '--ink': TIER_INK[t.name] } as React.CSSProperties}
+            aria-current={t.name === cur ? 'true' : undefined}
           >
-            <VipTierBadge
-              tier={{ tierName: t.name, color: t.hex, tierLevel: t.level }}
-              size="md"
-              className="medal-img"
-            />
-            <div className="nm">{t.name}</div>
-            <div className="rb">{t.rb}</div>
-            <div className="rl">RAKEBACK</div>
+            <b>{t.rb}</b>
+            <small>{t.name.toLowerCase()}</small>
           </div>
         ))}
       </div>
-    </section>
+      <div className="vip-foot">
+        <span>Rakeback on net losses · paid back to your balance</span>
+        <Link href="/vip">
+          VIP club <span aria-hidden="true">→</span>
+        </Link>
+      </div>
+    </div>
   );
 }
 
 /* ────────────────────────────────────────────────────────────
-   9. FOOTER
+   7. FOOTER
    ──────────────────────────────────────────────────────────── */
 const MORBIUS_TOKEN = '0xB7d4eB5fDfE3d4d3B5C16a44A49948c6EC77c6F1';
 const X_URL = 'https://x.com/Morbius_io';
@@ -1112,13 +790,11 @@ export function HomeFooter() {
     <footer className="foot">
       <div className="foot-top">
         <div className="foot-brand">
-          <span className="brand">
-            MORBIUS<i>.IO</i>
+          <span className="logo">
+            <img src="/home2/m-mark.png" alt="" />
+            <span>Morbius</span>
           </span>
-          <p className="foot-tag">
-            The Web3 casino on PulseChain — 25+ provably-fair games, one chip, VIP rakeback on every
-            loss.
-          </p>
+          <p>The Web3 casino on PulseChain — {FLOOR_GAMES.length} games, one chip, VIP rakeback on losses.</p>
           <div className="foot-social">
             <a href={X_URL} target="_blank" rel="noopener noreferrer" aria-label="Morbius on X">
               <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -1154,13 +830,11 @@ export function HomeFooter() {
       </div>
 
       <div className="foot-bottom">
-        <span className="fair">Play responsibly · 18+</span>
-        <div className="foot-legal">
-          <button type="button" className="foot-rg" onClick={() => setRgOpen(true)}>
-            Responsible gaming
-          </button>
-          <span className="foot-copy">© 2026 Morbius.io</span>
-        </div>
+        <span>Play responsibly · 18+</span>
+        <button type="button" onClick={() => setRgOpen(true)}>
+          Responsible gaming
+        </button>
+        <span>© 2026 Morbius.io</span>
       </div>
 
       <SelfExclusionModal isOpen={rgOpen} onClose={() => setRgOpen(false)} />
