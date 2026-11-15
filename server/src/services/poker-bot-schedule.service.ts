@@ -397,11 +397,11 @@ export class PokerBotScheduleService {
 
   /** Upcoming + recent scheduled games, for the stream worker / admin view. */
   async listRecent(limit = 12): Promise<
-    { slotKey: string; scheduledAt: string; tournamentId: string | null; status: string; tournamentStatus: string | null; tableId: string | null }[]
+    { slotKey: string; scheduledAt: string; tournamentId: string | null; status: string; tournamentStatus: string | null; tableId: string | null; name: string | null }[]
   > {
     const r = await this.pool.query(
       `SELECT g.slot_key, g.scheduled_at, g.tournament_id, g.status,
-              t.status AS tournament_status,
+              t.status AS tournament_status, t.name AS tournament_name,
               (SELECT pt.id FROM poker_tables pt WHERE pt.tournament_id = g.tournament_id
                 ORDER BY pt.table_seq NULLS LAST, pt.created_at LIMIT 1) AS table_id
          FROM poker_bot_scheduled_games g
@@ -418,6 +418,7 @@ export class PokerBotScheduleService {
       status: String(row.status),
       tournamentStatus: row.tournament_status ? String(row.tournament_status) : null,
       tableId: row.table_id ? String(row.table_id) : null,
+      name: row.tournament_name ? String(row.tournament_name) : null,
     }));
   }
 }

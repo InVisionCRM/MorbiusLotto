@@ -59,6 +59,7 @@ import { PokerBotCashService, readBotCashConfig } from './services/poker-bot-cas
 import { PokerBotBanterService } from './services/poker-bot-banter.service';
 import { getTableTalk } from './lib/poker-table-talk';
 import { loadStreamMeta } from './services/poker-bot-stream-meta';
+import { loadBroadcast } from './services/poker-bot-broadcast';
 import { chipsToWei } from './lib/poker-chip-scale';
 import { loadPokerBotRegistry, syncPokerBotProfiles } from './lib/poker-bot-registry';
 import { applyPokerChipDelta, getPokerChipBalance, setWeeklyDropWagerHook, setWeeklyDropRefundHook } from './services/poker-chip-wallet';
@@ -660,6 +661,22 @@ async function initializeServices() {
         res.json({ ...state, myHoleCards: null, meta, talk: getTableTalk(tableId) });
       } catch (err) {
         res.status(500).json({ error: (err as Error)?.message || 'failed' });
+      }
+    });
+
+    // Public, read-only MTT broadcast snapshot for the stream's feature-table picker + overlay.
+    // Only tournaments in poker_bot_scheduled_games; no hole cards / balances / secrets; ~1 s cache.
+    app.get('/api/poker/bot-schedule/tournament/:tournamentId/broadcast', async (req, res) => {
+      try {
+        const tournamentId = String(req.params.tournamentId || '');
+        if (!/^[0-9a-f-]{36}$/i.test(tournamentId)) return res.status(400).json({ error: 'bad tournamentId' });
+        const snap = await loadBroadcast(dbService.getPool(), pokerGameService, tournamentId);
+        if (!snap) return res.status(404).json({ error: 'not a scheduled bot game tournament' });
+        res.set('Cache-Control', 'no-store');
+        res.json(snap);
+      } catch (err) {
+        logger.warn('broadcast snapshot failed', { error: (err as Error)?.message });
+        res.status(500).json({ error: 'failed' });
       }
     });
 

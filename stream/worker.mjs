@@ -100,7 +100,11 @@ const MUSIC_ENABLED = !['0', 'false', 'no', 'off'].includes(env('MUSIC_ENABLED',
 const MUSIC_DIR = env('MUSIC_DIR', path.join(path.dirname(fileURLToPath(import.meta.url)), 'music'));
 const MUSIC_URL = env('MUSIC_URL', '');
 const MUSIC_VOLUME = Math.min(1, Math.max(0, Number(env('MUSIC_VOLUME', '0.18')) || 0.18));
+const WINNER_HOLD_MS = 25_000;
 const OUTRO_MS = Math.max(0, Number(env('STREAM_OUTRO_SECONDS', '90')) || 0) * 1000;
+// STREAM_MOCK=mtt|daily: serve /api/current from mock.mjs (no live API; use with STREAM_ENABLED=0). ?mock=<scenario> overrides.
+const MOCK = ['mtt', 'daily', '1'].includes(env('STREAM_MOCK', '').toLowerCase());
+const MOCK_SCENARIO = env('STREAM_MOCK_SCENARIO', env('STREAM_MOCK', '') === 'daily' ? 'daily' : 'early');
 const MODE = env('STREAM_MODE', 'tournament').toLowerCase() === 'cash' ? 'cash' : 'tournament';
 const CASH_TABLE_ID = env('STREAM_TABLE_ID', '');
 const STREAM_NAME = env('STREAM_NAME', 'Morbius Poker Cash Game');
@@ -173,6 +177,95 @@ export function nextSlotFrom(body, now = Date.now()) {
   const games = Array.isArray(body?.games) ? body.games : [];
   const up = games.map((g) => g.scheduledAt).filter((a) => a && Date.parse(a) > now).sort();
   return up[0] ?? null;
+}
+
+/** "2026-11-12 21:00 America/New_York" -> "#PulseChain Poker FreeRoll at 9pm EST" (lowercase am/pm, minutes only when not :00). */
+export function dailyStreamTitle(slotKey) {
+  const hm = String(slotKey || '').split(' ')[1] || '';
+  const m = /^(\d{1,2}):(\d{2})$/.exec(hm);
+  if (!m) return '#PulseChain Poker FreeRoll';
+  const h = Number(m[1]); const h12 = h % 12 === 0 ? 12 : h % 12;
+  return `#PulseChain Poker FreeRoll at ${h12}${m[2] === '00' ? '' : ':' + m[2]}${h < 12 ? 'am' : 'pm'} EST`;
+}
+
+/** Stream title: the tournament's own name, else the daily-slot format. */
+export function streamTitle(game) {
+  const n = String(game?.name || '').trim();
+  return n || dailyStreamTitle(game?.slotKey);
+}
+
+export const BRAND_LINE = 'The Morbius Daily Freeroll';
+export const MIN_DWELL_MS = 22_000;
+
+/** Interest score of one broadcast table (see pickFeatureTable). Pure. */
+export function scoreTable(t, ctx = {}) {
+  if (!t || !(t.seated >= 2)) return -1;
+  const inHand = t.phase != null;
+  let s = inHand ? 5 : 0;
+  if (t.showdown) s += 60;
+  if (t.allIn) s += 100;
+  // pot is judged against the biggest pot, but never against less than half the biggest stack (a 30-chip preflop pot isn't "big")
+  const ref = Math.max(ctx.maxPot || 0, 0.5 * (ctx.maxStack || 0));
+  if (inHand && ref > 0) s += 40 * Math.min(1, (t.pot || 0) / ref);
+  if (ctx.maxStack > 0) s += 10 * Math.min(1, (t.biggestStack || 0) / ctx.maxStack);
+  return s;
+}
+
+/**
+ * Feature-table picker. Pure. tables = broadcast.tables; cur = { tableId, since } (ms epoch).
+ * Rules: one live table -> stay; no/dead current -> best now; min dwell ~22 s; never cut away mid-hand
+ * unless another table has an all-in/showdown and ours is just folding around; finish the current hand;
+ * between hands move only for a clearly better table (score >= 25 and +15 over ours).
+ * Returns { tableId, switched, reason, label } (label = chip text when switched).
+ */
+export function pickFeatureTable({ tables, cur, now = Date.now(), minDwellMs = MIN_DWELL_MS }) {
+  const live = (Array.isArray(tables) ? tables : []).filter((t) => t.seated >= 2 || t.seated >= 1 && tables.length === 1);
+  if (live.length === 0) return { tableId: cur?.tableId ?? null, switched: false, reason: 'none', label: null };
+  const ctx = { maxPot: Math.max(0, ...live.map((t) => t.pot || 0)), maxStack: Math.max(0, ...live.map((t) => t.biggestStack || 0)) };
+  const scored = live.map((t) => ({ t, s: scoreTable(t, ctx) }));
+  const label = (t) => (t.allIn ? 'ALL-IN' : t.showdown ? 'SHOWDOWN' : 'BIG POT');
+  const best = scored.reduce((a, b) => (b.s > a.s || (b.s === a.s && b.t.tableNumber < a.t.tableNumber) ? b : a));
+  if (live.length === 1) return { tableId: live[0].tableId, switched: live[0].tableId !== cur?.tableId, reason: 'only-table', label: null };
+  const here = scored.find((x) => x.t.tableId === cur?.tableId);
+  if (!here) return { tableId: best.t.tableId, switched: true, reason: cur?.tableId ? 'table-gone' : 'initial', label: cur?.tableId ? label(best.t) : null };
+  if (best.t.tableId === here.t.tableId) return { tableId: here.t.tableId, switched: false, reason: 'best', label: null };
+  if (now - (cur.since ?? 0) < minDwellMs) return { tableId: here.t.tableId, switched: false, reason: 'dwell', label: null };
+  const hot = (t) => t.allIn || t.showdown;
+  if (here.t.phase != null) {
+    // mid-hand: only an all-in/showdown elsewhere pulls us away, and only if ours is quiet
+    if (!hot(here.t) && hot(best.t)) return { tableId: best.t.tableId, switched: true, reason: 'hot-elsewhere', label: label(best.t) };
+    const hotOther = scored.filter((x) => hot(x.t) && x.t.tableId !== here.t.tableId).sort((a, b) => b.s - a.s)[0];
+    if (!hot(here.t) && hotOther) return { tableId: hotOther.t.tableId, switched: true, reason: 'hot-elsewhere', label: label(hotOther.t) };
+    return { tableId: here.t.tableId, switched: false, reason: 'finish-hand', label: null };
+  }
+  if (best.s >= 25 && best.s - here.s >= 15) return { tableId: best.t.tableId, switched: true, reason: 'better', label: label(best.t) };
+  return { tableId: here.t.tableId, switched: false, reason: 'hold', label: null };
+}
+
+/** A game has MTT overlays when its field exceeds one table (or is spread over several). */
+export function isMttBroadcast(bc) {
+  const t = bc?.tables;
+  if (!Array.isArray(t) || t.length === 0) return false;
+  return t.length > 1 || (bc.tournament?.entrants ?? 0) > (t[0].maxSeats ?? 10);
+}
+
+/** Extra /api/current fields for an MTT (empty object for daily single-table games => unchanged shape). */
+export function currentExtras(cur, now = Date.now()) {
+  const bc = cur?.broadcast;
+  const title = cur ? streamTitle({ name: cur.name || bc?.tournament?.name, slotKey: cur.slotKey }) : null;
+  if (!cur?.feature || !isMttBroadcast(bc)) return title && !cur?.cash ? { title, brand: BRAND_LINE } : {};
+  const f = cur.feature;
+  return {
+    title, brand: BRAND_LINE, mtt: true,
+    feature: {
+      tableId: f.tableId, tableNumber: f.tableNumber, tableCount: bc.tables.filter((t) => t.seated > 0).length,
+      reason: f.reason, chip: f.chip, switchAgeMs: f.switchedAt ? now - f.switchedAt : null,
+    },
+    broadcast: {
+      generatedAt: bc.generatedAt, tournament: bc.tournament, leaderboard: bc.leaderboard, eliminations: bc.eliminations, winner: bc.winner, flags: bc.flags,
+      tables: bc.tables.map((t) => ({ tableNumber: t.tableNumber, seated: t.seated, pot: t.pot, allIn: t.allIn, showdown: t.showdown })),
+    },
+  };
 }
 
 const state = { current: null, lastPoll: null, lastError: null, history: [] };
@@ -338,7 +431,7 @@ function startCash() {
 
 function startStream(game) {
   const target = rtmpTarget();
-  const title = game.cash ? STREAM_NAME : `The Morbius Daily Freeroll · ${slotLabel(game.slotKey)} ET`;
+  const title = game.cash ? STREAM_NAME : streamTitle(game);
   const url = `http://127.0.0.1:${PORT}/view?name=${encodeURIComponent(title)}${game.cash ? '&mode=cash' : ''}`;
   if (!target) {
     log('dry run: would stream game (STREAM_ENABLED=0 or X_RTMP_URL/X_STREAM_KEY missing)', { tournamentId: game.tournamentId, tableId: game.tableId, url });
@@ -365,6 +458,7 @@ function startStream(game) {
   if (CAPTURE === 'cdp') { const i = ffArgs.indexOf('-nostdin'); ffArgs.splice(i, 1); }
   const cur = { ...game, dry: false, startedAt: Date.now(), ff: { proc: null }, url, toFile: isFile };
   state.current = cur;
+  if (!game.cash && game.tournamentId) { cur.bcTimer = setInterval(() => refreshBroadcast(cur), 1500); refreshBroadcast(cur); }
   if (CAPTURE === 'cdp') {
     startCdpCapture(cur, url)
       .then(() => {
@@ -389,6 +483,35 @@ function startStream(game) {
   log('stream started', { tournamentId: game.tournamentId, tableId: game.tableId, url, toFile: isFile, capture: CAPTURE, mode: MODE });
 }
 
+/** MTT: poll the broadcast snapshot and run the feature-table picker (falls back silently on old servers). */
+async function refreshBroadcast(cur) {
+  if (!cur.tournamentId || state.current !== cur || cur.stopping || cur.outroUntil) return;
+  try {
+    const r = await fetch(`${API_BASE}/api/poker/bot-schedule/tournament/${cur.tournamentId}/broadcast`, { signal: AbortSignal.timeout(5000) });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const bc = await r.json();
+    applyBroadcast(cur, bc);
+  } catch (e) {
+    cur.bcFails = (cur.bcFails || 0) + 1;
+    if (cur.bcFails > 5) { cur.broadcast = null; cur.feature = null; }
+  }
+}
+
+export function applyBroadcast(cur, bc, now = Date.now()) {
+  cur.bcFails = 0;
+  cur.broadcast = bc;
+  if (!isMttBroadcast(bc)) { cur.feature = null; return; }
+  const prev = cur.feature;
+  const pick = pickFeatureTable({ tables: bc.tables, cur: prev ? { tableId: prev.tableId, since: prev.since } : null, now });
+  if (!pick.tableId) return;
+  const t = bc.tables.find((x) => x.tableId === pick.tableId);
+  if (!prev || pick.tableId !== prev.tableId) {
+    cur.feature = { tableId: pick.tableId, since: now, reason: pick.reason, chip: pick.label, switchedAt: prev ? now : null };
+  }
+  cur.feature.tableNumber = t?.tableNumber ?? null;
+  cur.tableId = cur.feature.tableId;
+}
+
 function stopStream(reason) {
   const cur = state.current;
   if (!cur) return;
@@ -396,6 +519,7 @@ function stopStream(reason) {
   clearTimeout(cur.timer);
   clearInterval(cur.pump);
   clearInterval(cur.repaint);
+  clearInterval(cur.bcTimer);
   try { cur.ff?.proc?.stdin?.end(); } catch {}
   try { cur.ff?.proc?.kill('SIGINT'); } catch {}
   try { cur.browser?.kill('SIGTERM'); } catch {}
@@ -426,6 +550,10 @@ async function poll() {
         if (Date.now() >= cur.outroUntil) stopStream('tournament finished');
         return;
       }
+      if (done && cur.broadcast?.winner && isMttBroadcast(cur.broadcast)) { // let the champion banner land before the outro
+        cur.winnerHoldUntil = cur.winnerHoldUntil || Date.now() + WINNER_HOLD_MS;
+        if (Date.now() < cur.winnerHoldUntil) return;
+      }
       if (done && OUTRO_MS > 0 && g && String(g.tournamentStatus) === 'completed') {
         // Intermission outro: the view switches to the promo loop + next-game countdown.
         cur.outroUntil = Date.now() + OUTRO_MS;
@@ -437,8 +565,9 @@ async function poll() {
       else if (cur.tournamentStatus !== 'active' && g.tournamentStatus !== 'active' && Date.now() - Date.parse(g.scheduledAt) > 20 * 60_000) stopStream('never started');
       else {
         // the view follows the table via /api/current (table appears at start; may change on consolidation)
-        cur.tableId = g.tableId;
+        if (!cur.feature) cur.tableId = g.tableId;
         cur.tournamentStatus = g.tournamentStatus;
+        if (g.name) cur.name = g.name;
       }
       return;
     }
@@ -474,6 +603,12 @@ if (isMain) http
         .catch((e) => { res.writeHead(500, { 'content-type': 'application/json' }); res.end(JSON.stringify({ error: String(e?.message ?? e) })); });
       return;
     }
+    if (MOCK && /^\/api\/current/.test(req.url || '')) {
+      const sc = new URL(req.url, 'http://x').searchParams.get('mock') || MOCK_SCENARIO;
+      import('./mock.mjs').then((m) => { const body = JSON.stringify(m.mockCurrent(sc)); res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' }); res.end(body); })
+        .catch((e) => { res.writeHead(500); res.end(String(e?.message ?? e)); });
+      return;
+    }
     if (req.url === '/api/current') {
       const c = state.current;
       if (!c || !c.tableId) {
@@ -500,7 +635,13 @@ if (isMain) http
         return;
       }
       fetch(`${API_BASE}/api/poker/bot-schedule/table/${c.tableId}/state`, { signal: AbortSignal.timeout(8000) })
-        .then(async (r) => { res.writeHead(r.status, { 'content-type': 'application/json', 'cache-control': 'no-store' }); res.end(await r.text()); })
+        .then(async (r) => {
+          res.writeHead(r.status, { 'content-type': 'application/json', 'cache-control': 'no-store' });
+          const text = await r.text();
+          const extra = r.ok ? currentExtras(c) : {};
+          if (!Object.keys(extra).length) return res.end(text);
+          try { res.end(JSON.stringify({ ...JSON.parse(text), ...extra })); } catch { res.end(text); }
+        })
         .catch((e) => { res.writeHead(502, { 'content-type': 'application/json' }); res.end(JSON.stringify({ error: String(e?.message ?? e) })); });
       return;
     }
@@ -547,7 +688,6 @@ if (isMain) {
   const shutdown = () => { stopStream('shutdown'); try { xvfb?.kill(); } catch {} setTimeout(() => process.exit(0), 1500); };
   process.on('SIGTERM', shutdown);
   process.on('SIGINT', shutdown);
-  setInterval(poll, POLL_MS);
-  poll();
+  if (!MOCK) { setInterval(poll, POLL_MS); poll(); }
   if (MODE === 'cash') startCash();
 }
