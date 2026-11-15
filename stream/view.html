@@ -227,18 +227,78 @@
   .cp-tag img { width: 14px; height: 13px; object-fit: contain; }
   .cp-tag:has(span:empty) { display: none; }
   .fadein { animation: fadein .6s ease; } @keyframes fadein { from { opacity: 0; transform: translateY(8px); } }
+
+  /* ---- MTT broadcast (body.mtt): field-wide leaderboard, prize ladder, feature-table chips, lower-third banners ---- */
+  .mtt-only { display: none; } body.mtt .mtt-only { display: block; } body.mtt .std-only { display: none !important; }
+  #titleBlock { display: flex; flex-direction: column; line-height: 1.05; }
+  #brand { font-size: 10.5px; letter-spacing: 3px; color: #b99cff; font-weight: 700; text-transform: uppercase; margin: 2px 0 0 62px; }
+  body.mtt #title { font-size: 20px; }
+  #lateReg { margin-top: 5px; font-size: 12.5px; font-weight: 700; padding: 3px 8px; border-radius: 6px; display: none; white-space: nowrap; }
+  #lateReg.open { display: block; background: rgba(34,197,94,.16); color: var(--mint); border: 1px solid #22c55e88; font-variant-numeric: tabular-nums; }
+  #lateReg.closed { display: block; background: rgba(148,163,184,.12); color: #94a3b8; border: 1px solid #33415588; }
+  body.mtt #nextLvl { font-size: 12.5px; }
+  .lb .row { line-height: 21px; font-size: 13px; }
+  .lb .row .rk { width: 16px; color: #7f93bd; font-size: 11.5px; flex: none; text-align: right; margin-right: 5px; }
+  .lb .row.paid { box-shadow: inset 2px 0 0 #ffd36b; padding-left: 3px; }
+  .lb .row .tb { color: #8fa4cf; font-size: 11px; margin: 0 6px; flex: none; }
+  .lb .row .tb.feat { color: #04110a; background: #ffd36b; border-radius: 4px; padding: 0 4px; font-weight: 800; }
+  .lb .row .nn { flex: 1; min-width: 0; } .lb .row .n { max-width: 98px; }
+  .lb .row .v { flex: none; }
+  .lb .itm { color: var(--mint); font-size: 11px; letter-spacing: 1.5px; text-align: center; margin-top: 2px; }
+  #lbStats { margin-top: 6px; padding-top: 5px; border-top: 1px solid var(--line); font-size: 12.5px; color: #c7d4f0; line-height: 18px; }
+  #lbStats b { color: var(--gold); }
+  .ladder .row { font-size: 12.5px; line-height: 18px; } .ladder .pl { width: 30px; color: #8ea2c9; flex: none; } .ladder .mid { flex: 1; color: #9fb3d9; overflow: hidden; text-overflow: ellipsis; padding: 0 4px; }
+  .ladder .row.taken .mid { color: var(--mint); font-weight: 700; } .ladder .row.taken .v { opacity: .7; }
+  .ladder .row.min { background: rgba(34,197,94,.14); border-radius: 4px; } .ladder .row.min .mid { color: var(--mint); }
+  .ladder .row.top .pl { color: var(--gold); font-weight: 800; }
+  #ladderState { font-size: 11.5px; font-weight: 800; letter-spacing: 1.5px; text-align: center; border-radius: 5px; padding: 3px 0; margin-bottom: 5px; display: none; }
+  #ladderState.bub { display: block; background: #e11d48; color: #fff; animation: pulse 1.4s infinite; }
+  #ladderState.itm { display: block; background: linear-gradient(90deg, #22c55e, #16a34a); color: #04110a; }
+  .elim div { font-size: 12px; line-height: 17px; } .elim .pz { color: var(--gold); }
+  #feature { position: absolute; left: 266px; top: 58px; z-index: 3; display: none; font-size: 12px; font-weight: 800; letter-spacing: 1.6px; text-transform: uppercase;
+    background: rgba(8,13,28,.85); border: 1px solid #b26bff88; border-radius: 8px; padding: 4px 10px; color: #e9d5ff; white-space: nowrap; }
+  #feature b { color: #ffd36b; } #feature small { color: #8ea2c9; letter-spacing: 1px; font-weight: 700; margin-left: 4px; }
+  #statusPill { position: absolute; right: 266px; top: 58px; z-index: 3; display: none; font-size: 12.5px; font-weight: 800; letter-spacing: 2px; border-radius: 8px; padding: 4px 12px; }
+  #statusPill.bub { display: block; background: #e11d48; color: #fff; animation: pulse 1.4s infinite; }
+  #statusPill.itm { display: block; background: linear-gradient(90deg, #22c55e, #16a34a); color: #04110a; }
+  #statusPill.ft { display: block; background: linear-gradient(90deg, #ffd36b, #f59e0b); color: #2a1a00; }
+  #switchChip { position: absolute; left: 660px; top: 56px; transform: translate(-50%, -14px); z-index: 7; opacity: 0; pointer-events: none; white-space: nowrap;
+    font-size: 19px; font-weight: 900; letter-spacing: 2px; text-transform: uppercase; padding: 6px 20px; border-radius: 10px; color: #fff;
+    background: linear-gradient(90deg, #7c1d9c, #be123c); box-shadow: 0 0 24px #be123ccc, 0 6px 18px rgba(0,0,0,.5); border: 1px solid #fff5; transition: opacity .35s, transform .35s; }
+  #switchChip.on { opacity: 1; transform: translate(-50%, 0); }
+  @keyframes swapfx { 0% { opacity: .15; filter: brightness(2.2); } 100% { opacity: 1; filter: none; } }
+  .swapfx { animation: swapfx .7s ease-out; }
+  body.mtt #felt { top: 190px; }
+  #lower { position: absolute; left: 270px; width: 740px; bottom: 72px; z-index: 6; opacity: 0; transform: translateY(26px); transition: opacity .4s, transform .45s cubic-bezier(.2,.9,.25,1.1); pointer-events: none; }
+  #lower.on { opacity: 1; transform: none; }
+  #lower .bar { display: flex; align-items: center; gap: 14px; border-radius: 10px; overflow: hidden; box-shadow: 0 8px 26px rgba(0,0,0,.6); }
+  #lower .tag { align-self: stretch; display: flex; align-items: center; padding: 0 14px; font-weight: 900; letter-spacing: 2px; font-size: 13px; white-space: nowrap; }
+  #lower .txt { flex: 1; min-width: 0; padding: 6px 14px 6px 0; }
+  #lower .h { font-size: 20px; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #fff; }
+  #lower .s { font-size: 13px; color: #d6e2ff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 1px; }
+  #lower.bust .bar { background: linear-gradient(90deg, rgba(20,8,16,.95), rgba(10,14,32,.92)); border: 1px solid #be123c99; min-height: 46px; }
+  #lower.bust .tag { background: #be123c; color: #fff; }
+  #lower.bust .h { font-size: 18px; } #lower.bust .h b { color: var(--gold); }
+  #lower.ms .bar { background: linear-gradient(90deg, #ffd36b, #f59e0b 55%, #b45309); border: 2px solid #fff6c8; min-height: 64px; }
+  #lower.ms .tag { background: #2a1a00; color: #ffd36b; font-size: 12px; }
+  #lower.ms .h { font-size: 28px; font-weight: 900; color: #2a1a00; letter-spacing: 1.5px; } #lower.ms .s { color: #3b2503; font-size: 14px; font-weight: 700; }
+  #lower.ms.bub .bar { background: linear-gradient(90deg, #fb7185, #e11d48 60%, #9f1239); border-color: #ffe4e6; } #lower.ms.bub .h, #lower.ms.bub .s { color: #fff; }
+  #lower.ms.bub .tag { background: #4c0519; color: #fecdd3; }
+  #lower.ms.itm .bar { background: linear-gradient(90deg, #4ade80, #16a34a 60%, #166534); border-color: #dcfce7; } #lower.ms.itm .h, #lower.ms.itm .s { color: #04110a; }
+  #lower.ms.itm .tag { background: #052e16; color: #86efac; }
 </style>
 </head>
 <body>
-  <div id="top"><div id="title"><span class="live">LIVE</span><span id="tname">Morbius Poker</span><span class="free" id="freeTop" style="display:none">FREE ENTRY</span></div><div id="meta"></div></div>
+  <div id="top"><div id="titleBlock"><div id="title"><span class="live">LIVE</span><span id="tname">Morbius Poker</span><span class="free" id="freeTop" style="display:none">FREE ENTRY</span></div><div id="brand"></div></div><div id="meta"></div></div>
 
   <div id="left" class="side">
     <div class="panel"><h3>Blinds <span id="lvl"></span></h3>
       <div class="big" id="blinds">–</div>
       <div id="lvlClock" style="display:none"><span class="t" id="lvlT"></span><span class="l">to next level</span></div>
-      <div class="muted" id="nextLvl" style="white-space:pre-line"></div></div>
-    <div class="panel"><h3>Chip leaders <span id="left-count"></span></h3><div id="leaders"></div></div>
-    <div class="panel" id="payPanel"><h3>Payouts <span id="pool"></span></h3><div id="payouts"></div></div>
+      <div class="muted" id="nextLvl" style="white-space:pre-line"></div><div id="lateReg"></div></div>
+    <div class="panel mtt-only lb"><h3>Chip leaders <span id="lbCount"></span></h3><div id="lb"></div><div id="lbStats"></div></div>
+    <div class="panel std-only"><h3>Chip leaders <span id="left-count"></span></h3><div id="leaders"></div></div>
+    <div class="panel std-only" id="payPanel"><h3>Payouts <span id="pool"></span></h3><div id="payouts"></div></div>
     <div id="cashPromo">
       <img class="cp-art" src="/promos/poker-tile-art.webp" alt="" />
       <div class="cp-badge" id="cpK"></div>
@@ -254,9 +314,11 @@
   </div>
 
   <div id="right" class="side">
+    <div class="panel mtt-only ladder"><h3>Prize ladder <span id="ladPool"></span></h3><div id="ladderState"></div><div id="ladder"></div></div>
+    <div class="panel mtt-only elim"><h3>Eliminations</h3><div id="elimList"></div></div>
     <div class="panel"><h3>Hand action</h3><div class="log" id="actions"></div></div>
-    <div class="panel"><h3>Last winners</h3><div class="log" id="winners"></div></div>
-    <div class="panel"><h3>How to join</h3>
+    <div class="panel std-only"><h3>Last winners</h3><div class="log" id="winners"></div></div>
+    <div class="panel std-only"><h3>How to join</h3>
       <ol class="join">
         <li>Go to <b>morbius.io/poker</b></li>
         <li id="joinWallet">Connect a wallet &amp; grab chips</li>
@@ -269,6 +331,8 @@
   <div id="seats"></div>
   <div id="fx"></div>
   <div id="banner" style="display:none"></div>
+  <div id="feature"></div><div id="statusPill"></div><div id="switchChip"></div>
+  <div id="lower"><div class="bar"><div class="tag" id="lowTag"></div><div class="txt"><div class="h" id="lowH"></div><div class="s" id="lowS"></div></div></div></div>
   <div id="inter">
     <div class="brand">$MORBIUS ON #PULSECHAIN</div>
     <div class="screen" id="interScreen"><video id="interVid" muted autoplay loop playsinline></video>
@@ -492,6 +556,97 @@ function renderInter(kind, at, freeEntry) {
 }
 function hideInter() { if (!interOn) return; interOn = false; $('inter').style.display = 'none'; }
 
+// ---- MTT broadcast: feature table chips, field-wide leaderboard, prize ladder, lower-third banners ----
+let MTT = false;
+const ord = (n) => { const v = n % 100; return v >= 11 && v <= 13 ? n + 'th' : n + ({ 1: 'st', 2: 'nd', 3: 'rd' }[n % 10] || 'th'); };
+const lowerEl = () => $('lower');
+const bq = []; let bqBusy = false; const seenElim = new Set(); let lastFeatTable = null; let switchTimer = null;
+let msShown = new Set(); let msKey = '';
+function msStore(key) { try { return new Set(JSON.parse(localStorage.getItem('mtt-ms:' + key) || '[]')); } catch { return new Set(); } }
+function msSave() { try { localStorage.setItem('mtt-ms:' + msKey, JSON.stringify([...msShown])); } catch {} }
+function enqueue(item, front) { if (front) bq.unshift(item); else bq.push(item); pump(); }
+function pump() {
+  if (bqBusy || !bq.length) return;
+  bqBusy = true;
+  const it = bq.shift(); const el = lowerEl();
+  el.className = it.kind + (it.cls ? ' ' + it.cls : '');
+  $('lowTag').textContent = it.tag; $('lowH').innerHTML = it.h; $('lowS').textContent = it.s || ''; $('lowS').style.display = it.s ? '' : 'none';
+  void el.offsetWidth; el.classList.add('on');
+  const ms = it.ms * (it.kind === 'bust' && bq.length > 2 ? 0.65 : 1);
+  setTimeout(() => { el.classList.remove('on'); setTimeout(() => { bqBusy = false; pump(); }, 500); }, ms);
+}
+function processMtt(st) {
+  const bc = st.broadcast; if (!bc) return;
+  const T = bc.tournament; const F = bc.flags || {};
+  const gen = Date.parse(bc.generatedAt) || Date.now();
+  // busts: only recent ones (so a page reload / stream start doesn't replay history); each once
+  const fresh = [];
+  for (const e of (bc.eliminations || []).slice().sort((a, b) => b.place - a.place)) {
+    const key = e.address + ':' + e.place; if (seenElim.has(key)) continue; seenElim.add(key);
+    if (e.at && gen - Date.parse(e.at) < 30_000) fresh.push(e);
+  }
+  const bustItems = [];
+  const enqueueBust = (it) => bustItems.push(it);
+  if (fresh.length >= 4) {
+    const lo = fresh[fresh.length - 1].place; const hi = fresh[0].place;
+    enqueueBust({ kind: 'bust', tag: 'ELIMINATED', h: `<b>${fresh.length} players</b> eliminated`, s: `Places ${ord(lo)}–${ord(hi)}`, ms: 4200 });
+  } else for (const e of fresh) {
+    enqueueBust({ kind: 'bust', tag: e.prize ? 'PAID BUST' : 'ELIMINATED', h: `${escH(e.name)} eliminated in <b>${ord(e.place)}</b>${e.prize ? ` — wins <b>${fmt(e.prize)}</b>` : ''}`, ms: 4200 });
+  }
+  // milestones: once per tournament (remembered across page reloads)
+  const key = (T.name || '') + '|' + (T.startedAt || ''); if (key !== msKey) { msKey = key; msShown = msStore(key); }
+  const fire = (id, item) => { if (msShown.has(id)) return; msShown.add(id); msSave(); enqueue(item, true); };
+  const paid = T.paidPlaces || (T.payouts || []).length; const minCash = (T.payouts || [])[paid - 1]?.amount;
+  if (F.finished && bc.winner) fire('winner', { kind: 'ms', tag: 'CHAMPION', h: `${escH(bc.winner.name)} WINS`, s: bc.winner.prize ? `1st place · ${fmt(bc.winner.prize)} MORBIUS` : '1st place', ms: 14_000 });
+  else if (F.headsUp) fire('headsup', { kind: 'ms', tag: 'MILESTONE', h: 'HEADS-UP', s: `${(bc.leaderboard || []).slice(0, 2).map((p) => escH(p.name)).join(' vs ')} · winner takes ${fmt((T.payouts || [])[0]?.amount)}`.replace(/&amp;/g, '&'), ms: 7000 });
+  else if (F.finalTable) fire('final', { kind: 'ms', tag: 'MILESTONE', h: 'FINAL TABLE', s: `${T.playersLeft} players left · 1st place ${fmt((T.payouts || [])[0]?.amount)}`, ms: 7000 });
+  if (F.inTheMoney) fire('itm', { kind: 'ms', cls: 'itm', tag: 'MILESTONE', h: 'IN THE MONEY', s: `The bubble has burst — everyone left cashes${minCash ? ' · min ' + fmt(minCash) : ''}`, ms: 7000 });
+  if (F.bubble) fire('bubble', { kind: 'ms', cls: 'bub', tag: 'MILESTONE', h: 'ON THE BUBBLE', s: `${T.playersLeft} players left · ${paid} get paid`, ms: 7000 });
+  bustItems.forEach((it) => enqueue(it, false));
+}
+function renderMtt(st) {
+  const bc = st.broadcast; const T = bc.tournament; const F = bc.flags || {}; const f = st.feature;
+  const paid = T.paidPlaces || (T.payouts || []).length;
+  // feature table chips
+  $('feature').style.display = 'block';
+  $('feature').innerHTML = `Feature table · <b>Table ${f.tableNumber}</b>${f.tableCount > 1 ? `<small>of ${f.tableCount}</small>` : ''}`;
+  if (lastFeatTable !== null && f.tableId !== lastFeatTable || (lastFeatTable === null && f.switchAgeMs != null && f.switchAgeMs < 5000)) {
+    const chip = $('switchChip'); chip.textContent = `Table ${f.tableNumber}${f.chip ? ' · ' + f.chip : ''}`;
+    chip.classList.add('on'); clearTimeout(switchTimer); switchTimer = setTimeout(() => chip.classList.remove('on'), 4500);
+    for (const id of ['felt', 'seats']) { const e = $(id); e.classList.remove('swapfx'); void e.offsetWidth; e.classList.add('swapfx'); }
+    for (const k of Object.keys(lastSig)) delete lastSig[k];
+  }
+  lastFeatTable = f.tableId;
+  const pill = $('statusPill');
+  pill.className = F.finished ? '' : F.bubble ? 'bub' : F.finalTable ? 'ft' : F.inTheMoney ? 'itm' : '';
+  pill.textContent = F.bubble ? 'ON THE BUBBLE' : F.finalTable ? (F.headsUp ? 'HEADS-UP' : 'FINAL TABLE') : F.inTheMoney ? 'IN THE MONEY' : '';
+  // late reg + blinds extras
+  const lr = $('lateReg'); const ends = T.lateReg?.endsAt ? Date.parse(T.lateReg.endsAt) : null;
+  if (T.lateReg?.open && ends) { lr.className = 'open'; lr.textContent = `Late reg closes in ${mmss(ends - Date.now())}`; }
+  else if (ends) { lr.className = 'closed'; lr.textContent = 'Late registration closed'; } else lr.className = '';
+  const b = T.blinds; if (b?.ante > 0) $('blinds').textContent += ` · ante ${fmt(b.ante)}`;
+  // leaderboard (field-wide)
+  $('lbCount').textContent = `${T.playersLeft}/${T.entrants} left`;
+  $('lb').innerHTML = (bc.leaderboard || []).slice(0, 10).map((p) =>
+    `<div class="row${p.rank <= paid ? ' paid' : ''}"><span class="rk">${p.rank}</span><span class="nn"><span class="avslot" data-a="${esc(p.address)}" data-n="${esc(p.name)}"></span><span class="n">${esc(p.name)}</span></span>${f.tableCount > 1 ? `<span class="tb${p.tableNumber === f.tableNumber ? ' feat' : ''}">T${p.tableNumber}</span>` : ''}<span class="v">${fmt(p.stack)}</span></div>`).join('')
+    + (F.inTheMoney ? '<div class="itm">★ ALL IN THE MONEY ★</div>' : '');
+  fillAvatars($('lb'), 'mini');
+  $('lbStats').innerHTML = `<b>${fmt(T.playersLeft)}</b> of ${fmt(T.entrants)} left · avg <b>${fmt(T.avgStack)}</b><br>Prize pool <b>${fmt(T.prizePool)}</b> · ${paid} paid`;
+  // prize ladder with who took each finished paid place
+  const took = new Map((bc.eliminations || []).map((e) => [e.place, e.name])); if (bc.winner) took.set(1, bc.winner.name);
+  const st2 = $('ladderState'); st2.className = F.bubble ? 'bub' : F.inTheMoney ? 'itm' : '';
+  st2.textContent = F.bubble ? 'ON THE BUBBLE' : F.inTheMoney ? 'IN THE MONEY' : '';
+  $('ladPool').textContent = `pool ${fmt(T.prizePool)}`;
+  $('ladder').innerHTML = (T.payouts || []).map((p) => {
+    const who = took.get(p.place);
+    const cls = (who ? ' taken' : '') + (F.inTheMoney && p.place === paid && !who ? ' min' : '') + (p.place <= 3 ? ' top' : '');
+    return `<div class="row${cls}"><span class="pl">${ord(p.place)}</span><span class="mid">${who ? esc(who) : p.percent + '%'}</span><span class="v">${fmt(p.amount)}</span></div>`;
+  }).join('');
+  $('elimList').innerHTML = (bc.eliminations || []).slice(0, 4).map((e) => `<div>${esc(e.name)} · <b>${ord(e.place)}</b>${e.prize ? ` <span class="pz">+${fmt(e.prize)}</span>` : ''}</div>`).join('') || '<div class="muted">No eliminations yet</div>';
+  $('meta').innerHTML = `${fmt(T.playersLeft)}/${fmt(T.entrants)} left · avg <b>${fmt(T.avgStack)}</b> · Blinds <b>${fmt(st.smallBlind)}/${fmt(st.bigBlind)}</b>` +
+    (b?.nextLevelAt ? `<span class="clk${Date.parse(b.nextLevelAt) - Date.now() <= 60_000 ? ' low' : ''}">Level up ${mmss(Date.parse(b.nextLevelAt) - Date.now())}</span>` : '');
+}
+
 function cardEl(n, opts = {}) {
   const d = document.createElement('div');
   if (opts.back) { d.className = 'card back'; return d; }
@@ -503,7 +658,7 @@ function cardEl(n, opts = {}) {
 }
 // seat anchors on an ellipse around the felt (center column between the two sidebars)
 function seatPos(i, n) {
-  const cx = 640, cy = 365, rx = 318, ry = 228;
+  const cx = 640, cy = MTT ? 350 : 365, rx = 318, ry = MTT ? 205 : 228;
   const a = Math.PI / 2 + (2 * Math.PI * i) / n;
   return { x: cx + rx * Math.cos(a), y: cy + ry * Math.sin(a) };
 }
@@ -582,7 +737,7 @@ function renderSidebars(st, meta) {
     $('payouts').innerHTML = `<div class="muted">Cash game — cash out anytime. Bots leave when they lose their buy-in.</div>`;
   } else $('payPanel').style.display = 'none';
 
-  $('actions').innerHTML = actionLog.slice(0, 12).map((x) => `<div>${x}</div>`).join('') || '<div class="muted">Waiting for action…</div>';
+  $('actions').innerHTML = actionLog.slice(0, MTT ? 7 : 12).map((x) => `<div>${x}</div>`).join('') || '<div class="muted">Waiting for action…</div>';
   $('winners').innerHTML = winLog.slice(0, 5).map((x) => `<div>${x}</div>`).join('') || '<div class="muted">No hands finished yet</div>';
 }
 
@@ -612,6 +767,10 @@ function renderOverlay(meta, st) {
 function render(st) {
   const meta = st.meta || null;
   const h = st.currentHand;
+  MTT = Boolean(st.mtt && st.broadcast && st.feature);
+  document.body.classList.toggle('mtt', MTT);
+  if (st.title && qs.get('mode') !== 'cash') $('tname').textContent = st.title;
+  $('brand').textContent = st.brand && qs.get('mode') !== 'cash' ? st.brand : '';
   track(st);
   processTalk(st);
   const actionSecs = Number(meta?.actionSeconds) > 0 ? Number(meta.actionSeconds) : 60;
@@ -684,11 +843,12 @@ function render(st) {
   } else banner.style.display = 'none';
   renderSidebars(st, meta);
   renderOverlay(meta, st);
+  if (MTT) { renderMtt(st); processMtt(st); } else { $('feature').style.display = 'none'; $('statusPill').className = ''; }
 }
 
 async function tick() {
   try {
-    const r = await fetch('/api/current', { cache: 'no-store' });
+    const r = await fetch('/api/current' + (qs.get('mock') ? '?mock=' + encodeURIComponent(qs.get('mock')) : ''), { cache: 'no-store' });
     if (r.ok) {
       const body = await r.json();
       if (body.pending) {
