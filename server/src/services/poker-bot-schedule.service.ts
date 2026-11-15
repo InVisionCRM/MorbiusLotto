@@ -26,15 +26,30 @@
  *   POKER_BOT_SCHEDULE_PRIZE=top_3         prize distribution type
  *   POKER_BOT_SCHEDULE_CREATOR=0x…         creator wallet (default: first bot). Never a rake/fee wallet.
  *   POKER_BOT_SCHEDULE_CREATOR_FEE=0       creator fee percent
- *   POKER_BOT_SCHEDULE_NAME=The Morbius Daily Freeroll
+ *   POKER_BOT_SCHEDULE_NAME=#PulseChain Poker FreeRoll  game name prefix; each game is named
+ *                                          "<name> at <time> EST" (e.g. "#PulseChain Poker FreeRoll at 9pm EST")
  *   POKER_BOT_SCHEDULE_LATE_REG_MINUTES=30 humans can still join this long after the start
  */
 
 import type { Pool } from 'pg';
+
 import { logger } from '../utils/logger';
 import { DEFAULT_BLIND_SCHEDULE, type PokerTournamentService } from './poker-tournament.service';
 import { listPokerBotAccounts } from '../lib/poker-bot-registry';
 import { fundPokerBotToBalance } from '../lib/poker-bot-bankroll';
+
+/** "21:00" -> "9pm", "09:30" -> "9:30am", "00:00" -> "12am", "12:00" -> "12pm". */
+export function formatDailyGameTime(localLabel: string): string {
+  const [h, m] = localLabel.split(':').map((n) => parseInt(n, 10));
+  const suffix = h >= 12 ? 'pm' : 'am';
+  const h12 = h % 12 === 0 ? 12 : h % 12;
+  return m ? `${h12}:${String(m).padStart(2, '0')}${suffix}` : `${h12}${suffix}`;
+}
+
+/** Viewer-facing daily game name: "#PulseChain Poker FreeRoll at 9pm EST" (literal "EST"). */
+export function formatDailyGameName(localLabel: string, prefix = '#PulseChain Poker FreeRoll'): string {
+  return `${prefix} at ${formatDailyGameTime(localLabel)} EST`;
+}
 
 const POLL_MS = 30_000;
 
@@ -107,7 +122,7 @@ export function readBotScheduleConfig(): BotScheduleConfig {
     prize: process.env.POKER_BOT_SCHEDULE_PRIZE?.trim() || 'top_3',
     creator: creatorRaw && /^0x[0-9a-fA-F]{40}$/.test(creatorRaw) ? creatorRaw.toLowerCase() : null,
     creatorFee: intEnv('POKER_BOT_SCHEDULE_CREATOR_FEE', 0, 0, 15),
-    name: process.env.POKER_BOT_SCHEDULE_NAME?.trim() || 'The Morbius Daily Freeroll',
+    name: process.env.POKER_BOT_SCHEDULE_NAME?.trim() || '#PulseChain Poker FreeRoll',
   };
 }
 
@@ -261,7 +276,7 @@ export class PokerBotScheduleService {
       const localLabel = slot.slotKey.split(' ')[1];
       const created = await this.tournaments.createPokerTournament({
         creatorAddress: creator,
-        name: `${cfg.name} ${localLabel} ET`,
+        name: formatDailyGameName(localLabel, cfg.name),
         buyInAmount: cfg.buyIn,
         prizeDistributionType: cfg.prize,
         config: {
