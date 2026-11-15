@@ -293,6 +293,8 @@ export class PokerBotScheduleService {
         internalHumanFreeEntry: cfg.freeEntry,
         // Heads-up / bot-only end game gets shorter blind levels so games can't drag on.
         internalFastEndgame: true,
+        // Promo freeroll: the bots' buy-ins are the prize, paid in full (no 5% pool cut / fees).
+        internalFeesWaived: true,
         isPrivate: false,
         scheduledStartAt: slot.at,
         creatorFeePercent: cfg.creatorFee,
