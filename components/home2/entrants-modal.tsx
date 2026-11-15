@@ -11,14 +11,14 @@
 import React, { useEffect } from 'react';
 import { useWeeklyDropEntrants } from '@/hooks/use-weekly-drop';
 
-/** Same visual family as the winner avatar circles (radial highlight top-left). */
+/** Polished steel / gold / cyan / violet balls — the Chronograph palette (radial highlight top-left). */
 const ENTRANT_GRADIENTS = [
-  'radial-gradient(circle at 32% 28%,#fde68a,#f59e0b)',
-  'radial-gradient(circle at 32% 28%,#a5f3fc,#0891b2)',
-  'radial-gradient(circle at 32% 28%,#c4b5fd,#7c3aed)',
-  'radial-gradient(circle at 32% 28%,#a7f3d0,#059669)',
-  'radial-gradient(circle at 32% 28%,#fecaca,#dc2626)',
-  'radial-gradient(circle at 32% 28%,#fbcfe8,#db2777)',
+  'radial-gradient(circle at 32% 28%,#fff,#c7ccd8 45%,#7a8091)',
+  'radial-gradient(circle at 32% 28%,#fbe8b4,#e9c46a 45%,#8a6a22)',
+  'radial-gradient(circle at 32% 28%,#cffafe,#22d3ee 45%,#0e6b7a)',
+  'radial-gradient(circle at 32% 28%,#ede9fe,#a78bfa 45%,#4c3a8f)',
+  'radial-gradient(circle at 32% 28%,#f1e2d3,#e3a878 45%,#7b5232)',
+  'radial-gradient(circle at 32% 28%,#e5e7eb,#9aa1b3 45%,#3a3f4c)',
 ];
 
 function gradientFor(address: string): string {
@@ -63,7 +63,7 @@ export function EntrantsModal({ open, onClose }: EntrantsModalProps) {
     >
       <div className="panel" onClick={(e) => e.stopPropagation()}>
         <div className="head">
-          <b>🎟 THIS WEEK&apos;S ENTRANTS</b>
+          <b>This week&apos;s entrants</b>
           {data && (
             <span className="count">
               {data.totalEntrants.toLocaleString('en-US')} players · {data.totalEntries.toLocaleString('en-US')}{' '}

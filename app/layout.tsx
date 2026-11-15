@@ -104,10 +104,12 @@ export default function RootLayout({
         <link rel="preconnect" href="https://api.web3modal.org" />
 
         {/* Montserrat for chat messages; Mitr for the Mini App + poker headings.
-            Display fonts (Lilita One … Monoton) drive the per-game lobby tile titles. */}
+            Display fonts (Lilita One … Monoton) are used by game pages / older tiles.
+            Manrope + Red Hat Mono and the card faces (Michroma … Federo) are the
+            Chronograph homepage: UI type and the per-game card lockups. */}
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&family=Jost:wght@500;600;800&family=Montserrat:wght@500&family=Mitr:wght@400;500;600;700&family=Lilita+One&family=Bungee&family=Titan+One&family=Bangers&family=Rye&family=Bowlby+One+SC&family=Shrikhand&family=Monoton&display=swap" rel="stylesheet" />
+        <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&family=Jost:wght@500;600;800&family=Montserrat:wght@500&family=Mitr:wght@400;500;600;700&family=Lilita+One&family=Bungee&family=Titan+One&family=Bangers&family=Rye&family=Bowlby+One+SC&family=Shrikhand&family=Monoton&family=Manrope:wght@200;300;400;500;600&family=Red+Hat+Mono:wght@400;500&family=Michroma&family=Tenor+Sans&family=Marcellus+SC&family=Saira+Condensed:wght@300&family=Bai+Jamjuree:wght@300&family=Jura:wght@400&family=Cormorant+Garamond:ital,wght@0,500;1,400;1,500&family=Italiana&family=Cinzel:wght@400&family=Bodoni+Moda:ital,wght@0,400;1,400&family=Josefin+Sans:wght@200;300&family=Poiret+One&family=Syncopate&family=Chakra+Petch:wght@300&family=Gruppo&family=Federo&display=swap" rel="stylesheet" />
       </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}

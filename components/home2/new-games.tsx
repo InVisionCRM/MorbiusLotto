@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * NewGames — the "just landed" shelf that sits above the floor.
+ * NewGames — the Chronograph "Just landed" rail that sits above the collection.
  *
  * Shows the most recently shipped games, newest first. Recency is not a
  * hand-kept list: every entry in FLOOR_GAMES carries `addedAt` (the date its
@@ -41,7 +41,7 @@ function freshness(iso: string, now: number): TileBadge | null {
 }
 
 export function NewGames() {
-  const trackRef = useRef<HTMLDivElement | null>(null);
+  const trackRef = useRef<HTMLElement | null>(null);
   const [paused, setPaused] = useState(false);
 
   /* Newest first. Ties (a batch shipped the same day) keep catalog order,
@@ -64,7 +64,7 @@ export function NewGames() {
   const step = useCallback(() => {
     const el = trackRef.current;
     if (!el) return;
-    const card = el.querySelector<HTMLElement>('.game-tile');
+    const card = el.querySelector<HTMLElement>('.ch-card');
     if (!card) return;
     const gap = parseFloat(getComputedStyle(el).columnGap || '0') || 0;
     const stride = card.offsetWidth + gap;
@@ -85,14 +85,16 @@ export function NewGames() {
   if (games.length === 0) return null;
 
   return (
-    <section className="zone ng-zone">
-      <div className="zone-head">
+    <>
+      <div className="sh" id="landed">
         <h2>
-          JUST <em>LANDED</em>
+          Just <em>landed</em>
         </h2>
+        <span className="meta">New references · {String(games.length).padStart(2, '0')}</span>
       </div>
-      <div
-        className="ng-track"
+      <section
+        className="rail"
+        aria-label="Just landed"
         ref={trackRef}
         onMouseEnter={() => setPaused(true)}
         onMouseLeave={() => setPaused(false)}
@@ -101,12 +103,12 @@ export function NewGames() {
         onFocusCapture={() => setPaused(true)}
         onBlurCapture={() => setPaused(false)}
       >
-        {games.map((g) => (
-          /* The rail's ribbon is about recency; until the date is known on
+        {games.map((g, i) => (
+          /* The rail's badge is about recency; until the date is known on
              the client it shows none, so server and first render agree. */
-          <GameTile key={g.key} game={g} badge={now == null ? null : freshness(g.addedAt, now) ?? g.badge ?? null} />
+          <GameTile key={g.key} game={g} order={i} badge={now == null ? null : freshness(g.addedAt, now) ?? g.badge ?? null} />
         ))}
-      </div>
-    </section>
+      </section>
+    </>
   );
 }

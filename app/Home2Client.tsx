@@ -10,20 +10,23 @@ import { useQueryClient } from '@tanstack/react-query'
 import {
   HomeTicker,
   HeroPlayer,
+  HeroVisitor,
   TheFloor,
+  WorkshopHead,
   SlotForge,
   TourneyForge,
   TableForge,
   WeeklyDrop,
   VipLadder,
   HomeFooter,
+  type TickerItem,
   type WeeklyDropWinner,
 } from '@/components/home2/sections'
-import { HeroCarousel } from '@/components/home2/hero-carousel'
 import { NewGames } from '@/components/home2/new-games'
-import { DailyFreeroll } from '@/components/home2/daily-freeroll'
+import { DailyFreeroll, FREEROLL_SLOTS, formatDailyGameTime } from '@/components/home2/daily-freeroll'
+import { ChronoDefs } from '@/components/home2/chrono-defs'
 import { FLOOR_GAMES } from '@/components/home2/scenes'
-import { HomeSidebar, ChipDock, MobileTopBar } from '@/components/home2/nav'
+import { TopNav, ChipDock, NavDrawer } from '@/components/home2/nav'
 import { GameLauncherSheet } from '@/components/home2/game-launcher-sheet'
 import { WhatsNewSplash } from '@/components/DevLog/WhatsNewSplash'
 import { DropSheet } from '@/components/home2/drop-sheet'
@@ -53,25 +56,14 @@ const RevokeApprovalsModal = dynamic(
   { ssr: false }
 )
 
-const TIER_EMOJI: Record<string, string> = {
-  BRONZE: '🥉',
-  SILVER: '🥈',
-  GOLD: '🥇',
-  PLATINUM: '💠',
-  DIAMOND: '💎',
-  OBSIDIAN: '🖤',
-}
-
 function shortAddress(addr?: string): string {
   return addr ? `${addr.slice(0, 6)}…${addr.slice(-4)}` : ''
 }
 
-/* Rank 1/2/3 avatar gradients for the Weekly Drop's last winners */
-const DROP_WINNER_GRADIENTS = [
-  'radial-gradient(circle at 32% 28%,#fde68a,#f59e0b)',
-  'radial-gradient(circle at 32% 28%,#a5f3fc,#0891b2)',
-  'radial-gradient(circle at 32% 28%,#c4b5fd,#7c3aed)',
-]
+const USD_PRICE = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumSignificantDigits: 3 })
+/* Rakeback on losses per tier (owner, 2026-07) — fallback when /api/vip/config omits the rate. */
+const LADDER_RAKEBACK_BPS: Record<string, number> = { BRONZE: 500, SILVER: 800, GOLD: 1200, PLATINUM: 1600, DIAMOND: 2000, OBSIDIAN: 2500 }
+const FREEROLL_TIMES = FREEROLL_SLOTS.map((h) => formatDailyGameTime(h)).join(' · ')
 
 /**
  * Route for a game key from the wins feed. Those keys track the lobby routes
@@ -103,6 +95,7 @@ export default function Home2Client() {
   const [activeSheet, setActiveSheet] = useState<'games' | 'drop' | 'wallet' | null>(null)
   const [revokeOpen, setRevokeOpen] = useState(false)
   const [navOpen, setNavOpen] = useState(false)
+  const [floorFilter, setFloorFilter] = useState('all')
   const [walletModalOpen, setWalletModalOpen] = useState(false)
   const [chartOpen, setChartOpen] = useState(false)
   const [entrantsOpen, setEntrantsOpen] = useState(false)
@@ -136,11 +129,13 @@ export default function Home2Client() {
     const curMin = curRung ? Number(curRung.minLifetimeWagerChips) : 0
     const wagerToNext = Math.max(0, nextMin - lifetime)
     const span = Math.max(1, nextMin - curMin)
-    const progressPct = nextMin > 0 ? Math.min(100, Math.round(((lifetime - curMin) / span) * 100)) : 100
     // No rung above the current one means this player is already at the top of
     // the ladder — the card says so rather than pointing at a tier that isn't there.
-    const atTopTier = !next
-    const nextRakeback = next ? `${next.rakebackBps / 100}%` : rakeback
+    // Until the ladder has loaded there is no "next", but that is not the top tier.
+    const atTopTier = rungs.length > 0 && !next
+    const progressPct = nextMin > 0 ? Math.min(100, Math.max(0, Math.round(((lifetime - curMin) / span) * 100))) : atTopTier ? 100 : 0
+    const nextBps = next?.rakebackBps ?? (next ? LADDER_RAKEBACK_BPS[next.tierName.toUpperCase()] : undefined)
+    const nextRakeback = nextBps != null ? `${nextBps / 100}%` : rakeback
     return {
       tierName,
       rakeback,
@@ -165,26 +160,31 @@ export default function Home2Client() {
   const topWin = useMemo(() => (wins.length ? wins.reduce((a, b) => (b.amount > a.amount ? b : a)) : null), [wins])
 
   const tickerItems = useMemo(() => {
-    const items: string[] = []
+    const items: TickerItem[] = [
+      { k: 'FreeRoll', v: `#PulseChain Poker · ${FREEROLL_TIMES} EST · free entry` },
+    ]
     if (topWin) {
       const who = topWin.username ?? shortAddress(topWin.address)
-      items.push(
-        `<b class="g">🏆 RECENT HIGH</b> <b>${topWin.amount.toLocaleString('en-US')}</b> on ${gameLabel(topWin.game)} — ${who}`
-      )
+      items.push({ k: 'Recent high', v: `${topWin.amount.toLocaleString('en-US')} MORBIUS on ${gameLabel(topWin.game)} — ${who}` })
     }
     for (const w of wins.slice(0, 5)) {
       const who = w.username ?? shortAddress(w.address)
-      items.push(`<b class="e">💸 WIN</b> <b>${w.amount.toLocaleString('en-US')}</b> on ${gameLabel(w.game)} — ${who}`)
+      items.push({ k: 'Win', v: `${w.amount.toLocaleString('en-US')} on ${gameLabel(w.game)} — ${who}` })
     }
-    items.push('<b class="c">👑 VIP</b> rakeback on losses — Bronze 5% to Obsidian 25%')
+    items.push({ k: 'VIP', v: 'rakeback on losses · Bronze 5% → Obsidian 25%' })
     items.push(
       drop?.draw
-        ? `<b class="g">🎟 WEEKLY DROP</b> pot at ${Number(drop.draw.potChips).toLocaleString('en-US')} · top 3 win Sunday 8PM`
-        : '<b class="g">🎟 WEEKLY DROP</b> lighting soon · top 3 win every Sunday 8PM'
+        ? { k: 'Weekly Drop', v: `pot at ${Number(drop.draw.potChips).toLocaleString('en-US')} MORBIUS · top 3 win Sunday 8 PM ET` }
+        : { k: 'Weekly Drop', v: 'lighting soon · top 3 win every Sunday 8 PM ET' }
     )
-    // Always real: live wins when the feed has them, plus the two standing facts above.
+    // Platform totals (formerly the promo hero's proof strip) — only once real.
+    if (gamesPlayed) items.push({ k: 'Games played', v: gamesPlayed.toLocaleString('en-US') })
+    if (totalWon) items.push({ k: 'MORBIUS won', v: totalWon.toLocaleString('en-US') })
+    const biggest = allTimeBiggest ?? topWin?.amount
+    if (biggest) items.push({ k: 'Biggest win', v: `${biggest.toLocaleString('en-US')} MORBIUS` })
+    if (morbiusUsd != null) items.push({ k: 'MORBIUS', v: USD_PRICE.format(morbiusUsd) })
     return items
-  }, [wins, topWin, drop])
+  }, [wins, topWin, drop, gamesPlayed, totalWon, allTimeBiggest, morbiusUsd])
 
   // Resume card: the player's own most recent win from the live feed
   const myLastWin = useMemo(
@@ -214,13 +214,12 @@ export default function Home2Client() {
         letter: (initialFrom[0] ?? '?').toUpperCase(),
         name,
         amount: Number(w.amountChips).toLocaleString('en-US'),
-        gradient: DROP_WINNER_GRADIENTS[Math.min(Math.max(w.rank, 1), 3) - 1],
       }
     })
     return {
       pot: Number(drop.draw.potChips),
       // drop.draw.id is a database UUID — meaningless to players, so it isn't shown.
-      statusPill: '🎟 DROP · LIVE',
+      status: 'Live',
       accruedNote: (() => {
         const accrued = Number(drop.draw.accruedChips ?? 0)
         const guaranteed = Number(drop.draw.guaranteedMin)
@@ -237,7 +236,7 @@ export default function Home2Client() {
       progress,
       entriesSub: (
         <>
-          <b style={{ color: 'var(--gold)' }}>{toNext.toLocaleString('en-US')} MORBIUS</b> wagered to your next entry
+          <b>{toNext.toLocaleString('en-US')} MORBIUS</b> wagered to your next entry
         </>
       ),
       winners,
@@ -250,11 +249,35 @@ export default function Home2Client() {
     if (address) router.push(`/player/${address}`)
   }
 
-  const openSheet = (kind: 'deposit' | 'games' | 'drop') => {
+  const openSheet = (kind: 'games' | 'drop' | 'wallet') => {
     setNavOpen(false)
     setActiveSheet(kind)
   }
   const closeSheet = () => setActiveSheet(null)
+  const openNav = () => {
+    setActiveSheet(null)
+    setNavOpen(true)
+  }
+  const pickFloor = (f: string) => {
+    setFloorFilter(f)
+    document.getElementById('collection')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
+  const onProfile = () =>
+    openProfileSettings({
+      displayName: profileDisplayName ?? '',
+      profileImageUrl,
+      bio,
+      xHandle,
+      tgHandle,
+      onSave: async (displayName, newImageUrl, newBio, newX, newTg) => {
+        if (!address) throw new Error('Connect your wallet to save your profile.')
+        await apiFetch('/api/player/profile', {
+          method: 'POST',
+          body: JSON.stringify({ displayName, profileImageUrl: newImageUrl, bio: newBio, xHandle: newX, tgHandle: newTg }),
+        })
+        queryClient.invalidateQueries({ queryKey: ['playerProfile', address] })
+      },
+    })
 
   // DROP badge on the dock: time until the live draw closes ('2d' / '5h'), null when no live draw
   const dropBadge = useMemo(() => {
@@ -267,50 +290,33 @@ export default function Home2Client() {
   }, [weeklyDrop])
 
   return (
-    <div className={`home2${navOpen ? ' nav-open' : ''}`} data-mode={mode}>
+    <div className="home2" data-mode={mode} id="top">
+      <ChronoDefs />
       {/* First visit only — it stores a versioned flag and never returns. */}
       <WhatsNewSplash />
-      <div className="app">
-        <HomeSidebar
-          mode={mode}
-          balance={balanceStr}
-          tierEmoji={TIER_EMOJI[vip.tierName] ?? '🥉'}
-          tierName={vip.tierName}
-          tierRakeback={vip.rakeback}
-          nextTier={vip.atTopTier ? null : vip.nextName}
-          nextRakeback={vip.nextRakeback}
-          progressPct={vip.progressPct}
-          wagerToNext={vip.wagerToNext}
-          recentHigh={topWin?.amount ?? null}
-          priceUsd={morbiusUsd}
-          onConnect={onConnect}
-          onDeposit={onDeposit}
-          onWithdraw={onDeposit}
-          onDisconnect={() => disconnect()}
-          onChartClick={() => setChartOpen(true)}
-        />
-        <div className="main">
-          <MobileTopBar mode={mode} onConnect={onConnect} />
-          <HomeTicker items={tickerItems} />
-          {/* Promo carousel is the top hero for everyone (auto-rotating). */}
-          <HeroCarousel
-            gamesPlayed={gamesPlayed}
-            morbiusWon={totalWon}
-            biggestWin={allTimeBiggest ?? topWin?.amount}
-            onTakeSeat={mode === 'player' ? onDashboard : onConnect}
-            onOpenDrop={() => setActiveSheet('drop')}
-            onRefer={mode === 'player' ? onDashboard : onConnect}
-          />
-          {/* The Morbius Daily Freeroll: free poker tournament at 1, 5 & 9 PM ET (links to /poker). */}
+      <TopNav
+        mode={mode}
+        balance={balanceStr}
+        avatarUrl={profileImageUrl}
+        priceUsd={morbiusUsd}
+        onConnect={onConnect}
+        onWallet={() => openSheet('wallet')}
+        onMenu={openNav}
+        onChart={() => setChartOpen(true)}
+        onFloor={pickFloor}
+        onDrop={() => openSheet('drop')}
+      />
+      <HomeTicker items={tickerItems} />
+      <main className="wrap">
+        <div className="heroGrid">
+          {/* #PulseChain Poker FreeRoll — six free games a day; links to /poker. */}
           <DailyFreeroll />
-          {/* Connected players keep their personalized hero directly below it. */}
           {mode === 'player' ? (
             <HeroPlayer
               name={displayName}
               address={address}
               avatarUrl={profileImageUrl}
               tierName={vip.tierName}
-              tierEmoji={TIER_EMOJI[vip.tierName] ?? '🥉'}
               nextTierName={vip.atTopTier ? null : vip.nextName}
               nextTierRakeback={vip.atTopTier ? vip.rakeback : vip.nextRakeback}
               wagerToNext={vip.wagerToNext}
@@ -320,18 +326,19 @@ export default function Home2Client() {
               onDeposit={onDeposit}
               onDashboard={onDashboard}
             />
-          ) : null}
-          {/* Newest tables ride above the floor so returning players see what changed. */}
-          <NewGames />
-          <TheFloor />
-          <SlotForge />
-          <TourneyForge />
-          <TableForge />
+          ) : (
+            <HeroVisitor onConnect={onConnect} onOpenDrop={() => openSheet('drop')} />
+          )}
+        </div>
+        {/* Newest tables ride above the collection so returning players see what changed. */}
+        <NewGames />
+        <TheFloor filter={floorFilter} onFilter={setFloorFilter} />
+        <section className="duo" aria-label="Weekly Drop and VIP ladder">
           {weeklyDrop ? (
             <WeeklyDrop
               pot={weeklyDrop.pot}
               accruedNote={weeklyDrop.accruedNote}
-              statusPill={weeklyDrop.statusPill}
+              status={weeklyDrop.status}
               countdownTo={weeklyDrop.countdownTo}
               entries={weeklyDrop.entries}
               progress={weeklyDrop.progress}
@@ -341,25 +348,52 @@ export default function Home2Client() {
               onViewEntrants={() => setEntrantsOpen(true)}
             />
           ) : (
-            <WeeklyDrop entries={0} progress={0} entriesSub={<>The Weekly Drop is lighting soon — every 1,000 MORBIUS you play will be a ticket.</>} winners={[]} />
+            <WeeklyDrop
+              entries={0}
+              progress={0}
+              entriesSub={<>The Weekly Drop is lighting soon — every 1,000 MORBIUS you play will be a ticket.</>}
+              winners={[]}
+            />
           )}
           <VipLadder currentTier={mode === 'player' ? vip.tierName : ''} />
-          <HomeFooter />
+        </section>
+        <WorkshopHead />
+        <div className="workshop">
+          <SlotForge />
+          <TourneyForge />
+          <TableForge />
         </div>
-      </div>
+      </main>
+      <HomeFooter />
       <ChipDock
-        balance={balanceStr}
         activeTab="home"
-        onChip={() => {
-          setActiveSheet(null)
-          setNavOpen(true)
-        }}
+        onChip={openNav}
         onGames={() => openSheet('games')}
         onDrop={() => openSheet('drop')}
         onWallet={() => openSheet('wallet')}
         dropBadge={dropBadge}
       />
-      {navOpen && <div className="nav-veil" onClick={() => setNavOpen(false)} />}
+      <NavDrawer
+        open={navOpen}
+        onClose={() => setNavOpen(false)}
+        mode={mode}
+        balance={balanceStr}
+        tierName={vip.tierName}
+        tierRakeback={vip.rakeback}
+        nextTier={vip.atTopTier ? null : vip.nextName}
+        nextRakeback={vip.nextRakeback}
+        progressPct={vip.progressPct}
+        wagerToNext={vip.wagerToNext}
+        recentHigh={topWin?.amount ?? null}
+        priceUsd={morbiusUsd}
+        onConnect={onConnect}
+        onDeposit={onDeposit}
+        onWithdraw={onDeposit}
+        onDisconnect={() => disconnect()}
+        onChart={() => setChartOpen(true)}
+        onDashboard={onDashboard}
+        onProfile={onProfile}
+      />
       <WalletSheet
         open={activeSheet === 'wallet'}
         onClose={closeSheet}
@@ -370,7 +404,6 @@ export default function Home2Client() {
         balanceSub={`${vip.tierName} tier · ${vip.rakeback} rakeback on losses`}
         avatar={
           profileImageUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
             <img src={profileImageUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
           ) : undefined
         }
@@ -388,21 +421,7 @@ export default function Home2Client() {
         }}
         onProfile={() => {
           closeSheet()
-          openProfileSettings({
-            displayName: profileDisplayName ?? '',
-            profileImageUrl,
-            bio,
-            xHandle,
-            tgHandle,
-            onSave: async (displayName, newImageUrl, newBio, newX, newTg) => {
-              if (!address) throw new Error('Connect your wallet to save your profile.')
-              await apiFetch('/api/player/profile', {
-                method: 'POST',
-                body: JSON.stringify({ displayName, profileImageUrl: newImageUrl, bio: newBio, xHandle: newX, tgHandle: newTg }),
-              })
-              queryClient.invalidateQueries({ queryKey: ['playerProfile', address] })
-            },
-          })
+          onProfile()
         }}
         onApprovals={() => {
           closeSheet()
@@ -426,7 +445,7 @@ export default function Home2Client() {
         countdownTo={weeklyDrop?.countdownTo}
         entries={mode === 'player' ? weeklyDrop?.entries ?? 0 : undefined}
         totalEntrants={weeklyDrop?.totalEntrants ?? null}
-        statusPill={weeklyDrop?.statusPill}
+        status={weeklyDrop?.status}
       />
       <ChartModal open={chartOpen} onClose={() => setChartOpen(false)} />
       <EntrantsModal open={entrantsOpen} onClose={() => setEntrantsOpen(false)} />

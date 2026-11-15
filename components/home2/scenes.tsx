@@ -1095,7 +1095,7 @@ export type FloorGame = {
   addedAt: string;
   /** Route the card links to (real app game route). */
   href: string;
-  /** Corner ribbon on the tile. The art itself lives at /home2/tiles/<key>.webp. */
+  /** Badge on the card. Homepage art is title-free at /home2/clean/<key>.webp; titles are HTML (card-styles.ts). */
   badge?: { kind: TileBadgeKind; label: string };
 };
 
