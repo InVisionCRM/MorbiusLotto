@@ -1514,6 +1514,17 @@ export class PokerGameService {
     );
   }
 
+  /**
+   * Cheap in-memory peek for the public stream broadcast: is this table live, and is any
+   * not-folded player all-in (stack 0 with chips committed)? No DB, no hole cards.
+   */
+  getLiveTableSummary(tableId: string): { live: boolean; anyAllIn: boolean } {
+    const t = this.activeTables.get(tableId);
+    if (!t || !t.currentRound) return { live: Boolean(t), anyAllIn: false };
+    const anyAllIn = (t.players as any[]).some((p) => p && !p.folded && !p.left && p.stackSize <= 0 && p.bet > 0);
+    return { live: true, anyAllIn };
+  }
+
   async getTableState(tableId: string, forPlayer: string | null): Promise<PokerTableState> {
     const pool = this.getPool();
     const forPlayerAddr = forPlayer ? this.normalizeAddress(forPlayer) : null;
