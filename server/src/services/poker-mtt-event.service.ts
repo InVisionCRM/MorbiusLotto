@@ -3,7 +3,7 @@
  *
  * Creates a scheduled, multi-table poker tournament on the existing MTT engine and seats the
  * 70 dedicated 'mtt' house bots (migration 203). Humans join free (one seat per wallet); the
- * bots' buy-ins fund the pool (70 × 715 = 50,050 chips), paid in full to the top 10 — fees
+ * bots' buy-ins fund the pool (70 × 715 = 50,050 chips), paid in full to 1st place — fees
  * waived (`tournaments.fees_waived`). Runs even if no human registers (minPlayers = 2).
  *
  * Reuses:
@@ -42,19 +42,20 @@ export interface MttLiveTestConfig {
   blindMinutes: number;
   lateRegMinutes: number;
   actionSeconds: number;
-  /** Top-10 payout curve (index 0 = 1st), sums to 100. */
+  /** Payout curve (index 0 = 1st), sums to 100. Length 10 when type is custom. */
   prizePercentages: number[];
+  /** Default winner-take-all; 'custom' only when the admin API passes prizePercentages. */
+  prizeDistributionType: 'winner_takes_all' | 'custom';
   /** Skip the "no overlap with a daily freeroll" guard. */
   allowDailyOverlap: boolean;
 }
 
 /**
- * Defaults (Kyle, Nov 2026): 100 seats on 10 tables of 10, 70 bots × 715 = 50,050 pool, top 10
- * paid in full, 5,000 stack (100 BB at 25/50), default schedule on 5-minute levels with the
- * daily game's fast end game, 45 min late reg, 15 s turn clock.
+ * Defaults (Kyle, Nov 2026): 100 seats on 10 tables of 10, 70 bots × 715 = 50,050 pool, 100%
+ * to 1st place (winner takes all), 5,000 stack (100 BB at 25/50), default schedule on 5-minute
+ * levels with the daily game's fast end game, 45 min late reg, 15 s turn clock.
  *
- * The payout curve uses only even percentages so 50,050 splits with zero rounding loss:
- * 15,015 / 10,010 / 7,007 / 5,005 / 4,004 / 3,003 / 2,002 / 2,002 / 1,001 / 1,001.
+ * A 50,050 (or any integer) pool pays out in full to 1st with no rounding loss.
  */
 export const MTT_LIVE_TEST_DEFAULTS: Omit<MttLiveTestConfig, 'startAt'> = {
   name: 'The Morbius 100-Player Freeroll',
@@ -66,7 +67,8 @@ export const MTT_LIVE_TEST_DEFAULTS: Omit<MttLiveTestConfig, 'startAt'> = {
   blindMinutes: 5,
   lateRegMinutes: 45,
   actionSeconds: 15,
-  prizePercentages: [30, 20, 14, 10, 8, 6, 4, 4, 2, 2],
+  prizePercentages: [100, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+  prizeDistributionType: 'winner_takes_all',
   allowDailyOverlap: false,
 };
 
@@ -119,8 +121,10 @@ export function buildMttLiveTestConfig(input: MttLiveTestInput, nowMs = Date.now
   const buyIn = BigInt(intIn(input.buyIn, Number(MTT_LIVE_TEST_DEFAULTS.buyIn), 1, 1_000_000, 'buyIn'));
 
   let prizePercentages = MTT_LIVE_TEST_DEFAULTS.prizePercentages;
+  let prizeDistributionType: MttLiveTestConfig['prizeDistributionType'] = 'winner_takes_all';
   if (input.prizePercentages != null) {
     prizePercentages = normalizePokerTournamentPrizePercents(MTT_LIVE_TEST_DEFAULTS.maxPlayers, input.prizePercentages);
+    prizeDistributionType = 'custom';
   }
 
   return {
@@ -130,6 +134,7 @@ export function buildMttLiveTestConfig(input: MttLiveTestInput, nowMs = Date.now
     buyIn,
     lateRegMinutes,
     prizePercentages,
+    prizeDistributionType,
     allowDailyOverlap: input.allowDailyOverlap === true,
   };
 }
@@ -231,8 +236,8 @@ export class PokerMttEventService {
         creatorAddress: bots[0],
         name: cfg.name,
         buyInAmount: cfg.buyIn,
-        prizeDistributionType: 'custom',
-        prizePercentages: cfg.prizePercentages,
+        prizeDistributionType: cfg.prizeDistributionType,
+        prizePercentages: cfg.prizeDistributionType === 'custom' ? cfg.prizePercentages : undefined,
         config: {
           startingStack: cfg.startingStack,
           minPlayers: 2,

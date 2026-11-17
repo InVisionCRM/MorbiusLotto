@@ -9,7 +9,7 @@ test('stream config defaults: avatars on, cash promo copy', () => {
   const c = streamConfig({});
   assert.equal(c.avatars, true);
   assert.equal(c.avatarBase, 'https://morbius.io/api/poker/avatar');
-  assert.deepEqual(c.cashPromo, { enabled: true, ...DEFAULT_CASH_PROMO, lines: ['1, 5 & 9 PM ET', '3,500 prize pool'] });
+  assert.deepEqual(c.cashPromo, { enabled: true, ...DEFAULT_CASH_PROMO, lines: ['1, 4, 9 AM · 1, 5, 9 PM ET', '10,010 prize pool · Winner takes all'] });
   assert.match(c.cashPromo.tag, /\$Morbius on #PulseChain/);
   assert.equal(c.cashPromo.url, 'morbius.io/poker');
 });
@@ -127,9 +127,11 @@ test('"Beat the Bots" never appears in anything a viewer can see', () => {
 });
 test('mock scenarios: MTT ones expose feature table + flags; daily keeps the legacy shape', () => {
   for (const sc of SCENARIOS.filter((s) => s !== 'daily')) { const r = mockCurrent(sc); assert.equal(r.mtt, true, sc); assert.ok(r.feature.tableNumber > 0); assert.ok(r.broadcast.leaderboard.length > 0); }
-  assert.equal(mockCurrent('bubble').broadcast.flags.bubble, true);
-  assert.equal(mockCurrent('itm-bust').broadcast.flags.inTheMoney, true);
+  // Official MTT is winner-take-all (1 paid place): bubble is 2 left, which is also heads-up.
+  assert.equal(mockCurrent('bubble').broadcast.flags.bubble, false);
+  assert.equal(mockCurrent('itm-bust').broadcast.flags.inTheMoney, false);
   assert.equal(mockCurrent('headsup').broadcast.flags.headsUp, true);
+  assert.equal(mockCurrent('headsup').broadcast.flags.bubble, true);
   assert.equal(mockCurrent('early').feature.tableNumber, 6);
   const d = mockCurrent('daily'); assert.equal(d.mtt, undefined); assert.equal(d.broadcast, undefined);
 });

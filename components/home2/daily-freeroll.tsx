@@ -128,7 +128,7 @@ export function DailyFreeroll() {
       <i className="spark s2" aria-hidden="true" />
       <i className="spark s3" aria-hidden="true" />
 
-      <span className="kick">Calibre 01 · Free entry · Six a day</span>
+      <span className="kick">Calibre 01 · Free entry · Six a day · Winner takes all</span>
       <h1>
         <small>#PulseChain Poker</small>
         <span className="chrome-word">FreeRoll</span>

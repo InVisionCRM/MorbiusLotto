@@ -365,7 +365,7 @@ const hmmss = (ms) => { const s = Math.max(0, Math.round(ms / 1000)); const h = 
 
 
 // ---- stream config from the worker (/stream-config): avatar art base + cash promo copy ----
-const DEFAULT_CASH_PROMO = { enabled: true, kicker: 'FREE ENTRY', title: 'The Morbius Daily Freeroll', lines: ['1, 5 & 9 PM ET', '3,500 prize pool'], cta: 'Play free at', url: 'morbius.io/poker', tag: '$Morbius on #PulseChain', qr: '' };
+const DEFAULT_CASH_PROMO = { enabled: true, kicker: 'FREE ENTRY', title: 'The Morbius Daily Freeroll', lines: ['1, 4, 9 AM · 1, 5, 9 PM ET', '10,010 prize pool · Winner takes all'], cta: 'Play free at', url: 'morbius.io/poker', tag: '$Morbius on #PulseChain', qr: '' };
 let CFG = { avatars: true, avatarBase: qs.get('avatarBase') || 'https://morbius.io/api/poker/avatar', cashPromo: DEFAULT_CASH_PROMO };
 fetch('/stream-config', { cache: 'no-store' }).then((r) => (r.ok ? r.json() : null)).then((j) => {
   if (j && typeof j === 'object') CFG = { ...CFG, ...j, avatarBase: qs.get('avatarBase') || j.avatarBase || CFG.avatarBase };
