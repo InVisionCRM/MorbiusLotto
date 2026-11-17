@@ -189,7 +189,7 @@ describe('PokerTournamentService.planMttBalance', () => {
 describe('MTT live test config', () => {
   const now = Date.parse('2026-11-15T12:00:00Z');
 
-  it('defaults: 100 seats / 10 per table, 70 × 715 = 50,050 pool paid in full to the top 10', () => {
+  it('defaults: 100 seats / 10 per table, 70 × 715 = 50,050 pool paid in full to 1st place', () => {
     const cfg = buildMttLiveTestConfig({ startAt: '2026-11-21T15:00:00Z' }, now);
     expect(cfg.name).toBe('The Morbius 100-Player Freeroll');
     expect(cfg.maxPlayers).toBe(100);
@@ -201,12 +201,14 @@ describe('MTT live test config', () => {
     expect(cfg.lateRegMinutes).toBe(45);
     const pool = cfg.buyIn * BigInt(cfg.bots);
     expect(pool).toBe(50_050n);
-    expect(cfg.prizePercentages).toHaveLength(10);
+    expect(cfg.prizeDistributionType).toBe('winner_takes_all');
+    expect(cfg.prizePercentages).toEqual([100, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
     expect(cfg.prizePercentages.reduce((a, b) => a + b, 0)).toBe(100);
     // integer split with no remainder → the full pool is paid
     const paid = cfg.prizePercentages.map((p) => (pool * BigInt(p)) / 100n);
     expect(paid.reduce((a, b) => a + b, 0n)).toBe(pool);
-    expect(paid[0]).toBe(15_015n);
+    expect(paid[0]).toBe(50_050n);
+    expect(paid.slice(1).every((n) => n === 0n)).toBe(true);
   });
 
   it('validates input', () => {

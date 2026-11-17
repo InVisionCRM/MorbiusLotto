@@ -15,7 +15,7 @@ const hex = (n) => ('0x' + (n * 2654435761 >>> 0).toString(16).padStart(8, '0').
 const num = (n) => Math.round(n);
 
 function ladder(pool = 500150) {
-  return [30, 20, 14, 10, 8, 6, 4, 4, 2, 2].map((percent, i) => ({ place: i + 1, percent, amount: Math.floor(pool * percent / 100) }));
+  return [{ place: 1, percent: 100, amount: pool }];
 }
 const ordinal = (n) => { const v = n % 100; return v >= 11 && v <= 13 ? `${n}th` : `${n}${{ 1: 'st', 2: 'nd', 3: 'rd' }[n % 10] ?? 'th'}`; };
 
@@ -81,8 +81,8 @@ function buildTableState(sp, spT, now) {
     myHoleCards: null,
     meta: { kind: 'tournament', actionSeconds: 15, seatsOpen: 0, cashTables: [{ tableId: 'c', smallBlind: 25, bigBlind: 50, seatsOpen: 4, maxSeats: 10 }],
       nextGame: { at: new Date(now + 3 * 3600_000).toISOString(), freeEntry: true, buyIn: '0', registrationOpen: false }, freeEntry: true,
-      tournament: { name: sp.daily ? '#PulseChain Poker FreeRoll at 9pm EST' : 'The Morbius 100-Player Freeroll', status: 'active', freeEntry: true, entrants: sp.entrants, playersLeft: sp.left, prizePool: sp.daily ? 3500 : 500150,
-        payouts: sp.daily ? [{ place: 1, percent: 60, amount: 2100 }, { place: 2, percent: 30, amount: 1050 }, { place: 3, percent: 10, amount: 350 }] : ladder(),
+      tournament: { name: sp.daily ? '#PulseChain Poker FreeRoll at 9pm EST' : 'The Morbius 100-Player Freeroll', status: 'active', freeEntry: true, entrants: sp.entrants, playersLeft: sp.left, prizePool: sp.daily ? 10010 : 500150,
+        payouts: sp.daily ? [{ place: 1, percent: 100, amount: 10010 }] : ladder(),
         lateRegMinutes: sp.lateEndsIn ? 45 : 0, startedAt: new Date(now - sp.startedAgo).toISOString(),
         blinds: { level: sp.level, smallBlind: sp.sb, bigBlind: sp.bb, nextLevelAt: new Date(now + sp.nextIn).toISOString(), nextSmallBlind: sp.nsb, nextBigBlind: sp.nbb } } },
     talk: [],
@@ -90,7 +90,7 @@ function buildTableState(sp, spT, now) {
 }
 
 function buildBroadcast(sp, now) {
-  const payouts = sp.daily ? [{ place: 1, percent: 60, amount: 2100 }, { place: 2, percent: 30, amount: 1050 }, { place: 3, percent: 10, amount: 350 }] : ladder();
+  const payouts = sp.daily ? [{ place: 1, percent: 100, amount: 10010 }] : ladder();
   const tables = sp.tables.map((t) => ({ tableId: `00000000-0000-4000-8000-${String(t.n).padStart(12, '0')}`, tableNumber: t.n, seated: t.seated, maxSeats: 10, pot: t.phase ? t.pot : 0,
     phase: t.phase, handNumber: t.phase ? 40 + t.n : null, allIn: Boolean(t.allIn), showdown: Boolean(t.showdown), biggestStack: 9000 + t.n * 700, isFinalTable: false }));
   const total = 500_000;
@@ -110,7 +110,7 @@ function buildBroadcast(sp, now) {
   return {
     tournamentId: 'mock', generatedAt: new Date(now).toISOString(),
     tournament: { name: sp.daily ? '#PulseChain Poker FreeRoll at 9pm EST' : 'The Morbius 100-Player Freeroll', status: 'active', entrants: sp.entrants, playersLeft: sp.left, avgStack: num(total / sp.left),
-      prizePool: sp.daily ? 3500 : 500150, payouts, paidPlaces: paid, lateReg: { open: lateRegOpen, endsAt: lateRegOpen ? new Date(now + sp.lateEndsIn).toISOString() : null },
+      prizePool: sp.daily ? 10010 : 500150, payouts, paidPlaces: paid, lateReg: { open: lateRegOpen, endsAt: lateRegOpen ? new Date(now + sp.lateEndsIn).toISOString() : null },
       startedAt: new Date(now - sp.startedAgo).toISOString(),
       blinds: { level: sp.level, smallBlind: sp.sb, bigBlind: sp.bb, nextLevelAt: new Date(now + sp.nextIn).toISOString(), nextSmallBlind: sp.nsb, nextBigBlind: sp.nbb }, actionSeconds: 15 },
     tables, leaderboard, eliminations, winner: null, flags,

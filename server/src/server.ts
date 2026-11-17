@@ -604,7 +604,7 @@ async function initializeServices() {
     });
 
     // Admin: create the one-shot 100-player MTT live test (70 'mtt' bots + 30 free human seats,
-    // 50,050 pool at the default 715 buy-in, paid in full to the top 10). Same auth as run-now.
+    // 50,050 pool at the default 715 buy-in, paid in full to 1st place). Same auth as run-now.
     // Body: { startAt (ISO, required), name?, buyIn? (int 1–1,000,000 chips per bot; pool = buyIn × 70,
     // e.g. 7145 → 500,150), lateRegMinutes?, prizePercentages? (10 ints, sum 100), allowDailyOverlap? }.
     // See services/poker-mtt-event.service.ts. Idempotent per startAt (409 on repeat).

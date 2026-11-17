@@ -57,7 +57,7 @@
  *   button, in Poppins (bundled in promos/poppins-*.woff2 so the Mac renders the same font).
  *   STREAM_CASH_PROMO_KICKER="FREE ENTRY"     corner ribbon badge
  *   STREAM_CASH_PROMO_TITLE="The Morbius Daily Freeroll"   last word(s) set big ("THE MORBIUS" / "DAILY FREEROLL")
- *   STREAM_CASH_PROMO_LINES="1, 5 & 9 PM ET|3,500 prize pool"   ("|" separates; a time-like line goes in
+ *   STREAM_CASH_PROMO_LINES="1, 4, 9 AM · 1, 5, 9 PM ET|10,010 prize pool · Winner takes all"   ("|" separates; a time-like line goes in
  *                                          the top-right badge, the next line in the banner ribbon)
  *   STREAM_CASH_PROMO_CTA="Play free at" STREAM_CASH_PROMO_URL="morbius.io/poker"   gold button
  *   STREAM_CASH_PROMO_TAG="$Morbius on #PulseChain"   footer, with the PulseChain logo
@@ -126,7 +126,7 @@ export function promoFile(urlPath, dir = PROMO_DIR) {
 export const DEFAULT_CASH_PROMO = Object.freeze({
   kicker: 'FREE ENTRY',
   title: 'The Morbius Daily Freeroll',
-  lines: ['1, 5 & 9 PM ET', '3,500 prize pool'],
+  lines: ['1, 4, 9 AM · 1, 5, 9 PM ET', '10,010 prize pool · Winner takes all'],
   cta: 'Play free at',
   url: 'morbius.io/poker',
   tag: '$Morbius on #PulseChain',

@@ -154,8 +154,8 @@ describe('MTT live test: creation + bot seating', () => {
     expect(Number(row.creator_fee_percent)).toBe(0);
     expect(Number(row.action_timer_seconds)).toBe(15);
     expect(Number(row.max_players)).toBe(100);
-    expect(row.prize_distribution_type).toBe('custom');
-    expect(row.prize_percentages).toEqual([30, 20, 14, 10, 8, 6, 4, 4, 2, 2]);
+    expect(row.prize_distribution_type).toBe('winner_takes_all');
+    expect(row.prize_percentages).toEqual([100]);
     expect(row.poker_config).toMatchObject({
       startingStack: 5000, minPlayers: 2, maxPlayers: 100, seatsPerTable: 10,
       blindIncreaseMode: 'by_time', blindIntervalMinutes: 5, startMode: 'time',
